@@ -46,6 +46,14 @@ jobs:
         continue-on-error: true
         run: pnpm test:coverage
 
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v7

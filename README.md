@@ -17,6 +17,7 @@
 <p align="center">
   <a href="https://github.com/coldsmirk/vef-framework-react/releases"><img src="https://img.shields.io/github/v/release/coldsmirk/vef-framework-react?style=flat-square&label=release" alt="GitHub Release"></a>
   <a href="https://github.com/coldsmirk/vef-framework-react/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/coldsmirk/vef-framework-react/test.yml?branch=main&label=tests&style=flat-square&logo=githubactions" alt="Build Status"></a>
+  <a href="https://codecov.io/gh/coldsmirk/vef-framework-react"><img src="https://img.shields.io/codecov/c/github/coldsmirk/vef-framework-react?style=flat-square&logo=codecov&label=codecov" alt="Coverage"></a>
   <a href="https://www.npmjs.com/package/@vef-framework-react/core"><img src="https://img.shields.io/npm/v/@vef-framework-react/core?style=flat-square&logo=npm&label=npm" alt="npm version"></a>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React 19"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
