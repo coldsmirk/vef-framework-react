@@ -1,0 +1,15 @@
+# @vef-vue/core
+
+Core features for using VEF Vue framework.
+
+## Installation
+
+```bash
+pnpm add @vef-vue/core
+```
+
+## Usage
+
+```ts
+import { xxx } from "@vef-vue/core";
+```

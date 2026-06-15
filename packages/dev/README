@@ -1,0 +1,120 @@
+## Code Generation
+
+A unified code generation entry point for the project: business systems author a
+single `code-generation.config.ts` at the project root and the framework provides a
+CLI per generator. Currently the only generator is **Dictionary Keys**;
+future ones (i18n, apiSchema, ...) live alongside as additional fields in
+the same config.
+
+### 1. Create `code-generation.config.ts` at the project root
+
+```ts
+import { defineCodeGenerationConfig } from "@vef-framework-react/dev";
+
+export default defineCodeGenerationConfig({
+  dictionaryKeys: {
+    // Output is resolved against the project root and must stay inside it.
+    // Default: src/types/dictionary.gen.ts
+    output: "src/types/dictionary.gen.ts",
+    // Optional: abort the fetcher after this many ms. Default: 30000. Set to 0 to disable.
+    timeout: 30000,
+    fetchDictionaryKeys: async () => {
+      // Runs in Node, so use Node-side HTTP / DB clients with project credentials.
+      // Read environment from process.env so the same config works across dev / staging / prod.
+      const response = await fetch(`${process.env.API_BASE_URL}/api`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.CODE_GENERATION_TOKEN}` },
+        body: JSON.stringify({ resource: "sys/dictionary", action: "find_keys" })
+      });
+      const json = await response.json();
+      return json.data.map(({ key, remark }) => ({ key, comment: remark }));
+    }
+  }
+  // Future: i18n: { ... }, apiSchema: { ... }
+});
+```
+
+> **Do not hardcode secrets in this file.** `jiti` caches transpiled config
+> files under `node_modules/.cache/jiti`; secrets in source land on disk.
+> Always read tokens from `process.env`.
+
+### Dictionary Keys: generate `DictionaryKey` union from the backend
+
+Goal: callers of `useDictionaryOptionsSelect` (and other dictionary-aware
+APIs) get IDE autocomplete and compile-time validation, sourced from the
+project's backend dictionary registry rather than hand-maintained string
+constants.
+
+Constraints:
+
+- `key` must match `/^[\w.-]+$/` (letters, digits, underscore, dot, hyphen).
+  Invalid keys abort the run — this prevents injection through the
+  generated file. **If your existing keys use other characters (colon,
+  slash, CJK, etc.), please open an issue before upgrading** so the
+  constraint can be evaluated.
+- `output` is rejected if absolute or escaping the project root.
+- The generated file is refused if its path is already a symlink
+  (anti-symlink-swap).
+
+### 2. Run the CLI on demand
+
+```bash
+# Regenerate the file
+pnpm vef gen:dictionary-keys
+
+# Verify the committed file is up-to-date (CI guard — REQUIRED in CI)
+pnpm vef gen:dictionary-keys --check
+```
+
+Recommended `package.json` scripts:
+
+```jsonc
+{
+  "scripts": {
+    "gen:dictionary-keys": "vef gen:dictionary-keys",
+    "check:dictionary-keys": "vef gen:dictionary-keys --check"
+  }
+}
+```
+
+### 3. Commit the generated file
+
+`src/types/dictionary.gen.ts` is committed to source control. The file
+augments `Register["dictionaryKeys"]` in `@vef-framework-react/hooks`, which
+narrows the `DictionaryKey` union project-wide. Without augmentation it
+falls back to `string`.
+
+When TypeScript reports a key is not assignable to `DictionaryKey`, the most
+common cause is that code generation has not been rerun after adding a new backend
+key — try `pnpm gen:dictionary-keys`.
+
+### CI
+
+Add `pnpm vef gen:dictionary-keys --check` to the CI pipeline. It exits
+non-zero when the committed `.gen.ts` is stale relative to what the fetcher
+currently returns, surfacing drift before merge.
+
+In CI logs (`process.env.CI` set), the command suppresses stack traces and
+only prints the error message, avoiding leaking absolute workspace paths
+in public logs.
+
+### Failure modes (strict by design)
+
+Any of these aborts the CLI run with a non-zero exit:
+
+- Missing `code-generation.config.{ts,mts,js,mjs}` at the project root
+- Config does not export a `CodeGenerationConfig` object
+- Config has no `dictionaryKeys` block
+- `dictionaryKeys.fetchDictionaryKeys` is missing or not a function
+- `dictionaryKeys.output` is set but not a string
+- `dictionaryKeys.timeout` is set but not a finite non-negative number
+- `fetchDictionaryKeys` throws or exceeds the timeout
+- Any returned key violates the `^[\w.-]+$` charset
+- Output path is absolute or escapes the project root
+- Output path resolves to an existing symlink
+- `--check` mode detects the committed file is stale
+
+Soft failures that warn but continue:
+
+- Empty fetcher result → generates `DictionaryKey = never`
+- Duplicate keys with conflicting comments → first occurrence wins

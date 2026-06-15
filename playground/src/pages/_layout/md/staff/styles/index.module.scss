@@ -1,0 +1,20 @@
+.org-tree-select {
+  width: 320px;
+}
+
+.dept-tree-wrapper {
+  height: 480px;
+  padding: var(--vef-spacing-sm);
+}
+
+.transfer-section {
+  &:first-of-type {
+    flex: none;
+    width: 320px;
+  }
+
+  &:last-of-type {
+    flex: auto;
+    overflow: hidden;
+  }
+}

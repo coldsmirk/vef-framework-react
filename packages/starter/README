@@ -1,0 +1,15 @@
+# @vef-framework-react/starter
+
+Starter for using VEF framework.
+
+## Installation
+
+```bash
+pnpm add @vef-framework-react/starter
+```
+
+## Usage
+
+```ts
+import { xxx } from "@vef-framework-react/starter";
+```

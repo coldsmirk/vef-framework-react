@@ -1,0 +1,73 @@
+{
+  "name": "@vef-framework-react/core",
+  "type": "module",
+  "version": "2.4.0",
+  "private": false,
+  "packageManager": "pnpm@11.1.2",
+  "description": "Core features for VEF framework",
+  "author": {
+    "name": "Venus",
+    "email": "iweixiaopeng@163.com",
+    "url": "https://github.com/ilxqx"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://vef.ilxqx.com",
+  "keywords": ["vef", "framework", "react", "core"],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "vef": "./src/index.ts",
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/es/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/es/index.js",
+  "types": "dist/types/index.d.ts",
+  "files": ["dist"],
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "dependencies": {
+    "@dnd-kit/abstract": "^0.4.0",
+    "@dnd-kit/collision": "^0.4.0",
+    "@dnd-kit/dom": "^0.4.0",
+    "@dnd-kit/helpers": "^0.4.0",
+    "@dnd-kit/react": "^0.4.0",
+    "@emotion/react": "^11.14.0",
+    "@hello-pangea/dnd": "^18.0.1",
+    "@microsoft/fetch-event-source": "^2.0.1",
+    "@tanstack/react-query": "^5.101.0",
+    "@vef-framework-react/shared": "workspace:*",
+    "@xstate/react": "^6.1.0",
+    "axios": "^1.17.0",
+    "clsx": "^2.1.1",
+    "immer": "^11.1.7",
+    "jotai": "^2.20.0",
+    "motion": "^12.40.0",
+    "use-immer": "^0.11.0",
+    "xstate": "^5.32.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "react": "^19.2.7"
+  }
+}

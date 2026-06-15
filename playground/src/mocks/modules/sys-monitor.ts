@@ -1,0 +1,103 @@
+import { faker } from "@faker-js/faker";
+
+import { defineMock } from "../define-mock";
+
+interface SystemOverview {
+  host: {
+    hostname: string;
+    os: string;
+    platform: string;
+    platformVersion: string;
+    kernelArch: string;
+    uptime: number;
+  };
+  cpu: { physicalCores: number; logicalCores: number; usagePercent: number };
+  memory: { total: number; used: number; usedPercent: number };
+  disk: { total: number; used: number; usedPercent: number; partitions: number };
+  network: { interfaces: number; bytesSent: number; bytesRecv: number; packetsSent: number; packetsRecv: number };
+  process: { pid: number; name: string; cpuPercent: number; memoryPercent: number };
+  load: { load1: number; load5: number; load15: number };
+  build: { vefVersion: string; appVersion: string; buildTime: string; gitCommit: string };
+}
+
+defineMock<void, SystemOverview>("sys/monitor", "get_overview", () => {
+  const memTotal = 32 * 1024 * 1024 * 1024;
+  const memUsed = Math.floor(memTotal * faker.number.float({ min: 0.3, max: 0.7 }));
+  const diskTotal = 512 * 1024 * 1024 * 1024;
+  const diskUsed = Math.floor(diskTotal * faker.number.float({ min: 0.4, max: 0.85 }));
+
+  return {
+    host: {
+      hostname: "playground-host",
+      os: "linux",
+      platform: "ubuntu",
+      platformVersion: "24.04",
+      kernelArch: "x86_64",
+      uptime: faker.number.int({ min: 60_000, max: 1_000_000 })
+    },
+    cpu: {
+      physicalCores: 8,
+      logicalCores: 16,
+      usagePercent: faker.number.float({
+        min: 5,
+        max: 70,
+        fractionDigits: 2
+      })
+    },
+    memory: {
+      total: memTotal,
+      used: memUsed,
+      usedPercent: Number(((memUsed / memTotal) * 100).toFixed(2))
+    },
+    disk: {
+      total: diskTotal,
+      used: diskUsed,
+      usedPercent: Number(((diskUsed / diskTotal) * 100).toFixed(2)),
+      partitions: 3
+    },
+    network: {
+      interfaces: 4,
+      bytesSent: faker.number.int({ min: 1_000_000, max: 1_000_000_000 }),
+      bytesRecv: faker.number.int({ min: 1_000_000, max: 1_000_000_000 }),
+      packetsSent: faker.number.int({ min: 10_000, max: 1_000_000 }),
+      packetsRecv: faker.number.int({ min: 10_000, max: 1_000_000 })
+    },
+    process: {
+      pid: 12_345,
+      name: "vef-playground",
+      cpuPercent: faker.number.float({
+        min: 0.5,
+        max: 8,
+        fractionDigits: 2
+      }),
+      memoryPercent: faker.number.float({
+        min: 1,
+        max: 6,
+        fractionDigits: 2
+      })
+    },
+    load: {
+      load1: faker.number.float({
+        min: 0.1,
+        max: 3,
+        fractionDigits: 2
+      }),
+      load5: faker.number.float({
+        min: 0.1,
+        max: 2.5,
+        fractionDigits: 2
+      }),
+      load15: faker.number.float({
+        min: 0.1,
+        max: 2,
+        fractionDigits: 2
+      })
+    },
+    build: {
+      vefVersion: "2.1.12",
+      appVersion: "0.0.3",
+      buildTime: new Date().toISOString(),
+      gitCommit: faker.git.commitSha().slice(0, 10)
+    }
+  };
+});

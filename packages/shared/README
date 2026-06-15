@@ -1,0 +1,15 @@
+# @vef-framework-react/shared
+
+Shared utilities for using VEF framework.
+
+## Installation
+
+```bash
+pnpm add @vef-framework-react/shared
+```
+
+## Usage
+
+```ts
+import { xxx } from "@vef-framework-react/shared";
+```

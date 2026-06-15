@@ -1,0 +1,50 @@
+{
+  "name": "@vef-framework-react/playground",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "clean": "rimraf dist",
+    "dev": "vite",
+    "build": "pnpm clean && vite build",
+    "preview": "vite preview",
+    "gen:dictionary-keys": "vef gen:dictionary-keys",
+    "check:dictionary-keys": "vef gen:dictionary-keys --check"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.2.5",
+    "@emotion/react": "^11.14.0",
+    "@tanstack/react-router": "^1.170.15",
+    "@vef-framework-react/approval-flow-editor": "workspace:*",
+    "@vef-framework-react/components": "workspace:*",
+    "@vef-framework-react/core": "workspace:*",
+    "@vef-framework-react/expression": "workspace:*",
+    "@vef-framework-react/form-editor": "workspace:*",
+    "@vef-framework-react/hooks": "workspace:*",
+    "@vef-framework-react/shared": "workspace:*",
+    "@vef-framework-react/starter": "workspace:*",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@faker-js/faker": "^10.4.0",
+    "@stylistic/stylelint-config": "^5.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vef-framework-react/dev": "workspace:*",
+    "eslint": "^10.4.1",
+    "lint-staged": "^17.0.7",
+    "msw": "^2.14.6",
+    "stylelint": "^17.13.0",
+    "stylelint-config-recess-order": "^7.7.0",
+    "stylelint-config-recommended": "^18.0.0",
+    "stylelint-config-standard-scss": "^17.0.0",
+    "stylelint-order": "^8.1.1",
+    "vite": "^8.0.16"
+  },
+  "msw": {
+    "workerDirectory": ["public"]
+  }
+}

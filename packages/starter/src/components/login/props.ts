@@ -1,0 +1,124 @@
+import type { ReactNode } from "react";
+
+import type { ResolvedChallenges } from "../../types/common";
+import type { LoginChallenge, LoginParams, LoginResult, ResolveChallengeParams } from "./payload";
+
+/**
+ * Arguments passed to a challenge renderer. Renderers are stateless from the
+ * Login component's perspective — they consume `challenge` for prompt data
+ * and call `resolve` / `cancel` to drive the flow forward or backward.
+ *
+ * Parameterised by `K`, the specific challenge type the renderer is bound to.
+ * When projects augment `Register['challenges']`, `challenge.data` and the
+ * `resolve` argument are both narrowed to the corresponding spec entry.
+ */
+export interface LoginChallengeRendererProps<
+  K extends keyof ResolvedChallenges = keyof ResolvedChallenges
+> {
+  /**
+   * The pending challenge to present (type identifier and challenge-specific data).
+   */
+  challenge: Extract<LoginChallenge, { type: K }>;
+  /**
+   * Submit the user's answer to the current challenge. The concrete shape of
+   * `response` is dictated by the augmented `ResolvedChallenges[K]['response']`;
+   * without augmentation, it falls back to `unknown`.
+   * Returns once the resulting `LoginResult` has been applied — either the
+   * next challenge is shown or authentication completes and navigation runs.
+   */
+  resolve: (response: ResolvedChallenges[K]["response"]) => Promise<void>;
+  /**
+   * Abandon the challenge and return to the initial credentials form.
+   * The held challenge token is discarded; the user must log in again.
+   */
+  cancel: () => void;
+  /**
+   * Whether a resolve call is currently in flight. Useful for disabling
+   * submit buttons inside the renderer.
+   */
+  pending: boolean;
+  /**
+   * Encrypts a sensitive plaintext using the same scheme the initial login
+   * uses for credentials. Present only when the Login component received a
+   * `publicKey`; renderers handling sensitive responses (e.g. a new password
+   * for `password_change`) should call this before invoking `resolve`.
+   * Absent when no `publicKey` was configured.
+   *
+   * May throw if the underlying RSA encryption fails (invalid key, empty
+   * plaintext, etc.). Renderers should catch in their submit handler and
+   * surface a user-visible error rather than letting the rejection escape.
+   */
+  encrypt?: (plaintext: string) => string;
+}
+
+/**
+ * A renderer responsible for displaying and resolving a single challenge type.
+ * Business apps register one per challenge type they support; the Login
+ * component looks up the renderer by `challenge.type` at runtime.
+ */
+export type LoginChallengeRenderer<
+  K extends keyof ResolvedChallenges = keyof ResolvedChallenges
+> = (props: LoginChallengeRendererProps<K>) => ReactNode;
+
+/**
+ * The full renderer registry — one renderer per known challenge type. When
+ * `Register['challenges']` is augmented, TypeScript enforces exhaustiveness
+ * (every declared challenge must have a renderer) and per-key typing of the
+ * `challenge.data` / `resolve` payloads.
+ */
+export type LoginChallengeRenderers = {
+  [K in keyof ResolvedChallenges]: LoginChallengeRenderer<K>;
+};
+
+/**
+ * The shared subset of LoginProps, independent of whether the flow may
+ * surface challenges.
+ */
+interface BaseLoginProps {
+  /**
+   * The logo of the login page.
+   */
+  logo?: ReactNode;
+  /**
+   * The title of the login page.
+   */
+  title?: string;
+  /**
+   * The description of the login page.
+   */
+  description?: string;
+  /**
+   * The public key for encrypting credentials (and sensitive challenge
+   * responses via `LoginChallengeRendererProps.encrypt`).
+   */
+  publicKey?: string;
+  /**
+   * The callback function for the login.
+   */
+  onLogin: (params: LoginParams) => Promise<LoginResult>;
+}
+
+/**
+ * Challenge-aware Login wiring. `onResolveChallenge` and `challengeRenderers`
+ * are required together: a server that can return challenges needs both a
+ * transport (`onResolveChallenge`) and a presenter (`challengeRenderers`).
+ */
+interface LoginPropsWithChallenge {
+  onResolveChallenge: (params: ResolveChallengeParams) => Promise<LoginResult>;
+  challengeRenderers: LoginChallengeRenderers;
+}
+
+/**
+ * Login wiring for backends that never issue challenges.
+ */
+interface LoginPropsWithoutChallenge {
+  onResolveChallenge?: never;
+  challengeRenderers?: never;
+}
+
+/**
+ * The props of the Login component. Either both challenge hooks are wired
+ * up, or neither is — partial wiring would leave the UI stranded on a
+ * challenge it cannot dispatch.
+ */
+export type LoginProps = BaseLoginProps & (LoginPropsWithChallenge | LoginPropsWithoutChallenge);

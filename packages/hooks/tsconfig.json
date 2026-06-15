@@ -1,0 +1,9 @@
+{
+  "extends": "../dev/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["vef"]
+  },
+  "include": ["src", "test-utils.tsx", "vite.config.ts", "env.d.ts"]
+}

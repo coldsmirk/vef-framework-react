@@ -1,0 +1,19 @@
+{
+  "extends": "../packages/dev/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@emotion/react",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["vef"],
+    "paths": {
+      "~api": ["./src/api"],
+      "~apis": ["./src/apis"],
+      "~helpers": ["./src/helpers"],
+      "~components": ["./src/components"],
+      "~router": ["./src/router"],
+      "~stores": ["./src/stores"],
+      "~types": ["./src/types"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

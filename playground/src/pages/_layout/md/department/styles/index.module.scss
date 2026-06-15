@@ -1,0 +1,18 @@
+.card-container {
+  :global(.vef-card-head) {
+    padding-block: var(--vef-spacing-md);
+  }
+}
+
+.card-title {
+  line-height: var(--vef-control-height);
+}
+
+.card-body {
+  height: 100%;
+}
+
+.tree-wrapper {
+  flex: auto;
+  overflow: hidden;
+}

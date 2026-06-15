@@ -1,0 +1,49 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vef-spacing-md);
+}
+
+.welcome-card {
+  position: relative;
+}
+
+.welcome-title {
+  margin: 0;
+}
+
+.welcome-stats {
+  height: 100%;
+
+  .welcome-stat-item {
+    :global(.vef-typography) {
+      font-size: var(--vef-font-size-lg);
+    }
+
+    :global(span:last-child) {
+      font-family: var(--vef-font-family-code);
+      font-size: var(--vef-font-size-heading-3);
+      font-weight: 500;
+    }
+  }
+}
+
+.stat-card {
+  :global(.vef-statistic-content) {
+    font-family: var(--vef-font-family-code);
+    font-size: var(--vef-font-size-heading-2);
+    font-weight: 700;
+    color: var(--vef-color-text);
+  }
+}
+
+.stat-card-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  font-size: 32px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}

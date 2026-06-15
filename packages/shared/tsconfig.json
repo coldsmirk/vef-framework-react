@@ -1,0 +1,8 @@
+{
+  "extends": "../dev/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["vef"]
+  },
+  "include": ["src", "env.d.ts", "vite.config.ts"]
+}

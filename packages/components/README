@@ -1,0 +1,17 @@
+# @vef-vue/components
+
+UI components for using VEF Vue framework.
+
+## Installation
+
+```bash
+pnpm add @vef-vue/components
+```
+
+## Usage
+
+```tsx
+import { VefButton } from "@vef-vue/components"
+
+<VefButton>Click me</VefButton>
+```

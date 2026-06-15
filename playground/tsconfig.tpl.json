@@ -1,0 +1,16 @@
+{
+  "extends": "@vef-framework-react/dev/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "paths": {
+      "~api": ["./src/api"],
+      "~apis": ["./src/apis"],
+      "~helpers": ["./src/helpers"],
+      "~components": ["./src/components"],
+      "~router": ["./src/router"],
+      "~types": ["./src/types"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

@@ -1,0 +1,12 @@
+export const VEF_FRAMEWORK_VERSION = "1.0.0";
+export const PUBLIC_DIR = "public";
+export const ENV_DIR = "env";
+export const ASSETS_DIR = "assets";
+export const ENV_APP_PREFIX = "VEF_APP_";
+export const ENV_BUILD_PREFIX = "VEF_BUILD_";
+export const SRC_DIR = "src";
+export const DEFAULT_OUTPUT_DIR = "dist";
+export const DEFAULT_SERVER_PORT = 3833;
+export const DEFAULT_APP_NAME = "APP";
+export const PAGES_DIR = "pages";
+export const ROUTER_DIR = "router";

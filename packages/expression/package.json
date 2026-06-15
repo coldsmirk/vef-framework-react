@@ -1,0 +1,72 @@
+{
+  "name": "@vef-framework-react/expression",
+  "type": "module",
+  "version": "2.4.0",
+  "private": false,
+  "packageManager": "pnpm@11.1.2",
+  "description": "Frontend abstraction over the GoRules ZEN expression engine (WASM) for VEF framework",
+  "author": {
+    "name": "Venus",
+    "email": "iweixiaopeng@163.com",
+    "url": "https://github.com/ilxqx"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://vef.ilxqx.com",
+  "keywords": ["vef", "framework", "react", "expression", "zen", "gorules", "wasm"],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "vef": "./src/index.ts",
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/es/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./react": {
+      "vef": "./src/react/index.ts",
+      "import": {
+        "types": "./dist/types/react/index.d.ts",
+        "default": "./dist/es/react/index.js"
+      },
+      "require": {
+        "types": "./dist/types/react/index.d.ts",
+        "default": "./dist/cjs/react/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/es/index.js",
+  "types": "dist/types/index.d.ts",
+  "files": ["dist"],
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@gorules/zen-engine-wasm": "0.23.1",
+    "@vef-framework-react/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "react": "^19.2.7"
+  }
+}

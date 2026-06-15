@@ -1,0 +1,42 @@
+.custom-data-scope-button {
+  &:global(.hidden) {
+    visibility: hidden;
+  }
+
+  &:global(.vef-btn) {
+    height: auto;
+    padding-inline: 0;
+  }
+}
+
+.popover-title {
+  &:global(.vef-popover-title) {
+    --vef-popover-title-margin-bottom: 0;
+  }
+}
+
+.tabs {
+  &:global(.vef-tabs) {
+    --vef-tabs-horizontal-margin: 0 0 var(--vef-spacing-sm) 0;
+  }
+}
+
+.transfer-wrapper {
+  width: 680px;
+}
+
+.tree-wrapper {
+  padding: var(--vef-spacing-sm);
+}
+
+.search-field {
+  width: 200px;
+}
+
+div.user-assignment-modal-body {
+  height: 60vh;
+}
+
+div.user-selector-table {
+  height: 50vh;
+}

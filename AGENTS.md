@@ -1,0 +1,251 @@
+# AGENTS.md
+
+This file provides guidance to AI coding agents when working with code in this repository. Kept in sync with `CLAUDE.md` — edit both together.
+
+## Project Overview
+
+VEF Framework is a React 19 application framework published to npm under `@vef-framework-react/*` (with external consumers). It is a pnpm-workspace monorepo built on TypeScript and Vite. Backwards-incompatible changes affect downstream apps, so prefer additive changes and surface breaking ones explicitly.
+
+## Commands
+
+### Development
+
+- `pnpm playground` — Start the playground dev server
+- `pnpm test` — Run all tests
+- `pnpm test:watch` — Tests in watch mode
+- `pnpm test:coverage` — Coverage report (informational only; not a CI gate)
+- `vitest run path/to/file.spec.ts` — Run a single test file
+
+### Quality (CI gates)
+
+- `pnpm typecheck` — Typecheck all packages
+- `pnpm typecheck:<pkg>` — Typecheck one package (`core` / `components` / `hooks` / `shared` / `expression` / `dev` / `starter` / `form-editor` / `approval-flow-editor`)
+- `pnpm lint` — ESLint `--fix` across the repo
+- `eslint --fix <file>` — Lint a single file
+
+### Build
+
+- `pnpm build` — Build all packages
+- `pnpm build:<pkg>` — Build one package (`core` / `components` / `hooks` / `shared` / `expression` / `dev` / `starter`; plus `build:playground`)
+- `pnpm clean` — Clean all package build outputs
+- `pnpm clean:modules` — Drop all `node_modules` and `pnpm-lock.yaml`
+
+### Dependencies & Metadata
+
+- `pnpm deps:check` — Check inter-package dependency consistency
+- `pnpm deps:check:apply` — Apply recommended fixes
+- `pnpm sync-meta` — Sync package metadata across the monorepo
+
+### Release
+
+- `pnpm version:patch|minor|major` — Bump versions across the monorepo
+- `pnpm release:patch|minor|major` — Bump + clean + build + publish
+- `pnpm pub` — Publish all packages without a version bump
+- `pnpm unpub` — Roll back published versions (see `scripts/unpublish.ts`)
+
+## Architecture
+
+### Monorepo Layout
+
+- pnpm workspaces; inter-package deps use `workspace:*`
+- Source packages: `packages/*`. Demo app: `playground/`. Plugins: `plugins/`.
+- Build orchestration via `pnpm --filter=./packages/* <cmd>`
+- **Source resolution**: package `exports` include a `"vef"` condition pointing at `src`; the playground's Vite config and the Vitest config resolve through it (Vitest also via explicit `src` path aliases) to the unbuilt sources for HMR / fast tests without rebuilds.
+
+### Packages
+
+Most packages publish under `@vef-framework-react/*` as dual ESM/CJS with TypeScript declarations (`form-editor` is currently `private`).
+
+| Package | Purpose |
+| --- | --- |
+| **core** | API client (TanStack Query + axios), `HttpClient` with `BusinessError` / token refresh, state utilities (Jotai / Zustand / XState), Immer, selector-based contexts, resumable chunked-upload `Uploader`, SSE client |
+| **components** | antd v6 + Emotion UI library (100+ components), TanStack Form integration, semantic color/scene system, custom motion/typography components |
+| **hooks** | Reusable React hook library (permission / event / dictionary / upload / deep-compare / etc.) |
+| **shared** | Pure-function utilities (tree, chrono, color, equal, key, path, string, event, task, format) |
+| **expression** | Frontend abstraction over the GoRules ZEN engine (`@gorules/zen-engine-wasm`) — expression compile/evaluate + editor lint/hover/completion; surfaced via `ExpressionInput` in `components`, used by `form-editor` and `approval-flow-editor` (the flow editor shares its `CONDITION_OPERATORS` vocabulary and edits branch expressions through `ExpressionInput`; evaluation still happens on the backend) |
+| **starter** | Ready-to-use layouts and auth components on top of TanStack Router |
+| **form-editor** | Visual form schema editor. `private` is temporary — slated for npm publish; treat its `src/index.ts` as publication-grade (still pre-release, so pattern-fixing breaking changes are OK now). Targets forms with 100s of fields. |
+| **approval-flow-editor** | Visual approval flow editor on @xyflow/react v12 (ReactFlow) + elkjs auto-layout (excluded from test scope — visual canvas) |
+| **dev** | Shared ESLint / Stylelint / Commitlint configs, Vite plugins, TypeScript configs |
+
+### Key Patterns
+
+- **API Client** (`packages/core/src/api/client.ts`) wraps `HttpClient` + `QueryClient`. `createQueryFn` / `createMutationFn` inject an `AbortSignal` automatically; `executeMutation()` runs mutations imperatively.
+- **HTTP errors** split into `BusinessError` (API returned a non-OK business code; carries `code` / `message` / `data`) and network errors (axios errors for 4xx/5xx, timeouts).
+- **Token refresh queue** (`packages/core/src/http/client.ts`): on a 401 with a configured `tokenExpiredCode`, `HttpClient` refreshes once. Concurrent **new** requests fired during the refresh queue in `#waitingQueue` and resume with the renewed token; the request whose 401 triggered the refresh rethrows the original error (response interceptor rethrows after the switch).
+- **Path parameters**: `:paramName` in the URL is substituted from `params` — `/users/:id` + `{ id: 123 }` → `/users/123`.
+- **Auth skip**: set header `X-Skip-Authentication: "1"` to bypass Bearer injection for a single request.
+- **State management**: Jotai for atomic state, Zustand for stores (with `createStore` / `createPersistedStore` middleware stack in `core/store`), XState for complex machines (with `useActor` + selector in `core/state-machine`). Pick by complexity.
+- **Forms**: TanStack Form is wrapped by `packages/components/src/form/*` and surfaced through `FormModal` / `FormDrawer` / `Crud`.
+- **Expression engine**: `packages/expression` wraps the GoRules ZEN WASM engine and defines the `$vars` / `$user` / `$node` / `$form` scope; `components/expression-input` wires it to CodeMirror for in-editor lint / hover / completion; form-editor linkage evaluates through it (approval-flow conditions are plain backend-evaluated expressions, not ZEN).
+- **Editor perf at scale**: the form/flow editors target 100s of fields — keep per-keystroke render and per-frame drag cheap (structural sharing in `packages/form-editor/src/engine/schema/mutate.ts`, memoized canvas rows, and don't let `$vars` / expression-scope changes bust cell `memo`). Discrete-action tree walks (drop / duplicate) are not hot paths; don't pre-optimize them.
+
+### Build System
+
+- Vite for all packages via `defineBuildConfig()` (`scripts/build-config.ts`)
+- Auto-externalizes deps/peerDeps; Emotion CSS-in-JS transform; `.d.ts` via unplugin-dts
+- Requires Node 22+. pnpm version is auto-tracked from `package.json#packageManager` (CI uses `pnpm/action-setup@v4`).
+
+## Testing
+
+Vitest 4 + jsdom + `@testing-library/react`. Test files: `./packages/**/*.spec.{ts,tsx}`. Global setup at `./scripts/test-setup.ts` (browser-API mocks, `localStorage` polyfill, jsdom virtual-console filter). The root `vitest.config.ts` enables `globals: true`, so `describe` / `it` / `beforeEach` / `expect` / `vi` are available without imports.
+
+Conventions below follow Testing Library, Kent C. Dodds' Testing Trophy, and the practices of React Aria / Radix / Mantine / TanStack. Existing specs are being aligned; new specs follow these from day one.
+
+### Philosophy
+
+- **Test behavior, not implementation.** Assert on what a caller observes, not internal state, private fields, or refactor-fragile structure.
+- **Confidence over coverage.** Prefer integration-level tests (render → interact → assert). Coverage is a side-effect of good tests.
+- **One concept per `it`.** Unrelated assertions belong in separate `it` blocks.
+- **No flaky tests.** No performance assertions, time-of-day logic, or real-clock `setTimeout` waits.
+
+### File Layout
+
+Specs are **colocated** next to the source: `<name>.spec.ts(x)` when the source is `<name>.ts(x)`, or `index.spec.ts(x)` when the source is `index.ts(x)`. No `__tests__/` directories.
+
+### Canonical Samples
+
+Reach for these patterns before inventing new ones:
+
+- **Pure utility** — `packages/shared/src/utils/tree.spec.ts`
+- **Hook with `apiClient` injection** — `packages/hooks/src/use-has-fetching/index.spec.ts` (passes `apiClient` to `renderHook`, builds a `queryFn` via `apiClient.createQueryFn`)
+- **Component (antd + permission)** — `packages/components/src/permission-gate/index.spec.tsx`
+- **Component (form submit lifecycle)** — `packages/components/src/form-modal/index.spec.tsx`
+- **Component (async UI gated by `Promise.withResolvers`)** — `packages/components/src/action-button/index.spec.tsx` (loading state under a deferred onClick)
+- **`vi.hoisted` + `vi.mock` for a CJS package** — `packages/core/src/http/client.spec.ts` (axios)
+- **`vi.mock` for a typed SDK module** — `packages/core/src/sse/client.spec.ts`
+- **In-repo dependency mock at the package boundary** — `packages/components/src/file-upload/index.spec.tsx` (mocks `core/Uploader`)
+- **Fake-driver scripted backend** — `packages/core/src/storage/uploader.spec.ts`
+- **Manual `defer<T>()` for deterministic async ordering** — `packages/core/src/http/client.spec.ts`, `packages/core/src/storage/uploader.spec.ts`
+
+### Imports & Wrappers
+
+- `globals: true` is on — new specs **omit** `describe` / `it` / `expect` / `vi` imports. Existing explicit imports are kept; do not bulk-rename old specs purely to drop them.
+- **Component and hook specs go through the package's `test-utils.tsx`** (`packages/components/test-utils.tsx`, `packages/hooks/test-utils.tsx`) — `render` / `renderHook` from that module install `ConfigProvider` / `AppContextProvider` / `ApiClientProvider`. Bypassing the wrapper makes antd and permission-aware code misfire.
+- Pull `screen`, `waitFor`, `act`, `within`, etc. from the same `test-utils.tsx` (it re-exports `* from "@testing-library/react"`).
+- Specs that touch `useApiClient` / `useMutation` / `useQuery` pass `apiClient` to `render` / `renderHook`; the wrapper installs `ApiClientProvider` (which provides `QueryClientProvider`). Use `createTestApiClient()` for an isolated per-test instance — its default `baseUrl` is `http://vef-test.invalid` so any leaked real network call fails loudly.
+- Packages without a local `test-utils.tsx` (currently `core`, `shared`, `expression`, and `form-editor`) import directly from `@testing-library/react`. They have no provider requirements — `core/state-machine/index.spec.ts`, `core/context/disabled.spec.tsx`, and `core/context/context-selector.spec.tsx` are the canonical examples.
+
+### Structure & Queries
+
+- `describe(module name)` → optional `describe("when <condition>")` → `it("<observable outcome>")`. Descriptions read as sentences: `it("renders the dialog")`, `it("throws when X is missing")`. **Do not prefix with "should"** — third-person verb or imperative statement only.
+- Separate happy path, edge cases, and errors into distinct `describe` blocks.
+- One `it` per case — do not use `it.each` (it collapses semantically distinct cases under one description and obscures which row failed).
+- Prefer accessible queries: `getByRole` / `findByRole` > `getByLabelText` > `getByText` > `getByTestId`. See [Testing Library priority](https://testing-library.com/docs/queries/about#priority).
+- `queryBy*` is **only** for absence assertions (`expect(queryBy...).not.toBeInTheDocument()`).
+- `findBy*` already waits — do not wrap it in `waitFor`.
+- Don't query by CSS class unless the class is a documented contract (e.g. `vef-btn-loading`).
+
+### Interactions & Async
+
+- **`userEvent` only.** Fresh `userEvent.setup()` per test. `userEvent` fires the full pointer/focus chain and flushes microtasks; `fireEvent` does not, which silently breaks antd popover / popconfirm transitions. The repo currently has zero `fireEvent` usage — even antd's hidden `<Upload>` input is driven by `user.upload(input, file)` (see `packages/components/src/file-upload/index.spec.tsx`). If a new spec genuinely needs `fireEvent`, justify the exception in the PR description.
+- `await findBy*` for elements appearing async; `await waitFor(() => expect(...))` for non-element state.
+- `Promise.withResolvers()` (or a hand-rolled `defer<T>()`) gates async flow under test (`action-button`, `http/client`, `uploader`).
+- Timer-driven code: `vi.useFakeTimers()` / `vi.useRealTimers()`; flush via `vi.runAllTimers()`, `vi.runAllTimersAsync()`, or `vi.advanceTimersByTime(ms)`. Use `vi.useFakeTimers({ shouldAdvanceTime: true })` when the code under test mixes a real `await` with fake intervals.
+- `vi.spyOn(target, "method")` over `vi.fn` whenever you want the original implementation to still run (e.g. silencing `console.warn` while observing calls — see `silenceConsole` in `http/client.spec.ts`). Reach for `vi.fn` when constructing a replacement from scratch.
+- **Never** `await new Promise(r => setTimeout(r, ms))` — it's flaky, slow, and not what user-visible behavior depends on. Use microtask flushes (`await Promise.resolve()`) for ordering and fake timers for delay-sensitive code.
+
+### Assertions
+
+- Plain `expect().to*` + jest-dom matchers (`toBeInTheDocument`, `toHaveTextContent`, `toHaveAttribute`, `toBeDisabled`, `toHaveValue`). No custom matchers.
+- Snapshot tests only for stable structural output (e.g. generated schema). Never for rendered DOM.
+
+### Mocking
+
+- Mock the **network layer** (`axios` / `fetch` / event-source) and **side-effect entry points** of third-party SDKs.
+- `vi.hoisted` is required when a `vi.mock` factory needs to reference an outer variable — Vitest hoists `vi.mock` to file-top, and `vi.hoisted` is the only legal way to share state with the factory. See `http/client.spec.ts`.
+- Browser APIs (`ResizeObserver`, `IntersectionObserver`, `matchMedia`, `localStorage`) are already mocked globally in `scripts/test-setup.ts` — do not duplicate.
+- **Do not mock internal modules.** Test through the public API. The fake-driver pattern in `uploader.spec.ts` is canonical: construct a typed fake of the boundary, script its responses, record calls for assertion.
+- A dependency from another in-repo package counts as a boundary — mocking it is fine when that dependency has its own thorough coverage (e.g. `components/file-upload` mocking `core/Uploader`).
+- **Per-test mock isolation:** the project does not run `test.concurrent`, so two patterns coexist legitimately:
+  1. **Boundary mocks created once** (`vi.hoisted` instances, module-scoped `vi.fn()` like `mockHasPermission` in `permission-gate`) — cleared in `beforeEach` via `mockClear()` / `mockReset()`. Required for `vi.mock` factories; acceptable elsewhere.
+  2. **State-carrying fakes** (call counters, captured payloads, in-memory queues like `use-deep-memo`'s `factoryCallCount`) — must be re-created inside `beforeEach`. If a counter or buffer survives between tests, isolation is gone.
+- Reset shared state in `afterEach` via `vi.restoreAllMocks()` / `vi.clearAllTimers()`.
+
+### Hooks
+
+- `renderHook` from the package's local `test-utils.tsx`. The legacy `@testing-library/react-hooks` is not used.
+- `act` wrapping is implicit for Testing-Library-triggered updates — wrap manually only when the React warning explicitly asks.
+- Read latest value via `result.current` at each assertion point. Don't destructure into a stale binding.
+
+### What Not to Test
+
+- Pure re-export modules: `core/common`, `core/dnd`, `core/immer`, `core/motion`, `core/state`
+- Pure antd pass-through components (no behavior beyond a wrapper)
+- Pure style / animation components
+- Excluded from **coverage** (existing specs still run in `pnpm test`): `starter`, `dev`, `plugins`, `playground`, and the visual canvas in `approval-flow-editor`. `form-editor` and `expression` ARE in test scope (heavily tested) — just without an aggregate threshold yet.
+- Generated artifacts (`dist/`, `.d.ts`)
+
+### Coverage & Process
+
+- Package-level thresholds enforced via `vitest.config.ts` for `shared` / `hooks` / `core`. Values reflect the measured baseline minus ~5% buffer; raised stage by stage as new specs land. `components`, `form-editor`, and `expression` are coverage-measured but have no aggregate threshold by design — tracked per-component/feature.
+- CI gates on `pnpm typecheck && pnpm lint && pnpm test`. `pnpm test:coverage` runs as an informational artifact only.
+- New components and hooks ship with a spec. Exceptions justified in the PR description.
+- When modifying any `packages/{shared,hooks,core,components,form-editor,expression}/**` source, update the corresponding spec. Before renaming exports or changing prop types, search for specs asserting the old contract.
+- Use `test:` prefix for test-only commits (Conventional Commits, enforced by commitlint).
+
+## Conventions
+
+### Commit Messages
+
+- **Single-line only.** One Conventional Commits header (`type(scope): subject`); no blank line, no body — enforced by commitlint's `body-empty`/`footer-empty` rules (root `commitlint.config.ts` and `@vef-framework-react/dev`'s `defineCommitlintConfig`). Pass exactly one `-m` (keep under ~100 chars). Flag breaking changes with the header `!` (`feat!:`, `feat(scope)!:`) — the `BREAKING CHANGE:` footer is rejected. Extra rationale goes in the PR description or chat, never the commit body.
+- `test:` prefix marks test-only commits (commitlint-enforced).
+
+### Naming & Imports
+
+- Filenames: kebab-case. React components: PascalCase.
+- No leading-underscore identifiers (e.g. `_handleSubmit`). A `_` prefix is reserved solely for intentionally-unused params/vars (the ESLint `^_` ignore pattern) — never as a naming style for real, used bindings.
+- Comments, JSDoc, and inline docs: English only.
+- When wrapping a same-named component from another package, alias the imported inner component as `XxxInternal`.
+- Imports sorted by perfectionist plugin: type imports first, then external, then internal (alphabetical within group).
+
+### TypeScript
+
+- Strict mode; TypeScript 6+. Avoid `any` — `no-explicit-any` is **off** (a convention, not lint-enforced), so prefer precise types / generics and narrow casts rather than reaching for `any`
+- Prefer `interface` over `type` for object shapes
+- Array types: `T[]` for simple, `Array<T>` for complex (array-simple rule)
+- Max 5 function parameters
+- Type safety is not negotiable: prefer an exhaustive `switch` (with `assert-never` / `exhaustive()`) over `as` / widening casts on discriminated unions — never loosen types with a cast where a switch type-checks.
+
+### React & JSX
+
+- No class components, no `defaultProps`, prefer hooks
+- No unnecessary `useMemo` / `useCallback`
+- JSX props sorted: `key` / `ref` first, then alphabetical, callbacks last
+
+### Formatting
+
+@stylistic/eslint-plugin: 2-space indent, double quotes, semicolons, 120-char line width.
+
+### CSS Styling
+
+- Antd styles live in the `antd` CSS layer; VEF styles already have higher priority — **don't use `!important` or `&&` to override antd**.
+- Use `globalCssVars` from `@vef-framework-react/components` for theme variables.
+- Many CSS vars (`colorText`, `colorBorder`, `colorBgContainer`) auto-adapt to light/dark — no `.dark` overrides needed.
+- Use `html.dark &` only for properties that genuinely differ between themes (gradients, shadows, glass effects).
+
+## Tooling & Workflow
+
+### Git Hooks
+
+- **Pre-commit** (`lint-staged`): runs `eslint --fix` on staged `.js` / `.ts` / `.tsx` / `.json` / `.md` files
+- **Pre-push** (`.husky/pre-push`): runs `pnpm typecheck && pnpm test` before any push
+
+### CI
+
+`.github/workflows/test.yml` runs on every PR and push to `main`:
+
+- Gating: `pnpm typecheck` → `pnpm lint` → `pnpm test`
+- Informational: `pnpm test:coverage` (uploaded as artifact but not gating)
+
+### Skills to Use
+
+Every package is React 19 — apply these by **default** when writing or reviewing any component / hook (not only for big refactors):
+
+- `/vercel-react-best-practices` — performance & re-render patterns (memoization, derived state, effect deps, large lists)
+- `/vercel-composition-patterns` — component API design (compound components, avoid boolean-prop sprawl, lift state, React 19 APIs)
+- `/ant-design` — antd 6.x decision guide (component selection, theming/tokens, performance, CRUD / ProComponents); the UI layer is antd v6 + Emotion
+- `/frontend-design` — visual design, styling, UI aesthetics
+- `/web-design-guidelines` — UI code review (performance, forms, animations; accessibility is not prioritized for this project)
+- ReactFlow v12 (`@xyflow/react`) best practices when working in `approval-flow-editor` (its only consumer)
+- No `tanstack-form` skill exists — forms go through the `@vef-framework-react/components` form wrapper (`packages/components/src/form/*`)

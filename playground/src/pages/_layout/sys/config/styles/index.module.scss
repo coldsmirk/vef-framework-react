@@ -1,0 +1,85 @@
+.menu {
+  &:global(.vef-menu-light.vef-menu-root.vef-menu-inline) {
+    border-inline-end: 0;
+  }
+}
+
+.search-input {
+  width: 280px;
+}
+
+/* Config list container */
+.config-list-card {
+  &:global(.vef-card) {
+    --vef-card-body-padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Config item styles */
+.config-item {
+  display: flex;
+  gap: var(--vef-spacing-xl);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--vef-spacing-lg) var(--vef-spacing-xl);
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--vef-color-fill-quaternary);
+  }
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--vef-color-border-secondary);
+  }
+}
+
+.config-item-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.config-item-title {
+  font-size: var(--vef-font-size);
+  font-weight: 500;
+  color: var(--vef-color-text);
+}
+
+.config-item-desc {
+  font-size: calc(var(--vef-font-size) - 2px);
+  line-height: 1.5;
+  color: var(--vef-color-text-tertiary);
+}
+
+.config-item-control {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  min-width: 240px;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+}
+
+.error-message {
+  padding: var(--vef-spacing-xs) var(--vef-spacing-xl);
+  padding-top: 0;
+}
+
+.config-item-control-input {
+  width: 240px;
+}
+
+/* Aside panel */
+.aside-card {
+  &:global(.vef-flex-card) {
+    height: 100%;
+  }
+}

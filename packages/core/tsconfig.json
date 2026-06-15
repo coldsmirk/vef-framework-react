@@ -1,0 +1,10 @@
+{
+  "extends": "../dev/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@emotion/react",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["vef"]
+  },
+  "include": ["src", "env.d.ts", "vite.config.ts"]
+}

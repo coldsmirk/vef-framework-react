@@ -1,0 +1,18 @@
+import type { LucideProps } from "lucide-react";
+
+export function LetterSIcon({
+  size = "1.2em",
+  ...props
+}: LucideProps) {
+  return (
+    <svg
+      height={size}
+      viewBox="0 0 24 24"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path d="M11 7a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v2H9v2h4a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2V9h4V7z" fill="currentColor" />
+    </svg>
+  );
+}
