@@ -170,7 +170,7 @@ export function PalettePanel(): ReactElement {
             </div>
           )}
 
-      <ScrollArea css={panelBodyCss}>
+      <ScrollArea css={panelBodyCss} scrollbars="vertical">
         {groupedDefinitions.length === 0
           ? <div css={emptyCss}>没有匹配的组件</div>
           : groupedDefinitions.map(([group, definitions]) => (

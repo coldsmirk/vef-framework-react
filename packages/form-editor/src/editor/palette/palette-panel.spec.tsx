@@ -1,16 +1,32 @@
+import type { ScrollAreaProps } from "@vef-framework-react/components";
 import type { ReactElement } from "react";
 
 import type { FormEditorStoreApi } from "../../store/form-store";
+import type { EditorLayoutMode } from "../editor-layout-context";
 
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
+import { EditorLayoutProvider } from "../editor-layout-context";
 import { PalettePanel } from "./palette-panel";
+
+vi.mock("@vef-framework-react/components", async importOriginal => {
+  const actual = await importOriginal<typeof import("@vef-framework-react/components")>();
+
+  return {
+    ...actual,
+    ScrollArea: ({ children, scrollbars }: ScrollAreaProps) => (
+      <div data-scrollbars={scrollbars} data-testid="palette-scroll-area">
+        {children}
+      </div>
+    )
+  };
+});
 
 interface PalettePanelHarnessProps {
   onReady: (api: FormEditorStoreApi) => void;
@@ -34,16 +50,18 @@ function getStoreApi(storeApi: FormEditorStoreApi | null): FormEditorStoreApi {
   return storeApi;
 }
 
-function setupPalettePanel(): FormEditorStoreApi {
+function setupPalettePanel(layout: EditorLayoutMode = "comfortable"): FormEditorStoreApi {
   let storeApi: FormEditorStoreApi | null = null;
 
   render(
     <FormEditorStoreProvider initialState={{}}>
       <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
-        <PalettePanelHarness onReady={nextApi => {
-          storeApi = nextApi;
-        }}
-        />
+        <EditorLayoutProvider value={layout}>
+          <PalettePanelHarness onReady={nextApi => {
+            storeApi = nextApi;
+          }}
+          />
+        </EditorLayoutProvider>
       </RegistryProvider>
     </FormEditorStoreProvider>
   );
@@ -52,6 +70,19 @@ function setupPalettePanel(): FormEditorStoreApi {
 }
 
 describe("PalettePanel", () => {
+  it("renders the component list as a vertical-only scroll area", () => {
+    setupPalettePanel();
+
+    expect(screen.getByTestId("palette-scroll-area")).toHaveAttribute("data-scrollbars", "vertical");
+  });
+
+  it("hides horizontal overflow in the drawer icon rail", () => {
+    setupPalettePanel("drawer");
+
+    expect(screen.getByTestId("palette-scroll-area")).toHaveAttribute("data-scrollbars", "vertical");
+    expect(screen.queryByPlaceholderText("搜索组件…")).not.toBeInTheDocument();
+  });
+
   it("hides in preview mode without resetting local search state", async () => {
     const user = userEvent.setup();
     const storeApi = setupPalettePanel();

@@ -110,9 +110,11 @@ const listCss = css({
 });
 
 const railGroupCss = css({
+  boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
   gap: 6,
+  width: "100%",
   padding: "6px 8px",
 
   "& + &": {
