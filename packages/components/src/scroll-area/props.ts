@@ -4,10 +4,18 @@ import type { ComponentPropsWithRef, CSSProperties, Ref } from "react";
 
 import type { Length, Position } from "../_base";
 
+export type ScrollAreaScrollbars = "both" | "vertical" | "horizontal";
+
 /**
  * The props for the ScrollArea component.
  */
 export interface ScrollAreaProps extends Except<ComponentPropsWithRef<"div">, "dir">, Pick<ScrollAreaPropsInternal, "type" | "scrollHideDelay"> {
+  /**
+   * Which scrollbar axes to render.
+   *
+   * @default "both"
+   */
+  scrollbars?: ScrollAreaScrollbars;
   /**
    * The size of the scrollbar
    *

@@ -192,7 +192,7 @@ export { Radio, type RadioGroupProps, type RadioOption, type RadioProps } from "
 export { Rate, type RateProps } from "./rate";
 export { Result, type ResultProps } from "./result";
 export { Row, type RowProps } from "./row";
-export { ScrollArea, type ScrollAreaProps } from "./scroll-area";
+export { ScrollArea, type ScrollAreaProps, type ScrollAreaScrollbars } from "./scroll-area";
 export { Segmented, type SegmentedOption, type SegmentedProps } from "./segmented";
 export {
   Select,

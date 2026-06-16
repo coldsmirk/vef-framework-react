@@ -18,6 +18,7 @@ export function ScrollArea({
   ref,
   scrollbarSize,
   scrollbarPadding,
+  scrollbars = "both",
   viewportRef,
   viewportClassName,
   viewportStyle,
@@ -28,6 +29,8 @@ export function ScrollArea({
   children,
   ...rootProps
 }: ScrollAreaProps) {
+  const showVertical = scrollbars === "both" || scrollbars === "vertical";
+  const showHorizontal = scrollbars === "both" || scrollbars === "horizontal";
   const { style: rootStyle, ...restRootProps } = rootProps;
   const mergedRootStyle = useMemo<CSSProperties>(() => {
     return {
@@ -80,23 +83,31 @@ export function ScrollArea({
         {children}
       </Viewport>
 
-      <Scrollbar
-        css={styles.scrollbar}
-        orientation="vertical"
-      >
-        <Thumb css={styles.thumb} />
-      </Scrollbar>
+      {showVertical
+        ? (
+            <Scrollbar
+              css={styles.scrollbar}
+              orientation="vertical"
+            >
+              <Thumb css={styles.thumb} />
+            </Scrollbar>
+          )
+        : null}
 
-      <Scrollbar
-        css={[styles.scrollbar]}
-        orientation="horizontal"
-      >
-        <Thumb css={styles.thumb} />
-      </Scrollbar>
+      {showHorizontal
+        ? (
+            <Scrollbar
+              css={styles.scrollbar}
+              orientation="horizontal"
+            >
+              <Thumb css={styles.thumb} />
+            </Scrollbar>
+          )
+        : null}
 
-      <Corner />
+      {showVertical && showHorizontal ? <Corner /> : null}
     </Root>
   );
 }
 
-export { type ScrollAreaProps } from "./props";
+export { type ScrollAreaProps, type ScrollAreaScrollbars } from "./props";
