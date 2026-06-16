@@ -111,7 +111,13 @@ const labelCss = css({
   whiteSpace: "nowrap"
 });
 
+// A square card that fills the drawer rail's content width (the 64px dock minus
+// the rail group's 8px side padding), keeping the icon centered as the rail
+// widens. Tracks PALETTE_DOCK_WIDTH_DRAWER in styles.ts.
 const itemIconOnlyCss = css({
+  boxSizing: "border-box",
+  width: 48,
+  minHeight: 48,
   justifyContent: "center",
   padding: 8
 });

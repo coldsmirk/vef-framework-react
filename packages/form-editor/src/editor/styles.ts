@@ -18,7 +18,7 @@ import { globalCssVars } from "@vef-framework-react/components";
  */
 export const PALETTE_DOCK_WIDTH = 296;
 export const PALETTE_DOCK_WIDTH_COMPACT = 256;
-export const PALETTE_DOCK_WIDTH_DRAWER = 56;
+export const PALETTE_DOCK_WIDTH_DRAWER = 64;
 
 export const PROPERTIES_PANEL_WIDTH = 380;
 export const PROPERTIES_PANEL_WIDTH_COMPACT = 360;
