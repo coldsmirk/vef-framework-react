@@ -382,6 +382,7 @@ function validateBlock(raw: unknown, where: string, scope: string[], ctx: Ctx): 
   registerId(raw.id, where, ctx);
   validateSpan(raw.span, where, ctx);
   validateFlexValue(raw.flex, where, ctx);
+  validateColumnWidth(raw.columnWidth, where, ctx);
 
   const { type } = raw;
 
@@ -838,5 +839,21 @@ function validateFlexValue(flex: unknown, where: string, ctx: Ctx): void {
 
   if (flex.basis !== undefined && typeof flex.basis !== "string") {
     ctx.issues.push(createIssue(`${where}.flex.basis`, "flex_invalid"));
+  }
+}
+
+/**
+ * A block's fixed column width (used when the block is a column of a table
+ * subform). When present it must be a positive, finite number of pixels; the
+ * editor's write path floors it to an integer ≥ 1. Honored only under a table
+ * subform parent; a stray value elsewhere is inert.
+ */
+function validateColumnWidth(columnWidth: unknown, where: string, ctx: Ctx): void {
+  if (columnWidth === undefined) {
+    return;
+  }
+
+  if (typeof columnWidth !== "number" || !Number.isFinite(columnWidth) || columnWidth <= 0) {
+    ctx.issues.push(createIssue(`${where}.columnWidth`, "column_width_invalid"));
   }
 }

@@ -24,7 +24,15 @@ const bodyInnerCss = css({
   display: "flex",
   flexDirection: "column",
   gap: 22,
-  padding: "22px 20px 24px"
+  padding: "22px 20px 24px",
+  // Size from the panel, not the content. The panel body is a fixed-width
+  // vertical surface (see the dock's `scrollbars="vertical"`), but the scroll
+  // viewport's content track is otherwise content-sized: an intrinsically wide
+  // descendant (a freshly mounted CodeMirror laying its line out before the flex
+  // layout settles, a non-shrinking control row) would widen this track past the
+  // panel and clip on the right. Inline-size containment caps the body at the
+  // panel width so every descendant lays out within it.
+  contain: "inline-size"
 });
 
 const groupCss = css({
@@ -106,7 +114,7 @@ const EMPTY_TAB_HINTS: Partial<Record<PropertyTabId, TabEmptyHint>> = {
  * Layout when a field is selected:
  * - header: type icon + field label + field id + deselect button
  * - tabs: 属性 / 校验 / 联动 with count badges, plus a contextual 布局 tab
- * appended only when the field sits inside a flex / grid container
+ * appended only when the field sits inside a flex / grid container or a table subform
  * - body: scrollable, renders groups assigned to the active tab
  *
  * Empty / error states:
@@ -147,12 +155,15 @@ export function PropertiesPanel(): ReactElement {
     return buildPropertiesDescriptor(definition);
   }, [definition]);
 
-  // Layout sizing (flex grow / basis, grid span) only exists for a field that
-  // lives inside a flex / grid container, so the "布局" tab is contextual: shown
-  // only then, and dropped otherwise rather than left as a perpetually-empty tab.
-  // `located.parent` is the field's owning container from the same walk above.
+  // Layout sizing (flex grow / basis, grid span, table-subform column width)
+  // only exists for a field that lives inside a flex / grid container or a table
+  // subform, so the "布局" tab is contextual: shown only then, and dropped
+  // otherwise rather than left as a perpetually-empty tab. `located.parent` is
+  // the field's owning container from the same walk above.
   const layoutParent = field ? located?.parent : undefined;
-  const showLayout = layoutParent?.type === "flex" || layoutParent?.type === "grid";
+  const showLayout = layoutParent?.type === "flex"
+    || layoutParent?.type === "grid"
+    || (layoutParent?.type === "subform" && layoutParent.variant === "table");
   const tabs = useMemo(
     () => showLayout ? PROPERTY_TAB_ORDER : PROPERTY_TAB_ORDER.filter(tab => tab !== "layout"),
     [showLayout]
@@ -221,7 +232,7 @@ export function PropertiesPanel(): ReactElement {
           onChange={setActiveTab}
         />
 
-        <ScrollArea css={panelBodyCss}>
+        <ScrollArea css={panelBodyCss} scrollbars="vertical">
           <div css={bodyInnerCss}>
             <TabContent
               activeTab={resolvedTab}
@@ -237,7 +248,7 @@ export function PropertiesPanel(): ReactElement {
     );
   } else {
     content = (
-      <ScrollArea css={panelBodyCss}>
+      <ScrollArea css={panelBodyCss} scrollbars="vertical">
         <PropertiesEmpty
           hint={`字段类型 "${field.type}" 未在当前 registry 中注册`}
           icon="circle-help"

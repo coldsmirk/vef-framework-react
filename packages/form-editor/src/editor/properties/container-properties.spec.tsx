@@ -100,6 +100,12 @@ function storeSubform(api: FormEditorStoreApi): SubformNode {
 }
 
 describe("ContainerProperties", () => {
+  it("constrains the panel body to vertical scrolling only", () => {
+    setup(subformNode());
+
+    expect(screen.getByTestId("container-properties-scroll-area")).toHaveAttribute("scrollbars", "vertical");
+  });
+
   describe("subform", () => {
     it("shows the binding key read-only", () => {
       setup(subformNode());

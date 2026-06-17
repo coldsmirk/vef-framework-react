@@ -744,6 +744,22 @@ const subformTableColCss = css({
   borderRight: `1px solid ${globalCssVars.colorBorderSecondary}`
 });
 
+/**
+ * Inline sizing for a table-subform column with a fixed `columnWidth` — pins the
+ * slot to that pixel width instead of the auto `flex: 1 1 0` default, mirroring
+ * the runtime `EditableTable` column `width`. Returns `undefined` (auto) when the
+ * column carries no width.
+ */
+function subformColumnWidthStyle(width: number | undefined): CSSProperties | undefined {
+  return typeof width === "number"
+    ? {
+        flex: `0 0 ${width}px`,
+        width,
+        minWidth: width
+      }
+    : undefined;
+}
+
 const subformColumnCss = css({
   display: "flex",
   flexDirection: "column",
@@ -867,7 +883,7 @@ function SubformTablePreview({ subform }: { subform: TableSubform }): ReactEleme
             const beside = inline[index]?.beside ?? [];
 
             return (
-              <div key={field.id} css={subformTableColCss}>
+              <div key={field.id} css={subformTableColCss} style={subformColumnWidthStyle(field.columnWidth)}>
                 <CanvasField block={field}>
                   <SubformColumn field={field} />
                 </CanvasField>

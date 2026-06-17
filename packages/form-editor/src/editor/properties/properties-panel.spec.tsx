@@ -1,3 +1,4 @@
+import type { ScrollAreaProps } from "@vef-framework-react/components";
 import type { ReactElement } from "react";
 
 import type { FormFieldRegistry } from "../../engine/registry/form-field-registry";
@@ -14,6 +15,23 @@ import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
 import { definePropertyEntry } from "../../types";
 import { PropertiesPanel } from "./properties-panel";
+
+// Replace the Radix-backed ScrollArea with a passthrough so its props (notably
+// the vertical-only `scrollbars` axis) are observable as plain DOM attributes —
+// the real component renders custom scrollbars only under measured overflow,
+// which jsdom never produces.
+vi.mock("@vef-framework-react/components", async importOriginal => {
+  const actual = await importOriginal<typeof import("@vef-framework-react/components")>();
+
+  return {
+    ...actual,
+    ScrollArea: ({ children, ...props }: ScrollAreaProps) => (
+      <div data-testid="properties-scroll-area" {...props}>
+        {children}
+      </div>
+    )
+  };
+});
 
 const FIELD_ID = "Field_1";
 
@@ -88,6 +106,34 @@ function flexChildSchema(): FormSchema {
   };
 }
 
+function tableColumnSchema(): FormSchema {
+  return {
+    id: "Form_1",
+    version: 2,
+    presentations: {
+      pc: {
+        children: [
+          {
+            id: "Subform_1",
+            type: "subform",
+            variant: "table",
+            key: "rows",
+            label: "表格子表单",
+            template: [
+              {
+                id: FIELD_ID,
+                type: "textfield",
+                key: "name",
+                label: "姓名"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  };
+}
+
 function setupPropertiesPanel(
   selectId?: string,
   schema: FormSchema = makeSchema(),
@@ -129,6 +175,14 @@ describe("PropertiesPanel", () => {
     expect(screen.getAllByText("姓名").length).toBeGreaterThan(0);
   });
 
+  it("constrains the properties body to vertical scrolling only", async () => {
+    setupPropertiesPanel(FIELD_ID);
+
+    // A horizontal scrollbar must never appear when a wide control (e.g. the
+    // linkage script editor) renders — the panel is a vertical-only surface.
+    expect(await screen.findByTestId("properties-scroll-area")).toHaveAttribute("scrollbars", "vertical");
+  });
+
   it("deselects the field when the deselect button is clicked", async () => {
     const user = userEvent.setup();
     const storeApi = setupPropertiesPanel(FIELD_ID);
@@ -159,6 +213,21 @@ describe("PropertiesPanel", () => {
     await user.click(await screen.findByRole("tab", { name: "布局" }));
 
     expect(screen.getByText("布局 · 弹性占比")).toBeInTheDocument();
+  });
+
+  it("appends a 布局 tab for a field inside a table subform", async () => {
+    setupPropertiesPanel(FIELD_ID, tableColumnSchema());
+
+    expect(await screen.findByRole("tab", { name: "布局" })).toBeInTheDocument();
+  });
+
+  it("shows the column width control on the 布局 tab for a table subform column", async () => {
+    const user = userEvent.setup();
+    setupPropertiesPanel(FIELD_ID, tableColumnSchema());
+
+    await user.click(await screen.findByRole("tab", { name: "布局" }));
+
+    expect(screen.getByText("布局 · 列宽")).toBeInTheDocument();
   });
 
   describe("handleChange routing", () => {

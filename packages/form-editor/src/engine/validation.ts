@@ -48,6 +48,7 @@ export type ValidationIssueCode
   // Layout properties
     | "span_invalid"
     | "flex_invalid"
+    | "column_width_invalid"
     | "gap_invalid"
     | "columns_invalid"
     | "variant_invalid"
@@ -181,6 +182,7 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   tab_malformed: "标签页必须是对象且 label 为字符串",
   type_required: "type 必须为非空字符串",
   flex_invalid: "flex 配置无效：grow / shrink 须为非负数，basis 须为字符串",
+  column_width_invalid: "columnWidth 必须为正数（表格子表单列的固定像素宽度）",
   gap_invalid: "间距取值非法（需为预设档位或非负整数）",
   variant_invalid: "variant 必须为 \"card\" 或 \"collapse\"",
   title_invalid: "title 必须为字符串",

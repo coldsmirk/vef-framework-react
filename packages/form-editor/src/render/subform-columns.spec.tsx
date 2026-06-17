@@ -117,4 +117,31 @@ describe("buildSubformColumns", () => {
 
     expect(buildSubformColumns(template)).toHaveLength(6);
   });
+
+  it("forwards a field's fixed columnWidth to the table column", () => {
+    const columns = buildSubformColumns([
+      {
+        id: "F1",
+        type: "textfield",
+        key: "name",
+        label: "姓名",
+        columnWidth: 200
+      }
+    ]);
+
+    expect(columns[0]).toMatchObject({ dataIndex: "name", width: 200 });
+  });
+
+  it("leaves the column width unset when the field has no columnWidth", () => {
+    const columns = buildSubformColumns([
+      {
+        id: "F1",
+        type: "textfield",
+        key: "name",
+        label: "姓名"
+      }
+    ]);
+
+    expect(columns[0]?.width).toBeUndefined();
+  });
 });

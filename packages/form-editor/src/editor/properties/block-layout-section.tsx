@@ -55,9 +55,10 @@ export interface BlockLayoutSectionProps {
 /**
  * Layout sizing for the selected block, shown above its type-specific
  * properties. The control adapts to the block's parent container: under a flex
- * container it edits the per-slot `flex` (grow / basis); anywhere else (a grid
- * row) it edits the column `span` — an empty span means auto, sharing the row's
- * leftover width with the other auto blocks.
+ * container it edits the per-slot `flex` (grow / basis); under a table subform it
+ * edits the column's fixed pixel width; anywhere else (a grid row) it edits the
+ * column `span` — an empty span means auto, sharing the row's leftover width with
+ * the other auto blocks.
  */
 export function BlockLayoutSection({ node, parent }: BlockLayoutSectionProps): ReactElement | null {
   if (parent?.type === "flex") {
@@ -68,7 +69,14 @@ export function BlockLayoutSection({ node, parent }: BlockLayoutSectionProps): R
     return <GridSlotControl columns={gridColumnCount(parent)} node={node} />;
   }
 
-  // The document body and section / tabs / subform bodies are single-block
+  // A table subform lays its template fields out as columns, so the field's only
+  // sizing knob is the column width (a fixed pixel value, or auto when empty).
+  // The stack subform keeps the free vertical layout, which needs no sizing.
+  if (parent?.type === "subform" && parent.variant === "table") {
+    return <TableColumnWidthControl node={node} />;
+  }
+
+  // The document body and section / tabs / stack-subform bodies are single-block
   // vertical stacks — a block always fills the width, so there is nothing to
   // size here. Side-by-side layout is configured inside an explicit grid / flex.
   return null;
@@ -113,6 +121,38 @@ function GridSlotControl({ columns, node }: { columns: number; node: Block }): R
         {" "}
         则铺满整行。
       </span>
+    </section>
+  );
+}
+
+function TableColumnWidthControl({ node }: { node: Block }): ReactElement {
+  const storeApi = useFormEditorStoreApi();
+
+  const setWidth = (width: number | undefined): void => {
+    storeApi.getState().setColumnWidth({ nodeId: node.id, width });
+  };
+
+  return (
+    <section css={sectionCss}>
+      <span css={titleCss}>布局 · 列宽</span>
+
+      <div css={rowCss}>
+        <span css={labelCss}>列宽 (px)</span>
+
+        <InputNumber
+          min={1}
+          placeholder="自动"
+          style={controlStyle}
+          value={node.columnWidth}
+          onChange={value => setWidth(typeof value === "number" ? value : undefined)}
+        />
+
+        <Button disabled={node.columnWidth === undefined} type="text" onClick={() => setWidth(undefined)}>
+          重置
+        </Button>
+      </div>
+
+      <span css={hintCss}>留空则按表格剩余空间自动分配；设为固定像素后，该列不再随容器宽度伸缩。</span>
     </section>
   );
 }

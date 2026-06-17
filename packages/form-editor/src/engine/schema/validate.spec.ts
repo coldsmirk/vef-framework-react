@@ -373,6 +373,38 @@ describe("validateSchema", () => {
       }));
     });
 
+    it("rejects a non-positive column width", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          columnWidth: 0
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "column_width_invalid",
+        path: "presentations.pc.children[0].columnWidth"
+      }));
+    });
+
+    it("accepts a positive column width", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          columnWidth: 200
+        }
+      ]);
+
+      expect(validate(candidate).valid).toBe(true);
+    });
+
     it("rejects a legacy row node (rows are no longer part of the schema)", () => {
       const candidate = schema([
         {

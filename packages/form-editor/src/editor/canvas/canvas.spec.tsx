@@ -369,6 +369,42 @@ describe("Canvas", () => {
       // The column table chrome is PC-only; mobile renders the subform stacked.
       expect(screen.queryByText("拖入列")).not.toBeInTheDocument();
     });
+
+    it("pins a column to its fixed columnWidth on PC", () => {
+      const subform: Block = {
+        id: "Subform_T",
+        type: "subform",
+        variant: "table",
+        key: "rows",
+        label: "表格子表单",
+        template: [
+          {
+            id: "Col_name",
+            type: "textfield",
+            key: "name",
+            label: "姓名"
+          },
+          {
+            id: "Col_age",
+            type: "number",
+            key: "age",
+            label: "年龄",
+            columnWidth: 200
+          }
+        ]
+      };
+      setupCanvas({
+        schema: {
+          id: "Form_1",
+          version: 2,
+          presentations: { pc: { children: [subform] } }
+        }
+      });
+
+      // eslint-disable-next-line testing-library/no-node-access -- the styled cell is the unlabeled wrapper carrying the column's inline width
+      const cell = screen.getByText("年龄").closest("div[style*=\"width\"]");
+      expect(cell).toHaveStyle({ width: "200px" });
+    });
   });
 
   describe("drop zones", () => {

@@ -52,6 +52,9 @@ function columnFor(field: Block): EditableColumn<Row> | null {
   }
 
   const title = field.label ?? field.key;
+  // Fixed pixel width when the author set one; `undefined` lets the column
+  // auto-distribute the table's remaining width (the `EditableTable` default).
+  const width = field.columnWidth;
   const validators = {
     onChange: ({ value }: { value: unknown }): string | undefined => validateKeyedFieldValue(field, isRequired(field), value)
   };
@@ -60,6 +63,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "textfield": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.Input noWrapper maxLength={field.maxLength} placeholder={field.placeholder} />
       });
@@ -68,6 +72,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "textarea": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.TextArea noWrapper maxLength={field.maxLength} placeholder={field.placeholder} />
       });
@@ -76,6 +81,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "number": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => (
           <f.InputNumber
@@ -93,6 +99,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "select": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => (
           <f.Select
@@ -109,6 +116,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "radio": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.Radio noWrapper options={staticOptions(field.dataSource)} />
       });
@@ -117,6 +125,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "checkbox-group": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.CheckboxGroup noWrapper options={staticOptions(field.dataSource)} />
       });
@@ -125,6 +134,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "switch": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.Bool noWrapper />
       });
@@ -133,6 +143,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "date": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.DatePicker noWrapper format={DEFAULT_DATE_FORMAT} placeholder={field.placeholder} />
       });
@@ -141,6 +152,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "datetime": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.DatePicker noWrapper showTime format={DEFAULT_DATETIME_FORMAT} placeholder={field.placeholder} />
       });
@@ -149,6 +161,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
     case "daterange": {
       return createEditableColumn<Row>(field.key, {
         title,
+        width,
         validators,
         renderEditor: f => <f.DateRangePicker noWrapper format={DEFAULT_DATE_FORMAT} />
       });
@@ -158,7 +171,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
       // code-editor (and any future keyed leaf without a table editor): show the
       // stored value read-only rather than crash. The table-variant validation
       // steers authors away from these as columns.
-      return createEditableColumn<Row>(field.key, { title });
+      return createEditableColumn<Row>(field.key, { title, width });
     }
   }
 }

@@ -509,6 +509,45 @@ describe("form store", () => {
     });
   });
 
+  describe("setColumnWidth", () => {
+    it("writes a fixed column width and records a checkpoint", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const nodeId = api.getState().selectedId as string;
+      const before = api.getState();
+
+      act(() => api.getState().setColumnWidth({ nodeId, width: 200 }));
+
+      expect(api.getState().schema.presentations.pc?.children[0]?.columnWidth).toBe(200);
+      expect(api.getState().past).not.toBe(before.past);
+    });
+
+    it("pushes no history entry when the normalized width is already in place", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const nodeId = api.getState().selectedId as string;
+      act(() => api.getState().setColumnWidth({ nodeId, width: 200 }));
+      const before = api.getState();
+
+      // 200.4 floors to the 200 already in place — the op reports identity.
+      act(() => api.getState().setColumnWidth({ nodeId, width: 200.4 }));
+
+      expect(api.getState().schema).toBe(before.schema);
+      expect(api.getState().past).toBe(before.past);
+    });
+
+    it("pushes no history entry for a stale node id", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const before = api.getState();
+
+      act(() => api.getState().setColumnWidth({ nodeId: "ghost", width: 200 }));
+
+      expect(api.getState().schema).toBe(before.schema);
+      expect(api.getState().past).toBe(before.past);
+    });
+  });
+
   describe("editField / updateBlock", () => {
     it("pushes no history entry when the updater returns its input", () => {
       const api = setup();

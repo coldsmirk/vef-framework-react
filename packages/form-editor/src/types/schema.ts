@@ -99,6 +99,9 @@ export interface FlexSlot {
  * outside a grid. Range is validated at runtime, not in the type.
  * - `flex` sizes the block when it is a direct child of a {@link FlexNode};
  * it is ignored elsewhere, where `span` (in a grid) or full width applies.
+ * - `columnWidth` is a fixed pixel width honored only when the block is a column
+ * of a {@link TableSubform}; omitted means the column shares the table's
+ * remaining width with the other auto columns. Ignored outside a table subform.
  * - `linkage` is honored on any block: `show` / `hide` / `enable` / `disable`
  * apply to leaves and containers alike (a container's `disable` propagates to
  * its descendants at runtime). The value-bearing actions (`require` /
@@ -108,6 +111,7 @@ export interface FlexSlot {
 interface BlockBase extends NodeBase {
   span?: number;
   flex?: FlexSlot;
+  columnWidth?: number;
   linkage?: FieldLinkage;
 }
 

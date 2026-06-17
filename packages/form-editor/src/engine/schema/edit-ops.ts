@@ -171,12 +171,35 @@ export function setFlex(schema: PresentationLayer, blockId: string, flex: FlexSl
   return updateNode(schema, blockId, block => sameFlex(block.flex, next) ? block : patchBlock(block, { flex: next }));
 }
 
+/**
+ * Set (or clear) a block's fixed column width (honored when the block is a
+ * column of a {@link "../../types"!TableSubform}).
+ *
+ * The width is normalized at the write so the schema only ever persists what
+ * `validateSchema` accepts: floored to an integer and clamped to `>= 1`;
+ * `undefined` (or a non-finite number) clears it back to auto. Writing the value
+ * already in place returns the input layer unchanged.
+ */
+export function setColumnWidth(schema: PresentationLayer, blockId: string, width: number | undefined): PresentationLayer {
+  const next = clampColumnWidth(width);
+
+  return updateNode(schema, blockId, block => block.columnWidth === next ? block : patchBlock(block, { columnWidth: next }));
+}
+
 function clampSpan(span: number | undefined): number | undefined {
   if (span === undefined || !Number.isFinite(span)) {
     return undefined;
   }
 
   return Math.min(ROW_COLS, Math.max(1, Math.floor(span)));
+}
+
+function clampColumnWidth(width: number | undefined): number | undefined {
+  if (width === undefined || !Number.isFinite(width)) {
+    return undefined;
+  }
+
+  return Math.max(1, Math.floor(width));
 }
 
 function clampFlex(flex: FlexSlot | undefined): FlexSlot | undefined {

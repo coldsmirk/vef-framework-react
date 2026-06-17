@@ -21,7 +21,12 @@ const bodyCss = css({
   // Matches the field properties body gap (properties-panel) so both panels
   // share one vertical rhythm in the same panel slot.
   gap: 22,
-  padding: "22px 20px 24px"
+  padding: "22px 20px 24px",
+  // Cap the body at the panel width so an intrinsically wide descendant (a code
+  // editor, a non-shrinking control row) lays out within the panel instead of
+  // widening the scroll viewport's content track — mirrors the field properties
+  // body (`bodyInnerCss` in properties-panel).
+  contain: "inline-size"
 });
 
 const fieldCss = css({
@@ -133,7 +138,7 @@ export function ContainerProperties({
     <>
       <PanelHeader icon={<EditorIcon name={meta.icon} />} subtitle={node.id} title={meta.name} onClose={onClose} />
 
-      <ScrollArea css={panelBodyCss}>
+      <ScrollArea css={panelBodyCss} scrollbars="vertical">
         <div css={bodyCss}>
           <BlockLayoutSection node={node} parent={parent} />
           {node.type === "section" ? <SectionEditor section={node} update={update} /> : null}

@@ -8,7 +8,7 @@ import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
 import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
-import { cloneBlock, insertBlock, moveBlock, setFlex as setFlexOp, setSpan as setSpanOp, targetScope } from "../engine/schema/edit-ops";
+import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, targetScope } from "../engine/schema/edit-ops";
 import {
   editField as editFieldOp,
   removeBlock as removeNodeOp,
@@ -180,6 +180,11 @@ export interface FormEditorStoreState {
    * Set a block's per-slot flex sizing (used inside a flex container).
    */
   setFlex: (args: { nodeId: string; flex: FlexSlot | undefined }) => void;
+  /**
+   * Set a block's fixed column width (used when the block is a column of a table
+   * subform).
+   */
+  setColumnWidth: (args: { nodeId: string; width: number | undefined }) => void;
   /**
    * Apply a pure updater to a single leaf field. The properties panel forwards
    * updaters from each `PropertyEntry.write` lens, keeping the action
@@ -624,6 +629,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const { device, schema } = get();
         const layer = currentLayer(schema, device);
         const next = setFlexOp(layer, nodeId, flex);
+
+        if (next === layer) {
+          return;
+        }
+
+        checkpoint();
+        set({ schema: withPresentation(schema, device, next) });
+      },
+
+      setColumnWidth: ({ nodeId, width }) => {
+        const { device, schema } = get();
+        const layer = currentLayer(schema, device);
+        // The op normalizes (floor + clamp) before comparing, so identity — not
+        // a raw input comparison — is the no-op signal.
+        const next = setColumnWidthOp(layer, nodeId, width);
 
         if (next === layer) {
           return;

@@ -11,7 +11,7 @@ import type {
   TextfieldField
 } from "../../types";
 
-import { cloneBlock, insertBlock, moveBlock, setFlex, setSpan, targetScope } from "./edit-ops";
+import { cloneBlock, insertBlock, moveBlock, setColumnWidth, setFlex, setSpan, targetScope } from "./edit-ops";
 import { collectNodeIds, findField, findNode } from "./walk";
 
 function tf(id: string, key: string): TextfieldField {
@@ -690,6 +690,50 @@ describe("edit-ops", () => {
       const schema = setFlex(schemaOf(tf("f1", "a")), "f1", { grow: 1, basis: "10%" });
 
       expect(setFlex(schema, "f1", { grow: 1, basis: "10%" })).toBe(schema);
+    });
+  });
+
+  describe("setColumnWidth", () => {
+    it("sets a block's fixed column width", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      expect(findField(setColumnWidth(schema, "f1", 200), "f1")?.columnWidth).toBe(200);
+    });
+
+    it("clamps a width below 1 up to 1", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      expect(findField(setColumnWidth(schema, "f1", 0), "f1")?.columnWidth).toBe(1);
+    });
+
+    it("floors a fractional width to an integer", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      expect(findField(setColumnWidth(schema, "f1", 120.8), "f1")?.columnWidth).toBe(120);
+    });
+
+    it("clears the width back to auto with undefined", () => {
+      const schema = setColumnWidth(schemaOf(tf("f1", "a")), "f1", 200);
+
+      expect(findField(setColumnWidth(schema, "f1", undefined), "f1")?.columnWidth).toBeUndefined();
+    });
+
+    it("clears the width back to auto for a non-finite number", () => {
+      const schema = setColumnWidth(schemaOf(tf("f1", "a")), "f1", 200);
+
+      expect(findField(setColumnWidth(schema, "f1", Number.NaN), "f1")?.columnWidth).toBeUndefined();
+    });
+
+    it("returns the input layer reference when writing the width already in place", () => {
+      const schema = setColumnWidth(schemaOf(tf("f1", "a")), "f1", 200);
+
+      expect(setColumnWidth(schema, "f1", 200)).toBe(schema);
+    });
+
+    it("returns the input layer reference for a missing block id", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      expect(setColumnWidth(schema, "missing", 200)).toBe(schema);
     });
   });
 
