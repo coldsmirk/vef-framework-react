@@ -1,7 +1,7 @@
 {
   "name": "@vef-framework-react/shared",
   "type": "module",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": false,
   "packageManager": "pnpm@11.1.2",
   "description": "Shared utilities for VEF framework",
