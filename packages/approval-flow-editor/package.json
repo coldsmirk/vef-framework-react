@@ -1,7 +1,7 @@
 {
   "name": "@vef-framework-react/approval-flow-editor",
   "type": "module",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "private": false,
   "packageManager": "pnpm@11.1.2",
   "description": "Approval flow editor for VEF framework",
