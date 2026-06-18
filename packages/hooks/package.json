@@ -1,7 +1,7 @@
 {
   "name": "@vef-framework-react/hooks",
   "type": "module",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "private": false,
   "packageManager": "pnpm@11.1.2",
   "description": "Hooks for VEF framework",
