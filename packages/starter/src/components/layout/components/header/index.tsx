@@ -106,6 +106,12 @@ const brandSurfaceStyle = css({
     // Horizontal bar fills the header.
     height: "100%",
     flex: "auto",
+    // A flex item defaults to `min-width: auto`, so the menu refuses to shrink
+    // below its content width and overflows the header — spilling the trailing
+    // items over the right-side actions. Allowing it to shrink lets antd's
+    // rc-overflow measure the real available width and fold the overflow into
+    // the `...` indicator instead.
+    minWidth: 0,
     "--vef-menu-horizontal-line-height": "var(--vef-layout-header-height)",
     "--vef-menu-active-bar-height": "0",
     "--vef-menu-active-bar-border-width": "0",
