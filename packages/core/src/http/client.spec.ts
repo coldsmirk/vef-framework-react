@@ -422,6 +422,23 @@ describe("http/HttpClient", () => {
       expect(setAuthTokens).toHaveBeenCalledWith(renewedTokens);
     });
 
+    it("resolves the triggering request with the retried response after a successful refresh", async () => {
+      const retriedResponse = makeOkResponse({ id: 42 });
+      const setAuthTokens = vi.fn();
+      mocks.instance.call.mockResolvedValue(retriedResponse);
+
+      const { handlers } = buildHttpClient({
+        tokenExpiredCode: EXPIRED_CODE,
+        getAuthTokens: getOldTokens,
+        setAuthTokens,
+        refreshToken: getRenewedTokens
+      });
+
+      const result = await handlers.responseError(makeAxiosError(401, EXPIRED_BODY));
+
+      expect(result).toBe(retriedResponse);
+    });
+
     it("invokes onUnauthenticated for queued requests when the refresh fails", async () => {
       const refreshDeferred = defer<Readonly<AuthTokens>>();
       const onUnauthenticated = vi.fn();
@@ -462,11 +479,10 @@ describe("http/HttpClient", () => {
         refreshToken: () => refreshDeferred.promise
       });
 
-      // p1 triggers the refresh path. handleResponseError always rethrows the
-      // original error after handleUnauthorized completes, so swallow it — we
-      // only care about how queued requests are dispatched.
-      const p1 = handlers.responseError(makeAxiosError(401, EXPIRED_BODY))
-        .catch(silence);
+      // p1 triggers the refresh path; a successful refresh resolves it with the
+      // retried response. We only assert how the *queued* request is dispatched,
+      // so p1's own result is irrelevant here.
+      const p1 = handlers.responseError(makeAxiosError(401, EXPIRED_BODY));
       await Promise.resolve();
       await Promise.resolve();
 

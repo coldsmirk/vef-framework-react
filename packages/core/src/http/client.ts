@@ -183,7 +183,15 @@ export class HttpClient {
       }
 
       case 401: {
-        await this.handleUnauthorized(error, code, requestInfo);
+        // A successful silent refresh returns the retried response — resolve the
+        // original request with it instead of falling through to `throw error`,
+        // which would surface the stale 401 even though the retry succeeded.
+        const retriedResponse = await this.handleUnauthorized(error, code, requestInfo);
+
+        if (retriedResponse) {
+          return retriedResponse;
+        }
+
         break;
       }
 
