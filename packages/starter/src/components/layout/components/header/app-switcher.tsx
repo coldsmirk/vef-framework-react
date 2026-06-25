@@ -1,11 +1,10 @@
-import type { DynamicIconName } from "@vef-framework-react/components";
 import type { Awaitable } from "@vef-framework-react/shared";
 import type { JSX } from "react";
 
 import type { AppItem } from "../../props";
 
 import { css } from "@emotion/react";
-import { DynamicIcon, globalCssVars, IconButton, Popover, ScrollArea } from "@vef-framework-react/components";
+import { globalCssVars, IconButton, Popover, ScrollArea } from "@vef-framework-react/components";
 import { LayoutGridIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -74,11 +73,20 @@ const appIconStyle = css({
   justifyContent: "center",
   width: "56px",
   height: "56px",
+  overflow: "hidden",
   borderRadius: globalCssVars.borderRadiusLg,
   backgroundColor: globalCssVars.colorFillTertiary,
   color: globalCssVars.colorTextSecondary,
   fontSize: "26px",
-  transition: `background-color ${globalCssVars.motionDurationMid}, color ${globalCssVars.motionDurationMid}, box-shadow ${globalCssVars.motionDurationMid}`
+  transition: `background-color ${globalCssVars.motionDurationMid}, color ${globalCssVars.motionDurationMid}, box-shadow ${globalCssVars.motionDurationMid}`,
+
+  // The consumer may hand us an `<img>` (e.g. an uploaded app icon) instead of a
+  // glyph node; make it fill the chip and let `overflow: hidden` clip the corners.
+  "& img": {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover"
+  }
 });
 
 const appNameStyle = css({
@@ -129,7 +137,7 @@ export function AppSwitcher({
             {app.icon
               ? (
                   <span data-app-icon css={appIconStyle}>
-                    <DynamicIcon name={app.icon as DynamicIconName} />
+                    {app.icon}
                   </span>
                 )
               : null}

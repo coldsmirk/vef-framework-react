@@ -10,8 +10,9 @@ import type { PropsWithChildren, ReactNode } from "react";
 export type UserMenuItem = DistributedOmit<DropdownMenuItem, "onClick" | "onTitleClick">;
 
 /**
- * A selectable sub-application shown in the Layout's app switcher. Shaped as a
- * plain record so it can be hydrated straight from an API response (no JSX).
+ * A selectable sub-application shown in the Layout's app switcher. The project
+ * maps its own API data into this shape; `icon` is a ready-to-render node, so
+ * the consumer decides how to render it (an `<img>`, a `DynamicIcon`, etc.).
  */
 export interface AppItem {
   /**
@@ -27,11 +28,11 @@ export interface AppItem {
    */
   description?: string;
   /**
-   * Optional icon name, resolved through `DynamicIcon` (a kebab-case lucide
-   * name such as `"layout-dashboard"`). A string, not a node, so it survives a
-   * JSON round-trip from the backend.
+   * Optional icon node, rendered as-is in the switcher tile. Supply whatever
+   * fits the data — an `<img>` for an uploaded image, a `DynamicIcon` for a
+   * lucide glyph, etc.
    */
-  icon?: string;
+  icon?: ReactNode;
 }
 
 /**
