@@ -254,6 +254,14 @@ export interface ToolbarProps {
    * rendered at all.
    */
   onPublish?: (schema: FormSchema) => void;
+  /**
+   * Label for the publish button (defaults to "发布").
+   */
+  publishText?: string;
+  /**
+   * Whether the publish button shows a loading state.
+   */
+  publishLoading?: boolean;
 }
 
 /**
@@ -268,7 +276,12 @@ export interface ToolbarProps {
  * - `drawer`: import/export/clear collapse into a "更多" menu, the toggle pills
  * drop their labels, and the summary chip hides
  */
-export function Toolbar({ brand, onPublish }: ToolbarProps): ReactElement {
+export function Toolbar({
+  brand,
+  onPublish,
+  publishText,
+  publishLoading
+}: ToolbarProps): ReactElement {
   const pastLength = useFormEditorStore(s => s.past.length);
   const futureLength = useFormEditorStore(s => s.future.length);
   // Selecting the reduced primitive keeps the toolbar from re-rendering on
@@ -469,10 +482,11 @@ export function Toolbar({ brand, onPublish }: ToolbarProps): ReactElement {
               autoInsertSpace={false}
               css={primaryActionButtonCss}
               icon={<EditorIcon name="rocket" />}
+              loading={publishLoading}
               type="primary"
               onClick={handlePublish}
             >
-              发布
+              {publishText ?? "发布"}
             </Button>
           )
         : null}

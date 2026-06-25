@@ -341,6 +341,16 @@ export interface FormEditorProps extends Omit<FormEditorProviderProps, "children
    * button is not rendered at all.
    */
   onPublish?: (schema: FormSchema) => void;
+  /**
+   * Label for the publish button (defaults to "发布"). Ignored when `onPublish`
+   * is omitted (the button is not rendered).
+   */
+  publishText?: string;
+  /**
+   * Whether the publish button shows a loading state. Ignored when `onPublish`
+   * is omitted.
+   */
+  publishLoading?: boolean;
 }
 
 /**
@@ -365,12 +375,14 @@ export interface FormEditorProps extends Omit<FormEditorProviderProps, "children
 function FormEditorRoot({
   brand,
   onPublish,
+  publishText,
+  publishLoading,
   ...providerProps
 }: FormEditorProps): ReactElement {
   return (
     <FormEditorProvider {...providerProps}>
       <FormEditorShell>
-        <Toolbar brand={brand} onPublish={onPublish} />
+        <Toolbar brand={brand} publishLoading={publishLoading} publishText={publishText} onPublish={onPublish} />
 
         <FormEditorWorkspace>
           <PalettePanel />
