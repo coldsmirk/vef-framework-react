@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Center, Icon, Result } from "@vef-framework-react/components";
 import { motion } from "@vef-framework-react/core";
@@ -9,7 +11,7 @@ import { AccessDeniedIcon } from "./access-denied-icon";
 
 const ACCESS_DENIED_TITLE = "抱歉, 您没有权限访问该页面!";
 
-export function AccessDenied(): React.ReactNode {
+export function AccessDenied(): ReactNode {
   const { redirect } = useRouterState();
   const navigate = useNavigate();
 
@@ -35,7 +37,7 @@ interface HomeButtonProps {
   onClick: () => void;
 }
 
-function HomeButton({ onClick }: HomeButtonProps): React.ReactNode {
+function HomeButton({ onClick }: HomeButtonProps): ReactNode {
   return (
     <Button
       icon={<Icon component={ArrowLeftIcon} />}
@@ -49,10 +51,10 @@ function HomeButton({ onClick }: HomeButtonProps): React.ReactNode {
 }
 
 interface AnimatedIconProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
-function AnimatedIcon({ children }: AnimatedIconProps): React.ReactNode {
+function AnimatedIcon({ children }: AnimatedIconProps): ReactNode {
   return (
     <motion.div
       animate={{ opacity: 1, scale: 1 }}

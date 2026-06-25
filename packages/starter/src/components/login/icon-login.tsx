@@ -2,6 +2,11 @@ import type { SVGProps } from "react";
 
 import { globalCssVars } from "@vef-framework-react/components";
 
+// The XLink XML namespace URI is a fixed W3C identifier, not a network address.
+// unicorn/prefer-https exempts the sibling SVG namespace (`.../2000/svg`) but not this one.
+// eslint-disable-next-line unicorn/prefer-https -- fixed W3C XML namespace identifier, not a network address
+const XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
+
 export function IconLogin(props: SVGProps<SVGSVGElement>) {
   const colors = {
     primary: globalCssVars.colorPrimary,
@@ -21,7 +26,7 @@ export function IconLogin(props: SVGProps<SVGSVGElement>) {
     <svg
       viewBox="0 0 700 700"
       xmlns="http://www.w3.org/2000/svg"
-      xmlnsXlink="http://www.w3.org/1999/xlink"
+      xmlnsXlink={XLINK_NAMESPACE}
       {...props}
     >
       <defs>

@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-this-outside-of-class -- recast/ast-types PathVisitor methods invoke this.traverse per the visitor API */
 import type { AutoEnhanceContext, AutoEnhancePlugin, TransformResult } from "../types";
 
 import { types, visit } from "recast";

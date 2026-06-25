@@ -104,6 +104,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
         </div>
       </div>
 
+      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       <DefaultsPanel
         defaults={linkage.defaults}
         isTargetKeyed={isTargetKeyed}
@@ -150,6 +151,7 @@ export const DefaultsPanel: FC<DefaultsPanelProps> = ({
   onChange
 }) => (
   <div css={defaultStatesCss}>
+    {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
     <DefaultToggle
       checked={defaults?.hidden === true}
       hint="适合“满足规则后显示”的渐进式表单"
@@ -157,6 +159,7 @@ export const DefaultsPanel: FC<DefaultsPanelProps> = ({
       onChange={value => onChange("hidden", value)}
     />
 
+    {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
     <DefaultToggle
       checked={defaults?.disabled === true}
       hint="适合“满足规则后才允许编辑”的场景"
@@ -166,6 +169,7 @@ export const DefaultsPanel: FC<DefaultsPanelProps> = ({
 
     {isTargetKeyed
       ? (
+          // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
           <DefaultToggle
             checked={defaults?.required === true}
             hint="联动侧必填的初始值，规则的必填/选填动作可改写；与「校验」页的必填字段任一开启即必填"

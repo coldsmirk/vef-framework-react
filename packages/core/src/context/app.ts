@@ -3,6 +3,7 @@ import type { AppContext } from "./types";
 import { createContext, use } from "react";
 
 const AppContext = createContext<AppContext>({});
+AppContext.displayName = "AppContext";
 
 /**
  * Provider for the VEF app context.

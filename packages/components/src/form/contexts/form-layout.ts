@@ -11,6 +11,7 @@ export const defaultFormLayout: Readonly<FormLayout> = Object.freeze({
 });
 
 const FormLayoutContext = createContext<FormLayout>(defaultFormLayout);
+FormLayoutContext.displayName = "FormLayoutContext";
 
 export function useFormLayout(): FormLayout {
   return use(FormLayoutContext);

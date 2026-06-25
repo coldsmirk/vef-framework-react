@@ -64,8 +64,10 @@ export const FormModal = memo(<TValues extends object, TData = unknown>({
       }
 
       if (mutationFn) {
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutateAsync/handleClose form a hook cycle (useForm.onSubmit -> mutateAsync -> onSuccess -> handleClose -> reset from useForm); the callback runs after mount, so the late binding is safe.
         await mutateAsync(formValues);
       } else if (!onSubmit) {
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- see above: handleClose is defined below but only invoked from this deferred submit callback.
         handleClose();
       }
     }

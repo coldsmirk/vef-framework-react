@@ -1,5 +1,6 @@
 import type { LinkComponentProps } from "@tanstack/react-router";
 import type { Except } from "@vef-framework-react/shared";
+import type { JSX } from "react";
 
 import type { LayoutProps } from "../props";
 
@@ -61,7 +62,7 @@ export function Logo({
   title,
   logo,
   ...props
-}: LogoProps): React.JSX.Element {
+}: LogoProps): JSX.Element {
   const { colorPrimary } = useThemeTokens();
 
   return (

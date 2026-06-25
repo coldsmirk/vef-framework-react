@@ -47,6 +47,24 @@ interface PendingChallenge {
   challenge: LoginChallenge;
 }
 
+const Today = memo(() => {
+  const [today, setToday] = useState(getLocalizedDateTime);
+
+  useInterval(
+    () => setToday(getLocalizedDateTime()),
+    1000,
+    { autoInvoke: true }
+  );
+
+  return (
+    <div css={styles.date}>
+      <span>今天是 </span>
+      <span css={styles.dateHighlight}>{today}</span>
+    </div>
+  );
+});
+Today.displayName = "Today";
+
 export function Login({
   logo,
   title = DEFAULT_TITLE,
@@ -328,24 +346,6 @@ function ChallengeView({
     </>
   );
 }
-
-const Today = memo(() => {
-  const [today, setToday] = useState(getLocalizedDateTime);
-
-  useInterval(
-    () => setToday(getLocalizedDateTime()),
-    1000,
-    { autoInvoke: true }
-  );
-
-  return (
-    <div css={styles.date}>
-      <span>今天是 </span>
-      <span css={styles.dateHighlight}>{today}</span>
-    </div>
-  );
-});
-Today.displayName = "Today";
 
 const currentYear = new Date().getFullYear();
 

@@ -1,4 +1,5 @@
 import type { UploadError, UploadResult } from "@vef-framework-react/core";
+import type { ReactElement } from "react";
 
 import type { GetProp } from "../_base";
 import type { UploadProps } from "../upload";
@@ -47,7 +48,7 @@ export function FileUpload({
   onUploadSuccess,
   onUploadError,
   ...uploadProps
-}: FileUploadProps): React.JSX.Element {
+}: FileUploadProps): ReactElement {
   const apiClient = useApiClient();
   const { fileBaseUrl } = useAppContext();
   const http = apiClient[HTTP_CLIENT];

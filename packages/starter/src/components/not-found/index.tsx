@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Button, Center, Icon, Result } from "@vef-framework-react/components";
 import { motion } from "@vef-framework-react/core";
@@ -9,7 +11,7 @@ import { NotFoundIcon } from "./not-found-icon";
 
 const NOT_FOUND_TITLE = "抱歉, 您访问的页面不存在!";
 
-export function NotFound(): React.ReactNode {
+export function NotFound(): ReactNode {
   const navigate = useNavigate();
   const pathname = useLocation({ select: state => state.pathname });
 
@@ -33,7 +35,7 @@ interface HomeButtonProps {
   onClick: () => void;
 }
 
-function HomeButton({ onClick }: HomeButtonProps): React.ReactNode {
+function HomeButton({ onClick }: HomeButtonProps): ReactNode {
   return (
     <Button
       icon={<Icon component={ArrowLeftIcon} />}
@@ -47,10 +49,10 @@ function HomeButton({ onClick }: HomeButtonProps): React.ReactNode {
 }
 
 interface AnimatedIconProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
-function AnimatedIcon({ children }: AnimatedIconProps): React.ReactNode {
+function AnimatedIcon({ children }: AnimatedIconProps): ReactNode {
   return (
     <motion.div
       animate={{ opacity: 1, scale: 1 }}

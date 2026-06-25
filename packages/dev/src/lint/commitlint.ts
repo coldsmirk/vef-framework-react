@@ -1,17 +1,4 @@
-import type { UserConfig } from "@commitlint/types";
-
-import { RuleConfigSeverity } from "@commitlint/types";
-
-const COMMITLINT_EXTENDS = ["@commitlint/config-conventional"] as const;
-const COMMITLINT_FORMATTER = "@commitlint/format";
-
-export function defineCommitlintConfig(): UserConfig {
-  return {
-    extends: [...COMMITLINT_EXTENDS],
-    formatter: COMMITLINT_FORMATTER,
-    rules: {
-      "body-empty": [RuleConfigSeverity.Error, "always"],
-      "footer-empty": [RuleConfigSeverity.Error, "always"]
-    }
-  };
-}
+// commitlint is fully covered by canon — no framework-specific commit rules — so
+// this is a straight re-export. Kept as a module (rather than dropping it) so the
+// dev package stays the single toolchain facade consumers import from.
+export { defineCommitlintConfig } from "@coldsmirk/commitlint-config";

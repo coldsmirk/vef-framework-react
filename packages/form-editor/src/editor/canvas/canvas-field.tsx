@@ -22,6 +22,7 @@ import { removeNodeWithConfirm } from "../remove-node-confirm";
  * drag state into the value it provides, so the flag cascades to any depth.
  */
 export const SubtreeDraggingContext = createContext(false);
+SubtreeDraggingContext.displayName = "SubtreeDraggingContext";
 
 // Zero-footprint chrome: the wrapper adds no box-model space of its own — no
 // padding, no margin — so every block lays out on the canvas exactly as the

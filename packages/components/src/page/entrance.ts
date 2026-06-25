@@ -77,6 +77,7 @@ const SETTLED_STORE: PageEntranceStore = {
 };
 
 export const PageEntranceContext = createContext<PageEntranceStore>(SETTLED_STORE);
+PageEntranceContext.displayName = "PageEntranceContext";
 
 /**
  * Whether the hosting Page's entrance animation has finished (immediately

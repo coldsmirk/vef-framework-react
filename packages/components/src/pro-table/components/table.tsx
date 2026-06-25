@@ -1,5 +1,6 @@
 import type { QueryKey } from "@vef-framework-react/core";
 import type { AnyObject, Key } from "@vef-framework-react/shared";
+import type { ReactNode } from "react";
 
 import type { TableProps } from "../../table";
 import type { NonPaginatedProTableProps, PaginatedProTableProps } from "../props";
@@ -115,7 +116,7 @@ export function getRowKeyFn(
 
 function renderTitle<TRow extends AnyObject>(
   title: PaginatedTableProps<TRow, never>["title"]
-): ((data: readonly TRow[]) => React.ReactNode) | undefined {
+): ((data: readonly TRow[]) => ReactNode) | undefined {
   if (!title) {
     return undefined;
   }
@@ -125,7 +126,7 @@ function renderTitle<TRow extends AnyObject>(
 
 function renderSummary<TRow extends AnyObject>(
   summary: PaginatedTableProps<TRow, never>["summary"]
-): ((data: readonly TRow[]) => React.ReactNode) | undefined {
+): ((data: readonly TRow[]) => ReactNode) | undefined {
   if (!summary) {
     return undefined;
   }

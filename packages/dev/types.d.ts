@@ -6,7 +6,7 @@
 // surrounding double-underscores follow the build-tool convention for
 // framework-injected names (akin to `__webpack_require__`); the lint exemption
 // reflects that, rather than introducing a casing exception elsewhere.
-/* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable @typescript-eslint/naming-convention -- Vite-injected globals use the double-underscore build-tool convention */
 
 /**
  * The version of the vef framework
@@ -21,4 +21,4 @@ declare const __VEF_APP_VERSION__: string;
  */
 declare const __VEF_APP_CONFIG__: Readonly<Record<string, string>>;
 
-/* eslint-enable @typescript-eslint/naming-convention */
+/* eslint-enable @typescript-eslint/naming-convention -- end of the Vite-global declarations */

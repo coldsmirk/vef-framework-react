@@ -20,6 +20,6 @@ export function useShallowCallback<T extends (...args: any[]) => any>(
   callback: T,
   dependencies: DependencyList
 ): T {
-  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- shallow-equality hook compares dep values, not references
   return useCallback(callback, useShallowCompare(dependencies)) as T;
 }

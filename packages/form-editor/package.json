@@ -1,19 +1,27 @@
 {
   "name": "@vef-framework-react/form-editor",
-  "type": "module",
   "version": "2.4.4",
   "private": false,
-  "packageManager": "pnpm@11.1.2",
   "description": "Form editor for VEF framework",
+  "keywords": [
+    "vef",
+    "framework",
+    "react",
+    "form",
+    "editor",
+    "low-code"
+  ],
+  "homepage": "https://vef.ilxqx.com",
+  "license": "Apache-2.0",
   "author": {
     "name": "Venus",
     "email": "iweixiaopeng@163.com",
     "url": "https://github.com/ilxqx"
   },
-  "license": "Apache-2.0",
-  "homepage": "https://vef.ilxqx.com",
-  "keywords": ["vef", "framework", "react", "form", "editor", "low-code"],
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
+  "type": "module",
   "exports": {
     ".": {
       "vef": "./src/index.ts",
@@ -31,20 +39,13 @@
   "main": "dist/cjs/index.cjs",
   "module": "dist/es/index.js",
   "types": "dist/types/index.d.ts",
-  "files": ["dist"],
-  "engines": {
-    "node": ">=22.x"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "vite build",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit",
-    "build": "vite build"
-  },
-  "peerDependencies": {
-    "react": ">=19"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -63,5 +64,15 @@
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/state": "^6.6.0",
     "react": "^19.2.7"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import type { NodeKind } from "../../types";
 
@@ -60,7 +60,7 @@ export function BaseNode({
   description,
   selected,
   children
-}: BaseNodeProps & { ref?: React.RefObject<HTMLDivElement | null> }) {
+}: BaseNodeProps & { ref?: RefObject<HTMLDivElement | null> }) {
   const spec = getSpecification(type);
   const Icon = spec.icon;
 

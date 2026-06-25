@@ -1,5 +1,5 @@
 import type { ApiResult } from "@vef-framework-react/core";
-import type { AnyObject, Awaitable, Key } from "@vef-framework-react/shared";
+import type { AnyObject, Awaitable, EventEmitter, Key } from "@vef-framework-react/shared";
 import type { ReactNode } from "react";
 
 import type { Breakpoint, Length } from "../_base";
@@ -7,7 +7,7 @@ import type { CrudEvents } from "./event";
 import type { CrudFormDrawerConfig, CrudFormMode, CrudFormScene } from "./types";
 
 import { createComponentStore } from "@vef-framework-react/core";
-import { createThrowNotImplementedFn, EventEmitter, mergeWith } from "@vef-framework-react/shared";
+import { createThrowNotImplementedFn, mergeWith } from "@vef-framework-react/shared";
 
 import { createEventEmitter } from "./event";
 

@@ -1,4 +1,5 @@
 import type { SemanticColor } from "@vef-framework-react/components";
+import type { JSX } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars, semanticColors } from "@vef-framework-react/components";
@@ -20,7 +21,7 @@ const semanticColorLabels: Record<SemanticColor, string> = {
   error: "错误色"
 };
 
-export function ThemeColors(): React.JSX.Element {
+export function ThemeColors(): JSX.Element {
   return (
     <div css={wrapperStyle}>
       {semanticColors.map(color => (

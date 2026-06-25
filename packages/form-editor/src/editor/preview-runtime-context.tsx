@@ -18,6 +18,7 @@ export interface PreviewRuntime {
 }
 
 const PreviewRuntimeContext = createContext<PreviewRuntime>({});
+PreviewRuntimeContext.displayName = "PreviewRuntimeContext";
 
 export function PreviewRuntimeProvider({
   children,

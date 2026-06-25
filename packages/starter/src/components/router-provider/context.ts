@@ -14,6 +14,7 @@ export type UseRouterContext<
 > = () => RouterContext<TRouter, TDehydrated>;
 
 const RouterContextHookContext = createContext<MaybeNull<UseRouterContext>>(null);
+RouterContextHookContext.displayName = "RouterContextHookContext";
 
 export function useRouterContextHook(): MaybeNull<UseRouterContext> {
   return use(RouterContextHookContext);

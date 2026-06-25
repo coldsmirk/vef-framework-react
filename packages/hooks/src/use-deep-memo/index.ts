@@ -14,6 +14,6 @@ import { useDeepCompare } from "../use-deep-compare";
  * @returns The memoized value that only recomputes when dependencies are deeply different.
  */
 export function useDeepMemo<T>(factory: () => T, dependencies: DependencyList): T {
-  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- deep-equality hook compares dep values, not references
   return useMemo(factory, useDeepCompare(dependencies));
 }

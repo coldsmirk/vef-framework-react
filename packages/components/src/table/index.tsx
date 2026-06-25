@@ -76,7 +76,7 @@ export function Table<TRow = AnyObject>({
     if (header) {
       headerSizeRef(header);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- tableElRef.current is intentionally a dependency so the effect re-runs once the table DOM mounts and the header element can be found.
   }, [tableElRef.current, headerSizeRef]);
 
   const tableProps = useMemo<TablePropsInternal<TRow>>(() => {

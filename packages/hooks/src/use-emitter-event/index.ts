@@ -1,6 +1,5 @@
-import type { EventHandler, EventType } from "@vef-framework-react/shared";
+import type { EventEmitter, EventHandler, EventType } from "@vef-framework-react/shared";
 
-import { EventEmitter } from "@vef-framework-react/shared";
 import { useEffect } from "react";
 
 /**

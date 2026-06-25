@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import type { NodeKind } from "../../types";
 
@@ -50,7 +50,7 @@ export function NodeShell({
   type,
   selected,
   children
-}: NodeShellProps & { ref?: React.RefObject<HTMLDivElement | null> }) {
+}: NodeShellProps & { ref?: RefObject<HTMLDivElement | null> }) {
   const spec = getSpecification(type);
   const readonly = useEditorStore(s => s.readonly);
   const nodeId = useNodeId();

@@ -28,8 +28,7 @@ export function Header(): ReactNode {
   const isSubmitting = useHasMutating(saveConfigs.key);
 
   function handleSubmit(): void {
-    // eslint-disable-next-line unicorn/no-useless-undefined
-    eventEmitter.emit("submit", undefined);
+    eventEmitter.emit("submit");
   }
 
   return (

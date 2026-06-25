@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { ErrorProps } from "./props";
 
 import { Button, Center, Icon, Result, Spin, Text } from "@vef-framework-react/components";
@@ -14,7 +16,7 @@ export function Error({
   error,
   info,
   reset
-}: ErrorProps): React.ReactNode {
+}: ErrorProps): ReactNode {
   const { reset: resetQueryError } = useQueryErrorResetBoundary();
 
   useEffect(resetQueryError);
@@ -39,7 +41,7 @@ interface RetryButtonProps {
   onRetry: () => void;
 }
 
-function RetryButton({ onRetry }: RetryButtonProps): React.ReactNode {
+function RetryButton({ onRetry }: RetryButtonProps): ReactNode {
   return (
     <Button
       icon={<Icon component={RefreshCwIcon} />}
@@ -53,10 +55,10 @@ function RetryButton({ onRetry }: RetryButtonProps): React.ReactNode {
 }
 
 interface AnimatedIconProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
-function AnimatedIcon({ children }: AnimatedIconProps): React.ReactNode {
+function AnimatedIcon({ children }: AnimatedIconProps): ReactNode {
   return (
     <motion.div
       animate={{ opacity: 1, scale: 1 }}
@@ -81,7 +83,7 @@ function getErrorStack(error: Error, componentStack?: string): Promise<string | 
   return getSanitizedErrorStack(error);
 }
 
-function ErrorStack({ componentStack, error }: ErrorStackProps): React.ReactNode {
+function ErrorStack({ componentStack, error }: ErrorStackProps): ReactNode {
   const stackPromise = useMemo(
     () => getErrorStack(error, componentStack),
     [error, componentStack]

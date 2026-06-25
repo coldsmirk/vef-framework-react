@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 
 import { SearchOutlined } from "@ant-design/icons";
 import { FlexCard, Input, Loader, Stack, Tree, useDataOptionsTree } from "@vef-framework-react/components";
@@ -34,7 +34,7 @@ function DictTreeComponent({ value, onChange }: DictTreeProps): ReactNode {
 
   const title = `当前字典：${value?.name ?? "无"}`;
 
-  function handleSearchChange(event: React.ChangeEvent<HTMLInputElement>): void {
+  function handleSearchChange(event: ChangeEvent<HTMLInputElement>): void {
     setSearchValue(event.currentTarget.value);
   }
 

@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import type { LogoIconProps } from "./props";
 
 import { colorPaletteMap, getColorPalette } from "@vef-framework-react/shared";
@@ -7,7 +9,7 @@ const DEFAULT_COLOR = colorPaletteMap.get("blue")!.get(500)!;
 export function LogoIcon({
   primaryColor = DEFAULT_COLOR,
   ...props
-}: LogoIconProps): React.ReactElement {
+}: LogoIconProps): ReactElement {
   const colorPalette = getColorPalette(primaryColor);
 
   return (

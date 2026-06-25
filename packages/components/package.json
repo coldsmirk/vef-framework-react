@@ -1,19 +1,24 @@
 {
   "name": "@vef-framework-react/components",
-  "type": "module",
   "version": "2.4.4",
   "private": false,
-  "packageManager": "pnpm@11.1.2",
   "description": "Components for VEF Framework",
+  "keywords": [
+    "vef",
+    "framework",
+    "ui",
+    "react",
+    "components"
+  ],
+  "homepage": "https://vef.ilxqx.com",
+  "license": "Apache-2.0",
   "author": {
     "name": "Venus",
     "email": "iweixiaopeng@163.com",
     "url": "https://github.com/ilxqx"
   },
-  "license": "Apache-2.0",
-  "homepage": "https://vef.ilxqx.com",
-  "keywords": ["vef", "framework", "ui", "react", "components"],
   "sideEffects": false,
+  "type": "module",
   "exports": {
     ".": {
       "vef": "./src/index.ts",
@@ -31,21 +36,14 @@
   "main": "dist/cjs/index.cjs",
   "module": "dist/es/index.js",
   "types": "dist/types/index.d.ts",
-  "files": ["dist"],
-  "engines": {
-    "node": ">=22.x"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "rename-fonts": "tsx ../../scripts/rename-fonts.ts"
-  },
-  "peerDependencies": {
-    "react": ">=19"
+    "clean": "rimraf dist",
+    "rename-fonts": "tsx ../../scripts/rename-fonts.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.1.2",
@@ -88,5 +86,15 @@
   "devDependencies": {
     "@types/react-syntax-highlighter": "^15.5.13",
     "react": "^19.2.7"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

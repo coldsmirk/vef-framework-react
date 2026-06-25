@@ -1,10 +1,10 @@
 {
   "extends": "../dev/tsconfig.base.json",
   "compilerOptions": {
-    "experimentalDecorators": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@emotion/react",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "experimentalDecorators": true,
     "customConditions": ["vef"]
   },
   "include": ["src", "tests", "vite.config.ts", "env.d.ts"]

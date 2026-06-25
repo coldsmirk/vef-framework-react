@@ -41,7 +41,7 @@ if (isFingerprintSupported()) {
         fingerprint: result.visitorId
       });
     })
-    // eslint-disable-next-line unicorn/prefer-top-level-await
+    // eslint-disable-next-line unicorn/prefer-top-level-await -- fire-and-forget init via a promise chain, not top-level await
     .catch(error => {
       console.error("Failed to initialize fingerprint:", error);
     });

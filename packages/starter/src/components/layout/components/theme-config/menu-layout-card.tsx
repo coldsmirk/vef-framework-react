@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, JSX } from "react";
 
 import type { MenuLayoutMode } from "../../../../stores";
 
@@ -62,7 +62,7 @@ const layoutStyle = {
   })
 };
 
-export function MenuLayoutCard({ mode, ...props }: MenuLayoutCardProps): React.JSX.Element {
+export function MenuLayoutCard({ mode, ...props }: MenuLayoutCardProps): JSX.Element {
   const body = (
     <div css={layoutStyle.wrapper}>
       <div css={layoutStyle.header} />

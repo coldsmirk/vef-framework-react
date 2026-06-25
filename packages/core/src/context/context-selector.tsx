@@ -1,4 +1,4 @@
-import type { ComponentType, PropsWithChildren } from "react";
+import type { ComponentType, JSX, PropsWithChildren } from "react";
 
 import { isFunction } from "@vef-framework-react/shared";
 import { createContext, use, useEffect, useState, useSyncExternalStore } from "react";
@@ -47,8 +47,9 @@ export interface SelectorContextResult<TValue> {
  */
 export function createContextWithSelector<TValue>(defaultValue: TValue): SelectorContextResult<TValue> {
   const Context = createContext<Store<TValue>>(createStore(defaultValue));
+  Context.displayName = "Context";
 
-  function Provider({ value, children }: SelectorContextProviderProps<TValue>): React.JSX.Element {
+  function Provider({ value, children }: SelectorContextProviderProps<TValue>): JSX.Element {
     const [store] = useState(() => createStore(value));
 
     useEffect(() => {

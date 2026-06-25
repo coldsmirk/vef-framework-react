@@ -1,5 +1,5 @@
 import type { Transition, Variants } from "@vef-framework-react/core";
-import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
+import type { CSSProperties, PropsWithChildren, ReactElement, ReactNode } from "react";
 
 import { ClassNames } from "@emotion/react";
 import { AnimatePresence, motion } from "@vef-framework-react/core";
@@ -45,7 +45,7 @@ export function ScrollContent({
   actionBar,
   actionBarClassName,
   children
-}: ScrollContentProps): React.JSX.Element {
+}: ScrollContentProps): ReactElement {
   const { ref: actionBarRef, height: actionBarHeight } = useElementSize();
   const { ref: viewportRef, height: viewportHeight } = useElementSize();
 

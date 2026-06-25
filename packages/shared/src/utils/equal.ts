@@ -108,7 +108,7 @@ export function isDeepEqual(value1: unknown, value2: unknown): boolean {
       || !currentSecond
     ) {
       // Efficient NaN comparison - NaN is the only value that's not equal to itself
-      // eslint-disable-next-line no-self-compare
+      // eslint-disable-next-line no-self-compare -- NaN check: NaN is the only value not equal to itself
       return currentFirst !== currentFirst && currentSecond !== currentSecond;
     }
 

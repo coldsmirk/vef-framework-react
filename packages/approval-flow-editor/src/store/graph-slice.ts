@@ -345,7 +345,8 @@ export const createGraphSlice: EditorSliceCreator<GraphSlice> = (set, get) => {
           return;
         }
 
-        const branches = node.data.branches ??= [];
+        node.data.branches ??= [];
+        const { branches } = node.data;
         // max+1, not count+1: after deleting a low-priority branch, count+1
         // would collide with a surviving branch's priority — and duplicate
         // priorities are rejected at deploy ("first match wins" needs a

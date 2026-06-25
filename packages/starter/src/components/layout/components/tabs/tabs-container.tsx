@@ -1,5 +1,6 @@
 import type { Position } from "@vef-framework-react/components";
 import type { MaybeUndefined } from "@vef-framework-react/shared";
+import type { JSX } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars, ScrollArea } from "@vef-framework-react/components";
@@ -35,7 +36,7 @@ const tabsWrapperStyle = css({
   }
 });
 
-export function TabsContainer(): React.JSX.Element {
+export function TabsContainer(): JSX.Element {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const isOverflowRef = useRef(false);
   const overflowWidthRef = useRef(0);

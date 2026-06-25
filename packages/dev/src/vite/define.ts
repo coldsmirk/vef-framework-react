@@ -21,11 +21,11 @@ export function defineConstants(appName: string | undefined, appVersion: string,
   // Keys MUST mirror the global names declared in `packages/dev/types.d.ts`;
   // Vite injects them via string substitution at build time, so the casing
   // is dictated by the consumer-side identifiers rather than by our style.
-  /* eslint-disable @typescript-eslint/naming-convention */
+  /* eslint-disable @typescript-eslint/naming-convention -- keys mirror the Vite-injected double-underscore global names */
   return {
     __VEF_FRAMEWORK_VERSION__: JSON.stringify(VEF_FRAMEWORK_VERSION),
     __VEF_APP_VERSION__: JSON.stringify(appVersion),
     __VEF_APP_CONFIG__: appConfigValue
   };
-  /* eslint-enable @typescript-eslint/naming-convention */
+  /* eslint-enable @typescript-eslint/naming-convention -- end of the Vite-global define block */
 }

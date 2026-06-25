@@ -17,6 +17,6 @@ import { useShallowCompare } from "../use-shallow-compare";
  * @returns The memoized value.
  */
 export function useShallowMemo<T>(factory: () => T, dependencies: DependencyList): T {
-  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- shallow-equality hook compares dep values, not references
   return useMemo(factory, useShallowCompare(dependencies));
 }

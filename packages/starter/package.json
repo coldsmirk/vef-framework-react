@@ -1,19 +1,23 @@
 {
   "name": "@vef-framework-react/starter",
-  "type": "module",
   "version": "2.4.4",
   "private": false,
-  "packageManager": "pnpm@11.1.2",
   "description": "Starter for VEF framework",
+  "keywords": [
+    "vef",
+    "framework",
+    "react",
+    "starter"
+  ],
+  "homepage": "https://vef.ilxqx.com",
+  "license": "Apache-2.0",
   "author": {
     "name": "Venus",
     "email": "iweixiaopeng@163.com",
     "url": "https://github.com/ilxqx"
   },
-  "license": "Apache-2.0",
-  "homepage": "https://vef.ilxqx.com",
-  "keywords": ["vef", "framework", "react", "starter"],
   "sideEffects": false,
+  "type": "module",
   "exports": {
     ".": {
       "vef": "./src/index.ts",
@@ -31,26 +35,13 @@
   "main": "dist/cjs/index.cjs",
   "module": "dist/es/index.js",
   "types": "dist/types/index.d.ts",
-  "files": ["dist"],
-  "engines": {
-    "node": ">=22.x"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "vite build",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit",
-    "build": "vite build"
-  },
-  "peerDependencies": {
-    "@tanstack/react-router": ">=1",
-    "@vef-framework-react/components": ">=2",
-    "@vef-framework-react/core": ">=2",
-    "@vef-framework-react/hooks": ">=2",
-    "@vef-framework-react/shared": ">=2",
-    "react": ">=19",
-    "react-dom": ">=19"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
@@ -67,5 +58,21 @@
     "@vef-framework-react/shared": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
+  },
+  "peerDependencies": {
+    "@tanstack/react-router": ">=1",
+    "@vef-framework-react/components": ">=2",
+    "@vef-framework-react/core": ">=2",
+    "@vef-framework-react/hooks": ">=2",
+    "@vef-framework-react/shared": ">=2",
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

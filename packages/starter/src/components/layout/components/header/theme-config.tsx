@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { IconButton } from "@vef-framework-react/components";
 import { SwatchBookIcon } from "lucide-react";
 
@@ -13,7 +15,7 @@ function handleClick(): void {
   });
 }
 
-export function ThemeConfig({ className }: ThemeConfigProps): React.JSX.Element {
+export function ThemeConfig({ className }: ThemeConfigProps): JSX.Element {
   return (
     <IconButton
       className={className}

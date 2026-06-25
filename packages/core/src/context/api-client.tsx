@@ -1,5 +1,5 @@
 import type { MaybeNull } from "@vef-framework-react/shared";
-import type { PropsWithChildren } from "react";
+import type { JSX, PropsWithChildren } from "react";
 
 import type { ApiClient } from "../api";
 
@@ -9,6 +9,7 @@ import { createContext, use } from "react";
 import { QUERY_CLIENT } from "../api";
 
 const ApiClientContext = createContext<MaybeNull<ApiClient>>(null);
+ApiClientContext.displayName = "ApiClientContext";
 
 interface ApiClientProviderProps extends PropsWithChildren {
   value: ApiClient;
@@ -18,7 +19,7 @@ interface ApiClientProviderProps extends PropsWithChildren {
  * Provider for the API client context.
  * Wraps children with both ApiClient context and React Query's QueryClientProvider.
  */
-export function ApiClientProvider({ value, children }: ApiClientProviderProps): React.JSX.Element {
+export function ApiClientProvider({ value, children }: ApiClientProviderProps): JSX.Element {
   return (
     <ApiClientContext value={value}>
       <QueryClientProvider client={value[QUERY_CLIENT]}>

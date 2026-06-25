@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactElement } from "react";
 
 import * as styles from "../styles";
 
@@ -12,7 +12,7 @@ export function ResizeHandle({
   isDragging,
   position,
   onMouseDown
-}: ResizeHandleProps): React.JSX.Element {
+}: ResizeHandleProps): ReactElement {
   const positionStyle = position === "left"
     ? styles.resizeHandleLeft
     : styles.resizeHandleRight;

@@ -1,4 +1,5 @@
 import type { AnyRouter, RegisteredRouter } from "@tanstack/react-router";
+import type { ReactElement } from "react";
 
 import type { AppProps } from "./props";
 
@@ -30,7 +31,7 @@ export function App<
   appContext,
   appVersionNotification,
   router
-}: AppProps<TRouter, TDehydrated>): React.ReactElement {
+}: AppProps<TRouter, TDehydrated>): ReactElement {
   useEffect(() => {
     if (document.readyState === "complete") {
       removeInitLoader();

@@ -37,7 +37,7 @@ function serializeBody(
 }
 
 /**
- * SSE client wrapper around @microsoft/fetch-event-source.
+ * SSE client wrapper around `@microsoft/fetch-event-source`.
  *
  * Each `stream()` call runs the session statechart in `./stream-machine.ts`
  * (attempt → token refresh → one retry); this class supplies the connection

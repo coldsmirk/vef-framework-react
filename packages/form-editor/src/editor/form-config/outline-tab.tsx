@@ -117,6 +117,7 @@ export function OutlineTab(): ReactElement {
               <span css={emptyHintCss}>从左侧组件库拖入组件，字段结构会显示在这里</span>
             </div>
           )
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
         : layer.children.map(block => <BlockNode key={block.id} block={block} depth={0} />)}
     </div>
   );

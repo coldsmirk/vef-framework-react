@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { css } from "@emotion/react";
 import { Center, globalCssVars, Switch } from "@vef-framework-react/components";
 import { useShallow } from "@vef-framework-react/core";
@@ -12,7 +14,7 @@ const wrapperStyle = css({
   gap: globalCssVars.spacingMd
 });
 
-export function ColorScheme(): React.JSX.Element {
+export function ColorScheme(): JSX.Element {
   const {
     isGrayscaleMode,
     isColorBlindMode,

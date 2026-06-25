@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { css } from "@emotion/react";
 import { Center, globalCssVars, Switch, Tooltip } from "@vef-framework-react/components";
 import { clsx } from "@vef-framework-react/core";
@@ -12,7 +14,7 @@ const wrapperStyle = css({
   gap: globalCssVars.spacingMd
 });
 
-export function MenuLayout(): React.JSX.Element {
+export function MenuLayout(): JSX.Element {
   const menuLayout = useThemeStore(state => state.menuLayout);
   const isTabsVisible = useThemeStore(state => state.isTabsVisible);
   const isDarkSidebar = useThemeStore(state => state.isDarkSidebar);

@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { emitReloadPage, IconButton } from "@vef-framework-react/components";
 import { RefreshCwIcon } from "lucide-react";
 
@@ -7,7 +9,7 @@ interface ReloadProps {
   className?: string;
 }
 
-export function Reload({ className }: ReloadProps): React.JSX.Element {
+export function Reload({ className }: ReloadProps): JSX.Element {
   const fullPath = useRouteFullPath();
 
   function handleClick(): void {

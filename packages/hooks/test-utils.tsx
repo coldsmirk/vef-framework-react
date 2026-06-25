@@ -29,6 +29,7 @@ export interface CustomRenderHookOptions<TProps> extends RenderHookOptions<TProp
 export function createTestApiClient(http?: Partial<HttpClientOptions>): ApiClient {
   return createApiClient({
     http: {
+      // eslint-disable-next-line unicorn/prefer-https -- non-routable test host; plain HTTP avoids needless TLS setup in tests
       baseUrl: "http://vef-test.invalid",
       ...http
     }

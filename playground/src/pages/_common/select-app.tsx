@@ -16,7 +16,6 @@ const gridStyle = css({
 
 export const Route = createFileRoute("/_common/select-app")({
   validateSearch: z.object({
-    // eslint-disable-next-line unicorn/prefer-top-level-await -- `.catch` here is the zod fallback, not Promise#catch.
     redirect: z.string().optional().default("/").catch("/")
   }),
   component: SelectAppPage

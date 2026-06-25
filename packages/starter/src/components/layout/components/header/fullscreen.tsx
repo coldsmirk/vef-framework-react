@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { IconButton } from "@vef-framework-react/components";
 import { useFullscreenDocument } from "@vef-framework-react/hooks";
 import { isNullish } from "@vef-framework-react/shared";
@@ -7,7 +9,7 @@ interface FullscreenProps {
   className?: string;
 }
 
-export function Fullscreen({ className }: FullscreenProps): React.JSX.Element {
+export function Fullscreen({ className }: FullscreenProps): JSX.Element {
   const { toggle, fullscreen } = useFullscreenDocument();
   const isFullscreen = !isNullish(document.fullscreenElement) || fullscreen;
   const icon = isFullscreen ? <MinimizeIcon /> : <MaximizeIcon />;

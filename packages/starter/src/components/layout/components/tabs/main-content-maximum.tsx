@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { IconButton } from "@vef-framework-react/components";
 import { ExpandIcon, ShrinkIcon } from "lucide-react";
 
@@ -7,7 +9,7 @@ interface MainContentMaximumProps {
   className?: string;
 }
 
-export function MainContentMaximum({ className }: MainContentMaximumProps): React.JSX.Element {
+export function MainContentMaximum({ className }: MainContentMaximumProps): JSX.Element {
   const isMainContentMaximum = useThemeStore(state => state.isMainContentMaximum);
   const icon = isMainContentMaximum ? <ShrinkIcon /> : <ExpandIcon />;
   const tip = isMainContentMaximum ? "退出内容最大化" : "内容最大化";

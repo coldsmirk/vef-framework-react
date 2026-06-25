@@ -1,6 +1,7 @@
 import { createContext, use } from "react";
 
 const DisabledContext = createContext(false);
+DisabledContext.displayName = "DisabledContext";
 
 /**
  * Hook to access the disabled state from context.

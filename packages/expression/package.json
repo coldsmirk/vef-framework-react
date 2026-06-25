@@ -1,19 +1,26 @@
 {
   "name": "@vef-framework-react/expression",
-  "type": "module",
   "version": "2.4.4",
   "private": false,
-  "packageManager": "pnpm@11.1.2",
   "description": "GoRules ZEN expression runtime and shared condition operators for VEF framework",
+  "keywords": [
+    "vef",
+    "framework",
+    "react",
+    "expression",
+    "zen",
+    "gorules",
+    "wasm"
+  ],
+  "homepage": "https://vef.ilxqx.com",
+  "license": "Apache-2.0",
   "author": {
     "name": "Venus",
     "email": "iweixiaopeng@163.com",
     "url": "https://github.com/ilxqx"
   },
-  "license": "Apache-2.0",
-  "homepage": "https://vef.ilxqx.com",
-  "keywords": ["vef", "framework", "react", "expression", "zen", "gorules", "wasm"],
   "sideEffects": false,
+  "type": "module",
   "exports": {
     ".": {
       "vef": "./src/index.ts",
@@ -31,20 +38,23 @@
   "main": "dist/cjs/index.cjs",
   "module": "dist/es/index.js",
   "types": "dist/types/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gorules/zen-engine-wasm": "0.23.1",
+    "@vef-framework-react/shared": "workspace:*"
+  },
+  "packageManager": "pnpm@11.1.2",
   "engines": {
     "node": ">=22.x"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "scripts": {
-    "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit",
-    "build": "vite build"
-  },
-  "dependencies": {
-    "@gorules/zen-engine-wasm": "0.23.1",
-    "@vef-framework-react/shared": "workspace:*"
   }
 }

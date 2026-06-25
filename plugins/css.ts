@@ -23,6 +23,7 @@ export default function cssPlugin(): Plugin {
         return null;
       }
 
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- Rollup/Vite plugin hook; `this` is the PluginContext provided by the plugin API
       const result = await this.resolve(source, importer, options);
 
       if (!result) {

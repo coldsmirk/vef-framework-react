@@ -11,5 +11,4 @@ import Divider from "antd-mobile/es/components/divider";
  * `contentPosition`, defaulting to centered. The PC-only `dashed` rule has no
  * antd-mobile equivalent, so the mobile divider always renders solid.
  */
-export const MobileDivider: FC<FieldComponentProps<DividerField, undefined>> = ({ field }) => field.title ? <Divider contentPosition={field.titlePlacement ?? "center"}>{field.title}</Divider> : <Divider />
-;
+export const MobileDivider: FC<FieldComponentProps<DividerField, undefined>> = ({ field }) => field.title ? <Divider contentPosition={field.titlePlacement ?? "center"}>{field.title}</Divider> : <Divider />;

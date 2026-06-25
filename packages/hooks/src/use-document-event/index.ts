@@ -30,8 +30,8 @@ export function useDocumentEvent<TType extends string>(
   const listenerRef = useLatest(listener);
 
   useEffect(() => {
-    function handleEvent(this: Document, event: Event): void {
-      listenerRef.current.call(this, event as never);
+    function handleEvent(event: Event): void {
+      listenerRef.current.call(document, event as never);
     }
 
     document.addEventListener(type, handleEvent, options);

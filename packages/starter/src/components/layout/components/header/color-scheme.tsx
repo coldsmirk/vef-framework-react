@@ -1,3 +1,5 @@
+import type { JSX, MouseEvent } from "react";
+
 import { IconButton } from "@vef-framework-react/components";
 import { MoonIcon, SunIcon, SunMoon } from "lucide-react";
 
@@ -20,11 +22,11 @@ const colorSchemeTips = {
   system: "切换浅色主题"
 };
 
-export function ColorScheme({ className }: ColorSchemeProps): React.JSX.Element {
+export function ColorScheme({ className }: ColorSchemeProps): JSX.Element {
   const colorScheme = useThemeStore(state => state.colorScheme);
   const { getNextColorScheme, updateColorScheme } = useColorSchemeUpdater();
 
-  function handleClick(event: React.MouseEvent): void {
+  function handleClick(event: MouseEvent): void {
     updateColorScheme(
       getNextColorScheme(colorScheme),
       { x: event.clientX, y: event.clientY },

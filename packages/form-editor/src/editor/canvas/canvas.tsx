@@ -65,6 +65,7 @@ function SurfaceLoading(): ReactElement {
  * gap — mirroring how the runtime threads the same value through `ctx.gutter`.
  */
 const FormGapContext = createContext<number>(DEFAULT_STACK_GAP);
+FormGapContext.displayName = "FormGapContext";
 
 // The root document's append target is a constant — a single shared instance so
 // the root StackBody's `useDroppable` registration never churns its `data` (the
@@ -482,6 +483,7 @@ function StackBody({
 
   return (
     <Stack ref={ref} css={[fill && bodyFillCss, isDropTarget && bodyAppendActiveCss]} gap={gapPx}>
+      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       {blocks.map(block => <StackSlot key={block.id} block={block} />)}
     </Stack>
   );
@@ -513,6 +515,7 @@ const StackSlot = memo(({ block }: StackSlotProps): ReactElement => {
   return (
     <div css={stackSlotCss}>
       {suppressed ? null : <Zone descriptor={stackGapDescriptor(block.id)} />}
+      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       <EditorBlock block={block} />
     </div>
   );
@@ -557,6 +560,7 @@ function useInlineBody(
   // re-renders only the edited cell, not every sibling.
   const slots = inlineSlots(blocks).map(slot => (
     <div key={slot.block.id} css={slotCss} style={slotStyle(slot.block)}>
+      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       <EditorBlock block={slot.block} />
       {suppressed ? null : slot.beside.map(zone => <Zone key={zone.id} descriptor={zone} />)}
     </div>

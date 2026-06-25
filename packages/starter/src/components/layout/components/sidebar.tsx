@@ -1,4 +1,5 @@
 import type { MenuItem } from "@vef-framework-react/components";
+import type { JSX } from "react";
 
 import type { LayoutProps } from "../props";
 
@@ -101,7 +102,7 @@ export function Sidebar({
   title,
   items,
   showLogo = true
-}: SidebarProps): React.JSX.Element {
+}: SidebarProps): JSX.Element {
   return (
     <>
       {isDark && <ContourPattern isSidebarCollapsed={isSidebarCollapsed} />}

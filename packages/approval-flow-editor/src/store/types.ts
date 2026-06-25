@@ -81,7 +81,7 @@ export interface ValidationSlice {
 export interface FlowSlice {
   isDirty: boolean;
   /**
-   * @internal Counter incremented on meaningful data changes, used for onChange scheduling
+   * @internal
    */
   changeVersion: number;
   loadDefinition: (definition: FlowDefinition) => void;
@@ -120,13 +120,15 @@ export interface HistorySlice {
   past: HistoryEntry[];
   future: HistoryEntry[];
   /**
-   * @internal Capture the current graph as the next undo step. Called by the
-   * graph mutators before they apply a user edit.
+   * Called by graph mutators before they apply a user edit.
+   *
+   * @internal
    */
   checkpoint: (options?: CheckpointOptions) => void;
   /**
-   * @internal End the active coalescing run, so the next same-key checkpoint
-   * starts a new undo step (selection changes, drag end, undo/redo).
+   * Starts a new undo step (selection changes, drag end, undo/redo).
+   *
+   * @internal
    */
   breakCoalescing: () => void;
   undo: () => void;

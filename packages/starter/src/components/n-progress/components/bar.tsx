@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
@@ -44,7 +44,7 @@ const glowStyle = css({
   width: "150px"
 });
 
-export function Bar({ progress }: BarProps): React.ReactNode {
+export function Bar({ progress }: BarProps): ReactNode {
   const style = {
     "--vef-n-progress-bar-margin-left": `${(-1 + progress) * 100}%`
   } as CSSProperties;

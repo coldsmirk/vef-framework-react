@@ -73,6 +73,7 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
 }) => {
   if (condition.kind === "expression") {
     return (
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
       <ExpressionConditionEditor
         condition={condition}
         selfKey={selfKey}
@@ -85,6 +86,7 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
 
   if (condition.kind === "group") {
     return (
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
       <GroupConditionEditor
         condition={condition}
         depth={0}
@@ -103,6 +105,7 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
   // would produce a different id per render / StrictMode pass. The wrapped
   // group is committed as-is on the first edit.
   return (
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
     <GroupConditionEditor
       depth={0}
       sourceOptions={sourceOptions}
@@ -386,6 +389,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
         }
 
         return (
+          // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
           <LeafConditionEditor
             key={child.id ?? index}
             condition={child}

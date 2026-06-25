@@ -1,8 +1,8 @@
 {
   "extends": "./packages/dev/tsconfig.base.json",
   "compilerOptions": {
-    "customConditions": ["vef"],
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "customConditions": ["vef"]
   },
   "include": ["scripts", "plugins", "shims.d.ts", "eslint.config.ts", "commitlint.config.ts"]
 }

@@ -16,6 +16,7 @@ import { createContext, use, useEffect, useRef, useState } from "react";
 export type EditorLayoutMode = "docked" | "drawer";
 
 const EditorLayoutContext = createContext<EditorLayoutMode>("docked");
+EditorLayoutContext.displayName = "EditorLayoutContext";
 
 /**
  * Width threshold (in CSS pixels of the editor *root*, not the viewport) at or

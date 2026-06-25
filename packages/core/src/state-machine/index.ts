@@ -1,4 +1,5 @@
 import type {
+  Actor,
   ActorOptions,
   AnyActorLogic,
   ConditionalRequired,
@@ -8,7 +9,6 @@ import type {
 } from "xstate";
 
 import { useActorRef, useSelector } from "@xstate/react";
-import { Actor } from "xstate";
 
 /**
  * Custom hook for creating and using an XState actor with state selection.

@@ -1,5 +1,5 @@
 import type { AnyObject, Awaitable } from "@vef-framework-react/shared";
-import type { FC, ReactNode } from "react";
+import type { FC, ReactNode, Ref } from "react";
 
 import type { PropsWithRef } from "../_base";
 import type { ProTableProps } from "./props";
@@ -95,7 +95,7 @@ export const ProTable = memo(<TRow extends AnyObject, TParams extends AnyObject>
     </ProTableStoreProvider>
   );
 }) as (<TRow extends AnyObject, TParams extends AnyObject>(
-  props: ProTableProps<TRow, TParams> & { ref?: React.Ref<ProTableRef> }
+  props: ProTableProps<TRow, TParams> & { ref?: Ref<ProTableRef> }
 ) => Awaitable<ReactNode>) & Pick<FC, "displayName">;
 
 ProTable.displayName = "ProTable";

@@ -131,7 +131,7 @@ export function useChart({
       resizeObserverRef.current?.disconnect();
       chart.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- the instance must only be recreated when its construction options change; theme and size (effectiveTheme/width/height) are applied to the existing instance by other effects/the ResizeObserver, and the useEffectEvent callbacks are stable by design.
   }, [renderer, devicePixelRatio, ssr, useCoarsePointer, useDirtyRect, pointerSize, locale]);
 
   useEffect(() => {

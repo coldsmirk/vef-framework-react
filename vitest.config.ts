@@ -21,7 +21,7 @@ export default defineConfig({
   },
   test: {
     name: "vef-framework",
-    include: ["./packages/**/*.spec.{ts,tsx}"],
+    include: ["./packages/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./scripts/test-setup.ts"],
     globals: true,
@@ -43,7 +43,7 @@ export default defineConfig({
         "**/types.ts",
         "**/styles.ts",
         // Specs and test utilities
-        "**/*.spec.{ts,tsx}",
+        "**/*.test.{ts,tsx}",
         "**/test-utils.tsx",
         "**/test-expression-engine.ts",
         // Out-of-scope packages (see AGENTS.md > Testing Conventions > What Not to Test)

@@ -48,6 +48,7 @@ const noopRunEffects: RunEffects = () => {
 };
 
 const RunEffectsContext = createContext<RunEffects>(noopRunEffects);
+RunEffectsContext.displayName = "RunEffectsContext";
 
 /**
  * Read the nearest value scope's effect dispatcher. A field reads this to fire

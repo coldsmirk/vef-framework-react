@@ -151,6 +151,7 @@ interface RuntimeFieldApi {
  * so a variable change never busts their memo and re-renders the whole tree.
  */
 const ExpressionScopeContext = createContext<ExpressionContext | undefined>(undefined);
+ExpressionScopeContext.displayName = "ExpressionScopeContext";
 
 interface RenderCtx {
   disabled: boolean;
@@ -624,25 +625,6 @@ function FormRendererInner({
 }
 
 /**
- * A vertical stack of blocks (the document body, and section / tabs / subform
- * bodies). Blocks flow top-to-bottom with the resolved `gap` between them — the
- * container's own {@link GapScale} when set, else the inherited form-level gap
- * ({@link RenderCtx.gutter}). Each cell drops out when its own linkage hides it,
- * so the stack closes up with no hole.
- */
-function BlockStack({
-  blocks,
-  ctx,
-  gap
-}: { blocks: Block[]; ctx: RenderCtx; gap?: GapScale }): ReactElement {
-  return (
-    <Stack gap={resolveStackGap(gap, ctx.gutter)}>
-      {blocks.map(block => <BlockCell key={block.id} block={block} ctx={ctx} />)}
-    </Stack>
-  );
-}
-
-/**
  * The per-block linkage consumer (reads its own runtime state for the hidden /
  * disabled / required outcome), rendered 100-200× on a dense tab. A hidden block
  * emits nothing, so the stack's flex `gap` closes up with no hole. Memoized so a
@@ -661,6 +643,25 @@ function BlockCellBase({ block, ctx }: { block: Block; ctx: RenderCtx }): ReactE
 }
 
 const BlockCell = memo(BlockCellBase);
+
+/**
+ * A vertical stack of blocks (the document body, and section / tabs / subform
+ * bodies). Blocks flow top-to-bottom with the resolved `gap` between them — the
+ * container's own {@link GapScale} when set, else the inherited form-level gap
+ * ({@link RenderCtx.gutter}). Each cell drops out when its own linkage hides it,
+ * so the stack closes up with no hole.
+ */
+function BlockStack({
+  blocks,
+  ctx,
+  gap
+}: { blocks: Block[]; ctx: RenderCtx; gap?: GapScale }): ReactElement {
+  return (
+    <Stack gap={resolveStackGap(gap, ctx.gutter)}>
+      {blocks.map(block => <BlockCell key={block.id} block={block} ctx={ctx} />)}
+    </Stack>
+  );
+}
 
 function BlockBody({
   block,
@@ -698,6 +699,22 @@ function BlockBody({
   }
 }
 
+function FlexSlotCellBase({ block, ctx }: { block: Block; ctx: RenderCtx }): ReactElement | null {
+  const runtimeState = useRuntimeFieldState(block.id);
+
+  if (runtimeState.hidden) {
+    return null;
+  }
+
+  return (
+    <div style={flexSlotStyle(block.flex)}>
+      <BlockBody block={block} ctx={ctx} runtimeState={runtimeState} />
+    </div>
+  );
+}
+
+const FlexSlotCell = memo(FlexSlotCellBase);
+
 /**
  * Flex layout container. Lays its child blocks along one axis via CSS flexbox;
  * each slot is sized by its block's own {@link FlexSlot}. A hidden slot emits
@@ -720,22 +737,6 @@ function FlexFlow({ ctx, flex }: { ctx: RenderCtx; flex: FlexNode }): ReactEleme
   );
 }
 
-function FlexSlotCellBase({ block, ctx }: { block: Block; ctx: RenderCtx }): ReactElement | null {
-  const runtimeState = useRuntimeFieldState(block.id);
-
-  if (runtimeState.hidden) {
-    return null;
-  }
-
-  return (
-    <div style={flexSlotStyle(block.flex)}>
-      <BlockBody block={block} ctx={ctx} runtimeState={runtimeState} />
-    </div>
-  );
-}
-
-const FlexSlotCell = memo(FlexSlotCellBase);
-
 /**
  * Grid layout container. Lays its child blocks (cells) across a fixed number of
  * equal-width columns via real CSS grid; a cell's `span` widens it. A hidden
@@ -749,6 +750,7 @@ function GridFlow({ ctx, grid }: { ctx: RenderCtx; grid: GridNode }): ReactEleme
 
   return (
     <div style={gridContainerStyle(grid, ctx.gutter)}>
+      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       {blocks.map(block => <GridCell key={block.id} block={block} columns={columns} ctx={ctx} />)}
     </div>
   );
@@ -971,6 +973,7 @@ function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }
           return (
             <>
               {rows.map((_row, index) => (
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
                 <SubformRow
                   key={rowKeys[index]}
                   canRemove={canRemove}

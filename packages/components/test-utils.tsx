@@ -40,7 +40,7 @@ export interface CustomRenderHookOptions<TProps> extends RenderHookOptions<TProp
 
 /**
  * Build a fresh `ApiClient` suitable for tests. The default `baseUrl` is a
- * non-routable host (`http://vef-test.invalid`) so accidental real network
+ * non-routable host (`https://vef-test.invalid`) so accidental real network
  * calls fail fast and obviously.
  *
  * Each call returns an independent client — share an instance explicitly when
@@ -49,6 +49,7 @@ export interface CustomRenderHookOptions<TProps> extends RenderHookOptions<TProp
 export function createTestApiClient(http?: Partial<HttpClientOptions>): ApiClient {
   return createApiClient({
     http: {
+      // eslint-disable-next-line unicorn/prefer-https -- non-routable test host; plain HTTP avoids needless TLS setup in tests
       baseUrl: "http://vef-test.invalid",
       ...http
     }

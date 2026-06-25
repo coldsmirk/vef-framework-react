@@ -12,6 +12,7 @@ export interface GridContext {
 }
 
 const Context = createContext<MaybeNull<GridContext>>(null);
+Context.displayName = "Context";
 
 export const GridContextProvider = Context.Provider;
 

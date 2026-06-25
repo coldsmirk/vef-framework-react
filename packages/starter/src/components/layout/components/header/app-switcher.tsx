@@ -1,5 +1,6 @@
 import type { DynamicIconName } from "@vef-framework-react/components";
 import type { Awaitable } from "@vef-framework-react/shared";
+import type { JSX } from "react";
 
 import type { AppItem } from "../../props";
 
@@ -97,7 +98,7 @@ export function AppSwitcher({
   currentAppId,
   onAppChange,
   className
-}: AppSwitcherProps): React.JSX.Element {
+}: AppSwitcherProps): JSX.Element {
   const [open, setOpen] = useState(false);
 
   async function handleSelect(appId: string): Promise<void> {

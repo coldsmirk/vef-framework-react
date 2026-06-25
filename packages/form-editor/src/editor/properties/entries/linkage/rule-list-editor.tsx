@@ -173,6 +173,7 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
         : (
             <div css={rulesCss}>
               {rules.map((rule, index) => (
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
                 <RuleCard
                   key={rule.id}
                   allowStateActions={allowStateActions}

@@ -1,4 +1,5 @@
 import type { UseColorSchemeValue, UseMediaQueryOptions } from "@mantine/hooks";
+import type { RefCallback } from "react";
 
 import {
   useColorScheme as useColorSchemeInternal,
@@ -41,7 +42,7 @@ const DEFAULT_ELEMENT_SIZE_OPTIONS: ResizeObserverOptions = { box: "border-box" 
 
 export function useElementSize<T extends HTMLElement = any>(
   options: ResizeObserverOptions = DEFAULT_ELEMENT_SIZE_OPTIONS
-): { ref: React.RefCallback<T | null>; width: number; height: number } {
+): { ref: RefCallback<T | null>; width: number; height: number } {
   return useElementSizeInternal<T>(options);
 }
 

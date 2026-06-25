@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import type { JSX, PropsWithChildren, ReactNode } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars, isFragment, Keyboard as KeyboardInternal } from "@vef-framework-react/components";
@@ -14,7 +14,7 @@ const keyboardStyle = css({
   columnGap: globalCssVars.spacingXs
 });
 
-export function Keyboard({ icon, children }: KeyboardProps): React.JSX.Element {
+export function Keyboard({ icon, children }: KeyboardProps): JSX.Element {
   const iconNodes = Children.map(icon, node => {
     if (isFragment(node)) {
       return (

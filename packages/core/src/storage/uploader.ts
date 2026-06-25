@@ -41,16 +41,18 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
       return;
     }
 
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
+    let timer: ReturnType<typeof setTimeout>;
 
     const onAbort = (): void => {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
       reject(new UploadAbortedError());
     };
+
+    timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
 
     signal.addEventListener("abort", onAbort, { once: true });
   });

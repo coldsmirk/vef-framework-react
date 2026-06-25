@@ -1,6 +1,7 @@
 import { createContext, use } from "react";
 
 const ViewportContext = createContext<number | null>(null);
+ViewportContext.displayName = "ViewportContext";
 
 /**
  * Hook to get the viewport height from Page component.

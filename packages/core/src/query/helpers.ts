@@ -45,9 +45,7 @@ export function createQueryClient(options?: QueryClientOptions): QueryClient {
         retryOnMount: true,
         queryKeyHashFn: hashKey,
 
-        // TanStack Query exposes this opt-in via the documented mixed-case name;
-        // matching the upstream API contract is preferable to renaming it.
-        // eslint-disable-next-line @typescript-eslint/naming-convention
+        // eslint-disable-next-line @typescript-eslint/naming-convention -- documented upstream TanStack Query option name
         experimental_prefetchInRender: true
       },
       mutations: {

@@ -1,15 +1,15 @@
 {
   "name": "@vef-framework-react/playground",
-  "type": "module",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "build": "pnpm clean && vite build",
+    "check:dictionary-keys": "vef gen:dictionary-keys --check",
     "clean": "rimraf dist",
     "dev": "vite",
-    "build": "pnpm clean && vite build",
-    "preview": "vite preview",
     "gen:dictionary-keys": "vef gen:dictionary-keys",
-    "check:dictionary-keys": "vef gen:dictionary-keys --check"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
@@ -45,6 +45,8 @@
     "vite": "^8.0.16"
   },
   "msw": {
-    "workerDirectory": ["public"]
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

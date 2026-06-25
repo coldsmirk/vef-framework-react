@@ -1,5 +1,5 @@
 import type { TableColumn } from "@vef-framework-react/components";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import type { Department } from "~apis";
 
 import { SearchOutlined } from "@ant-design/icons";
@@ -120,7 +120,7 @@ const OrgTree = memo(({ value, onChange }: OrgTreeProps): ReactNode => {
   });
   const { ref, height } = useElementSize();
 
-  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
+  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>): void => {
     setSearchValue(event.currentTarget.value);
   }, [setSearchValue]);
 

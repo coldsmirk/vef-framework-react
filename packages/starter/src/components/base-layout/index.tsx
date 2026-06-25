@@ -1,9 +1,11 @@
+import type { JSX } from "react";
+
 import type { BaseLayoutProps } from "./props";
 
 import * as styles from "./styles";
 import { useBaseLayout } from "./use-base-layout";
 
-export function BaseLayout(props: BaseLayoutProps): React.JSX.Element {
+export function BaseLayout(props: BaseLayoutProps): JSX.Element {
   const {
     isHeaderVisible,
     isTabsVisible,

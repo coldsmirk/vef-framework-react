@@ -16,6 +16,6 @@ import { useShallowCompare } from "../use-shallow-compare";
  * @param dependencies - Dependency array to compare shallowly.
  */
 export function useShallowEffect(effect: EffectCallback, dependencies?: DependencyList): void {
-  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- shallow-equality hook compares dep values, not references
   useEffect(effect, useShallowCompare(dependencies));
 }

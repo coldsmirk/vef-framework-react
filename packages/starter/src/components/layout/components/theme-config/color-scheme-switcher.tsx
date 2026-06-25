@@ -1,4 +1,5 @@
 import type { Position, SegmentedOption } from "@vef-framework-react/components";
+import type { JSX, MouseEvent } from "react";
 
 import type { ColorScheme } from "../../../../stores";
 
@@ -42,7 +43,7 @@ const options: SegmentedOption[] = [
   }
 ];
 
-export function ColorSchemeSwitcher(): React.JSX.Element {
+export function ColorSchemeSwitcher(): JSX.Element {
   const colorScheme = useThemeStore(state => state.colorScheme);
   const { updateColorScheme } = useColorSchemeUpdater();
   const positionRef = useRef<Position>({
@@ -54,7 +55,7 @@ export function ColorSchemeSwitcher(): React.JSX.Element {
     updateColorScheme(value as ColorScheme, positionRef.current);
   }
 
-  function handleClick(event: React.MouseEvent): void {
+  function handleClick(event: MouseEvent): void {
     positionRef.current = {
       x: event.clientX,
       y: event.clientY

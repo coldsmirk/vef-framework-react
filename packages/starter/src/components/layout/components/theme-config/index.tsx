@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { ClassNames, css } from "@emotion/react";
 import { Divider, Drawer, globalCssVars, ScrollArea } from "@vef-framework-react/components";
 
@@ -22,7 +24,7 @@ const containerStyle = css({
   paddingInline: globalCssVars.spacingXs
 });
 
-export function ThemeConfig(): React.JSX.Element {
+export function ThemeConfig(): JSX.Element {
   const isThemeConfigVisible = useThemeStore(state => state.isThemeConfigVisible);
 
   function handleClose(): void {

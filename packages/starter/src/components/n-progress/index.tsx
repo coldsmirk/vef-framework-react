@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useNProgress } from "@tanem/react-nprogress";
 import { useEmitterEvent } from "@vef-framework-react/hooks";
 import { useState } from "react";
@@ -5,7 +7,7 @@ import { useState } from "react";
 import { Bar, Container } from "./components";
 import { nProgressEventEmitter } from "./event";
 
-export function NProgress(): React.ReactNode {
+export function NProgress(): ReactNode {
   const [isAnimating, setIsAnimating] = useState(false);
   const {
     animationDuration,

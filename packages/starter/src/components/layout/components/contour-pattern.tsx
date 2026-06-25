@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { css } from "@emotion/react";
 
 interface ContourPatternProps {
@@ -122,7 +124,7 @@ const collapsedStyle = css({
 const LINE_COLOR = "color-mix(in srgb, var(--vef-color-primary) 55%, #a8c7ff)";
 const GLOW_FILL = "color-mix(in srgb, var(--vef-color-primary) 8%, transparent)";
 
-export function ContourPattern({ isSidebarCollapsed = false }: ContourPatternProps): React.JSX.Element {
+export function ContourPattern({ isSidebarCollapsed = false }: ContourPatternProps): JSX.Element {
   return (
     <div css={[containerStyle, isSidebarCollapsed && collapsedStyle]}>
       <svg

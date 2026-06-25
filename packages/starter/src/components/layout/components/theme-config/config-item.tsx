@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import type { JSX, PropsWithChildren, ReactNode } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
@@ -19,7 +19,7 @@ export function ConfigItem({
   className,
   label,
   children
-}: ConfigItemProps): React.JSX.Element {
+}: ConfigItemProps): JSX.Element {
   return (
     <div className={className} css={itemStyle}>
       <span>{label}</span>

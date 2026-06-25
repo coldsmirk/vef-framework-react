@@ -1,6 +1,6 @@
 import type { GetProp, TreeProps } from "@vef-framework-react/components";
 import type { DataOption, DataOptionWithPinyin, QueryFunction } from "@vef-framework-react/core";
-import type { CSSProperties, Key } from "react";
+import type { ChangeEvent, CSSProperties, Key } from "react";
 import type { DataScopeTarget } from "~apis";
 
 import { SearchOutlined } from "@ant-design/icons";
@@ -123,7 +123,7 @@ export const TransferSelector = memo(({
     setOrgId(value);
   }, []);
 
-  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     setSearchValue(event.currentTarget.value);
   }, [setSearchValue]);
 

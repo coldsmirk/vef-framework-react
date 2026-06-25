@@ -82,7 +82,7 @@ if (global.localStorage === undefined) {
 // they flood the pre-push test output. Filter them out while keeping every
 // other jsdom error visible. `_virtualConsole` is jsdom's documented internal
 // hook — we mirror its name verbatim.
-// eslint-disable-next-line @typescript-eslint/naming-convention
+// eslint-disable-next-line @typescript-eslint/naming-convention -- mirrors jsdom's internal _virtualConsole hook name verbatim
 const virtualConsole = (global.window as { _virtualConsole?: {
   removeAllListeners: (event: string) => void;
   on: (event: string, listener: (err: Error) => void) => void;

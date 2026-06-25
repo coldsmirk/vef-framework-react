@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { IconButton } from "@vef-framework-react/components";
 import { useHotkeys } from "@vef-framework-react/hooks";
 import { SearchIcon } from "lucide-react";
@@ -8,7 +10,7 @@ interface SearchProps {
   className?: string;
 }
 
-export function Search({ className }: SearchProps): React.JSX.Element {
+export function Search({ className }: SearchProps): JSX.Element {
   const setIsSearchVisible = useLayoutStore(state => state.setIsSearchVisible);
 
   function handleClick(): void {

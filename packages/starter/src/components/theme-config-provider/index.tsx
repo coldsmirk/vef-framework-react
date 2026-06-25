@@ -1,11 +1,11 @@
-import type { PropsWithChildren } from "react";
+import type { JSX, PropsWithChildren } from "react";
 
 import { ConfigProvider } from "@vef-framework-react/components";
 
 import { useColorModeEffect } from "./use-color-mode-effect";
 import { useThemeConfig } from "./use-theme-config";
 
-export function ThemeConfigProvider({ children }: PropsWithChildren): React.JSX.Element {
+export function ThemeConfigProvider({ children }: PropsWithChildren): JSX.Element {
   const theme = useThemeConfig();
   useColorModeEffect();
 

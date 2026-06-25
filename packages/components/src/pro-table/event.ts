@@ -1,6 +1,6 @@
 import { createEventEmitter as createEventEmitterInternal } from "@vef-framework-react/shared";
 
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- must stay a type alias; an interface lacks the implicit index signature the EventEmitter<Record<EventType, any>> constraint needs.
 export type ProTableEvents = {
   /**
    * Trigger table data refetch

@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { css } from "@emotion/react";
 
 // Scattered shallow circular segments: each is a true circle pushed mostly past the bar edge so only
@@ -55,7 +57,7 @@ const SHAPES = [
   }
 ] as const;
 
-export function HeaderPattern(): React.JSX.Element {
+export function HeaderPattern(): JSX.Element {
   return (
     <div css={patternStyle}>
       {SHAPES.map(shape => (

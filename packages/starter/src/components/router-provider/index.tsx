@@ -1,4 +1,5 @@
 import type { AnyRouter, RegisteredRouter, RouterProps } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import type { RouterContext, UseRouterContext } from "./context";
 import type { RouterProviderProps } from "./props";
@@ -11,7 +12,7 @@ import { useRouterContextHook } from "./context";
 export function RouterProvider<
   TRouter extends AnyRouter = RegisteredRouter,
   TDehydrated extends Record<string, any> = Record<string, any>
->({ router }: RouterProviderProps<TRouter, TDehydrated>): React.ReactNode {
+>({ router }: RouterProviderProps<TRouter, TDehydrated>): ReactNode {
   const contextHook = useRouterContextHook();
   const baseContext = useMemo<RouterContext<TRouter, TDehydrated>>(
     () => ({ router }) as RouterContext<TRouter, TDehydrated>,
@@ -46,7 +47,7 @@ function RouterProviderWithContext<
   baseContext,
   router,
   useRouterContext
-}: RouterProviderWithContextProps<TRouter, TDehydrated>): React.ReactNode {
+}: RouterProviderWithContextProps<TRouter, TDehydrated>): ReactNode {
   const providedContext = useRouterContext();
   const mergedContext = useMemo<RouterContext<TRouter, TDehydrated>>(
     () => { return { ...providedContext, ...baseContext }; },

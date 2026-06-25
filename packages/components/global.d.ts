@@ -12,11 +12,15 @@
  * directly — imperative call sites use the `showXxxMessage` helpers instead.
  */
 
+import type { MessageInstance } from "antd/es/message/interface";
+import type { HookAPI } from "antd/es/modal/useModal";
+import type { NotificationInstance } from "antd/es/notification/interface";
+
 declare global {
   interface VefGlobal {
-    message: import("antd/es/message/interface").MessageInstance;
-    notification: import("antd/es/notification/interface").NotificationInstance;
-    modal: import("antd/es/modal/useModal").HookAPI;
+    message: MessageInstance;
+    notification: NotificationInstance;
+    modal: HookAPI;
   }
 
   // `undefined` until `<ConfigProvider>` registers it via `setVefGlobal`.

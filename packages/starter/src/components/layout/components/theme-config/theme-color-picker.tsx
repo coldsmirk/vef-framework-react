@@ -1,4 +1,5 @@
 import type { SemanticColor } from "@vef-framework-react/components";
+import type { JSX } from "react";
 
 import { ColorPicker } from "@vef-framework-react/components";
 import { useDidUpdate } from "@vef-framework-react/hooks";
@@ -10,7 +11,7 @@ interface ThemeColorPickerProps {
   color: SemanticColor;
 }
 
-export function ThemeColorPicker({ color }: ThemeColorPickerProps): React.JSX.Element {
+export function ThemeColorPicker({ color }: ThemeColorPickerProps): JSX.Element {
   const currentValue = useThemeStore(state => state.colors[color]);
   const [localValue, setLocalValue] = useState(currentValue);
   const [, startTransition] = useTransition();

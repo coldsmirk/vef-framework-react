@@ -1,3 +1,5 @@
+import type { JSX } from "react";
+
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
@@ -24,7 +26,7 @@ const actionsStyle = css({
   alignItems: "center"
 });
 
-export function Tabs(): React.JSX.Element {
+export function Tabs(): JSX.Element {
   return (
     <div css={tabsStyle}>
       <TabsContainer />

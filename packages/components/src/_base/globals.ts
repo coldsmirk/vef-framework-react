@@ -1,4 +1,4 @@
-/// <reference path="../../global.d.ts" />
+import type {} from "../../global";
 
 /**
  * Imperative access to the per-app antd context holders stashed on
@@ -9,7 +9,7 @@
  *
  * The {@link VefGlobal} shape and the `$vef` global are declared ambiently in
  * `../../global.d.ts`, so `globalThis.$vef` is typed directly — no cast. The
- * `/// <reference />` above pulls that declaration in wherever this module is
+ * `import type {}` above pulls that declaration in wherever this module is
  * type-checked, so a consumer resolving the package source (the `vef` condition)
  * sees `$vef` without re-declaring it in its own `env.d.ts`, and the built
  * `globals.d.ts` carries it to published consumers.

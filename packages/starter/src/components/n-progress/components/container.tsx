@@ -1,4 +1,4 @@
-import type { CSSProperties, PropsWithChildren } from "react";
+import type { CSSProperties, PropsWithChildren, ReactNode } from "react";
 
 import { css } from "@emotion/react";
 
@@ -17,7 +17,7 @@ export function Container({
   animationDuration,
   children,
   isFinished
-}: PropsWithChildren<ContainerProps>): React.ReactNode {
+}: PropsWithChildren<ContainerProps>): ReactNode {
   const style = {
     "--vef-n-progress-animation-duration": `${animationDuration}ms`,
     "--vef-n-progress-opacity": isFinished ? 0 : 1

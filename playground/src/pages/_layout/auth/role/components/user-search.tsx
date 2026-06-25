@@ -1,3 +1,5 @@
+import type { ChangeEvent } from "react";
+
 import { Group, Input, TreeSelect, useDataOptionsTreeSelect } from "@vef-framework-react/components";
 import { useDebouncedValue } from "@vef-framework-react/hooks";
 import { useCallback, useEffect, useEffectEvent, useState } from "react";
@@ -44,7 +46,7 @@ export function UserSearch({ value, onChange }: UserSearchProps) {
     }
   });
 
-  const handleKeywordChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleKeywordChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     setKeyword(event.currentTarget.value);
   }, []);
 

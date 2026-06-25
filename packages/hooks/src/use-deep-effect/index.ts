@@ -13,6 +13,6 @@ import { useDeepCompare } from "../use-deep-compare";
  * @param dependencies - The dependency array to deeply compare for changes.
  */
 export function useDeepEffect(effect: EffectCallback, dependencies?: DependencyList): void {
-  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- deep-equality hook compares dep values, not references
   useEffect(effect, useDeepCompare(dependencies));
 }
