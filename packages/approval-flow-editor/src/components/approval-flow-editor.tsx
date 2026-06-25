@@ -1,13 +1,13 @@
 import type { EdgeMouseHandler, NodeMouseHandler, OnConnectEnd } from "@xyflow/react";
-import type { FC } from "react";
+import type { CSSProperties, FC } from "react";
 
 import type { EditorPlugins } from "../plugins";
 import type { ConnectionRejection } from "../shared/connection-rules";
 import type { FlowDefinition, NodeKind } from "../types";
 
 import { Global } from "@emotion/react";
-import { globalCssVars, showWarningMessage } from "@vef-framework-react/components";
-import { Background, BackgroundVariant, MiniMap, ReactFlow, ReactFlowProvider, useStore, useUpdateNodeInternals } from "@xyflow/react";
+import { Button, globalCssVars, showWarningMessage } from "@vef-framework-react/components";
+import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EDGE_MARKER_END, isNodeKind } from "../constants";
@@ -45,6 +45,23 @@ export interface ApprovalFlowEditorProps {
    */
   onChange?: (definition: FlowDefinition) => void;
   /**
+   * Publish hook, invoked with the current definition after a validation pass.
+   * Structural errors block publishing. When omitted, the publish button is not
+   * rendered. Mirrors {@link FormEditor}'s `onPublish` so a host (e.g. a wizard
+   * step) can wire both editors the same way.
+   */
+  onPublish?: (definition: FlowDefinition) => void;
+  /**
+   * Custom label for the publish button. Defaults to "发布". Relabel it — e.g.
+   * "下一步" — when the editor's CTA doubles as a flow's forward action.
+   */
+  publishText?: string;
+  /**
+   * Shows a loading spinner on the publish button and blocks re-clicks while the
+   * host processes the publish (e.g. an async create / deploy / publish chain).
+   */
+  publishLoading?: boolean;
+  /**
    * Whether the editor is readonly
    */
   readonly?: boolean;
@@ -59,7 +76,7 @@ export interface ApprovalFlowEditorProps {
   /**
    * Custom style
    */
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
 // Hoist stable object references to prevent ReactFlow from re-processing on every render
@@ -101,6 +118,9 @@ const VALIDATION_DEBOUNCE_MS = 300;
 const EditorInner: FC<ApprovalFlowEditorProps> = ({
   value,
   onChange,
+  onPublish,
+  publishText,
+  publishLoading = false,
   readonly = false,
   className,
   style
@@ -301,6 +321,25 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
     [storeApi]
   );
 
+  // Editor-native publish CTA: validate the current graph, block on structural
+  // errors, otherwise hand the definition to the host. Mirrors FormEditor's
+  // pre-publish gate so both editors behave the same inside a wizard step.
+  const handlePublish = useCallback(() => {
+    if (!onPublish) {
+      return;
+    }
+
+    const definition = toDefinition();
+    const issues = validateFlowDefinition(definition);
+
+    if (issues.length > 0) {
+      showWarningMessage(`流程校验未通过（${issues.length} 项），请先修正后再继续`);
+      return;
+    }
+
+    onPublish(definition);
+  }, [onPublish, toDefinition]);
+
   return (
     // tabIndex makes the shell focusable, so the history shortcuts only fire
     // while focus is inside this editor instance.
@@ -344,6 +383,16 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
           />
 
           <ZoomControl />
+
+          {!readonly && onPublish
+            ? (
+                <Panel position="top-right">
+                  <Button loading={publishLoading} type="primary" onClick={handlePublish}>
+                    {publishText ?? "发布"}
+                  </Button>
+                </Panel>
+              )
+            : null}
         </ReactFlow>
 
         {!readonly && <EditorToolbar />}
@@ -361,6 +410,9 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
 export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
   value,
   onChange,
+  onPublish,
+  publishText,
+  publishLoading,
   readonly,
   plugins,
   className,
@@ -382,10 +434,13 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
         >
           <EditorInner
             className={className}
+            publishLoading={publishLoading}
+            publishText={publishText}
             readonly={readonly}
             style={style}
             value={value}
             onChange={onChange}
+            onPublish={onPublish}
           />
         </EditorStoreProvider>
       </EditorPluginsContext>
