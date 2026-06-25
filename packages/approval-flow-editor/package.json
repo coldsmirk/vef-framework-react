@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/approval-flow-editor",
-  "version": "2.4.4",
+  "version": "2.5.0",
   "private": false,
   "description": "Approval flow editor for VEF framework",
   "keywords": [

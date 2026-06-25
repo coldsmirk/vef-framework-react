@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/expression",
-  "version": "2.4.4",
+  "version": "2.5.0",
   "private": false,
   "description": "GoRules ZEN expression runtime and shared condition operators for VEF framework",
   "keywords": [
