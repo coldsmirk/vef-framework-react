@@ -44,14 +44,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.2.5",
+    "@ant-design/icons": "^6.3.2",
     "@emotion/react": "^11.14.0",
     "@tanem/react-nprogress": "^6.0.3",
     "compare-versions": "^6.1.1",
-    "lucide-react": "^1.17.0"
+    "lucide-react": "^1.22.0"
   },
   "devDependencies": {
-    "@tanstack/react-router": "^1.170.15",
+    "@tanstack/react-router": "^1.170.16",
     "@vef-framework-react/components": "workspace:*",
     "@vef-framework-react/core": "workspace:*",
     "@vef-framework-react/hooks": "workspace:*",

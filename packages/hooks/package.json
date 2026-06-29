@@ -44,10 +44,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mantine/hooks": "^9.3.0",
+    "@mantine/hooks": "^9.4.1",
     "@vef-framework-react/core": "workspace:*",
     "@vef-framework-react/shared": "workspace:*",
-    "react-hotkeys-hook": "^5.3.2"
+    "react-hotkeys-hook": "^5.3.3"
   },
   "devDependencies": {
     "react": "^19.2.7"

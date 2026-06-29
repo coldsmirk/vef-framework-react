@@ -15,6 +15,12 @@ onlyBuiltDependencies:
   - msw
 
 overrides:
+  # Pin Babel to 7.x: @emotion/babel-plugin (and the rest of the build babel
+  # pipeline) is not yet Babel 8 compatible — Babel 8 dropped NodePath#hoist,
+  # which the plugin calls. Drop these once Emotion ships Babel 8 support.
+  '@babel/core': ^7.29.7
+  '@babel/parser': ^7.29.7
+  '@babel/traverse': ^7.29.7
   brace-expansion: '>=5.0.5'
   minimatch: '>=10.2.3'
   picomatch: '>=4.0.4'

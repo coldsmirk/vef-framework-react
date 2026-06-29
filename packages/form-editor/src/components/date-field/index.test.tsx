@@ -1,7 +1,7 @@
 import type { DateField, DateRangeField, DatetimeField } from "../../types";
 
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "./index";
@@ -101,7 +101,7 @@ describe("date fields", () => {
   });
 
   it("commits an empty string when the date is cleared", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const onChange = vi.fn();
     const { Component } = dateFieldDefinition;
 
@@ -124,7 +124,7 @@ describe("date fields", () => {
   });
 
   it("commits an empty array when the range is cleared", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const onChange = vi.fn();
     const { Component } = dateRangeFieldDefinition;
 

@@ -51,10 +51,10 @@
     "@vef-framework-react/core": "workspace:*",
     "@vef-framework-react/expression": "workspace:*",
     "@vef-framework-react/shared": "workspace:*",
-    "@xyflow/react": "^12.11.0",
+    "@xyflow/react": "^12.11.1",
     "dayjs": "^1.11.0",
     "elkjs": "^0.11.1",
-    "lucide-react": "^1.17.0"
+    "lucide-react": "^1.22.0"
   },
   "devDependencies": {
     "react": "^19.2.7"

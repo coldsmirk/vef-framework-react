@@ -49,8 +49,8 @@
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
-    "@codemirror/lint": "^6.8.5",
-    "@codemirror/view": "^6.43.0",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/view": "^6.43.4",
     "@emotion/react": "^11.14.0",
     "@vef-framework-react/components": "workspace:*",
     "@vef-framework-react/core": "workspace:*",
@@ -58,11 +58,11 @@
     "@vef-framework-react/hooks": "workspace:*",
     "@vef-framework-react/shared": "workspace:*",
     "antd-mobile": "^5.42.3",
-    "lucide-react": "^1.17.0"
+    "lucide-react": "^1.22.0"
   },
   "devDependencies": {
     "@codemirror/lang-javascript": "^6.2.5",
-    "@codemirror/state": "^6.6.0",
+    "@codemirror/state": "^6.7.0",
     "react": "^19.2.7"
   },
   "peerDependencies": {
