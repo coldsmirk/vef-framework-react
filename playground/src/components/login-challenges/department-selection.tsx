@@ -1,6 +1,6 @@
 import type { LoginChallengeRendererProps } from "@vef-framework-react/starter";
 
-import { Button, Empty, Group, Icon, Radio, Stack } from "@vef-framework-react/components";
+import { Alert, Button, Empty, Group, Icon, Radio, Stack } from "@vef-framework-react/components";
 import { Building2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -14,6 +14,7 @@ export interface DepartmentOption {
 export function DepartmentSelectionChallenge({
   challenge,
   pending,
+  error,
   resolve,
   cancel
 }: LoginChallengeRendererProps<typeof DEPARTMENT_SELECTION_CHALLENGE_TYPE>) {
@@ -55,6 +56,9 @@ export function DepartmentSelectionChallenge({
           您归属多个部门，请选择本次登录所代表的部门
         </p>
       </div>
+
+      {error
+        && <Alert showIcon message={error} type="error" />}
 
       {departments.length === 0
         ? <Empty description="未查询到可用的部门，请联系管理员" />

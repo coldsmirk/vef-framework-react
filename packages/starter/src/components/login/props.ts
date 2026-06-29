@@ -38,6 +38,14 @@ export interface LoginChallengeRendererProps<
    */
   pending: boolean;
   /**
+   * The error message from the most recent failed `resolve` attempt, or
+   * `null` when there is none. Set by the Login component when
+   * `onResolveChallenge` rejects (e.g. a wrong verification code); renderers
+   * should surface it inline so the user gets feedback. Cleared automatically
+   * on the next `resolve` call and when the challenge is cancelled.
+   */
+  error?: string | null;
+  /**
    * Encrypts a sensitive plaintext using the same scheme the initial login
    * uses for credentials. Present only when the Login component received a
    * `publicKey`; renderers handling sensitive responses (e.g. a new password

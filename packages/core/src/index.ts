@@ -104,14 +104,12 @@ export {
 export type {
   ApiResult,
   AuthTokens,
-  BusinessError,
   HttpClient,
   HttpClientOptions,
-  isBusinessError,
   ProgressEvent,
   RequestOptions
 } from "./http";
-export { skipAuthenticationHeader, skipAuthenticationValue } from "./http";
+export { BusinessError, isBusinessError, skipAuthenticationHeader, skipAuthenticationValue } from "./http";
 export {
   applyPatches,
   currentState,
