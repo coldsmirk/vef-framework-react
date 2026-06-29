@@ -58,7 +58,7 @@ export function DepartmentSelectionChallenge({
       </div>
 
       {error
-        && <Alert showIcon message={error} type="error" />}
+        && <Alert showIcon title={error} type="error" />}
 
       {departments.length === 0
         ? <Empty description="未查询到可用的部门，请联系管理员" />

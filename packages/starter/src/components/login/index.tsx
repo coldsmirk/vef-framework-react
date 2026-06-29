@@ -273,11 +273,10 @@ export function Login({
                     <Stack gap="medium">
                       {loginError && (
                         <Alert
-                          closable
                           showIcon
-                          message={loginError}
+                          closable={{ onClose: () => setLoginError(null) }}
+                          title={loginError}
                           type="error"
-                          onClose={() => setLoginError(null)}
                         />
                       )}
 
@@ -365,7 +364,7 @@ function ChallengeView({
         <Alert
           showIcon
           description={`未注册类型为「${challenge.type}」的挑战处理器，请联系系统管理员。`}
-          message="不支持的登录挑战"
+          title="不支持的登录挑战"
           type="warning"
         />
 
