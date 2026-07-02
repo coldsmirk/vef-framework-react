@@ -6,7 +6,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath } from "@xyflow/react";
 import { XIcon } from "lucide-react";
 import { memo } from "react";
 
-import { useEditorStore } from "../../store";
+import { useApprovalActions, useEditorUiStore } from "../../store";
 
 const deleteButtonStyle = css({
   width: 18,
@@ -50,9 +50,9 @@ export const ApprovalEdge = memo(({
   style,
   markerEnd
 }: EdgeProps) => {
-  const readonly = useEditorStore(s => s.readonly);
-  const isHovered = useEditorStore(s => s.hoveredEdgeId === id);
-  const removeEdge = useEditorStore(s => s.removeEdge);
+  const readonly = useEditorUiStore(s => s.readonly);
+  const isHovered = useEditorUiStore(s => s.hoveredEdgeId === id);
+  const { removeEdge } = useApprovalActions();
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,

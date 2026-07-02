@@ -134,6 +134,9 @@ importers:
 
   packages/approval-flow-editor:
     dependencies:
+      '@coldsmirk/nodeloom-core':
+        specifier: ^0.2.0
+        version: 0.2.0(@types/react@19.2.17)(@xyflow/react@12.11.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(immer@11.1.8)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
@@ -973,6 +976,13 @@ packages:
     engines: {node: '>=22'}
     peerDependencies:
       eslint: '>=10'
+
+  '@coldsmirk/nodeloom-core@0.2.0':
+    resolution: {integrity: sha512-VBVgfEFWwIPJUlapahIBMF/7g1fIBfSc9eBD9XVmLIgEy9U+FXdkebQSF7GIvAOYHll0ZRL097aMBWShKOEvlg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@xyflow/react': ^12.1.0
+      react: '>=19'
 
   '@coldsmirk/stylelint-config@0.3.0':
     resolution: {integrity: sha512-xEaa1+5rMRegWZ8nzGiRo6dlr3XsVFLpuvrOJj50w7NO9j+do5s8XxMpBlPwOlw4vtXQj+qqcSjRj+7Xk6w/PQ==}
@@ -7086,6 +7096,16 @@ snapshots:
       - '@typescript-eslint/eslint-plugin'
       - supports-color
       - typescript
+
+  '@coldsmirk/nodeloom-core@0.2.0(@types/react@19.2.17)(@xyflow/react@12.11.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(immer@11.1.8)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))':
+    dependencies:
+      '@xyflow/react': 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(immer@11.1.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react: 19.2.7
+      zustand: 5.0.14(@types/react@19.2.17)(immer@11.1.8)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - use-sync-external-store
 
   '@coldsmirk/stylelint-config@0.3.0(postcss@8.5.16)(stylelint@17.14.0(typescript@6.0.3))':
     dependencies:

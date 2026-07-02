@@ -20,7 +20,7 @@ import { Checkbox, Input, InputNumber, Segmented, Select } from "@vef-framework-
 import { useShallow } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { useEditorStore } from "../../store";
+import { anyNodeConfig, nodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../../store";
 import { AssigneeList } from "./assignee-list";
 import { CcList } from "./cc-list";
 import { FieldPermissionTable } from "./field-permission-table";
@@ -112,12 +112,9 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so this
   // large form does not re-render during drags.
-  const data = useEditorStore(s => {
-    const node = s.nodes.find(n => n.id === nodeId);
-    return node?.type === "approval" ? node.data : undefined;
-  });
-  const readonly = useEditorStore(s => s.readonly);
-  const updateNodeData = useEditorStore(s => s.updateNodeData);
+  const data = useEditorStore(s => nodeConfig(s.nodes.find(n => n.id === nodeId), "approval"));
+  const readonly = useEditorUiStore(s => s.readonly);
+  const { updateNodeData } = useApprovalActions();
 
   // Candidate targets for "rollback to specified node": other task nodes in the
   // flow (the backend stores their ids in rollbackTargetKeys). Subscribe to the
@@ -127,17 +124,17 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
   // stable across drags that do not touch a candidate; options are then memoized.
   const rollbackCandidateNodes = useEditorStore(
     useShallow(s => {
-      const self = s.nodes.find(n => n.id === nodeId);
+      const self = nodeConfig(s.nodes.find(n => n.id === nodeId), "approval");
 
-      if (!self || self.type !== "approval" || self.data.rollbackType !== "specified") {
+      if (self?.rollbackType !== "specified") {
         return EMPTY_NODES;
       }
 
-      return s.nodes.filter(n => n.id !== nodeId && (n.type === "approval" || n.type === "handle"));
+      return s.nodes.filter(n => n.id !== nodeId && (n.data.kind === "approval" || n.data.kind === "handle"));
     })
   );
   const rollbackTargetOptions = useMemo(
-    () => rollbackCandidateNodes.map(n => { return { label: n.data.name ?? n.id, value: n.id }; }),
+    () => rollbackCandidateNodes.map(n => { return { label: anyNodeConfig(n)?.name ?? n.id, value: n.id }; }),
     [rollbackCandidateNodes]
   );
 

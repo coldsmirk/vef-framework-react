@@ -4,7 +4,7 @@ import type { CcFieldPermission, CcNodeData } from "../../types";
 
 import { Checkbox, Input } from "@vef-framework-react/components";
 
-import { useEditorStore } from "../../store";
+import { nodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../../store";
 import { CcList } from "./cc-list";
 import { FieldPermissionTable } from "./field-permission-table";
 import { CheckboxList, ConfigSection, FormField } from "./shared";
@@ -24,12 +24,9 @@ export const CcNodeConfig: FC<CcNodeConfigProps> = ({ nodeId }) => {
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so the
   // form does not re-render during drags.
-  const data = useEditorStore(s => {
-    const node = s.nodes.find(n => n.id === nodeId);
-    return node?.type === "cc" ? node.data : undefined;
-  });
-  const readonly = useEditorStore(s => s.readonly);
-  const updateNodeData = useEditorStore(s => s.updateNodeData);
+  const data = useEditorStore(s => nodeConfig(s.nodes.find(n => n.id === nodeId), "cc"));
+  const readonly = useEditorUiStore(s => s.readonly);
+  const { updateNodeData } = useApprovalActions();
 
   if (!data) {
     return null;

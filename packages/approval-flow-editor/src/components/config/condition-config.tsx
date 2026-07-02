@@ -7,7 +7,7 @@ import { Button, globalCssVars, Input, InputNumber, Tooltip } from "@vef-framewo
 import { Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
-import { useEditorStore } from "../../store";
+import { nodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../../store";
 import { ConditionEditorModal } from "./condition-editor-modal";
 import { ConfigSection, FormField } from "./shared";
 
@@ -109,15 +109,14 @@ export const ConditionConfig: FC<ConditionConfigProps> = ({ nodeId }) => {
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so the
   // form does not re-render during drags.
-  const data = useEditorStore(s => {
-    const node = s.nodes.find(n => n.id === nodeId);
-    return node?.type === "condition" ? node.data : undefined;
-  });
-  const readonly = useEditorStore(s => s.readonly);
-  const updateNodeData = useEditorStore(s => s.updateNodeData);
-  const updateConditionBranch = useEditorStore(s => s.updateConditionBranch);
-  const addConditionBranch = useEditorStore(s => s.addConditionBranch);
-  const removeConditionBranch = useEditorStore(s => s.removeConditionBranch);
+  const data = useEditorStore(s => nodeConfig(s.nodes.find(n => n.id === nodeId), "condition"));
+  const readonly = useEditorUiStore(s => s.readonly);
+  const { updateNodeData } = useApprovalActions();
+  const {
+    updateConditionBranch,
+    addConditionBranch,
+    removeConditionBranch
+  } = useApprovalActions();
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
 
   if (!data) {

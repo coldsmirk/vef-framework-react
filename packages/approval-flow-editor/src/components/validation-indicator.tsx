@@ -1,7 +1,7 @@
 import type { FC } from "react";
 
 import type { FlowValidationError } from "../shared/flow-validation";
-import type { FlowNode } from "../types";
+import type { FlowNode, NodeKind } from "../types";
 
 import { css, keyframes } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
@@ -9,8 +9,9 @@ import { useReactFlow } from "@xyflow/react";
 import { TriangleAlertIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { isNodeKind } from "../constants";
 import { getSpecification } from "../specifications";
-import { useEditorStore } from "../store";
+import { anyNodeConfig, useEditorStore, useEditorUiStore } from "../store";
 
 const EMPTY_NODES: FlowNode[] = [];
 
@@ -112,14 +113,15 @@ function describeScope(issue: FlowValidationError, nodes: FlowNode[]): { label: 
   }
 
   const node = nodes.find(n => n.id === issue.nodeId);
+  const kind = node?.data.kind;
 
-  if (!node) {
+  if (!node || !isNodeKind(kind ?? "")) {
     return { label: issue.nodeId, color: globalCssVars.colorTextQuaternary };
   }
 
-  const spec = getSpecification(node.type);
+  const spec = getSpecification(kind as NodeKind);
 
-  return { label: node.data.name?.trim() || spec.label, color: spec.color };
+  return { label: anyNodeConfig(node)?.name?.trim() || spec.label, color: spec.color };
 }
 
 /**
@@ -129,7 +131,7 @@ function describeScope(issue: FlowValidationError, nodes: FlowNode[]): { label: 
  * deploy-ready, so a clean canvas stays clean.
  */
 export const ValidationIndicator: FC = () => {
-  const issues = useEditorStore(s => s.validationIssues);
+  const issues = useEditorUiStore(s => s.validationIssues);
   const selectNode = useEditorStore(s => s.selectNode);
   const { fitView } = useReactFlow();
   const [open, setOpen] = useState(false);

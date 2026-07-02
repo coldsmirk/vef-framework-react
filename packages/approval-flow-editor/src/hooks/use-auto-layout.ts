@@ -7,7 +7,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useState } from "react";
 
 import { NODE_DIMENSIONS } from "../constants";
-import { useEditorStoreApi } from "../store";
+import { useApprovalActions, useEditorStoreApi } from "../store";
 
 type ElkInstance = InstanceType<typeof ElkConstructor>;
 
@@ -38,15 +38,12 @@ const ELK_OPTIONS: Record<string, string> = {
 
 export function useAutoLayout() {
   const storeApi = useEditorStoreApi();
+  const { updateNodePositions } = useApprovalActions();
   const { fitView } = useReactFlow();
   const [isLayouting, setIsLayouting] = useState(false);
 
   async function runLayout() {
-    const {
-      nodes,
-      edges,
-      updateNodePositions
-    } = storeApi.getState();
+    const { nodes, edges } = storeApi.getState();
 
     if (nodes.length === 0) {
       return;

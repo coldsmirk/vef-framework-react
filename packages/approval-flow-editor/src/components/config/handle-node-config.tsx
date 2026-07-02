@@ -4,7 +4,7 @@ import type { EmptyAssigneeAction, ExecutionType, FieldPermission, HandleNodeDat
 
 import { Checkbox, Input, InputNumber, Select } from "@vef-framework-react/components";
 
-import { useEditorStore } from "../../store";
+import { nodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../../store";
 import { AssigneeList } from "./assignee-list";
 import { CcList } from "./cc-list";
 import { FieldPermissionTable } from "./field-permission-table";
@@ -53,12 +53,9 @@ export const HandleNodeConfig: FC<HandleNodeConfigProps> = ({ nodeId }) => {
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so the
   // form does not re-render during drags.
-  const data = useEditorStore(s => {
-    const node = s.nodes.find(n => n.id === nodeId);
-    return node?.type === "handle" ? node.data : undefined;
-  });
-  const readonly = useEditorStore(s => s.readonly);
-  const updateNodeData = useEditorStore(s => s.updateNodeData);
+  const data = useEditorStore(s => nodeConfig(s.nodes.find(n => n.id === nodeId), "handle"));
+  const readonly = useEditorUiStore(s => s.readonly);
+  const { updateNodeData } = useApprovalActions();
 
   if (!data) {
     return null;

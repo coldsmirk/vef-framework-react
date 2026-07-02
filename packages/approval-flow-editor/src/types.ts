@@ -1,5 +1,5 @@
 import type { ConditionOperator } from "@vef-framework-react/expression";
-import type { Edge, Node, XYPosition } from "@xyflow/react";
+import type { XYPosition } from "@xyflow/react";
 
 /**
  * Node kind aligned with backend NodeKind enum.
@@ -277,29 +277,18 @@ export interface CcNodeData extends BaseNodeData {
 }
 
 /**
- * Typed xyflow node per kind — enables type-safe NodeProps<T> without assertions
+ * In-memory node/edge shapes are `@coldsmirk/nodeloom-core`'s uniform ones: every node carries
+ * `type: "flowNode"` and `data: { kind, label, config }`, with the business fields (the wire
+ * `data`) living in `config`. `label` is the static kind label — the node's display name stays
+ * `config.name`, the only wire field. Type-safe per-kind access goes through
+ * `nodeConfig(node, kind)` (store/config-access.ts), the package's single erasure boundary.
  */
-export type StartNode = Node<StartNodeData, "start">;
-export type EndNode = Node<EndNodeData, "end">;
-export type ApprovalNode = Node<ApprovalNodeData, "approval">;
-export type HandleNode = Node<HandleNodeData, "handle">;
-export type ConditionNode = Node<ConditionNodeData, "condition">;
-export type CcNode = Node<CcNodeData, "cc">;
+export type { FlowEdge, FlowNode } from "@coldsmirk/nodeloom-core";
 
 /**
- * Union of all typed nodes
+ * Union of all wire-level node data shapes (the business fields stored in `config`).
  */
-export type FlowNode = StartNode | EndNode | ApprovalNode | HandleNode | ConditionNode | CcNode;
-
-/**
- * Union of all node data types
- */
-export type NodeData = FlowNode["data"];
-
-/**
- * Typed xyflow edge
- */
-export type FlowEdge = Edge;
+export type AnyNodeData = NodeDataMap[NodeKind];
 
 /**
  * Mapping from NodeKind to its corresponding data type
