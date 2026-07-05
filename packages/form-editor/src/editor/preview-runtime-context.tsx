@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { DataSourceResolver, ExpressionContext, LinkageEvaluators } from "../types";
+import type { DataSourceResolver, EvaluationContext, LinkageEvaluators } from "../types";
 
 import { createContext, use, useMemo } from "react";
 
@@ -8,13 +8,13 @@ import { createContext, use, useMemo } from "react";
  * Host-injected runtime capabilities the editor's live preview (and JSON split
  * render) need so the in-designer `FormRenderer` behaves like the deployed form:
  * remote / ref data sources resolve, a custom linkage engine runs, and the host
- * expression scope (`$user` / `$node`) is present. Mirrors the slots
+ * evaluation scope (`$user` / `$node`) is present. Mirrors the slots
  * `FormRendererProps` already exposes; the editor only forwards them.
  */
 export interface PreviewRuntime {
   evaluators?: LinkageEvaluators;
   dataSourceResolver?: DataSourceResolver;
-  expressionContext?: ExpressionContext;
+  evaluationContext?: EvaluationContext;
 }
 
 const PreviewRuntimeContext = createContext<PreviewRuntime>({});
@@ -32,10 +32,10 @@ export function PreviewRuntimeProvider({
       return {
         dataSourceResolver: value.dataSourceResolver,
         evaluators: value.evaluators,
-        expressionContext: value.expressionContext
+        evaluationContext: value.evaluationContext
       };
     },
-    [value.dataSourceResolver, value.evaluators, value.expressionContext]
+    [value.dataSourceResolver, value.evaluators, value.evaluationContext]
   );
 
   return <PreviewRuntimeContext value={stable}>{children}</PreviewRuntimeContext>;

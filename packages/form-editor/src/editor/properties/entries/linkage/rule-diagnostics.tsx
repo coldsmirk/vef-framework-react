@@ -4,6 +4,7 @@ import type { ValidationIssue } from "../../../../engine/validation";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
+import { isDeepEqual } from "@vef-framework-react/shared";
 
 const listCss = css({
   display: "flex",
@@ -63,6 +64,40 @@ export function groupIssuesByRule(issues: readonly ValidationIssue[]): Map<strin
   }
 
   return byRule;
+}
+
+/**
+ * Reference-reconcile a freshly-grouped issue map against the prior one.
+ * {@link groupIssuesByRule} allocates fresh buckets on every revalidation
+ * (every schema edit moves the deferred layer reference), which would hand
+ * every issue-carrying RuleCard a new `issues` prop identity — busting its
+ * memo on each keystroke anywhere in the form. A bucket whose content is
+ * unchanged keeps its previous array reference; a fully unchanged map keeps
+ * its own reference (mirroring the runtime's `stabilizeStateMap`).
+ */
+export function stabilizeIssueBuckets(
+  prev: Map<string, ValidationIssue[]> | undefined,
+  next: Map<string, ValidationIssue[]>
+): Map<string, ValidationIssue[]> {
+  if (!prev) {
+    return next;
+  }
+
+  let changed = prev.size !== next.size;
+  const reconciled = new Map<string, ValidationIssue[]>();
+
+  for (const [ruleId, bucket] of next) {
+    const previous = prev.get(ruleId);
+
+    if (previous !== undefined && isDeepEqual(previous, bucket)) {
+      reconciled.set(ruleId, previous);
+    } else {
+      reconciled.set(ruleId, bucket);
+      changed = true;
+    }
+  }
+
+  return changed ? reconciled : prev;
 }
 
 export interface RuleDiagnosticsProps {

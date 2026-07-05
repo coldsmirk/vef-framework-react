@@ -26,13 +26,13 @@ function installVefMessage(): VefMessageMock {
     error: vi.fn()
   };
 
-  (globalThis as { $vef?: unknown }).$vef = { message };
+  vi.stubGlobal("$vef", { message });
 
   return message;
 }
 
 afterEach(() => {
-  delete (globalThis as { $vef?: unknown }).$vef;
+  vi.unstubAllGlobals();
 });
 
 function makeSchema(): FormSchema {

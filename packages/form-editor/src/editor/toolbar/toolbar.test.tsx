@@ -37,13 +37,13 @@ function installVefGlobal(): VefMock {
     }
   };
 
-  (globalThis as { $vef?: unknown }).$vef = vef;
+  vi.stubGlobal("$vef", vef);
 
   return vef;
 }
 
 afterEach(() => {
-  delete (globalThis as { $vef?: unknown }).$vef;
+  vi.unstubAllGlobals();
 });
 
 function makeSchema(): FormSchema {

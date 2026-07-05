@@ -45,6 +45,11 @@ function isRequired(field: KeyedFormField): boolean {
  * Map one template field to an `EditableTable` column, or `null` when it cannot
  * be a column (a non-keyed presentation / action field — the `table` variant's
  * validation rejects these, but the renderer skips them defensively too).
+ *
+ * The per-type editor switch below is mirrored (statically) by the canvas
+ * preview's `SampleCell` (`editor/canvas/subform-table-cell.tsx`) — `field.type`
+ * is host-extensible, so neither switch can be exhaustive; when adding a type
+ * here, add its preview there too or the canvas degrades to a muted dash.
  */
 function columnFor(field: Block): EditableColumn<Row> | null {
   if (isContainerNode(field) || !isKeyedField(field)) {

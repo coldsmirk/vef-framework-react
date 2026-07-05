@@ -7,14 +7,13 @@ import type {
   Block,
   ChromeTabItem,
   DataSourceResolver,
-  ExpressionContext,
+  EvaluationContext,
   FieldLinkageRule,
   FlexNode,
   FormField,
   FormSchema,
   GapScale,
   GridNode,
-  LinkageCondition,
   LinkageEvaluators,
   LinkageTriggerKind,
   PresentationDevice,
@@ -27,15 +26,14 @@ import type {
 
 import { css } from "@emotion/react";
 import { EditableTable, Flex, globalCssVars, Stack, useForm } from "@vef-framework-react/components";
-import { getEngineError, isEngineReady, loadEngine } from "@vef-framework-react/expression";
 import { isDeepEqual } from "@vef-framework-react/shared";
-import { createContext, memo, Suspense, use, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createContext, memo, use, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 import { MobileScope } from "../components/mobile/scope";
 import { isKeyedField } from "../engine/keys";
 import {
   deriveDefaultValues,
-  deriveExpressionVariables,
+  deriveEvaluationVariables,
   getFieldEventTriggerKinds,
   getLinkageSourceKeys,
   getTriggerEffectActions
@@ -63,16 +61,6 @@ import {
 
 const rootCss = css({ width: "100%" });
 
-interface ExpressionEvaluationUsage {
-  condition: boolean;
-  value: boolean;
-}
-
-const NO_EXPRESSION_EVALUATION: ExpressionEvaluationUsage = Object.freeze({
-  condition: false,
-  value: false
-});
-
 export interface FormRendererProps {
   schema: FormSchema;
   /**
@@ -84,10 +72,9 @@ export interface FormRendererProps {
   defaultValues?: RuntimeFormValues;
   disabled?: boolean;
   /**
-   * Overrides for the dynamic linkage evaluators. Expression slots fall back to
-   * the shared ZEN engine; script slots fall back to `new Function` because
-   * scripts are statement blocks. Host projects only need overrides for a
-   * sandbox, a custom expression engine, or a DSL.
+   * Overrides for the dynamic linkage evaluators. Expression and script slots
+   * fall back to plain-JavaScript `new Function` compilation. Host projects
+   * only need overrides for a sandbox, a custom expression engine, or a DSL.
    */
   evaluators?: LinkageEvaluators;
   /**
@@ -96,12 +83,12 @@ export interface FormRendererProps {
    */
   dataSourceResolver?: DataSourceResolver;
   /**
-   * Host-supplied expression scope. `$vars` here merges over (and overrides) the
+   * Host-supplied evaluation scope. `$vars` here merges over (and overrides) the
    * schema's variable defaults; `$user` / `$node` carry runtime context. The
    * form derives `$vars` from `schema.variables` on its own, so this is only
    * needed to supply user / node context or override a variable at runtime.
    */
-  expressionContext?: ExpressionContext;
+  evaluationContext?: EvaluationContext;
   onSubmit?: (values: RuntimeFormValues) => void | Promise<void>;
   /**
    * Imperative handle for host chrome (a Modal footer's 确定/取消, an external
@@ -145,25 +132,33 @@ interface RuntimeFieldApi {
 }
 
 /**
- * Reactive expression scope for the runtime-state controllers (root + per-row),
+ * Reactive evaluation scope for the runtime-state controllers (root + per-row),
  * which must re-evaluate when `$vars` change. Field cells deliberately do NOT
- * read this — they take a stable ref via {@link RenderCtx.expressionContextRef}
+ * read this — they take a stable ref via {@link RenderCtx.evaluationContextRef}
  * so a variable change never busts their memo and re-renders the whole tree.
  */
-const ExpressionScopeContext = createContext<ExpressionContext | undefined>(undefined);
-ExpressionScopeContext.displayName = "ExpressionScopeContext";
+const EvaluationScopeContext = createContext<EvaluationContext | undefined>(undefined);
+EvaluationScopeContext.displayName = "EvaluationScopeContext";
 
 interface RenderCtx {
   disabled: boolean;
+  /**
+   * Renderer-instance prefix (React `useId`) for every field's DOM id. Two
+   * renderers of the same schema can legitimately share a page (a host
+   * mounting form + preview, the editor's preview beside its kept-alive JSON
+   * view), and without this the `field-${field.id}` ids would collide —
+   * cross-wiring every label's `htmlFor` across the instances.
+   */
+  domIdPrefix: string;
   evaluators: LinkageEvaluators | undefined;
   /**
-   * Stable ref to the form-composed expression scope (`$vars` from schema + host
+   * Stable ref to the form-composed evaluation scope (`$vars` from schema + host
    * `$user`/`$node`). A ref — not the value — so a `$vars` change does not bust
    * `ctx` identity and re-render every memoized cell; field validators read the
    * latest via `.current` at change/submit time. The reactive value reaches the
-   * runtime-state controllers (which must re-evaluate) via {@link ExpressionScopeContext}.
+   * runtime-state controllers (which must re-evaluate) via {@link EvaluationScopeContext}.
    */
-  expressionContextRef: RefObject<ExpressionContext | undefined>;
+  evaluationContextRef: RefObject<EvaluationContext | undefined>;
   form: RuntimeFormApi;
   /**
    * The form-level stack gap in pixels (from the schema's `gap`), used as the
@@ -194,7 +189,7 @@ interface RuntimeArrayFieldApi {
 function useRuntimeForm(
   args: Pick<FormRendererProps, "defaultValues" | "disabled" | "evaluators" | "onSubmit"> & {
     runtimeSchema: RuntimeSchema;
-    expressionContext: ExpressionContext | undefined;
+    evaluationContext: EvaluationContext | undefined;
     formRef: RefObject<RuntimeForm | null>;
     sinks: EffectSinks;
   }
@@ -230,7 +225,7 @@ function useRuntimeForm(
           blocks: args.runtimeSchema.children,
           disabled: args.disabled ?? false,
           evaluators: args.evaluators,
-          expressionContext: args.expressionContext,
+          evaluationContext: args.evaluationContext,
           namePrefix: "",
           values: value
         });
@@ -251,7 +246,7 @@ function useRuntimeForm(
         await dispatchFormEffects({
           actions: getTriggerEffectActions(formRules, "beforeSubmit"),
           evaluators: args.evaluators,
-          expressionContext: args.expressionContext,
+          evaluationContext: args.evaluationContext,
           form,
           sinks: args.sinks
         });
@@ -260,7 +255,7 @@ function useRuntimeForm(
       await args.onSubmit?.(filterSubmitValues({
         blocks: args.runtimeSchema.children,
         evaluators: args.evaluators,
-        expressionContext: args.expressionContext,
+        evaluationContext: args.evaluationContext,
         values: value
       }));
 
@@ -268,27 +263,13 @@ function useRuntimeForm(
         await dispatchFormEffects({
           actions: getTriggerEffectActions(formRules, "afterSubmit"),
           evaluators: args.evaluators,
-          expressionContext: args.expressionContext,
+          evaluationContext: args.evaluationContext,
           form,
           sinks: args.sinks
         });
       }
     }
   });
-}
-
-function ZenEngineGate({ children }: { children: ReactNode }): ReactNode {
-  if (!isEngineReady()) {
-    const error = getEngineError();
-
-    if (error) {
-      throw error;
-    }
-
-    throw loadEngine();
-  }
-
-  return children;
 }
 
 /**
@@ -308,108 +289,15 @@ export function FormRenderer({
   // and `$vars` seed from this, so a fresh reference each render would re-seed
   // `$vars` and clobber `set_variable` writes on any host re-render.
   const runtimeSchema = useMemo(() => toRuntimeSchema(schema, device), [schema, device]);
-  const expressionUsage = useMemo(
-    () => runtimeSchema ? getSchemaExpressionEvaluationUsage(runtimeSchema) : NO_EXPRESSION_EVALUATION,
-    [runtimeSchema]
-  );
-  const needsDefaultExpressionEngine = (expressionUsage.condition && rest.evaluators?.evaluateExpression === undefined)
-    || (expressionUsage.value && rest.evaluators?.evaluateAssignExpression === undefined);
-  const inner = runtimeSchema
+  const content = runtimeSchema
     ? <FormRendererInner runtimeSchema={runtimeSchema} {...rest} />
     : <FormRendererEmpty />;
-  const content = needsDefaultExpressionEngine
-    ? <Suspense fallback={null}><ZenEngineGate>{inner}</ZenEngineGate></Suspense>
-    : inner;
 
   return (
     <DeviceProvider device={device}>
       {device === "mobile" ? <MobileScope containOverlays={containOverlays}>{content}</MobileScope> : content}
     </DeviceProvider>
   );
-}
-
-function getSchemaExpressionEvaluationUsage(schema: RuntimeSchema): ExpressionEvaluationUsage {
-  const usage: ExpressionEvaluationUsage = { condition: false, value: false };
-
-  markRulesExpressionEvaluation(schema.linkage?.rules, usage);
-
-  for (const child of schema.children) {
-    markBlockExpressionEvaluation(child, usage);
-
-    if (usage.condition && usage.value) {
-      break;
-    }
-  }
-
-  return usage;
-}
-
-function markBlockExpressionEvaluation(block: Block, usage: ExpressionEvaluationUsage): void {
-  markRulesExpressionEvaluation(block.linkage?.rules, usage);
-
-  if (usage.condition && usage.value) {
-    return;
-  }
-
-  if ("children" in block && Array.isArray(block.children)) {
-    for (const child of block.children) {
-      markBlockExpressionEvaluation(child, usage);
-
-      if (usage.condition && usage.value) {
-        return;
-      }
-    }
-  }
-
-  if ("template" in block && Array.isArray(block.template)) {
-    for (const child of block.template) {
-      markBlockExpressionEvaluation(child, usage);
-
-      if (usage.condition && usage.value) {
-        return;
-      }
-    }
-  }
-}
-
-function markRulesExpressionEvaluation(rules: FieldLinkageRule[] | undefined, usage: ExpressionEvaluationUsage): void {
-  for (const rule of rules ?? []) {
-    if (conditionUsesExpression(rule.trigger.kind === "condition" ? rule.trigger.condition : undefined)) {
-      usage.condition = true;
-    }
-
-    for (const action of rule.actions) {
-      if (action.type === "assign" || action.type === "set_field" || action.type === "set_variable") {
-        usage.value ||= action.value.kind === "expression";
-        continue;
-      }
-
-      if (action.type === "alert") {
-        usage.value ||= action.message.kind === "expression";
-        continue;
-      }
-
-      if (action.type === "navigate") {
-        usage.value ||= action.to.kind === "expression";
-      }
-    }
-
-    if (usage.condition && usage.value) {
-      return;
-    }
-  }
-}
-
-function conditionUsesExpression(condition: LinkageCondition | undefined): boolean {
-  if (condition === undefined) {
-    return false;
-  }
-
-  if (condition.kind === "expression") {
-    return true;
-  }
-
-  return condition.kind === "group" && condition.children.some(child => conditionUsesExpression(child));
 }
 
 const emptyStateCss = css({
@@ -447,7 +335,7 @@ interface FormRendererInnerProps {
   disabled?: boolean;
   evaluators?: LinkageEvaluators;
   dataSourceResolver?: DataSourceResolver;
-  expressionContext?: ExpressionContext;
+  evaluationContext?: EvaluationContext;
   onSubmit?: (values: RuntimeFormValues) => void | Promise<void>;
   apiRef?: Ref<FormRendererApi>;
 }
@@ -466,12 +354,12 @@ function FormRendererInner({
   defaultValues,
   disabled = false,
   evaluators,
-  expressionContext: hostContext,
+  evaluationContext: hostContext,
   onSubmit,
   runtimeSchema
 }: FormRendererInnerProps): ReactElement {
   // Depend on the host context's individual slots, not the wrapper object: a host
-  // passing an inline `expressionContext` would otherwise mint a new object every
+  // passing an inline `evaluationContext` would otherwise mint a new object every
   // render, re-seeding `$vars` (clobbering `set_variable` writes) and churning
   // `ctx` (a full field re-render) on every keystroke.
   const hostVariables = hostContext?.variables;
@@ -482,20 +370,22 @@ function FormRendererInner({
   // host overrides on top); a `set_variable` effect mutates it, and re-seeds
   // whenever the seed changes (a new schema / host variables).
   const seededVariables = useMemo(
-    () => { return { ...deriveExpressionVariables(runtimeSchema), ...hostVariables }; },
+    () => { return { ...deriveEvaluationVariables(runtimeSchema), ...hostVariables }; },
     [runtimeSchema, hostVariables]
   );
   const [variables, setVariables] = useState(seededVariables);
   // Re-seed only on an actual content change: a host passing an inline
-  // `expressionContext.variables` object mints a new (deeply equal) seed every
+  // `evaluationContext.variables` object mints a new (deeply equal) seed every
   // render, and an identity-keyed re-seed would clobber `set_variable` writes
   // on each host re-render.
   const appliedSeedRef = useRef(seededVariables);
   useEffect(() => {
-    if (!isDeepEqual(appliedSeedRef.current, seededVariables)) {
-      appliedSeedRef.current = seededVariables;
-      setVariables(seededVariables);
+    if (isDeepEqual(appliedSeedRef.current, seededVariables)) {
+      return;
     }
+
+    appliedSeedRef.current = seededVariables;
+    setVariables(seededVariables);
   }, [seededVariables]);
   const setVariable = useCallback<SetVariable>(
     (name, value) => {
@@ -503,7 +393,10 @@ function FormRendererInner({
       // object: the `$vars` identity feeds the condition-effect detector's
       // deps, so an unconditional spread would re-run it after every
       // `set_variable` — with an opaque `always` rule, an infinite loop.
-      setVariables(prev => Object.is(prev[name], value) ? prev : { ...prev, [name]: value });
+      // Deep-equal (mirroring `set_field`'s no-op bail): an expression-
+      // resolved value may be a fresh but content-equal object, and treating
+      // that as a change would cascade a form-wide re-evaluation for nothing.
+      setVariables(prev => isDeepEqual(prev[name], value) ? prev : { ...prev, [name]: value });
     },
     []
   );
@@ -521,7 +414,7 @@ function FormRendererInner({
     []
   );
 
-  const expressionContext = useMemo<ExpressionContext>(
+  const evaluationContext = useMemo<EvaluationContext>(
     () => {
       return {
         variables,
@@ -532,11 +425,11 @@ function FormRendererInner({
     [variables, hostUser, hostNode]
   );
 
-  // A stable ref to the live expression scope. Field validators read `.current`
+  // A stable ref to the live evaluation scope. Field validators read `.current`
   // at change/submit time, so `ctx` can stay stable (and cells keep their memo)
   // across `$vars` changes instead of re-rendering the whole field tree.
-  const expressionContextRef = useRef(expressionContext);
-  expressionContextRef.current = expressionContext;
+  const evaluationContextRef = useRef(evaluationContext);
+  evaluationContextRef.current = evaluationContext;
 
   // The effect lane's renderer-owned sinks, bundled once so a new native effect
   // adds a field to `EffectSinks`, not another prop threaded through every scope.
@@ -554,7 +447,7 @@ function FormRendererInner({
     defaultValues,
     disabled,
     evaluators,
-    expressionContext,
+    evaluationContext,
     formRef,
     onSubmit,
     runtimeSchema,
@@ -583,13 +476,15 @@ function FormRendererInner({
     dispatchFormEffects({
       actions: getTriggerEffectActions(runtimeSchema.linkage?.rules, "load"),
       evaluators,
-      expressionContext,
+      evaluationContext,
       form,
       sinks
     }).catch((error: unknown) => {
       console.error("[form-editor] load effect failed:", error);
     });
-  }, [evaluators, expressionContext, form, runtimeSchema, sinks]);
+  }, [evaluators, evaluationContext, form, runtimeSchema, sinks]);
+
+  const domIdPrefix = useId();
 
   // Memoized so the field tree's props are stable across the controller's
   // per-keystroke re-renders — a precondition for `React.memo(BlockCell)` to
@@ -598,28 +493,29 @@ function FormRendererInner({
     () => {
       return {
         disabled,
+        domIdPrefix,
         evaluators,
-        expressionContextRef,
+        evaluationContextRef,
         form,
         gutter: resolveStackGap(runtimeSchema.gap, DEFAULT_STACK_GAP),
         namePrefix: "",
         sinks
       };
     },
-    [disabled, evaluators, expressionContextRef, form, runtimeSchema.gap, sinks]
+    [disabled, domIdPrefix, evaluators, evaluationContextRef, form, runtimeSchema.gap, sinks]
   );
 
   return (
     <AppForm>
-      <ExpressionScopeContext value={expressionContext}>
+      <EvaluationScopeContext value={evaluationContext}>
         <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <RuntimeStateController evaluators={evaluators} expressionContext={expressionContext} form={form} schema={runtimeSchema} sinks={sinks}>
+          <RuntimeStateController evaluationContext={evaluationContext} evaluators={evaluators} form={form} schema={runtimeSchema} sinks={sinks}>
             <Form css={rootCss} disabled={disabled}>
               <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
             </Form>
           </RuntimeStateController>
         </DataSourceProvider>
-      </ExpressionScopeContext>
+      </EvaluationScopeContext>
     </AppForm>
   );
 }
@@ -862,7 +758,7 @@ function SubformFlow({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode })
  * it for a freshly added row); it is injected into the view value and stripped
  * on write, so form state stays the clean record the schema / submit expect.
  *
- * Per-row linkage / expression scope is intentionally NOT wired here (those live
+ * Per-row linkage / evaluation scope is intentionally NOT wired here (those live
  * in the stack variant's per-row controllers) — the table targets straightforward
  * tabular entry.
  */
@@ -872,6 +768,13 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
   const minRows = subform.minRows ?? 0;
   const idsRef = useRef<string[]>([]);
   const idSeedRef = useRef(0);
+  // Row-wrapper cache keyed by the underlying TanStack row object: a keystroke
+  // in one row replaces only that row's reference, so every untouched row keeps
+  // its previous wrapped identity and rc-table's per-row memoization holds —
+  // without this, the map below would mint fresh objects for ALL rows on every
+  // render and force a cell diff across the whole table. Written during render:
+  // safe because it is a pure idempotent memo (same row + id ⇒ equal wrapper).
+  const wrappedRowsRef = useRef(new WeakMap<Record<string, unknown>, Record<string, unknown>>());
 
   const columns = useMemo(() => buildSubformColumns(subform.template), [subform.template]);
   const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
@@ -883,7 +786,18 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
           const rows = (Array.isArray(fieldApi.state.value) ? fieldApi.state.value : []) as Array<Record<string, unknown>>;
           reconcileRowKeys(idsRef.current, rows.length, idSeedRef);
           const valueForTable = rows.map((row, index) => {
-            return { ...row, [SUBFORM_ROW_ID]: idsRef.current[index] };
+            const id = idsRef.current[index];
+            const cached = wrappedRowsRef.current.get(row);
+
+            if (cached && cached[SUBFORM_ROW_ID] === id) {
+              return cached;
+            }
+
+            const wrapped = { ...row, [SUBFORM_ROW_ID]: id };
+
+            wrappedRowsRef.current.set(row, wrapped);
+
+            return wrapped;
           });
 
           const handleChange = (next: Array<Record<string, unknown>>): void => {
@@ -896,7 +810,11 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
               // floor for an externally reseeded row.
               return typeof id === "string" ? id : idsRef.current[index] ?? `row-${index}`;
             });
-            const clean = next.map(({ [SUBFORM_ROW_ID]: _rid, ...rest }) => rest);
+            const clean = next.map(row => {
+              const rest = { ...row };
+              delete rest[SUBFORM_ROW_ID];
+              return rest;
+            });
 
             ctx.form.setFieldValue(arrayName, clean);
           };
@@ -1025,10 +943,6 @@ function SubformRowBase({
   subform: SubformNode;
 }): ReactElement {
   const chrome = useContainerChrome();
-  // The reactive expression scope — the row controller must re-evaluate when
-  // `$vars` change. `ctx` only carries a stable ref (for validators), not this
-  // live value, so the row re-renders here while its memoized cells still bail.
-  const expressionContext = use(ExpressionScopeContext);
   const rowPrefix = `${ctx.namePrefix}${subform.key}[${index}].`;
 
   const templateSchema = useMemo<RuntimeSchema>(
@@ -1051,21 +965,50 @@ function SubformRowBase({
 
   return (
     <chrome.SubformRow removeControl={canRemove ? <chrome.RemoveButton onClick={() => onRemove(index)} /> : undefined}>
-      <SubformRowController
-        evaluators={ctx.evaluators}
-        expressionContext={expressionContext}
-        form={ctx.form}
-        prefix={rowPrefix}
-        sinks={ctx.sinks}
-        templateSchema={templateSchema}
-      >
+      <SubformRowScope ctx={ctx} prefix={rowPrefix} templateSchema={templateSchema}>
         <BlockStack blocks={subform.template} ctx={rowCtx} gap={subform.variant === "stack" ? subform.gap : undefined} />
-      </SubformRowController>
+      </SubformRowScope>
     </chrome.SubformRow>
   );
 }
 
 const SubformRow = memo(SubformRowBase);
+
+/**
+ * Bridges the reactive evaluation scope into the row controller. The context
+ * subscription lives HERE — a separate, deliberately non-memoized component
+ * beneath {@link SubformRow}'s memo — so a `$vars` write re-renders only this
+ * bridge (the controller re-evaluates the row against the fresh scope, as it
+ * must: any row condition may read `$vars`), while the row chrome, the remove
+ * button, and the stable `children` element above it all bail. `ctx` only
+ * carries a stable ref (for validators), never this live value.
+ */
+function SubformRowScope({
+  children,
+  ctx,
+  prefix,
+  templateSchema
+}: {
+  children: ReactNode;
+  ctx: RenderCtx;
+  prefix: string;
+  templateSchema: RuntimeSchema;
+}): ReactElement {
+  const evaluationContext = use(EvaluationScopeContext);
+
+  return (
+    <SubformRowController
+      evaluationContext={evaluationContext}
+      evaluators={ctx.evaluators}
+      form={ctx.form}
+      prefix={prefix}
+      sinks={ctx.sinks}
+      templateSchema={templateSchema}
+    >
+      {children}
+    </SubformRowController>
+  );
+}
 
 function FieldSlot({
   ctx,
@@ -1087,21 +1030,25 @@ function FieldSlot({
     [field, ctx.namePrefix]
   );
   const labelPosition = field.labelPosition ?? "top";
-  // Per-scope-unique DOM id: a subform template renders once per row under the
-  // same field id, so qualify it with the row name-prefix to avoid duplicate
-  // ids / broken label associations. At the root the prefix is "" — unchanged.
-  const domId = `field-${ctx.namePrefix}${field.id}`;
+  // Globally-unique DOM id: the renderer-instance prefix separates co-mounted
+  // renderers of the same schema, and the row name-prefix separates a subform
+  // template's per-row instances — without both, duplicate ids cross-wire
+  // label associations.
+  const domId = `${ctx.domIdPrefix}field-${ctx.namePrefix}${field.id}`;
 
   let content: ReactElement;
 
   if (isKeyedField(field)) {
-    // Change-time and submit-time validation are identical; one callback keeps
-    // the two lanes from drifting apart. `field` is narrowed to keyed in this
-    // branch, so the callback stays type-safe without re-checking.
+    // Registered on the change lane only: TanStack Form's submit event runs the
+    // change validator too (defaultValidationLogic), so submit-time coverage is
+    // free — while a second registration under `onSubmit` would store the same
+    // message in both errorMap lanes and render it twice after a failed submit.
+    // `field` is narrowed to keyed in this branch, so the callback stays
+    // type-safe without re-checking.
     const runValidation = ({ fieldApi, value }: { fieldApi: RuntimeFieldApi; value: unknown }): string | undefined => validateRuntimeField({
       disabled: ctx.disabled,
       evaluators: ctx.evaluators,
-      expressionContext: ctx.expressionContextRef.current,
+      evaluationContext: ctx.evaluationContextRef.current,
       field,
       namePrefix: ctx.namePrefix,
       value,
@@ -1113,8 +1060,7 @@ function FieldSlot({
         name={`${ctx.namePrefix}${field.key}`}
         validators={{
           onChangeListenTo: listenToKeys,
-          onChange: runValidation,
-          onSubmit: runValidation
+          onChange: runValidation
         }}
       >
         {(fieldApi: RuntimeFieldApi) => (

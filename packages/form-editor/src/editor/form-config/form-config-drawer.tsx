@@ -10,12 +10,13 @@ import { AnimatePresence, motion } from "@vef-framework-react/core";
 
 import { assertNever } from "../../engine/assert-never";
 import { EditorIcon } from "../../icons";
-import { selectFieldCount, useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { selectFieldCount, selectLinkageRuleCount, useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { FormDataSourcesPanel } from "../properties/form-data-sources-panel";
 import { FormLinkagePanel } from "../properties/form-linkage-panel";
 import { FormVariablesPanel } from "../properties/form-variables-panel";
 import { panelTransition } from "../styles";
 import { FormBasicsTab } from "./form-basics-tab";
+import { LinkageOverview } from "./linkage-overview";
 import { OutlineTab } from "./outline-tab";
 
 const DRAWER_Z = 6;
@@ -107,6 +108,17 @@ const reusedBodyCss = css({
   padding: "18px 22px 24px"
 });
 
+const sectionTitleCss = css({
+  marginBottom: 10,
+  fontSize: globalCssVars.fontSizeSm,
+  fontWeight: 600,
+  color: globalCssVars.colorTextSecondary
+});
+
+const eventsSectionCss = css({
+  marginTop: 22
+});
+
 interface DrawerTab {
   key: FormConfigTabId;
   label: string;
@@ -186,13 +198,16 @@ function DrawerSheet(): ReactElement {
   // Shares the toolbar/footer's WeakMap-memoized walk instead of re-counting
   // the tree on every drawer render.
   const fieldsCount = useFormEditorStore(selectFieldCount);
+  // Same aggregate the footer chip shows (field rules + form events): the tab
+  // opens onto the overview of exactly that set, so the two numbers must agree.
+  const linkageCount = useFormEditorStore(selectLinkageRuleCount);
 
   const counts: Record<FormConfigTabId, number> = {
     outline: fieldsCount,
     form: 0,
     variables: schema.variables?.length ?? 0,
     dataSources: schema.dataSources?.length ?? 0,
-    linkage: schema.linkage?.rules?.length ?? 0
+    linkage: linkageCount
   };
 
   const patch = (next: FormSchemaPatch): void => {
@@ -288,9 +303,21 @@ function DrawerBody({
     }
 
     case "linkage": {
+      // Two zones behind one count: the read-only index of field-level rules
+      // (authored on each control's 联动 tab) and the editable form-level
+      // event rules. Without the index, the footer's "N 联动" chip lands on a
+      // panel that may legitimately say "no rules" — a dead-end scent.
       return (
         <div css={reusedBodyCss}>
-          <FormLinkagePanel schema={schema} onChange={linkage => patch({ linkage })} />
+          <section>
+            <div css={sectionTitleCss}>字段联动</div>
+            <LinkageOverview />
+          </section>
+
+          <section css={eventsSectionCss}>
+            <div css={sectionTitleCss}>表单事件</div>
+            <FormLinkagePanel schema={schema} onChange={linkage => patch({ linkage })} />
+          </section>
         </div>
       );
     }

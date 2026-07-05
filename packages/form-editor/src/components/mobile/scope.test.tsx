@@ -5,6 +5,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MobileScope, useMobileScopeContainer } from "./scope";
 import { admThemeBridge } from "./theme";
 
+function Probe(): ReactElement {
+  const getContainer = useMobileScopeContainer();
+
+  return <span data-testid="container">{getContainer().dataset.device ?? "body"}</span>;
+}
+
 describe("MobileScope", () => {
   it("renders its children", () => {
     render(
@@ -17,12 +23,6 @@ describe("MobileScope", () => {
   });
 
   it("exposes the scope node as the overlay container when containing", async () => {
-    function Probe(): ReactElement {
-      const getContainer = useMobileScopeContainer();
-
-      return <span data-testid="container">{getContainer().dataset.device ?? "body"}</span>;
-    }
-
     render(
       <MobileScope containOverlays>
         <Probe />
@@ -33,12 +33,6 @@ describe("MobileScope", () => {
   });
 
   it("falls back to the document body as the overlay container by default", () => {
-    function Probe(): ReactElement {
-      const getContainer = useMobileScopeContainer();
-
-      return <span data-testid="container">{getContainer().dataset.device ?? "body"}</span>;
-    }
-
     render(
       <MobileScope>
         <Probe />

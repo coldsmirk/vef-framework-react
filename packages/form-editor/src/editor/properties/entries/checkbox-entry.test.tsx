@@ -19,7 +19,7 @@ function makeField(required?: boolean): TextfieldField {
     id: "Field_1",
     type: "textfield",
     key: "name",
-    ...required === undefined ? {} : { validate: { required } }
+    ...required !== undefined && { validate: { required } }
   };
 }
 

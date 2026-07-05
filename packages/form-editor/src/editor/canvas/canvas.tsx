@@ -4,7 +4,7 @@ import type { EditorViewMode } from "../../store/form-store";
 import type { Block, ChromeTabItem, FlexNode, FormField, FormSchema, GapScale, GridNode, KeyedFormField, PresentationDevice, SectionNode, SubformNode, TableSubform, TabsNode } from "../../types";
 import type { DropZoneData } from "../dnd";
 import type { PreviewRuntime } from "../preview-runtime-context";
-import type { DropZoneAccept, DropZoneDescriptor } from "./drop-zones";
+import type { DropZoneAccept, DropZoneDescriptor, ZoneOrientation } from "./drop-zones";
 
 import { css } from "@emotion/react";
 import { Flex, globalCssVars, Stack } from "@vef-framework-react/components";
@@ -29,7 +29,7 @@ import { dropZoneId, fallbackDropZoneId, FIELD_DRAG_TYPE } from "../dnd";
 import { usePreviewRuntime } from "../preview-runtime-context";
 import { CanvasField, SubtreeDraggingContext } from "./canvas-field";
 import { DropIndicator } from "./drop-indicator";
-import { inlineSlots, stackGapDescriptor } from "./drop-zones";
+import { composeAccept, inlineSlots, stackGapDescriptor } from "./drop-zones";
 import { MobileSeedState } from "./mobile-seed-state";
 import { PhoneFrame, phoneViewportCss } from "./phone-frame";
 import { isTableColumnField, makeColumnAccept } from "./subform-column-eligibility";
@@ -163,6 +163,14 @@ const besideHitCss = css({
 const besideLeftCss = css({ left: -7 });
 const besideRightCss = css({ right: -7 });
 
+// A horizontal beside zone's `after` side straddles the slot's BOTTOM edge —
+// gapHitCss alone anchors to the top (the `before` side, shared with stack gaps).
+const gapBottomCss = css({
+  top: "auto",
+  bottom: 0,
+  transform: "translateY(50%)"
+});
+
 const emptyZoneCss = css({
   display: "flex",
   // Fill the surface when the form is empty so the whole sheet is droppable.
@@ -287,11 +295,14 @@ export function Canvas(): ReactElement {
  * Resolve the canvas body for the active view mode: the editable document tree
  * (`edit`), the live form (`preview`), or the JSON / render split (`json`).
  *
- * The edit document is kept alive inside an {@link Activity} while previewing
- * or inspecting JSON: at hundreds of blocks a full unmount/remount per round
- * trip (every draggable re-registered, every cell re-rendered) is a visible
- * stall, while a hidden tree costs nothing. The preview itself stays
- * fresh-mounted — its form state intentionally resets per visit.
+ * The edit document and the JSON split view are both kept alive inside an
+ * {@link Activity} while another mode shows. For the edit tree that preserves
+ * component state, DOM, and the render/reconciliation work of hundreds of
+ * blocks (note it does NOT skip effect replay — Activity unmounts and remounts
+ * every effect on hide/show, so dnd-kit still re-registers each draggable).
+ * For the JSON view it preserves the draft buffer, so an unapplied hand edit
+ * survives a round trip to 编辑/预览 instead of being silently discarded. The
+ * preview stays fresh-mounted — its form state intentionally resets per visit.
  */
 function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: PresentationDevice, runtime: PreviewRuntime): ReactElement {
   // Only the edit document needs the canvas-owned DataSourceProvider: its field
@@ -326,20 +337,18 @@ function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: Pre
             <FormRenderer
               dataSourceResolver={runtime.dataSourceResolver}
               device={device}
+              evaluationContext={runtime.evaluationContext}
               evaluators={runtime.evaluators}
-              expressionContext={runtime.expressionContext}
               schema={schema}
             />
           )
         : null}
 
-      {viewMode === "json"
-        ? (
-            <Suspense fallback={<SurfaceLoading />}>
-              <JsonSplitView device={device} runtime={runtime} schema={schema} />
-            </Suspense>
-          )
-        : null}
+      <Activity mode={viewMode === "json" ? "visible" : "hidden"}>
+        <Suspense fallback={<SurfaceLoading />}>
+          <JsonSplitView device={device} runtime={runtime} schema={schema} />
+        </Suspense>
+      </Activity>
     </>
   );
 }
@@ -391,7 +400,8 @@ function Zone({ descriptor }: { descriptor: DropZoneDescriptor }): ReactElement 
       css={[
         descriptor.orientation === "vertical" ? besideHitCss : gapHitCss,
         descriptor.orientation === "vertical" && side === "before" && besideLeftCss,
-        descriptor.orientation === "vertical" && side === "after" && besideRightCss
+        descriptor.orientation === "vertical" && side === "after" && besideRightCss,
+        descriptor.orientation === "horizontal" && side === "after" && gapBottomCss
       ]}
     >
       <DropIndicator isActive={isDropTarget} orientation={descriptor.orientation} />
@@ -543,7 +553,8 @@ interface InlineBody {
 function useInlineBody(
   blocks: Block[],
   tailTarget: DropZoneData,
-  slotStyle: (block: Block) => CSSProperties
+  slotStyle: (block: Block) => CSSProperties,
+  orientation: ZoneOrientation = "vertical"
 ): InlineBody {
   const suppressed = use(SubtreeDraggingContext);
   const { isDropTarget, ref } = useDroppable({
@@ -558,7 +569,7 @@ function useInlineBody(
   // EditorBlock (memo by block reference) is the cell body, mirroring the
   // runtime side's per-cell memo: a property keystroke inside a grid/flex
   // re-renders only the edited cell, not every sibling.
-  const slots = inlineSlots(blocks).map(slot => (
+  const slots = inlineSlots(blocks, orientation).map(slot => (
     <div key={slot.block.id} css={slotCss} style={slotStyle(slot.block)}>
       {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       <EditorBlock block={slot.block} />
@@ -892,7 +903,9 @@ function SubformTablePreview({ subform }: { subform: TableSubform }): ReactEleme
                   <SubformColumn field={field} />
                 </CanvasField>
 
-                {suppressed ? null : beside.map(zone => <Zone key={zone.id} descriptor={{ ...zone, accept }} />)}
+                {/* Layer the column-eligibility test over the zone's built-in
+                    self-anchor suppression rather than replacing it. */}
+                {suppressed ? null : beside.map(zone => <Zone key={zone.id} descriptor={{ ...zone, accept: composeAccept(zone.accept, accept) }} />)}
               </div>
             );
           })}
@@ -947,7 +960,14 @@ function FlexPreview({ flex }: { flex: FlexNode }): ReactElement {
   const tailTarget = useMemo<DropZoneData>(() => {
     return { zone: "container", containerId: flex.id };
   }, [flex.id]);
-  const body = useInlineBody(blocks, tailTarget, block => flexSlotStyle(block.flex));
+  // A column-direction flex stacks its slots top-to-bottom, so its insertion
+  // indicators must be horizontal bars on the block edges, not side bands.
+  const body = useInlineBody(
+    blocks,
+    tailTarget,
+    block => flexSlotStyle(block.flex),
+    flex.direction === "column" ? "horizontal" : "vertical"
+  );
 
   if (body.isEmpty) {
     return <EmptyZone disabled={body.suppressed} tailTarget={tailTarget} />;

@@ -14,7 +14,7 @@ function makeSchema(dataSources: FormDataSource[]): FormSchema {
   return {
     id: "Form_1",
     version: 2,
-    ...dataSources.length > 0 ? { dataSources } : {},
+    ...(dataSources.length > 0) && { dataSources },
     presentations: { pc: { children: [] } }
   };
 }

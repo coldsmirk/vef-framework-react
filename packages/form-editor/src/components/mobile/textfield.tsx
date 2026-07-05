@@ -4,8 +4,9 @@ import type { FieldComponentProps, TextfieldField } from "../../types";
 
 import Input from "antd-mobile/es/components/input";
 
+import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
-import { InputCell } from "./input-cell";
+import { InputCell, inputCellAffixCss } from "./input-cell";
 
 /**
  * Mobile renderer for the textfield, mirroring the PC `Textfield` contract
@@ -14,6 +15,9 @@ import { InputCell } from "./input-cell";
  * wiring through {@link FieldShell}. Only the control differs — an antd-mobile
  * `Input` (borderless by design, so it wears the shared {@link InputCell})
  * whose `onChange(string)` maps directly onto the field's string value.
+ * antd-mobile's `Input` has no affix slot, so `prefixIcon` renders as a leading
+ * cell adornment — the same pattern the mobile number field uses for its
+ * `prefix` / `suffix` text.
  */
 export const MobileTextfield: FC<FieldComponentProps<TextfieldField, string>> = ({
   disabled,
@@ -34,6 +38,14 @@ export const MobileTextfield: FC<FieldComponentProps<TextfieldField, string>> = 
     required={required ?? field.validate?.required}
   >
     <InputCell disabled={disabled} hasError={(errors?.length ?? 0) > 0}>
+      {field.prefixIcon
+        ? (
+            <span css={inputCellAffixCss}>
+              <EditorIcon name={field.prefixIcon} />
+            </span>
+          )
+        : null}
+
       <Input
         clearable={field.allowClear}
         disabled={disabled}

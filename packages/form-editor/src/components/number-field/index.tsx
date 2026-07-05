@@ -158,8 +158,13 @@ const numberProperties: PropertiesDescriptor = [
         type: "number",
         description: "保留的小数位数",
         read: field => field.precision,
+        // Clamped into toFixed's legal 0..100 digit range — an out-of-range
+        // precision would make the renderers' rounding throw.
         write: (field, precision) => {
-          return { ...field, precision };
+          return {
+            ...field,
+            precision: precision === undefined ? undefined : Math.min(100, Math.max(0, Math.floor(precision)))
+          };
         }
       })
     ]

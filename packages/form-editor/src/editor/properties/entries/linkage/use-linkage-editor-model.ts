@@ -1,12 +1,13 @@
-import type { FieldLinkage, FormDataSource, FormVariable, PresentationLayer } from "../../../../types";
+import type { ValidationIssue } from "../../../../engine/validation";
+import type { FieldLinkage, FormDataSource, PresentationLayer } from "../../../../types";
 import type { SourceFieldOption } from "./options";
 
-import { useDeferredValue, useMemo } from "react";
+import { useDeferredValue, useMemo, useRef } from "react";
 
 import { validateLinkageSchema } from "../../../../engine/linkage";
 import { findScope } from "../../../../engine/schema/walk";
 import { collectSourceCandidates, getDataSourceOptions, getSourceFieldOptions } from "./options";
-import { groupIssuesByRule } from "./rule-diagnostics";
+import { groupIssuesByRule, stabilizeIssueBuckets } from "./rule-diagnostics";
 import { useStableOptions } from "./use-stable-options";
 
 const ROOT_SCOPE_KEY = "";
@@ -22,10 +23,6 @@ export interface LinkageEditorModel {
    */
   dataSourceOptions: SourceFieldOption[];
   /**
-   * Declared `$vars` names, for the expression editors' completion.
-   */
-  variableNames: string[];
-  /**
    * Validator issues hung onto each rule by id, for live in-card diagnostics.
    */
   issuesByRule: ReturnType<typeof groupIssuesByRule>;
@@ -34,10 +31,10 @@ export interface LinkageEditorModel {
 /**
  * The shared model behind every linkage editor host — the field-level entry, the
  * container section, and the form-level events panel. Each resolves the same
- * four things (same-scope field options, data-source options, variable names,
- * deferred rule diagnostics) and differed only in which layer/scope they walk
- * and whether the form-level linkage participates; that wiring lived copy-pasted
- * across all three.
+ * three things (same-scope field options, data-source options, deferred rule
+ * diagnostics) and differed only in which layer/scope they walk and whether the
+ * form-level linkage participates; that wiring lived copy-pasted across all
+ * three.
  *
  * `nodeId` is the node whose own value scope the sources resolve in (`null` for
  * the form-level root scope). `formLinkage` is threaded only by the form panel so
@@ -52,15 +49,13 @@ export function useLinkageEditorModel(args: {
   layer: PresentationLayer;
   nodeId: string | null;
   dataSources: FormDataSource[] | undefined;
-  variables: FormVariable[] | undefined;
   formLinkage?: FieldLinkage;
 }): LinkageEditorModel {
   const {
     dataSources,
     formLinkage,
     layer,
-    nodeId,
-    variables
+    nodeId
   } = args;
 
   const deferredLayer = useDeferredValue(layer);
@@ -82,16 +77,24 @@ export function useLinkageEditorModel(args: {
   ));
 
   const dataSourceOptions = useMemo(() => getDataSourceOptions(dataSources), [dataSources]);
-  const variableNames = useMemo(() => variables?.map(variable => variable.name) ?? [], [variables]);
+  // Bucket identities are reconciled against the previous run so an
+  // issue-carrying RuleCard's memo survives unrelated edits. The render-phase
+  // ref write is safe for the same reason as useStableOptions: stabilizing is
+  // idempotent under self-composition.
+  const issuesByRuleRef = useRef<Map<string, ValidationIssue[]>>(undefined);
   const issuesByRule = useMemo(
-    () => groupIssuesByRule(validateLinkageSchema(deferredLayer, deferredFormLinkage).issues),
+    () => stabilizeIssueBuckets(
+      issuesByRuleRef.current,
+      groupIssuesByRule(validateLinkageSchema(deferredLayer, deferredFormLinkage).issues)
+    ),
     [deferredLayer, deferredFormLinkage]
   );
+
+  issuesByRuleRef.current = issuesByRule;
 
   return {
     fieldOptions,
     dataSourceOptions,
-    variableNames,
     issuesByRule
   };
 }

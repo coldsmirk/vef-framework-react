@@ -3,7 +3,7 @@ import type { DropZoneData } from "../dnd";
 
 import { CollisionPriority } from "@vef-framework-react/core";
 
-import { dropZoneId } from "../dnd";
+import { dropZoneId, isEditorDragData } from "../dnd";
 
 /**
  * Drop-zone geometry — the single axis along which a container body varies. A
@@ -54,7 +54,29 @@ export interface InlineSlot {
   beside: DropZoneDescriptor[];
 }
 
-function besideDescriptor(anchorId: string, side: "before" | "after"): DropZoneDescriptor {
+/**
+ * Rejects the drag whose own block IS the zone's anchor: dropping a block
+ * beside itself is a structural no-op (`moveBlock` refuses an anchor inside
+ * the dragged subtree), so the zone must not light up as a valid target —
+ * a highlighted indicator that silently does nothing breaks the "highlight
+ * means droppable" contract. Palette drags carry no node id and always pass.
+ */
+function acceptsOtherBlock(anchorId: string): DropZoneAccept {
+  return source => !isEditorDragData(source.data)
+    || source.data.kind !== "block"
+    || source.data.nodeId !== anchorId;
+}
+
+/**
+ * AND-compose two acceptance tests, treating an absent one as "accept all".
+ * Lets a caller layer its own test (the table's column eligibility) over a
+ * descriptor's built-in self-anchor suppression instead of replacing it.
+ */
+export function composeAccept(a: DropZoneAccept | undefined, b: DropZoneAccept | undefined): DropZoneAccept {
+  return source => (a?.(source) ?? true) && (b?.(source) ?? true);
+}
+
+function besideDescriptor(anchorId: string, side: "before" | "after", orientation: ZoneOrientation): DropZoneDescriptor {
   const data: DropZoneData = {
     zone: "beside",
     anchorId,
@@ -65,7 +87,8 @@ function besideDescriptor(anchorId: string, side: "before" | "after"): DropZoneD
     id: dropZoneId(data),
     data,
     priority: CollisionPriority.Normal,
-    orientation: "vertical"
+    orientation,
+    accept: acceptsOtherBlock(anchorId)
   };
 }
 
@@ -73,15 +96,20 @@ function besideDescriptor(anchorId: string, side: "before" | "after"): DropZoneD
  * Describe an inline body (flex / grid) as a list of slots with their beside
  * zones. The N+1 dedup that every inline container would otherwise re-implement
  * is done once here, so a new inline container inherits it by passing its blocks.
+ *
+ * `orientation` is the axis the indicators render on and must match the body's
+ * actual layout axis: a row of slots gets `"vertical"` edge bands (the
+ * default), a column-direction flex gets `"horizontal"` ones — a left/right
+ * hairline on a top-to-bottom stack would point at the wrong insertion axis.
  */
-export function inlineSlots(blocks: Block[]): InlineSlot[] {
+export function inlineSlots(blocks: Block[], orientation: ZoneOrientation = "vertical"): InlineSlot[] {
   const lastIndex = blocks.length - 1;
 
   return blocks.map((block, index) => {
-    const beside = [besideDescriptor(block.id, "before")];
+    const beside = [besideDescriptor(block.id, "before", orientation)];
 
     if (index === lastIndex) {
-      beside.push(besideDescriptor(block.id, "after"));
+      beside.push(besideDescriptor(block.id, "after", orientation));
     }
 
     return {
@@ -108,6 +136,7 @@ export function stackGapDescriptor(anchorId: string): DropZoneDescriptor {
     id: dropZoneId(data),
     data,
     priority: CollisionPriority.Low,
-    orientation: "horizontal"
+    orientation: "horizontal",
+    accept: acceptsOtherBlock(anchorId)
   };
 }

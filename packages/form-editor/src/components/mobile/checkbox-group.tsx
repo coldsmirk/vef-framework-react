@@ -8,6 +8,10 @@ import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
 import { MobileOptionGroup } from "./option-group";
 
+// Identity-stable fallback so a missing value doesn't hand Checkbox.Group a
+// fresh array every render (the field lives inside memoized canvas rows).
+const EMPTY_VALUE: Array<string | number> = [];
+
 /**
  * Mobile counterpart of `checkbox-group-field`. Mirrors
  * `FieldComponentProps<CheckboxGroupField, Array<string | number>>` — the same
@@ -43,7 +47,7 @@ export const MobileCheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField
     >
       <Checkbox.Group
         disabled={disabled}
-        value={Array.isArray(value) ? value : []}
+        value={Array.isArray(value) ? value : EMPTY_VALUE}
         onChange={next => onChange(next)}
       >
         <MobileOptionGroup direction={field.direction} error={error} isEmpty={options.length === 0} loading={loading}>

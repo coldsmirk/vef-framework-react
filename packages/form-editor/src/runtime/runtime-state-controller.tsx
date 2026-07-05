@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { ExpressionContext, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EvaluationContext, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { EffectSinks } from "./effects";
 import type { RuntimeForm, RuntimeFormValues, RuntimeStateMap } from "./types";
 
@@ -19,7 +19,7 @@ import { stabilizeStateMap } from "./stabilize-state-map";
 interface LinkageScopeProps {
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   prefix: string;
   schema: RuntimeSchema;
@@ -38,7 +38,7 @@ interface LinkageScopeProps {
 function LinkageScope({
   children,
   evaluators,
-  expressionContext,
+  evaluationContext,
   form,
   prefix,
   schema,
@@ -57,7 +57,7 @@ function LinkageScope({
   // self-consistent. KEEP the render path side-effect-free — the only write
   // (`form.setFieldValue`) lives in the effect below; never add logging,
   // counters, or external writes here, or that safety breaks.
-  const next = evaluateRuntimeStates(schema, values, { evaluators, expressionContext });
+  const next = evaluateRuntimeStates(schema, values, { evaluators, evaluationContext });
   const stateMap = stabilizeStateMap(prevRef.current, next);
   prevRef.current = stateMap;
 
@@ -78,7 +78,7 @@ function LinkageScope({
   // published to descendant fields. Same scope (root / row), same `values`.
   const runEffects = useScopeEffects({
     evaluators,
-    expressionContext,
+    evaluationContext,
     form,
     prefix,
     schema,
@@ -111,14 +111,14 @@ function LinkageScope({
 export function RuntimeStateController({
   children,
   evaluators,
-  expressionContext,
+  evaluationContext,
   form,
   schema,
   sinks
 }: {
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   schema: RuntimeSchema;
   sinks: EffectSinks;
@@ -127,8 +127,8 @@ export function RuntimeStateController({
 
   return (
     <LinkageScope
+      evaluationContext={evaluationContext}
       evaluators={evaluators}
-      expressionContext={expressionContext}
       form={form}
       prefix=""
       schema={schema}
@@ -150,7 +150,7 @@ export function RuntimeStateController({
 export function SubformRowController({
   children,
   evaluators,
-  expressionContext,
+  evaluationContext,
   form,
   prefix,
   sinks,
@@ -158,7 +158,7 @@ export function SubformRowController({
 }: {
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   prefix: string;
   sinks: EffectSinks;
@@ -172,8 +172,8 @@ export function SubformRowController({
 
   return (
     <LinkageScope
+      evaluationContext={evaluationContext}
       evaluators={evaluators}
-      expressionContext={expressionContext}
       form={form}
       prefix={prefix}
       schema={templateSchema}

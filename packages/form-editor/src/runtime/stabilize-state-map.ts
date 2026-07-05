@@ -26,11 +26,12 @@ export function stabilizeStateMap(
 
   for (const id of nextKeys) {
     const nextEntry = next[id];
-    const prevEntry = prev[id];
 
     if (nextEntry === undefined) {
       continue;
     }
+
+    const prevEntry = prev[id];
 
     if (prevEntry !== undefined && isDeepEqual(prevEntry, nextEntry)) {
       // Preserve identity so the consumer's Object.is selector bails.

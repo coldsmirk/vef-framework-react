@@ -2,20 +2,12 @@ import type { FC } from "react";
 
 import type { FieldComponentProps, NumberField } from "../../types";
 
-import { css } from "@emotion/react";
-import { globalCssVars } from "@vef-framework-react/components";
 import { isNullish } from "@vef-framework-react/shared";
 import Input from "antd-mobile/es/components/input";
 import { useEffect, useState } from "react";
 
 import { FieldShell } from "../../render/parts/field-shell";
-import { InputCell } from "./input-cell";
-
-const affixCss = css({
-  flexShrink: 0,
-  alignSelf: "center",
-  color: globalCssVars.colorTextTertiary
-});
+import { InputCell, inputCellAffixCss } from "./input-cell";
 
 /**
  * Parse a raw input string to the field's committed numeric value, the single
@@ -38,9 +30,18 @@ function parseDraft(
     return undefined;
   }
 
-  const clamped = Math.min(Math.max(next, min ?? Number.NEGATIVE_INFINITY), max ?? Number.POSITIVE_INFINITY);
+  const clamped = Math.min(Math.max(next, min ?? -Infinity), max ?? Infinity);
 
-  return isNullish(precision) ? clamped : Number(clamped.toFixed(precision));
+  if (isNullish(precision)) {
+    return clamped;
+  }
+
+  // `toFixed` throws a RangeError outside 0..100; the property entry clamps
+  // new writes, but a hand-authored schema can still carry an out-of-range
+  // precision — clamp here so a bad value degrades instead of crashing render.
+  const digits = Math.min(100, Math.max(0, Math.floor(precision)));
+
+  return Number(clamped.toFixed(digits));
 }
 
 /**
@@ -112,7 +113,7 @@ export const MobileNumber: FC<FieldComponentProps<NumberField, number | undefine
       required={required ?? field.validate?.required}
     >
       <InputCell disabled={disabled} hasError={(errors?.length ?? 0) > 0}>
-        {field.prefix ? <span css={affixCss}>{field.prefix}</span> : null}
+        {field.prefix ? <span css={inputCellAffixCss}>{field.prefix}</span> : null}
 
         <Input
           disabled={disabled}
@@ -127,7 +128,7 @@ export const MobileNumber: FC<FieldComponentProps<NumberField, number | undefine
           onChange={handleChange}
         />
 
-        {field.suffix ? <span css={affixCss}>{field.suffix}</span> : null}
+        {field.suffix ? <span css={inputCellAffixCss}>{field.suffix}</span> : null}
       </InputCell>
     </FieldShell>
   );

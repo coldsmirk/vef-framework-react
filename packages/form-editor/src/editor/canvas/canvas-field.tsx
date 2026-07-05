@@ -315,7 +315,18 @@ export function CanvasField({
     >
       <div css={actionsCss} onClick={stop} onMouseDown={stop}>
         <div css={actionsPillCss}>
-          <span ref={handleRef} aria-label="拖动排序" css={gripCss} title="拖动排序">
+          {/* Focusable so dnd-kit's KeyboardSensor can work: it binds keydown to
+              this handle element, and a keydown only reaches an element that can
+              hold focus — without tabIndex the documented Enter-to-pick-up /
+              arrow-to-move flow can never start. */}
+          <span
+            ref={handleRef}
+            aria-label="拖动排序"
+            css={gripCss}
+            role="button"
+            tabIndex={0}
+            title="拖动排序"
+          >
             <EditorIcon name="grip-vertical" />
           </span>
 

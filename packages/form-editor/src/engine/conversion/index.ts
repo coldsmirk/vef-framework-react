@@ -184,7 +184,7 @@ export function convertPresentation(
     // presentations never share node ids. The form-level rhythm preset (`gap`)
     // carries over: the reflow restructures blocks, not the document rhythm.
     layer: {
-      ...pc.gap === undefined ? {} : { gap: pc.gap },
+      ...pc.gap !== undefined && { gap: pc.gap },
       children: converted.map(block => freshenBlock(block))
     },
     report

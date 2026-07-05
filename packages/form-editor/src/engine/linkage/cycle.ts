@@ -54,7 +54,9 @@ export function findLinkageCycles(edges: Map<string, Set<string>>): string[] {
 
     visiting.add(key);
 
-    for (const target of edges.get(key) ?? []) {
+    const targets = edges.get(key) ?? [];
+
+    for (const target of targets) {
       visit(target, [...path, target]);
     }
 

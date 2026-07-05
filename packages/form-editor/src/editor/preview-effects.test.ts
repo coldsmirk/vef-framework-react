@@ -22,7 +22,7 @@ function installVefMessage(): MessageMock {
     error: vi.fn()
   };
 
-  (globalThis as { $vef?: unknown }).$vef = { message };
+  vi.stubGlobal("$vef", { message });
 
   return message;
 }
@@ -36,7 +36,7 @@ function contextResolving(resolved?: unknown): EffectDispatchContext {
 
 describe("previewDispatchEffect", () => {
   afterEach(() => {
-    delete (globalThis as { $vef?: unknown }).$vef;
+    vi.unstubAllGlobals();
   });
 
   describe("alert", () => {

@@ -40,7 +40,6 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   const storeApi = useFormEditorStoreApi();
   const layer = useCurrentLayer();
   const dataSources = useFormEditorStore(state => state.schema.dataSources);
-  const variables = useFormEditorStore(state => state.schema.variables);
   const linkage = readLinkage(node.linkage);
   const rules = linkage.rules ?? [];
 
@@ -51,13 +50,11 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   const {
     dataSourceOptions,
     fieldOptions,
-    issuesByRule,
-    variableNames
+    issuesByRule
   } = useLinkageEditorModel({
     layer,
     nodeId: node.id,
-    dataSources,
-    variables
+    dataSources
   });
 
   const seedSourceKey = fieldOptions[0]?.value;
@@ -101,7 +98,6 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
         sourceOptions={fieldOptions}
         targetOptions={fieldOptions}
         triggerKinds={triggerKinds}
-        variableNames={variableNames}
         onChange={next => commit({ ...linkage, rules: next })}
       />
     </div>

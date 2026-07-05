@@ -1,7 +1,6 @@
-import type { FieldOption, FormDataSource, FormField, FormSchema, PresentationLayer } from "../../types";
+import type { FieldOption, FormDataSource, FormField, FormSchema } from "../../types";
 
-import { isKeyedField } from "../keys";
-import { isRootScope, walkFields } from "./walk";
+import { walkUniqueRootKeyedFields } from "../keys";
 
 /**
  * Coarse field kind understood by the approval flow editor and the Go backend
@@ -82,34 +81,18 @@ function staticOptions(field: FormField, dataSources: Map<string, FormDataSource
  */
 export function toFormFieldDefinitions(schema: FormSchema): FormFieldDefinition[] {
   const definitions: FormFieldDefinition[] = [];
-  const seen = new Set<string>();
   const dataSources = new Map((schema.dataSources ?? []).map(source => [source.id, source]));
 
-  const collect = (layer: PresentationLayer | undefined): void => {
-    if (layer === undefined) {
-      return;
-    }
+  walkUniqueRootKeyedFields(schema, field => {
+    const options = staticOptions(field, dataSources);
 
-    walkFields(layer, (field, scope) => {
-      if (!isRootScope(scope) || !isKeyedField(field) || seen.has(field.key)) {
-        return;
-      }
-
-      seen.add(field.key);
-
-      const options = staticOptions(field, dataSources);
-
-      definitions.push({
-        key: field.key,
-        kind: fieldKind(field.type),
-        label: field.label ?? field.key,
-        ...options ? { options } : {}
-      });
+    definitions.push({
+      key: field.key,
+      kind: fieldKind(field.type),
+      label: field.label ?? field.key,
+      ...options && { options }
     });
-  };
-
-  collect(schema.presentations.pc);
-  collect(schema.presentations.mobile);
+  });
 
   return definitions;
 }

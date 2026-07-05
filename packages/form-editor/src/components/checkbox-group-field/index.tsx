@@ -16,6 +16,16 @@ import { OptionsStatus } from "../../render/parts/options-status";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { optionDirectionEntry, requiredEntry } from "../field-entries";
 
+// Hoisted so re-renders hand Checkbox.Group identity-stable props (the field
+// lives inside memoized canvas rows; see mobile/option-group.tsx for the same
+// treatment of its direction styles).
+const VERTICAL_GROUP_STYLE = {
+  display: "flex",
+  flexDirection: "column",
+  rowGap: 8
+} as const;
+const EMPTY_VALUE: Array<string | number> = [];
+
 const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<string | number>>> = ({
   disabled,
   domId,
@@ -49,14 +59,8 @@ const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<strin
               <Checkbox.Group
                 disabled={disabled}
                 options={options}
-                value={Array.isArray(value) ? value : []}
-                style={field.direction === "vertical"
-                  ? {
-                      display: "flex",
-                      flexDirection: "column",
-                      rowGap: 8
-                    }
-                  : undefined}
+                style={field.direction === "vertical" ? VERTICAL_GROUP_STYLE : undefined}
+                value={Array.isArray(value) ? value : EMPTY_VALUE}
                 onChange={next => onChange(next)}
               />
             </Spin>

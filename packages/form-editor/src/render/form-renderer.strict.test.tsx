@@ -4,17 +4,11 @@ import type { Block, FormSchema, TextfieldField } from "../types";
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { isEngineReady, loadEngine } from "@vef-framework-react/expression";
 import { StrictMode } from "react";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormRenderer } from "./form-renderer";
-
-vi.mock("@vef-framework-react/expression", async () => {
-  const { mockExpressionPackage } = await import("../test-expression-engine");
-  return mockExpressionPackage();
-});
 
 /**
  * StrictMode smoke coverage. The runtime leans on render-phase ref writes
@@ -53,12 +47,6 @@ function renderStrict(ui: ReactNode): void {
 }
 
 describe("FormRenderer under StrictMode", () => {
-  beforeEach(() => {
-    vi.mocked(isEngineReady).mockClear();
-    vi.mocked(isEngineReady).mockReturnValue(true);
-    vi.mocked(loadEngine).mockClear();
-  });
-
   it("does not fire a condition effect already true on mount", () => {
     const dispatchEffect = vi.fn();
     const schema = stack(
@@ -116,67 +104,6 @@ describe("FormRenderer under StrictMode", () => {
     renderStrict(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
 
     expect(dispatchEffect).not.toHaveBeenCalled();
-  });
-
-  it("does not load the default expression engine when condition expressions are host-evaluated", () => {
-    const dispatchEffect = vi.fn();
-    const schema = stack(
-      field("watcher", {
-        linkage: {
-          rules: [
-            {
-              id: "R1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "true" } },
-              actions: [{ type: "alert", message: { kind: "literal", value: "hi" } }]
-            }
-          ]
-        }
-      })
-    );
-
-    renderStrict(
-      <FormRenderer
-        schema={schema}
-        evaluators={{
-          dispatchEffect,
-          evaluateExpression: () => true
-        }}
-      />
-    );
-
-    expect(isEngineReady).not.toHaveBeenCalled();
-    expect(loadEngine).not.toHaveBeenCalled();
-  });
-
-  it("loads the default expression engine when a value expression has no host evaluator", () => {
-    vi.mocked(isEngineReady).mockReturnValue(false);
-
-    const dispatchEffect = vi.fn();
-    const schema = stack(
-      field("watcher", {
-        linkage: {
-          rules: [
-            {
-              id: "R1",
-              trigger: { kind: "load" },
-              actions: [{ type: "alert", message: { kind: "expression", source: "$form.name" } }]
-            }
-          ]
-        }
-      })
-    );
-
-    renderStrict(
-      <FormRenderer
-        schema={schema}
-        evaluators={{
-          dispatchEffect,
-          evaluateExpression: () => true
-        }}
-      />
-    );
-
-    expect(loadEngine).toHaveBeenCalled();
   });
 
   it("fires the load lifecycle effect exactly once", async () => {

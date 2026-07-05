@@ -92,7 +92,7 @@ export function minValueEntry<F extends ValidatableField>(): PropertyEntry {
     id: "validateMin",
     label: "校验下限",
     type: "number",
-    description: "提交时校验,低于此值报错",
+    description: "提交时校验，低于此值报错",
     read: field => field.validate?.min,
     write: (field, min) => { return { ...field, validate: { ...field.validate, min } }; }
   });
@@ -107,7 +107,7 @@ export function maxValueEntry<F extends ValidatableField>(): PropertyEntry {
     id: "validateMax",
     label: "校验上限",
     type: "number",
-    description: "提交时校验,高于此值报错",
+    description: "提交时校验，高于此值报错",
     read: field => field.validate?.max,
     write: (field, max) => { return { ...field, validate: { ...field.validate, max } }; }
   });
@@ -190,7 +190,7 @@ export function inputMaxLengthEntry<F extends MaxLengthInputField>(): PropertyEn
     id: "inputMaxLength",
     label: "最大输入长度",
     type: "number",
-    description: "输入时硬上限,区别于提交校验规则",
+    description: "输入时硬上限，区别于提交校验规则",
     read: field => field.maxLength,
     write: (field, maxLength) => { return { ...field, maxLength }; }
   });
@@ -231,7 +231,7 @@ export function columnTypeEntry<F extends ColumnTypedField>(options: PropertyEnt
     id: "columnType",
     label: "数据库列类型",
     type: "select",
-    description: "table 存储模式下该字段的列类型;留空按控件自动推断",
+    description: "table 存储模式下该字段的列类型；留空按控件自动推断",
     options: [{ value: "", label: "自动(按控件推断)" }, ...options],
     read: field => field.columnType ?? "",
     write: (field, value) => { return { ...field, columnType: value === "" ? undefined : (value as ColumnDataType) }; }

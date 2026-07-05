@@ -6,6 +6,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import { numberFieldDefinition } from "./index";
 
+function getNumberComponent(): NonNullable<typeof numberFieldDefinition.Component> {
+  const { Component } = numberFieldDefinition;
+
+  if (!Component) {
+    throw new Error("number field is missing a Component");
+  }
+
+  return Component;
+}
+
 describe("number field", () => {
   it("defines a keyed numeric field with serializable defaults", () => {
     expect(numberFieldDefinition.config).toMatchObject({
@@ -17,17 +27,13 @@ describe("number field", () => {
   });
 
   it("renders the label and a numeric input", () => {
-    const { Component } = numberFieldDefinition;
+    const Component = getNumberComponent();
     const field: NumberField = {
       id: "Field_n",
       type: "number",
       key: "n",
       label: "数量"
     };
-
-    if (!Component) {
-      throw new Error("number field is missing a Component");
-    }
 
     render(<Component domId="field-n" field={field} value={undefined} onChange={vi.fn()} />);
 
@@ -37,17 +43,13 @@ describe("number field", () => {
   it("commits undefined when the value is cleared", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const { Component } = numberFieldDefinition;
+    const Component = getNumberComponent();
     const field: NumberField = {
       id: "Field_n",
       type: "number",
       key: "n",
       label: "数量"
     };
-
-    if (!Component) {
-      throw new Error("number field is missing a Component");
-    }
 
     render(<Component domId="field-n" field={field} value={42} onChange={onChange} />);
 
@@ -59,7 +61,7 @@ describe("number field", () => {
   it("rounds the committed value to the configured precision", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const { Component } = numberFieldDefinition;
+    const Component = getNumberComponent();
     const field: NumberField = {
       id: "Field_n",
       type: "number",
@@ -67,10 +69,6 @@ describe("number field", () => {
       label: "数量",
       precision: 2
     };
-
-    if (!Component) {
-      throw new Error("number field is missing a Component");
-    }
 
     render(
       <>
@@ -87,7 +85,7 @@ describe("number field", () => {
   });
 
   it("renders the prefix and suffix affixes", () => {
-    const { Component } = numberFieldDefinition;
+    const Component = getNumberComponent();
     const field: NumberField = {
       id: "Field_n",
       type: "number",
@@ -96,10 +94,6 @@ describe("number field", () => {
       prefix: "¥",
       suffix: "元"
     };
-
-    if (!Component) {
-      throw new Error("number field is missing a Component");
-    }
 
     render(<Component domId="field-n" field={field} value={undefined} onChange={vi.fn()} />);
 

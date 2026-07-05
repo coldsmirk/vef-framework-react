@@ -1,6 +1,6 @@
 import type {
   Block,
-  ExpressionContext,
+  EvaluationContext,
   KeyedFormField,
   LinkageActionValue,
   LinkageCondition,
@@ -13,6 +13,7 @@ import type {
 import { exhaustive } from "../assert-never";
 import { isKeyedField } from "../keys";
 import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
+import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
 import { matchLeaf } from "./operators";
 import { isStateAction } from "./taxonomy";
@@ -46,7 +47,7 @@ export interface EvaluateLinkageOptions {
    * scripts. Omitted at design time; the runtime composes it from the form's
    * variables and the host context.
    */
-  expressionContext?: ExpressionContext;
+  evaluationContext?: EvaluationContext;
 }
 
 /**
@@ -65,14 +66,26 @@ export function evaluateLinkage(
   values: Record<string, unknown>,
   options: EvaluateLinkageOptions = {}
 ): RuntimeFieldState {
+  return evaluateLinkageResolved(node, values, resolveLinkageEvaluators(options.evaluators), options.evaluationContext);
+}
+
+/**
+ * The body of {@link evaluateLinkage}, taking an already-resolved evaluator
+ * set. `evaluateRuntimeStates` calls this directly so the per-keystroke pass
+ * resolves the evaluators ONCE, not once per linkage-bearing field.
+ */
+function evaluateLinkageResolved(
+  node: Block,
+  values: Record<string, unknown>,
+  evaluators: Required<LinkageEvaluators>,
+  evaluationContext: EvaluationContext | undefined
+): RuntimeFieldState {
   const { linkage } = node;
 
   if (!linkage) {
     return emptyRuntimeState;
   }
 
-  const evaluators = resolveLinkageEvaluators(options.evaluators);
-  const { expressionContext } = options;
   const state: RuntimeFieldState = {
     ...emptyRuntimeState,
     hidden: linkage.defaults?.hidden === true,
@@ -80,24 +93,43 @@ export function evaluateLinkage(
     required: linkage.defaults?.required === true
   };
 
-  for (const rule of linkage.rules ?? []) {
-    // Edge triggers (field events, form lifecycle) drive the effect lane and
-    // never derive state, so only condition triggers are folded here.
-    if (rule.trigger.kind !== "condition") {
+  const linkageRules = linkage.rules ?? [];
+
+  for (const rule of linkageRules) {
+    // Shape guard first: the render path evaluates host-supplied schemas that
+    // may never have passed validateLinkageSchema, and a malformed rule must
+    // degrade to "skipped", never crash. Then: edge triggers (field events,
+    // form lifecycle) drive the effect lane and never derive state, so only
+    // condition triggers are folded here.
+    if (!isRecord(rule) || !isRecord(rule.trigger) || rule.trigger.kind !== "condition") {
       continue;
     }
 
-    if (!matchCondition(rule.trigger.condition, values, evaluators, expressionContext)) {
+    if (!matchCondition(rule.trigger.condition, values, evaluators, evaluationContext)) {
+      continue;
+    }
+
+    if (!Array.isArray(rule.actions)) {
       continue;
     }
 
     // Apply this rule's state actions in order; effect actions are skipped so
     // the fold stays pure and idempotent (it re-runs on every value change).
     for (const action of rule.actions) {
-      if (isStateAction(action)) {
-        applyAction(state, action, values, evaluators, expressionContext);
+      if (isRecord(action) && isStateAction(action)) {
+        applyAction(state, action, values, evaluators, evaluationContext);
       }
     }
+  }
+
+  // Only a keyed leaf can receive an assignment: `applyScopedAssignments`
+  // walks leaf fields only, so an `assigned` computed for a container —
+  // reachable via a script's `value` patch, which no static validator can see
+  // into — would be silently dropped downstream. Enforce the invariant here
+  // so "assigned ⇒ keyed leaf" holds at the evaluator level.
+  if (state.assigned && !(isLeafField(node) && isKeyedField(node))) {
+    state.assigned = false;
+    state.assignedValue = undefined;
   }
 
   return state;
@@ -125,7 +157,7 @@ export function evaluateRuntimeStates(
       return;
     }
 
-    states[node.id] = evaluateLinkage(node, values, { evaluators, expressionContext: options.expressionContext });
+    states[node.id] = evaluateLinkageResolved(node, values, evaluators, options.evaluationContext);
   });
 
   return states;
@@ -136,19 +168,33 @@ export function evaluateRuntimeStates(
  * appropriately so a large tree never evaluates more leaves than needed.
  * Exported so the effect lane can re-evaluate a rule's trigger condition for
  * rising-edge detection without duplicating the recursion.
+ *
+ * Structurally defensive: a missing / non-object condition, a group without a
+ * `children` array, or an out-of-contract `kind` degrades to "no match" — the
+ * render path may evaluate a host-supplied schema that never passed
+ * `validateLinkageSchema`, and `matchLeaf`'s "never crash the renderer"
+ * contract must hold for shape, not just for values.
  */
 export function matchCondition(
   condition: LinkageCondition,
   values: Record<string, unknown>,
   evaluators: Required<LinkageEvaluators>,
-  context?: ExpressionContext
+  context?: EvaluationContext
 ): boolean {
+  if (!isRecord(condition)) {
+    return false;
+  }
+
   switch (condition.kind) {
     case "leaf": {
-      return matchLeaf(condition, values);
+      return matchLeaf(condition, values, context);
     }
 
     case "group": {
+      if (!Array.isArray(condition.children)) {
+        return false;
+      }
+
       return condition.logic === "all"
         ? condition.children.every(child => matchCondition(child, values, evaluators, context))
         : condition.children.some(child => matchCondition(child, values, evaluators, context));
@@ -156,6 +202,11 @@ export function matchCondition(
 
     case "expression": {
       return evaluators.evaluateExpression(condition.source, values, context);
+    }
+
+    default: {
+      exhaustive(condition);
+      return false;
     }
   }
 }
@@ -170,7 +221,7 @@ function applyAction(
   action: StateAction,
   values: Record<string, unknown>,
   evaluators: Required<LinkageEvaluators>,
-  context: ExpressionContext | undefined
+  context: EvaluationContext | undefined
 ): void {
   switch (action.type) {
     case "show": {
@@ -212,7 +263,11 @@ function applyAction(
     case "script": {
       const patch = evaluators.evaluateScriptAction(action.source, values, context);
 
-      if (!patch) {
+      // Scripts are arbitrary JS: a truthy non-object return (`return true;`,
+      // a plausible slip for `return { hidden: true }`) must degrade to "no
+      // patch" like any other malformed result — the `in` operator below
+      // throws on primitives, and a broken script must not crash the form.
+      if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
         return;
       }
 
@@ -254,7 +309,7 @@ export function resolveActionValue(
   actionValue: LinkageActionValue,
   values: Record<string, unknown>,
   evaluators: Required<LinkageEvaluators>,
-  context?: ExpressionContext
+  context?: EvaluationContext
 ): unknown {
   return actionValue.kind === "literal"
     ? actionValue.value
@@ -264,12 +319,13 @@ export function resolveActionValue(
 /**
  * Build the `$vars` map from a schema's form-global variable declarations,
  * keyed by variable name with each `defaultValue`. The runtime merges this with
- * any host-supplied overrides to form the expression context's `variables`.
+ * any host-supplied overrides to form the evaluation context's `variables`.
  */
-export function deriveExpressionVariables(schema: RuntimeSchema): Record<string, unknown> {
+export function deriveEvaluationVariables(schema: RuntimeSchema): Record<string, unknown> {
   const variables: Record<string, unknown> = {};
+  const schemaVariables = schema.variables ?? [];
 
-  for (const variable of schema.variables ?? []) {
+  for (const variable of schemaVariables) {
     if (variable.name.length > 0) {
       variables[variable.name] = variable.defaultValue;
     }
@@ -309,7 +365,9 @@ export function deriveDefaultValues(
             // Fresh seed per row: nested subform arrays must not share refs.
             return {
               ...deriveDefaultValues({ id: node.id, children: node.template }),
-              ...row !== null && typeof row === "object" ? row as Record<string, unknown> : {}
+              // isRecord (not a bare typeof check): an array row must fall
+              // back to the blank seed, not spread its indices into the record.
+              ...isRecord(row) && row
             };
           })
         : seedSubformRows(node);

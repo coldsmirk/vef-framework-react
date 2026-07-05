@@ -56,6 +56,16 @@ export const inputCellDisabledCss = css({
   background: globalCssVars.colorBgContainerDisabled
 });
 
+/**
+ * A prefix / suffix adornment inside the cell (a unit label, a leading icon).
+ * Shared by the free-text fields so their affixes align identically.
+ */
+export const inputCellAffixCss = css({
+  flexShrink: 0,
+  alignSelf: "center",
+  color: globalCssVars.colorTextTertiary
+});
+
 // A multi-line control needs vertical padding instead of the single-line
 // cell's centering height.
 const inputCellMultilineCss = css({

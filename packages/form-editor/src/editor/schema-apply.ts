@@ -3,6 +3,7 @@ import type { ValidationIssue } from "../engine/validation";
 import type { FormEditorStoreApi } from "../store/form-store";
 
 import { validateSchema } from "../engine/schema/validate";
+import { formatIssueLine } from "../engine/validation";
 import { notify } from "./toolbar/notify";
 
 /**
@@ -10,15 +11,6 @@ import { notify } from "./toolbar/notify";
  * at the first offenders without turning the toast into a scrollable report.
  */
 const WARNING_PREVIEW_LIMIT = 3;
-
-/**
- * One issue rendered as `path：message` (or the bare message when it has no
- * path). Shared by the warning toast and the error block, which differ only in
- * the separator they join the lines with.
- */
-function formatIssueLine(issue: ValidationIssue): string {
-  return issue.path.length > 0 ? `${issue.path}：${issue.message}` : issue.message;
-}
 
 /**
  * One-toast summary for a warning-only apply: total count plus the first few
@@ -60,7 +52,9 @@ export function applySchemaJson(args: { raw: string; registries: DeviceRegistrie
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return { ok: false, errorText: error instanceof Error ? error.message : "JSON 格式无效" };
+    // Keep the engine's message (it pinpoints line/column) behind a Chinese
+    // lead-in so the failure class is readable at a glance.
+    return { ok: false, errorText: error instanceof Error ? `JSON 解析失败：${error.message}` : "JSON 格式无效" };
   }
 
   const result = validateSchema(parsed, registries);
@@ -104,5 +98,5 @@ export function downloadSchemaJson(json: string, schemaId: string): void {
   // Defer the revoke past this task: several browsers process the programmatic
   // download asynchronously after the click handler returns, and revoking the
   // URL synchronously can abort the download for larger blobs.
-  globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -65,6 +65,7 @@ export const LINKAGE_ACTION_TYPES: readonly LinkageActionType[] = [
 ];
 
 const STATE_ACTION_SET: ReadonlySet<string> = new Set(STATE_ACTION_TYPES);
+const EFFECT_ACTION_SET: ReadonlySet<string> = new Set(EFFECT_ACTION_TYPES);
 
 /**
  * Narrows an action to the state family — folded into `RuntimeFieldState` by
@@ -76,12 +77,13 @@ export function isStateAction(action: FieldLinkageAction): action is StateAction
 
 /**
  * Narrows an action to the effect family — fired by the side-effect lane,
- * skipped by the state lane. The complement of {@link isStateAction} over the
- * closed {@link FieldLinkageAction} union, which is sound because
- * {@link STATE_ACTION_TYPE_TABLE} is compile-checked to be complete.
+ * skipped by the state lane. A positive membership test (not the negation of
+ * {@link isStateAction}): on the unvalidated render path an out-of-contract
+ * `action.type` must classify as NEITHER family, not silently become an
+ * effect.
  */
 export function isEffectAction(action: FieldLinkageAction): action is EffectAction {
-  return !STATE_ACTION_SET.has(action.type);
+  return EFFECT_ACTION_SET.has(action.type);
 }
 
 /**

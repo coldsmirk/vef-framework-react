@@ -1,16 +1,16 @@
 import type { FC, ReactElement } from "react";
 
 import type { FieldLinkageAction, LinkageActionType, LinkageActionValue, LinkageAlertLevel } from "../../../../types";
+import type { ActionValueMode } from "./mutators";
 import type { OptionItem, SourceFieldOption } from "./options";
 
 import { Button, CodeEditor, Input, Segmented, Select, Switch } from "@vef-framework-react/components";
-import { useMemo } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
 import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { coerceToString } from "../coerce";
-import { expressionAssistExtensions } from "./expression-assist";
+import { ExpressionInput, NO_COMPLETION_SETUP } from "./expression-input";
 import { createActionFor, setActionValueMode } from "./mutators";
 import { alertLevelOptions, isLinkageActionType } from "./options";
 import {
@@ -27,10 +27,10 @@ import {
   valueEditorCss
 } from "./styles";
 
-const valueModeOptions = [
+const valueModeOptions: Array<{ value: ActionValueMode; label: string }> = [
   { value: "literal", label: "字面量" },
   { value: "expression", label: "表达式" }
-] as const;
+];
 
 export interface ActionEditorProps {
   action: FieldLinkageAction;
@@ -56,11 +56,6 @@ export interface ActionEditorProps {
    * action's `retrigger` (edge vs. always) apply, so the toggle shows just here.
    */
   isConditionTrigger: boolean;
-  /**
-   * Declared form-variable names, feeding the expression editors' completion
-   * and unknown-key lint (same assist the condition editor gets).
-   */
-  variableNames?: string[];
   onChange: (next: FieldLinkageAction) => void;
   onRemove: () => void;
 }
@@ -78,96 +73,86 @@ export const ActionEditor: FC<ActionEditorProps> = ({
   dataSourceOptions,
   isConditionTrigger,
   targetOptions,
-  variableNames,
   onChange,
   onRemove
-}) => {
-  // The same scope-aware completion + unknown-key lint the condition editor
-  // gets — script sources and expression values reference the identical scope.
-  const assistExtensions = useMemo(
-    () => expressionAssistExtensions({ fields: targetOptions, variables: variableNames ?? [] }),
-    [targetOptions, variableNames]
-  );
+}) => (
+  <div css={actionCardCss}>
+    <div css={actionHeaderCss}>
+      <Select
+        options={availableActions}
+        style={selectStyle}
+        value={action.type}
+        onChange={value => {
+          if (!isLinkageActionType(value)) {
+            return;
+          }
 
-  return (
-    <div css={actionCardCss}>
-      <div css={actionHeaderCss}>
-        <Select
-          options={availableActions}
-          style={selectStyle}
-          value={action.type}
-          onChange={value => {
-            if (isLinkageActionType(value)) {
-            // Swapping the type resets the payload to that type's defaults but
-            // keeps the action's client-stable id, so the list key (and thus
-            // this editor's DOM) survives the switch.
-              const next = createActionFor(value);
-              onChange(action.id === undefined ? next : { ...next, id: action.id });
-            }
-          }}
-        />
-
-        {canRemove
-          ? (
-              <Button
-                aria-label="删除动作"
-                css={actionDeleteCss}
-                icon={<EditorIcon name="x" />}
-                size="small"
-                type="text"
-                onClick={onRemove}
-              />
-            )
-          : null}
-      </div>
-
-      <ActionBody
-        action={action}
-        assistExtensions={assistExtensions}
-        dataSourceOptions={dataSourceOptions}
-        targetOptions={targetOptions}
-        onChange={onChange}
+          // Swapping the type resets the payload to that type's defaults but
+          // keeps the action's client-stable id, so the list key (and thus
+          // this editor's DOM) survives the switch.
+          const next = createActionFor(value);
+          onChange(action.id === undefined ? next : { ...next, id: action.id });
+        }}
       />
 
-      {isConditionTrigger && isEffectAction(action) && (
-        <div css={actionRetriggerCss}>
-          {/* Title + persistent hint, mirroring the DefaultsPanel toggle rows,
+      {canRemove
+        ? (
+            <Button
+              aria-label="删除动作"
+              css={actionDeleteCss}
+              icon={<EditorIcon name="x" />}
+              size="small"
+              type="text"
+              onClick={onRemove}
+            />
+          )
+        : null}
+    </div>
+
+    <ActionBody
+      action={action}
+      dataSourceOptions={dataSourceOptions}
+      targetOptions={targetOptions}
+      onChange={onChange}
+    />
+
+    {isConditionTrigger && isEffectAction(action) && (
+      <div css={actionRetriggerCss}>
+        {/* Title + persistent hint, mirroring the DefaultsPanel toggle rows,
               so the consequential edge-vs-always behavior is explained inline
               instead of hidden in a native (touch-invisible) tooltip. */}
-          <div css={defaultTextCss}>
-            <span css={actionRetriggerLabelCss}>重复触发</span>
+        <div css={defaultTextCss}>
+          <span css={actionRetriggerLabelCss}>重复触发</span>
 
-            <span css={defaultHintCss}>
-              条件持续满足期间，依赖字段每次变化都重新触发；关闭（默认）则仅在条件首次满足时触发一次。
-            </span>
-          </div>
-
-          <Switch
-            aria-label="重复触发"
-            checked={action.retrigger === "always"}
-            size="small"
-            onChange={checked => {
-              if (checked) {
-                onChange({ ...action, retrigger: "always" });
-                return;
-              }
-
-              // Turning the toggle off removes the key entirely (the default is
-              // "edge") so the persisted action stays minimal.
-              const next = { ...action };
-              delete next.retrigger;
-              onChange(next);
-            }}
-          />
+          <span css={defaultHintCss}>
+            条件持续满足期间，依赖字段每次变化都重新触发；关闭（默认）则仅在条件首次满足时触发一次。
+          </span>
         </div>
-      )}
-    </div>
-  );
-};
+
+        <Switch
+          aria-label="重复触发"
+          checked={action.retrigger === "always"}
+          size="small"
+          onChange={checked => {
+            if (checked) {
+              onChange({ ...action, retrigger: "always" });
+              return;
+            }
+
+            // Turning the toggle off removes the key entirely (the default is
+            // "edge") so the persisted action stays minimal.
+            const next = { ...action };
+            delete next.retrigger;
+            onChange(next);
+          }}
+        />
+      </div>
+    )}
+  </div>
+);
 
 interface ActionBodyProps {
   action: FieldLinkageAction;
-  assistExtensions: ReturnType<typeof expressionAssistExtensions>;
   dataSourceOptions: SourceFieldOption[];
   targetOptions: SourceFieldOption[];
   onChange: (next: FieldLinkageAction) => void;
@@ -179,7 +164,6 @@ interface ActionBodyProps {
  */
 function ActionBody({
   action,
-  assistExtensions,
   dataSourceOptions,
   targetOptions,
   onChange
@@ -188,7 +172,6 @@ function ActionBody({
     case "assign": {
       return (
         <ActionValueEditor
-          assistExtensions={assistExtensions}
           expressionPlaceholder="field.A + field.B"
           literalPlaceholder="赋值内容"
           value={action.value}
@@ -209,7 +192,6 @@ function ActionBody({
           />
 
           <ActionValueEditor
-            assistExtensions={assistExtensions}
             expressionPlaceholder="field.A"
             literalPlaceholder="写入的值"
             value={action.value}
@@ -229,7 +211,6 @@ function ActionBody({
           />
 
           <ActionValueEditor
-            assistExtensions={assistExtensions}
             expressionPlaceholder="$vars.count + 1"
             literalPlaceholder="写入的值"
             value={action.value}
@@ -263,7 +244,6 @@ function ActionBody({
           />
 
           <ActionValueEditor
-            assistExtensions={assistExtensions}
             expressionPlaceholder="field.name + ' 已保存'"
             literalPlaceholder="提示内容"
             value={action.message}
@@ -276,7 +256,6 @@ function ActionBody({
     case "navigate": {
       return (
         <ActionValueEditor
-          assistExtensions={assistExtensions}
           expressionPlaceholder="'/orders/' + field.id"
           literalPlaceholder="目标路径，如 /orders"
           value={action.to}
@@ -308,7 +287,7 @@ function ActionBody({
         <div css={codeEditorWrapperCss}>
           <CodeEditor
             showLineNumbers
-            extensions={assistExtensions}
+            basicSetupOptions={NO_COMPLETION_SETUP}
             language="javascript"
             minHeight={90}
             showFoldGutter={false}
@@ -331,7 +310,6 @@ return { value: field.B + field.C };'
 
 interface ActionValueEditorProps {
   value: LinkageActionValue;
-  assistExtensions: ReturnType<typeof expressionAssistExtensions>;
   literalPlaceholder?: string;
   expressionPlaceholder?: string;
   onChange: (next: LinkageActionValue) => void;
@@ -342,7 +320,6 @@ interface ActionValueEditorProps {
  * by `assign`, `set_field`, `alert`, and `navigate`.
  */
 function ActionValueEditor({
-  assistExtensions,
   expressionPlaceholder,
   literalPlaceholder,
   value,
@@ -370,13 +347,8 @@ function ActionValueEditor({
           )
         : (
             <div css={codeEditorWrapperCss}>
-              <CodeEditor
-                extensions={assistExtensions}
-                minHeight={60}
+              <ExpressionInput
                 placeholder={expressionPlaceholder}
-                showFoldGutter={false}
-                showLineNumbers={false}
-                size="small"
                 value={value.source}
                 onChange={source => onChange({ kind: "expression", source })}
               />

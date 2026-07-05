@@ -14,7 +14,7 @@ function makeSchema(linkage?: FieldLinkage): FormSchema {
   return {
     id: "Form_1",
     version: 2,
-    ...linkage ? { linkage } : {},
+    ...linkage && { linkage },
     presentations: {
       pc: {
         children: [

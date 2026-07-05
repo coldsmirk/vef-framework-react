@@ -1,3 +1,4 @@
+import type { SelectProps } from "@vef-framework-react/components";
 import type { FC } from "react";
 
 import type {
@@ -7,12 +8,13 @@ import type {
 } from "../../../../types";
 import type { SourceFieldOption } from "./options";
 
-import { Button, CodeEditor, Input, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
-import { useMemo, useState } from "react";
+import { Button, Input, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
+import { useState } from "react";
 
 import { EditorIcon } from "../../../../icons";
+import { useContextSources } from "../../../context-sources";
 import { coerceToString } from "../coerce";
-import { expressionAssistExtensions } from "./expression-assist";
+import { ExpressionInput } from "./expression-input";
 import {
   appendChild,
   conditionHasAuthoredContent,
@@ -43,11 +45,6 @@ export interface ConditionEditorProps {
   condition: LinkageCondition;
   sourceOptions: SourceFieldOption[];
   /**
-   * Declared form-variable names, feeding `$vars.` autocompletion in
-   * expression mode.
-   */
-  variableNames?: string[];
-  /**
    * The owning block's data-binding key. The expression → visual switch
    * seeds its first condition with another field when one exists — a
    * self-referencing show rule is almost always a mistake.
@@ -60,14 +57,13 @@ export interface ConditionEditorProps {
  * Top-level wrapper. The root condition is always a `group` or an
  * `expression` — a bare `leaf` is never the rule's top condition. Mode
  * switching here is a destructive replace (group ↔ expression) because
- * there is no general way to reverse-translate a free-form ZEN expression
+ * there is no general way to reverse-translate a free-form JS expression
  * back into a structured tree; a switch that would discard authored content
  * is gated behind a confirmation.
  */
 export const ConditionEditor: FC<ConditionEditorProps> = ({
   condition,
   sourceOptions,
-  variableNames,
   selfKey,
   onChange
 }) => {
@@ -78,7 +74,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
         condition={condition}
         selfKey={selfKey}
         sourceOptions={sourceOptions}
-        variableNames={variableNames}
         onChange={onChange}
       />
     );
@@ -91,7 +86,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
         condition={condition}
         depth={0}
         sourceOptions={sourceOptions}
-        variableNames={variableNames}
         onChange={onChange}
         onSwitchToExpression={() => onChange(createExpression())}
       />
@@ -109,7 +103,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
     <GroupConditionEditor
       depth={0}
       sourceOptions={sourceOptions}
-      variableNames={variableNames}
       condition={{
         kind: "group",
         logic: "all",
@@ -124,17 +117,13 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
 interface ExpressionConditionEditorProps {
   condition: Extract<LinkageCondition, { kind: "expression" }>;
   sourceOptions: SourceFieldOption[];
-  variableNames?: string[];
   selfKey?: string;
   onChange: (next: LinkageCondition) => void;
 }
 
-const NO_VARIABLES: string[] = [];
-
 const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
   condition,
   sourceOptions,
-  variableNames = NO_VARIABLES,
   selfKey,
   onChange
 }) => {
@@ -142,14 +131,6 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
   // while no keyed field exists to seed the visual builder with.
   const [noSourceNotice, setNoSourceNotice] = useState(false);
   const authored = conditionHasAuthoredContent(condition);
-
-  // Scope-aware completion (field keys, declared variables) + unknown-key
-  // lint — without these the designer types keys from memory and a typo
-  // silently never matches.
-  const assistExtensions = useMemo(
-    () => expressionAssistExtensions({ fields: sourceOptions, variables: variableNames }),
-    [sourceOptions, variableNames]
-  );
 
   const switchToVisual = (): void => {
     // Prefer a field other than the rule's own: a self-referencing show rule
@@ -174,7 +155,7 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
   return (
     <div css={conditionGroupCss}>
       <div css={conditionGroupHeaderCss}>
-        <span css={expressionHeaderLabelCss}>ZEN 表达式（返回布尔）</span>
+        <span css={expressionHeaderLabelCss}>JS 表达式（返回布尔）</span>
 
         {authored && sourceOptions.length > 0
           ? (
@@ -191,13 +172,8 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
       </div>
 
       <div css={codeEditorWrapperCss}>
-        <CodeEditor
-          extensions={assistExtensions}
-          minHeight={60}
-          placeholder="field.A == 'foo' and field.B > 10"
-          showFoldGutter={false}
-          showLineNumbers={false}
-          size="small"
+        <ExpressionInput
+          placeholder="field.A === 'foo' && field.B > 10"
           value={condition.source}
           onChange={source => onChange({ ...condition, source })}
         />
@@ -214,12 +190,6 @@ interface GroupConditionEditorProps {
   condition: LinkageConditionGroup;
   depth: number;
   sourceOptions: SourceFieldOption[];
-  /**
-   * Declared form-variable names, feeding `$vars.` completion and unknown-key
-   * lint for a nested `expression` leaf (the same assist the top-level
-   * expression editor gets).
-   */
-  variableNames?: string[];
   /**
    * Switch the entire root condition into expression mode. Only the depth-0
    * group exposes this — nested groups do not (mode-switching mid-tree
@@ -240,7 +210,6 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
   condition,
   depth,
   sourceOptions,
-  variableNames = NO_VARIABLES,
   onChange,
   onRemoveSelf,
   onSwitchToExpression
@@ -248,14 +217,6 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
   const canNest = depth < MAX_CONDITION_NESTING_DEPTH;
   const canAddLeaf = sourceOptions.length > 0;
   const authored = conditionHasAuthoredContent(condition);
-
-  // The same scope-aware completion + unknown-key lint the top-level expression
-  // editor builds, so a nested `expression` leaf is not a blind text box where a
-  // mistyped field key silently never matches.
-  const assistExtensions = useMemo(
-    () => expressionAssistExtensions({ fields: sourceOptions, variables: variableNames }),
-    [sourceOptions, variableNames]
-  );
 
   const updateChild = (index: number, next: LinkageCondition): void => {
     onChange(updateAtPath(condition, [index], () => next));
@@ -296,7 +257,8 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
       return;
     }
 
-    onChange(appendChild(condition, [], createGroup([createLeaf(seed)])));
+    const group = createGroup([createLeaf(seed)]);
+    onChange(appendChild(condition, [], group));
   };
 
   const updateLogic = (logic: "all" | "any"): void => {
@@ -351,7 +313,6 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
               condition={child}
               depth={depth + 1}
               sourceOptions={sourceOptions}
-              variableNames={variableNames}
               onChange={next => updateChild(index, next)}
               onRemoveSelf={() => removeChild(index)}
             />
@@ -364,13 +325,9 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
           return (
             <div key={child.id ?? index} css={conditionRowCss}>
               <div css={[codeEditorWrapperCss, conditionRowFullCss]}>
-                <CodeEditor
-                  extensions={assistExtensions}
+                <ExpressionInput
                   minHeight={36}
-                  placeholder="ZEN 表达式"
-                  showFoldGutter={false}
-                  showLineNumbers={false}
-                  size="small"
+                  placeholder="JS 表达式"
                   value={child.source}
                   onChange={source => updateChild(index, { ...child, source })}
                 />
@@ -444,21 +401,38 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
   onChange,
   onRemove
 }) => {
+  const contextSources = useContextSources();
   const showValueInput = operatorNeedsValue(condition.operator);
   const hasSource = condition.sourceKey.length > 0;
-  // A dangling sourceKey (its field was deleted or renamed elsewhere) keeps
-  // its raw key visible with an explicit "未找到字段" affordance instead of
-  // silently rendering the bare string as if it resolved.
-  const sourceUnresolved = hasSource && !sourceOptions.some(option => option.value === condition.sourceKey);
-  const leafSourceOptions = sourceUnresolved
+  // A dangling sourceKey (its field was deleted or renamed elsewhere, or a
+  // context source no longer declared) keeps its raw key visible with an
+  // explicit "未找到" affordance instead of silently rendering the bare string
+  // as if it resolved.
+  const sourceUnresolved = hasSource
+    && sourceOptions.every(option => option.value !== condition.sourceKey)
+    && contextSources.every(source => source.key !== condition.sourceKey);
+  const danglingOptions = sourceUnresolved
     ? [
-        ...sourceOptions,
         {
           value: condition.sourceKey,
           label: <span css={missingSourceLabelCss}>{`${condition.sourceKey}（未找到字段）`}</span>
         }
       ]
-    : sourceOptions;
+    : [];
+  // With no declared context sources the picker stays a flat field list; with
+  // them it groups fields and host context so the two namespaces read apart.
+  const leafSourceOptions: SelectProps["options"] = contextSources.length === 0
+    ? [...sourceOptions, ...danglingOptions]
+    : [
+        { label: "表单字段", options: sourceOptions },
+        {
+          label: "全局上下文",
+          options: contextSources.map(source => {
+            return { value: source.key, label: source.label };
+          })
+        },
+        ...danglingOptions
+      ];
 
   return (
     <div css={conditionRowCss}>
@@ -482,7 +456,7 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
           onChange({
             ...condition,
             operator: value,
-            ...operatorNeedsValue(value) ? {} : { value: undefined }
+            ...!operatorNeedsValue(value) && { value: undefined }
           });
         }}
       />

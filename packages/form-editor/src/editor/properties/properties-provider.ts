@@ -163,31 +163,31 @@ export function countConfiguredEntries(
 
   for (const group of groupsForTab(descriptor, tab)) {
     for (const entry of group.entries) {
-      if (entry.readOnly) {
-        continue;
-      }
-
-      if (entry.visible && !entry.visible(field)) {
-        continue;
-      }
-
-      // The linkage badge counts RULES, not "a linkage object exists": an
-      // emptied `{ rules: [] }` payload must read as zero, and three rules
-      // should badge 3, not 1.
-      if (entry.type === "linkage-rules") {
-        const linkage = entry.read(field) as FormField["linkage"];
-
-        count += linkage?.rules?.length ?? 0;
-        continue;
-      }
-
-      if (isEntryConfigured(field, entry)) {
-        count += 1;
-      }
+      count += countConfiguredEntry(field, entry);
     }
   }
 
   return count;
+}
+
+function countConfiguredEntry(field: FormField, entry: PropertyEntry): number {
+  if (entry.readOnly) {
+    return 0;
+  }
+
+  if (entry.visible && !entry.visible(field)) {
+    return 0;
+  }
+
+  // The linkage badge counts RULES, not "a linkage object exists": an
+  // emptied `{ rules: [] }` payload must read as zero, and three rules
+  // should badge 3, not 1.
+  if (entry.type === "linkage-rules") {
+    const linkage = entry.read(field) as FormField["linkage"];
+    return linkage?.rules?.length ?? 0;
+  }
+
+  return isEntryConfigured(field, entry) ? 1 : 0;
 }
 
 function isEntryConfigured(field: FormField, entry: PropertyEntry): boolean {

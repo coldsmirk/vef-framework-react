@@ -8,7 +8,7 @@ function field(id: string, key: string, linkage?: FieldLinkage): TextfieldField 
     type: "textfield",
     key,
     label: `字段${id}`,
-    ...linkage === undefined ? {} : { linkage }
+    ...linkage !== undefined && { linkage }
   };
 }
 

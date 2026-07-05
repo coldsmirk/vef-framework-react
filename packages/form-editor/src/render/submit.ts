@@ -2,7 +2,7 @@ import type { EvaluateLinkageOptions, RuntimeFieldState } from "../engine/linkag
 import type { RuntimeFormValues } from "../runtime/types";
 import type {
   Block,
-  ExpressionContext,
+  EvaluationContext,
   KeyedFormField,
   KeyedNodeUnion,
   LinkageEvaluators,
@@ -86,12 +86,12 @@ function visitEffectiveKeyedNodes(
 export function filterSubmitValues(args: {
   blocks: Block[];
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   values: RuntimeFormValues;
 }): RuntimeFormValues {
   const options: EvaluateLinkageOptions = {
     evaluators: args.evaluators,
-    expressionContext: args.expressionContext
+    evaluationContext: args.evaluationContext
   };
   const submitValues: RuntimeFormValues = {};
 
@@ -107,7 +107,7 @@ export function filterSubmitValues(args: {
       submitValues[node.key] = rows.map(rowValue => filterSubmitValues({
         blocks: node.template,
         evaluators: args.evaluators,
-        expressionContext: args.expressionContext,
+        evaluationContext: args.evaluationContext,
         values: asRecord(rowValue)
       }));
     } else {
@@ -146,7 +146,7 @@ export function collectSubmitErrors(args: {
   blocks: Block[];
   disabled: boolean;
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   namePrefix: string;
   values: RuntimeFormValues;
 }): Record<string, string> {
@@ -159,7 +159,7 @@ export function collectSubmitErrors(args: {
 
   const options: EvaluateLinkageOptions = {
     evaluators: args.evaluators,
-    expressionContext: args.expressionContext
+    evaluationContext: args.evaluationContext
   };
 
   collectScopeSubmitErrors(args.blocks, args.values, args.namePrefix, options, errors);
@@ -213,7 +213,7 @@ function collectScopeSubmitErrors(
 export function validateRuntimeField(args: {
   disabled: boolean;
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   field: KeyedFormField;
   namePrefix: string;
   value: unknown;
@@ -234,7 +234,7 @@ export function validateRuntimeField(args: {
   const scopeValues = resolveScopeValues(args.values, args.namePrefix);
   const runtimeState = evaluateLinkage(args.field, scopeValues, {
     evaluators: args.evaluators,
-    expressionContext: args.expressionContext
+    evaluationContext: args.evaluationContext
   });
 
   if (runtimeState.hidden || runtimeState.disabled) {

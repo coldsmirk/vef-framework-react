@@ -79,7 +79,29 @@ export function infoDialog(title: string, content: ReactNode, detail?: string): 
   console.info("[form-editor]", detail === undefined ? title : `${title}\n${detail}`);
 }
 
-export function confirmDialog(title: string, content: ReactNode, onOk: () => void, okType: "danger" | "primary" = "danger"): void {
+export interface ConfirmDialogOptions {
+  onOk: () => void;
+  /**
+   * Visual intent of the confirm button.
+   *
+   * @default "danger"
+   */
+  okType?: "danger" | "primary";
+  /**
+   * Plain-text rendering of a rich (React) `content` for the `$vef`-less
+   * native fallback, where the React body cannot be shown and the title alone
+   * would drop the substance of the question (mirrors `infoDialog`'s
+   * `detail`). Unnecessary when `content` is already a string.
+   */
+  detail?: string;
+}
+
+export function confirmDialog(title: string, content: ReactNode, options: ConfirmDialogOptions): void {
+  const {
+    detail,
+    okType = "danger",
+    onOk
+  } = options;
   const modal = globalThis.$vef?.modal;
 
   if (modal) {
@@ -94,9 +116,12 @@ export function confirmDialog(title: string, content: ReactNode, onOk: () => voi
     return;
   }
 
-  // The native fallback can only show text; a rich body degrades to the title.
+  // The native fallback can only show text: a string content is used verbatim,
+  // a rich body falls back to `detail`, and only as a last resort the title.
+  const text = typeof content === "string" ? content : detail;
+
   // eslint-disable-next-line no-alert -- intentional fallback when $vef.modal is unavailable
-  if (globalThis.confirm?.(typeof content === "string" ? `${title}\n\n${content}` : title)) {
+  if (globalThis.confirm?.(text === undefined ? title : `${title}\n\n${text}`)) {
     onOk();
   }
 }

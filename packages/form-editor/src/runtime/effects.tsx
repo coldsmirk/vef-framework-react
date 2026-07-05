@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EffectAction, EffectDispatchContext, ExpressionContext, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EffectAction, EffectDispatchContext, EvaluationContext, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { RuntimeForm, RuntimeFormValues } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
@@ -77,7 +77,7 @@ export function EffectDispatchProvider({ children, run }: { children: ReactNode;
 async function runEffectActions(args: {
   actions: EffectAction[];
   evaluators: Required<LinkageEvaluators>;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   prefix: string;
   sinks: EffectSinks;
@@ -85,99 +85,106 @@ async function runEffectActions(args: {
   const scopeValues = resolveScopeValues(args.form.store.state.values, args.prefix);
   const context: EffectDispatchContext = {
     values: scopeValues,
-    resolveValue: value => resolveActionValue(value, scopeValues, args.evaluators, args.expressionContext)
+    resolveValue: value => resolveActionValue(value, scopeValues, args.evaluators, args.evaluationContext)
   };
   // Host-delegated effects may be async; collect their promises so a caller that
   // awaits the run (the `beforeSubmit` / `afterSubmit` lifecycle) actually waits.
   const pending: Array<Promise<void>> = [];
 
   for (const action of args.actions) {
-    switch (action.type) {
-      case "set_field": {
-        const name = `${args.prefix}${action.targetKey}`;
-        const next = context.resolveValue(action.value);
-
-        // A write of the value the target already holds is dropped: TanStack's
-        // `setBy` mints a new values object even for an identical leaf, which
-        // would read as a value change and re-fire an opaque-condition `always`
-        // rule forever. Mirrors `setVariable`'s no-op bail (deep-equal because
-        // an expression-resolved value may be a fresh but equal object).
-        if (!isDeepEqual(args.form.getFieldValue(name), next)) {
-          // Same options as `applyScopedAssignments`: a programmatic write must
-          // not run the target's onChange listeners or mark it touched, so an
-          // effect (e.g. a `load` write) never surfaces a premature validation
-          // error.
-          args.form.setFieldValue(name, next, {
-            dontRunListeners: true,
-            dontUpdateMeta: true
-          });
-        }
-
-        break;
-      }
-
-      case "set_variable": {
-        // Writes the form-global `$vars` store; the host owns the actual state,
-        // so re-evaluation flows from its update (see `FormRenderer`).
-        args.sinks.setVariable(action.variable, context.resolveValue(action.value));
-        break;
-      }
-
-      case "refresh_data_source": {
-        // Bumps the data-source version nonce; fields referencing the source
-        // re-fetch through the resolver (see `useFieldOptions`). Scope-agnostic —
-        // data sources are form-global regardless of which row fired the effect.
-        args.sinks.refreshDataSource(action.dataSourceId);
-        break;
-      }
-
-      case "submit": {
-        // form-core's `handleSubmit` rethrows a rejecting host `onSubmit`. An
-        // effect-triggered submit is fire-and-forget, so the rejection is
-        // contained here (mirroring `runEffects`) instead of surfacing as an
-        // unhandled promise rejection.
-        args.form.handleSubmit().catch((error: unknown) => {
-          console.error("[form-editor] submit effect failed:", error);
-        });
-        break;
-      }
-
-      case "reset": {
-        args.form.reset();
-        break;
-      }
-
-      // The host-delegated trio (no built-in behavior): each forwards to the
-      // host's effect dispatcher. Kept as separate cases (not a fall-through
-      // multi-label) so the stylistic padding between case bodies holds without
-      // tripping no-fallthrough. A sync dispatch resolves immediately, so joining
-      // `pending` unconditionally is free; the `exhaustive` default below still
-      // catches a future EffectAction member.
-      case "alert": {
-        pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
-        break;
-      }
-
-      case "api_call": {
-        pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
-        break;
-      }
-
-      case "navigate": {
-        pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
-        break;
-      }
-
-      default: {
-        // Unknown action types in an externally-supplied schema are ignored on
-        // the render path; the never-check keeps the switch exhaustive.
-        exhaustive(action);
-        break;
-      }
-    }
+    runEffectAction(action, args, context, pending);
   }
 
   await Promise.all(pending);
+}
+
+function runEffectAction(
+  action: EffectAction,
+  args: {
+    evaluators: Required<LinkageEvaluators>;
+    form: RuntimeForm;
+    prefix: string;
+    sinks: EffectSinks;
+  },
+  context: EffectDispatchContext,
+  pending: Array<Promise<void>>
+): void {
+  switch (action.type) {
+    case "set_field": {
+      const name = `${args.prefix}${action.targetKey}`;
+      const next = context.resolveValue(action.value);
+
+      // A write of the value the target already holds is dropped: TanStack's
+      // `setBy` mints a new values object even for an identical leaf, which
+      // would read as a value change and re-fire an opaque-condition `always`
+      // rule forever. Mirrors `setVariable`'s no-op bail (deep-equal because
+      // an expression-resolved value may be a fresh but equal object).
+      if (!isDeepEqual(args.form.getFieldValue(name), next)) {
+        // Same options as `applyScopedAssignments`: a programmatic write must
+        // not run the target's onChange listeners or mark it touched, so an
+        // effect (e.g. a `load` write) never surfaces a premature validation
+        // error.
+        args.form.setFieldValue(name, next, {
+          dontRunListeners: true,
+          dontUpdateMeta: true
+        });
+      }
+
+      return;
+    }
+
+    case "set_variable": {
+      // Writes the form-global `$vars` store; the host owns the actual state,
+      // so re-evaluation flows from its update (see `FormRenderer`).
+      args.sinks.setVariable(action.variable, context.resolveValue(action.value));
+      return;
+    }
+
+    case "refresh_data_source": {
+      // Bumps the data-source version nonce; fields referencing the source
+      // re-fetch through the resolver (see `useFieldOptions`). Scope-agnostic —
+      // data sources are form-global regardless of which row fired the effect.
+      args.sinks.refreshDataSource(action.dataSourceId);
+      return;
+    }
+
+    case "submit": {
+      // form-core's `handleSubmit` rethrows a rejecting host `onSubmit`. An
+      // effect-triggered submit is fire-and-forget, so the rejection is
+      // contained here (mirroring `runEffects`) instead of surfacing as an
+      // unhandled promise rejection.
+      args.form.handleSubmit().catch((error: unknown) => {
+        console.error("[form-editor] submit effect failed:", error);
+      });
+      return;
+    }
+
+    case "reset": {
+      args.form.reset();
+      return;
+    }
+
+    case "alert": {
+      pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
+      return;
+    }
+
+    case "api_call": {
+      pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
+      return;
+    }
+
+    case "navigate": {
+      pending.push(Promise.resolve(args.evaluators.dispatchEffect(action, context)));
+      return;
+    }
+
+    default: {
+      // Unknown action types in an externally-supplied schema are ignored on
+      // the render path; the never-check keeps the switch exhaustive.
+      exhaustive(action);
+    }
+  }
 }
 
 /**
@@ -190,7 +197,7 @@ async function runEffectActions(args: {
 export function dispatchFormEffects(args: {
   actions: EffectAction[];
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   sinks: EffectSinks;
 }): Promise<void> {
@@ -201,7 +208,7 @@ export function dispatchFormEffects(args: {
   return runEffectActions({
     actions: args.actions,
     evaluators: resolveLinkageEvaluators(args.evaluators),
-    expressionContext: args.expressionContext,
+    evaluationContext: args.evaluationContext,
     form: args.form,
     prefix: "",
     sinks: args.sinks
@@ -243,7 +250,7 @@ function inputSignature(sourceKeys: string[], values: RuntimeFormValues): unknow
  */
 export function useScopeEffects(args: {
   evaluators: LinkageEvaluators | undefined;
-  expressionContext: ExpressionContext | undefined;
+  evaluationContext: EvaluationContext | undefined;
   form: RuntimeForm;
   prefix: string;
   schema: RuntimeSchema;
@@ -252,7 +259,7 @@ export function useScopeEffects(args: {
 }): RunEffects {
   const {
     evaluators,
-    expressionContext,
+    evaluationContext,
     form,
     prefix,
     schema,
@@ -287,15 +294,15 @@ export function useScopeEffects(args: {
     signaturesRef.current = null;
   }
 
-  // Read the expression context through a ref so the dispatcher identity
+  // Read the evaluation context through a ref so the dispatcher identity
   // survives `$vars` writes. `runEffects` is the value of the context every
-  // FieldSlot consumes — if it changed with the expression context, one
+  // FieldSlot consumes — if it changed with the evaluation context, one
   // `set_variable` would re-render every leaf field straight through the
-  // memo wall (the exact churn the renderer's `expressionContextRef`
+  // memo wall (the exact churn the renderer's `evaluationContextRef`
   // exists to prevent). Dispatch happens from events/effects, after render,
   // so the ref is always current by the time it is read.
-  const expressionContextRef = useRef(expressionContext);
-  expressionContextRef.current = expressionContext;
+  const evaluationContextRef = useRef(evaluationContext);
+  evaluationContextRef.current = evaluationContext;
 
   const runEffects = useCallback<RunEffects>(
     actions => {
@@ -306,7 +313,7 @@ export function useScopeEffects(args: {
         runEffectActions({
           actions,
           evaluators: resolved,
-          expressionContext: expressionContextRef.current,
+          evaluationContext: evaluationContextRef.current,
           form,
           prefix,
           sinks
@@ -323,7 +330,7 @@ export function useScopeEffects(args: {
       return;
     }
 
-    const truths = evaluateConditionEffectTruths(conditionRules, values, resolved, expressionContext);
+    const truths = evaluateConditionEffectTruths(conditionRules, values, resolved, evaluationContext);
     const signatures = conditionRules.map(rule => rule.alwaysActions.length > 0 ? inputSignature(rule.sourceKeys, values) : null);
     const previousTruths = truthsRef.current;
     const previousSignatures = signaturesRef.current;
@@ -339,11 +346,15 @@ export function useScopeEffects(args: {
     }
 
     for (const [index, rule] of conditionRules.entries()) {
-      if (!truths[index]) {
+      const truth = truths[index];
+
+      if (!truth) {
         continue;
       }
 
-      if (!previousTruths[index]) {
+      const previousTruth = previousTruths[index];
+
+      if (!previousTruth) {
         // Rising edge (false→true): every effect fires once, in declaration order.
         runEffects(rule.actions);
       } else if (rule.alwaysActions.length > 0) {
@@ -352,7 +363,7 @@ export function useScopeEffects(args: {
         // signature (opaque expression condition) has no tracked keys, so it
         // re-fires on any actual value change — the `values` reference moving —
         // but NOT on a re-run driven by other deps (a `set_variable` updating
-        // the expression context must not re-fire the very rule that wrote it).
+        // the evaluation context must not re-fire the very rule that wrote it).
         const changed = signatures[index] === null
           ? values !== previousValues
           : !isDeepEqual(signatures[index], previousSignatures?.[index]);
@@ -362,7 +373,7 @@ export function useScopeEffects(args: {
         }
       }
     }
-  }, [values, conditionRules, resolved, expressionContext, runEffects]);
+  }, [values, conditionRules, resolved, evaluationContext, runEffects]);
 
   return runEffects;
 }

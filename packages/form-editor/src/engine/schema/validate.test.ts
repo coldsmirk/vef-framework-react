@@ -251,7 +251,8 @@ describe("validateSchema", () => {
     });
 
     it("accepts word-character keys including digits and underscores", () => {
-      expect(validate(schema([field("1", "total_2")])).valid).toBe(true);
+      const result = validate(schema([field("1", "total_2")]));
+      expect(result.valid).toBe(true);
     });
   });
 
@@ -345,11 +346,13 @@ describe("validateSchema", () => {
     });
 
     it("rejects a key on a flex container", () => {
-      expect(codesOf(validate(flexSchema({ key: "stray" })).issues)).toContain("stray_key_on_container");
+      const result = validate(flexSchema({ key: "stray" }));
+      expect(codesOf(result.issues)).toContain("stray_key_on_container");
     });
 
     it("rejects a key on a grid container", () => {
-      expect(codesOf(validate(gridSchema({ key: "stray" })).issues)).toContain("stray_key_on_container");
+      const result = validate(gridSchema({ key: "stray" }));
+      expect(codesOf(result.issues)).toContain("stray_key_on_container");
     });
   });
 
@@ -509,11 +512,13 @@ describe("validateSchema", () => {
     });
 
     it("rejects a non-integer column count", () => {
-      expect(codesOf(validate(gridSchema({ columns: 2.5 })).issues)).toContain("columns_invalid");
+      const result = validate(gridSchema({ columns: 2.5 }));
+      expect(codesOf(result.issues)).toContain("columns_invalid");
     });
 
     it("rejects a column count above the 24-column basis", () => {
-      expect(codesOf(validate(gridSchema({ columns: 25 })).issues)).toContain("columns_invalid");
+      const result = validate(gridSchema({ columns: 25 }));
+      expect(codesOf(result.issues)).toContain("columns_invalid");
     });
 
     it("rejects a negative row gap", () => {
@@ -953,6 +958,28 @@ describe("validateSchema", () => {
     });
   });
 
+  describe("when a subform variant is missing or invalid", () => {
+    it("rejects it instead of normalizing the input in place", () => {
+      const subformNode: Record<string, unknown> = {
+        id: "Sub_1",
+        type: "subform",
+        key: "lines",
+        template: [field("a", "amount")]
+      };
+
+      const result = validate(schema([subformNode]));
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "subform_variant_invalid",
+        path: "presentations.pc.children[0].variant"
+      }));
+      // The validator is a pure read — diagnostic surfaces call it on the live
+      // tree, so it must never write back into its input.
+      expect(subformNode.variant).toBeUndefined();
+    });
+  });
+
   describe("when subform bounds are wrong", () => {
     it("rejects minRows greater than maxRows", () => {
       const candidate = schema([
@@ -1171,23 +1198,6 @@ describe("validateSchema", () => {
       ]));
 
       expect(codesOf(result.issues)).not.toContain("subform_table_column");
-    });
-  });
-
-  describe("when a subform omits its variant (a legacy schema)", () => {
-    it("normalizes the variant to \"stack\" on ingest", () => {
-      const candidate = schema([
-        {
-          id: "Sub_1",
-          type: "subform",
-          key: "lines",
-          template: [field("name", "name")]
-        }
-      ]) as { presentations: { pc: { children: Array<{ variant?: unknown }> } } };
-
-      validate(candidate);
-
-      expect(candidate.presentations.pc.children[0]?.variant).toBe("stack");
     });
   });
 });

@@ -141,6 +141,21 @@ function assignRuleField(): TextfieldField {
   });
 }
 
+function FocusHarness(): ReactElement {
+  const [field, setField] = useState<FormField>(() => assignRuleField());
+
+  return (
+    <FormEditorStoreProvider initialState={{ schema: schemaFor(assignRuleField()) }}>
+      <LinkageRulesEntry
+        entry={entry}
+        field={field}
+        schema={schemaFor(assignRuleField())}
+        onChange={value => setField(current => entry.write(current, value as FieldLinkage | undefined))}
+      />
+    </FormEditorStoreProvider>
+  );
+}
+
 describe("linkage rules entry", () => {
   describe("trigger", () => {
     it("renders the condition builder for a condition trigger", () => {
@@ -533,21 +548,6 @@ describe("linkage rules entry", () => {
       // lens and re-rendered, exactly like the properties panel + store. With
       // the action's id stripped, the list key would flip from "A1" to the
       // index, remounting the editor and dropping focus after ONE keystroke.
-      function FocusHarness(): ReactElement {
-        const [field, setField] = useState<FormField>(() => assignRuleField());
-
-        return (
-          <FormEditorStoreProvider initialState={{ schema: schemaFor(assignRuleField()) }}>
-            <LinkageRulesEntry
-              entry={entry}
-              field={field}
-              schema={schemaFor(assignRuleField())}
-              onChange={value => setField(current => entry.write(current, value as FieldLinkage | undefined))}
-            />
-          </FormEditorStoreProvider>
-        );
-      }
-
       render(<FocusHarness />);
 
       const input = screen.getByPlaceholderText("赋值内容");

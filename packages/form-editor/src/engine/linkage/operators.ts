@@ -1,6 +1,9 @@
-import type { LinkageConditionLeaf, LinkageOperator } from "../../types";
+import type { EvaluationContext, LinkageConditionLeaf, LinkageOperator } from "../../types";
 
 import { isNullish } from "@vef-framework-react/shared";
+
+import { exhaustive } from "../assert-never";
+import { isRecord } from "../validation";
 
 /**
  * The full set of supported leaf operators, in display order. Mirrors the
@@ -45,15 +48,75 @@ export function isEmptyRuntimeValue(value: unknown): boolean {
 }
 
 /**
- * Evaluates a leaf condition against the current form values. Operators
- * fall back to `false` rather than throw when the source value is of an
- * unexpected type, so a malformed condition can never crash the renderer.
+ * Resolve a leaf's source to its runtime value. A plain key reads the form
+ * values; a `$`-rooted path walks the evaluation context — `$user.departmentId`
+ * reads `context.user.departmentId`, `$vars.quota` reads a variable, `$form.x`
+ * is the explicit spelling of a form value. An unknown root or a broken path
+ * resolves to `undefined` (which no positive operator matches), mirroring how
+ * an absent form key behaves.
+ */
+function resolveLeafSourceValue(
+  sourceKey: string,
+  values: Record<string, unknown>,
+  context: EvaluationContext | undefined
+): unknown {
+  if (!sourceKey.startsWith("$")) {
+    return values[sourceKey];
+  }
+
+  const [root, ...path] = sourceKey.split(".");
+  let value: unknown;
+
+  switch (root) {
+    case "$form": {
+      value = values;
+      break;
+    }
+
+    case "$vars": {
+      value = context?.variables;
+      break;
+    }
+
+    case "$user": {
+      value = context?.user;
+      break;
+    }
+
+    case "$node": {
+      value = context?.node;
+      break;
+    }
+
+    default: {
+      return undefined;
+    }
+  }
+
+  for (const segment of path) {
+    if (!isRecord(value)) {
+      return undefined;
+    }
+
+    value = value[segment];
+  }
+
+  return value;
+}
+
+/**
+ * Evaluates a leaf condition against the current form values (or, for a
+ * `$`-rooted source path, the evaluation context — see
+ * {@link resolveLeafSourceValue}). Operators fall back to `false` rather than
+ * throw when the source value is of an unexpected type, so a malformed
+ * condition can never crash the renderer.
  */
 export function matchLeaf(
   leaf: LinkageConditionLeaf,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  context?: EvaluationContext
 ): boolean {
-  const sourceValue = values[leaf.sourceKey];
+  const sourceValue = resolveLeafSourceValue(leaf.sourceKey, values, context);
   const expectedValue = leaf.value;
 
   switch (leaf.operator) {
@@ -74,6 +137,13 @@ export function matchLeaf(
     case "empty": { return isEmptyRuntimeValue(sourceValue); }
 
     case "notEmpty": { return !isEmptyRuntimeValue(sourceValue); }
+
+    default: {
+      // An out-of-contract operator (unvalidated host schema) never matches —
+      // the compile-time check keeps the switch exhaustive over the union.
+      exhaustive(leaf.operator);
+      return false;
+    }
   }
 }
 

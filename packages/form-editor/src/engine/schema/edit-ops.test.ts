@@ -675,9 +675,17 @@ describe("edit-ops", () => {
     it("drops a non-finite factor from the written slot", () => {
       const schema = schemaOf(tf("f1", "a"));
 
-      const next = setFlex(schema, "f1", { grow: Number.NaN, basis: "1px" });
+      const next = setFlex(schema, "f1", { grow: NaN, basis: "1px" });
 
       expect(findField(next, "f1")?.flex).toEqual({ basis: "1px" });
+    });
+
+    it("clears the slot entirely when every axis is dropped as invalid", () => {
+      // `{ grow: NaN }` must not persist as `flex: {}` — an all-invalid write
+      // collapses to "no flex config", like clampSpan/clampColumnWidth.
+      const schema = setFlex(schemaOf(tf("f1", "a")), "f1", { grow: 1 });
+
+      expect(findField(setFlex(schema, "f1", { grow: NaN }), "f1")?.flex).toBeUndefined();
     });
 
     it("clears the flex slot with undefined", () => {
@@ -721,7 +729,7 @@ describe("edit-ops", () => {
     it("clears the width back to auto for a non-finite number", () => {
       const schema = setColumnWidth(schemaOf(tf("f1", "a")), "f1", 200);
 
-      expect(findField(setColumnWidth(schema, "f1", Number.NaN), "f1")?.columnWidth).toBeUndefined();
+      expect(findField(setColumnWidth(schema, "f1", NaN), "f1")?.columnWidth).toBeUndefined();
     });
 
     it("returns the input layer reference when writing the width already in place", () => {
@@ -938,11 +946,13 @@ describe("edit-ops", () => {
 
       expect(cloneAction?.type).toBe("api_call");
 
-      if (sourceAction?.type === "api_call" && cloneAction?.type === "api_call") {
-        expect(cloneAction.request).not.toBe(sourceAction.request);
-        expect(cloneAction.request.params).not.toBe(sourceAction.request.params);
-        expect(cloneAction.request).toEqual(sourceAction.request);
+      if (sourceAction?.type !== "api_call" || cloneAction?.type !== "api_call") {
+        throw new Error("Expected api_call actions");
       }
+
+      expect(cloneAction.request).not.toBe(sourceAction.request);
+      expect(cloneAction.request.params).not.toBe(sourceAction.request.params);
+      expect(cloneAction.request).toEqual(sourceAction.request);
     });
 
     it("does not alias a literal action value payload with the source", () => {
@@ -964,10 +974,12 @@ describe("edit-ops", () => {
 
       expect(cloneAction?.type).toBe("assign");
 
-      if (cloneAction?.type === "assign" && cloneAction.value.kind === "literal") {
-        expect(cloneAction.value.value).not.toBe(payload);
-        expect(cloneAction.value.value).toEqual(payload);
+      if (cloneAction?.type !== "assign" || cloneAction.value.kind !== "literal") {
+        throw new Error("Expected literal assign action");
       }
+
+      expect(cloneAction.value.value).not.toBe(payload);
+      expect(cloneAction.value.value).toEqual(payload);
     });
   });
 });

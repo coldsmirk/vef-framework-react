@@ -1,7 +1,6 @@
-import type { ColumnDataType, FormField, FormSchema, PresentationLayer, Validatable } from "../../types";
+import type { ColumnDataType, FormField, FormSchema, Validatable } from "../../types";
 
-import { isKeyedField } from "../keys";
-import { isRootScope, walkFields } from "./walk";
+import { walkUniqueRootKeyedFields } from "../keys";
 
 /**
  * A keyed field projected to its table-storage column shape: the dialect-
@@ -76,41 +75,25 @@ export function inferColumnType(field: FormField): ColumnDataType {
  */
 export function toColumnDefinitions(schema: FormSchema): ColumnDefinition[] {
   const definitions: ColumnDefinition[] = [];
-  const seen = new Set<string>();
 
-  const collect = (layer: PresentationLayer | undefined): void => {
-    if (layer === undefined) {
-      return;
+  walkUniqueRootKeyedFields(schema, field => {
+    const columnType = inferColumnType(field);
+    const definition: ColumnDefinition = { key: field.key, columnType };
+
+    const maxLength = (field as Validatable).validate?.maxLength;
+
+    if (columnType === "string" && maxLength !== undefined && maxLength > 0) {
+      definition.maxLength = maxLength;
     }
 
-    walkFields(layer, (field, scope) => {
-      if (!isRootScope(scope) || !isKeyedField(field) || seen.has(field.key)) {
-        return;
-      }
+    const { precision } = field as { precision?: number };
 
-      seen.add(field.key);
+    if (columnType === "decimal" && precision !== undefined && precision > 0) {
+      definition.precision = precision;
+    }
 
-      const columnType = inferColumnType(field);
-      const definition: ColumnDefinition = { key: field.key, columnType };
-
-      const maxLength = (field as Validatable).validate?.maxLength;
-
-      if (columnType === "string" && maxLength !== undefined && maxLength > 0) {
-        definition.maxLength = maxLength;
-      }
-
-      const { precision } = field as { precision?: number };
-
-      if (columnType === "decimal" && precision !== undefined && precision > 0) {
-        definition.precision = precision;
-      }
-
-      definitions.push(definition);
-    });
-  };
-
-  collect(schema.presentations.pc);
-  collect(schema.presentations.mobile);
+    definitions.push(definition);
+  });
 
   return definitions;
 }

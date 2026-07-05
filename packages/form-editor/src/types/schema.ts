@@ -758,7 +758,7 @@ interface SubformBase extends BlockBase, KeyedNode {
 /**
  * Free-layout subform: each row renders the `template` as a stack of fully
  * editable, individually-laid-out fields — supporting nesting and per-row
- * linkage / expression scope. The default variant.
+ * linkage / evaluation scope. The default variant.
  */
 export interface StackSubform extends SubformBase {
   variant: "stack";

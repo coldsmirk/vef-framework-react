@@ -5,6 +5,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import { switchFieldDefinition } from "./index";
 
+function getSwitchComponent(): NonNullable<typeof switchFieldDefinition.Component> {
+  const { Component } = switchFieldDefinition;
+
+  if (!Component) {
+    throw new Error("switch field is missing a Component");
+  }
+
+  return Component;
+}
+
 describe("switch field", () => {
   it("defines a keyed boolean field with serializable defaults", () => {
     expect(switchFieldDefinition.config).toMatchObject({ type: "switch", keyed: true });
@@ -12,17 +22,13 @@ describe("switch field", () => {
   });
 
   it("renders the label and a switch", () => {
-    const { Component } = switchFieldDefinition;
+    const Component = getSwitchComponent();
     const field: SwitchField = {
       id: "Field_s",
       type: "switch",
       key: "s",
       label: "启用"
     };
-
-    if (!Component) {
-      throw new Error("switch field is missing a Component");
-    }
 
     render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
@@ -31,17 +37,13 @@ describe("switch field", () => {
   });
 
   it("marks the inline label when a runtime require linkage sets required", () => {
-    const { Component } = switchFieldDefinition;
+    const Component = getSwitchComponent();
     const field: SwitchField = {
       id: "Field_s",
       type: "switch",
       key: "s",
       label: "启用"
     };
-
-    if (!Component) {
-      throw new Error("switch field is missing a Component");
-    }
 
     render(<Component required domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
@@ -49,17 +51,13 @@ describe("switch field", () => {
   });
 
   it("omits the required marker by default", () => {
-    const { Component } = switchFieldDefinition;
+    const Component = getSwitchComponent();
     const field: SwitchField = {
       id: "Field_s",
       type: "switch",
       key: "s",
       label: "启用"
     };
-
-    if (!Component) {
-      throw new Error("switch field is missing a Component");
-    }
 
     render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
@@ -68,7 +66,7 @@ describe("switch field", () => {
 
   describe("appearance", () => {
     it("renders the on text inside the switch track", () => {
-      const { Component } = switchFieldDefinition;
+      const Component = getSwitchComponent();
       const field: SwitchField = {
         id: "Field_s",
         type: "switch",
@@ -77,17 +75,13 @@ describe("switch field", () => {
         onText: "开"
       };
 
-      if (!Component) {
-        throw new Error("switch field is missing a Component");
-      }
-
       render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
       expect(screen.getByRole("switch")).toContainElement(screen.getByText("开"));
     });
 
     it("renders the off text inside the switch track", () => {
-      const { Component } = switchFieldDefinition;
+      const Component = getSwitchComponent();
       const field: SwitchField = {
         id: "Field_s",
         type: "switch",
@@ -96,17 +90,13 @@ describe("switch field", () => {
         offText: "关"
       };
 
-      if (!Component) {
-        throw new Error("switch field is missing a Component");
-      }
-
       render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
       expect(screen.getByRole("switch")).toContainElement(screen.getByText("关"));
     });
 
     it("applies the small size to the switch", () => {
-      const { Component } = switchFieldDefinition;
+      const Component = getSwitchComponent();
       const field: SwitchField = {
         id: "Field_s",
         type: "switch",
@@ -115,27 +105,19 @@ describe("switch field", () => {
         size: "small"
       };
 
-      if (!Component) {
-        throw new Error("switch field is missing a Component");
-      }
-
       render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 
       expect(screen.getByRole("switch")).toHaveClass("ant-switch-small");
     });
 
     it("renders a default-sized switch without the small modifier", () => {
-      const { Component } = switchFieldDefinition;
+      const Component = getSwitchComponent();
       const field: SwitchField = {
         id: "Field_s",
         type: "switch",
         key: "s",
         label: "启用"
       };
-
-      if (!Component) {
-        throw new Error("switch field is missing a Component");
-      }
 
       render(<Component domId="field-s" field={field} value={false} onChange={vi.fn()} />);
 

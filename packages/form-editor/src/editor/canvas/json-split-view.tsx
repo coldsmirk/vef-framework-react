@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import { EditorIcon } from "../../icons";
 import { FormRenderer } from "../../render/form-renderer";
 import { useDeviceRegistries } from "../../store/engine-provider";
-import { useFormEditorStoreApi } from "../../store/form-store";
+import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { applySchemaJson, downloadSchemaJson } from "../schema-apply";
 import { notify } from "../toolbar/notify";
 
@@ -65,6 +65,11 @@ export function JsonSplitView({
 }: { device: PresentationDevice; runtime?: PreviewRuntime; schema: FormSchema }): ReactElement {
   const storeApi = useFormEditorStoreApi();
   const registries = useDeviceRegistries();
+  // The whole view is kept alive (hidden) across mode switches so the draft
+  // buffer survives; the render pane alone is NOT — a hidden live form buys
+  // nothing (its state intentionally resets per visit, like the preview mode)
+  // while still evaluating linkage on every schema edit made in edit mode.
+  const visible = useFormEditorStore(state => state.viewMode === "json");
   const json = useMemo(() => JSON.stringify(schema, null, 2), [schema]);
 
   const [draft, setDraft] = useState(json);
@@ -173,14 +178,18 @@ export function JsonSplitView({
       <div css={paneCss}>
         <div css={headerCss}>预览</div>
 
-        <FormRenderer
-          containOverlays
-          dataSourceResolver={runtime.dataSourceResolver}
-          device={device}
-          evaluators={runtime.evaluators}
-          expressionContext={runtime.expressionContext}
-          schema={schema}
-        />
+        {visible
+          ? (
+              <FormRenderer
+                containOverlays
+                dataSourceResolver={runtime.dataSourceResolver}
+                device={device}
+                evaluationContext={runtime.evaluationContext}
+                evaluators={runtime.evaluators}
+                schema={schema}
+              />
+            )
+          : null}
       </div>
     </div>
   );

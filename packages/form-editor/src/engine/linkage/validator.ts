@@ -60,8 +60,26 @@ const ALERT_LEVEL_SET: ReadonlySet<string> = new Set(ALERT_LEVELS);
  * writing one back (hiding does not clear values in this runtime), so a rule
  * carrying only those may freely reference any field — including the block
  * itself ("require self when self is empty").
+ *
+ * Declared as a compile-checked table (the taxonomy.ts pattern): a future
+ * state action type forces an explicit true/false entry here, so the cycle
+ * detector can never silently miss a new value-writing action.
  */
-const VALUE_WRITING_STATE_ACTIONS: ReadonlySet<StateActionType> = new Set<StateActionType>(["assign", "script"]);
+const VALUE_WRITING_STATE_ACTION_TABLE: Record<StateActionType, boolean> = {
+  show: false,
+  hide: false,
+  enable: false,
+  disable: false,
+  require: false,
+  optional: false,
+  assign: true,
+  script: true
+};
+
+const VALUE_WRITING_STATE_ACTIONS: ReadonlySet<StateActionType> = new Set(
+  (Object.keys(VALUE_WRITING_STATE_ACTION_TABLE) as StateActionType[])
+    .filter(type => VALUE_WRITING_STATE_ACTION_TABLE[type])
+);
 
 /**
  * Per-scope view of the keyed nodes available as linkage sources. A subform
@@ -246,7 +264,12 @@ function flagUnreachableHidden(args: {
     return;
   }
 
+  // Only a condition-triggered `show` can ever lift the default: a `show` on
+  // an edge trigger is separately rejected (`state_action_on_edge_trigger`)
+  // and never reaches the state lane, so it must not suppress this warning.
   const hasShow = Array.isArray(rules) && rules.some(rule => isRecord(rule)
+    && isRecord(rule.trigger)
+    && rule.trigger.kind === "condition"
     && Array.isArray(rule.actions)
     && rule.actions.some(action => isRecord(action) && action.type === "show"));
 
@@ -630,9 +653,7 @@ function validateStateAction(args: {
       value: action.value,
       where: `${where}.value`
     });
-  }
-
-  if (action.type === "script") {
+  } else if (action.type === "script") {
     if (typeof action.source !== "string") {
       issues.push(createIssue(`${where}.source`, "action_malformed", undefined, ruleId));
     } else if (action.source.length === 0) {
@@ -851,7 +872,10 @@ function validateLeafCondition(args: {
     valid = false;
   } else if (sourceKey.length === 0) {
     issues.push(createIssue(`${where}.sourceKey`, "source_key_empty", undefined, ruleId));
-  } else if (!keyedNodes.has(sourceKey)) {
+  } else if (!sourceKey.startsWith("$") && !keyedNodes.has(sourceKey)) {
+    // A `$`-rooted context path resolves against the host-supplied expression
+    // context, which this static pass cannot see into — treated like `$user`
+    // members inside an expression source: never flagged as unresolved.
     issues.push(createIssue(`${where}.sourceKey`, "source_key_unresolved", { key: sourceKey }, ruleId));
   }
 

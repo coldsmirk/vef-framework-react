@@ -10,9 +10,10 @@ import { Button, Dropdown, globalCssVars, Tooltip } from "@vef-framework-react/c
 import { useState } from "react";
 
 import { validateSchema } from "../../engine/schema/validate";
+import { formatIssueLine } from "../../engine/validation";
 import { EditorIcon } from "../../icons";
 import { useDeviceRegistries } from "../../store/engine-provider";
-import { createEmptySchema, selectFieldCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { selectFieldCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useEditorLayout } from "../editor-layout-context";
 import { IssueList } from "../validation-summary";
 import { confirmDialog, notify } from "./notify";
@@ -305,8 +306,10 @@ export function Toolbar({
       return;
     }
 
-    confirmDialog("确认清空当前表单？", "该操作可通过撤销恢复。", () => {
-      storeApi.getState().setSchema(createEmptySchema());
+    confirmDialog("确认清空当前表单？", "该操作可通过撤销恢复。", {
+      onOk: () => {
+        storeApi.getState().clearSchema();
+      }
     });
   };
 
@@ -322,12 +325,13 @@ export function Toolbar({
     const { schema } = storeApi.getState();
     const result = validateSchema(schema, registries);
     const errors = result.issues.filter(issue => issue.severity === "error");
-    const warnings = result.issues.filter(issue => issue.severity === "warning");
 
     if (errors.length > 0) {
       notify("error", `Schema 存在 ${errors.length} 个错误，已阻止发布`);
       return;
     }
+
+    const warnings = result.issues.filter(issue => issue.severity === "warning");
 
     if (warnings.length === 0) {
       onPublish(schema);
@@ -337,8 +341,11 @@ export function Toolbar({
     confirmDialog(
       `存在 ${warnings.length} 条校验提示，仍要发布？`,
       <IssueList issues={warnings} />,
-      () => onPublish(schema),
-      "primary"
+      {
+        onOk: () => onPublish(schema),
+        okType: "primary",
+        detail: warnings.map(issue => formatIssueLine(issue)).join("\n")
+      }
     );
   };
 

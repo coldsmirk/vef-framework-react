@@ -33,11 +33,6 @@ export interface TriggerEditorProps {
   triggerKinds: readonly LinkageTriggerKind[];
   sourceOptions: SourceFieldOption[];
   /**
-   * Declared form-variable names, forwarded to the expression-mode condition
-   * editor for `$vars.` autocompletion.
-   */
-  variableNames?: string[];
-  /**
    * The owning block's data-binding key, forwarded so the expression → visual
    * switch seeds with a different field when one exists.
    */
@@ -62,7 +57,6 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
   trigger,
   triggerKinds,
   sourceOptions,
-  variableNames,
   selfKey,
   onChange
 }) => {
@@ -105,7 +99,6 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
               condition={trigger.condition}
               selfKey={selfKey}
               sourceOptions={sourceOptions}
-              variableNames={variableNames}
               onChange={condition => onChange({ kind: "condition", condition })}
             />
           )

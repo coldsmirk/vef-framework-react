@@ -14,8 +14,8 @@ function makeSchema(variables: FormVariable[], linkage?: FieldLinkage): FormSche
   return {
     id: "Form_1",
     version: 2,
-    ...variables.length > 0 ? { variables } : {},
-    ...linkage ? { linkage } : {},
+    ...(variables.length > 0) && { variables },
+    ...linkage && { linkage },
     presentations: { pc: { children: [] } }
   };
 }
@@ -94,16 +94,16 @@ describe("form variables panel", () => {
 
       const input = screen.getByPlaceholderText("默认值");
       await user.click(input);
-      await user.keyboard("3.14");
+      await user.keyboard("3.15");
 
       // The draft keeps the literal text while typing — `3.` is never
       // round-tripped through Number() mid-edit (which swallowed the dot and
-      // turned 3.14 into 314).
-      expect(input).toHaveValue("3.14");
+      // turned 3.15 into 315).
+      expect(input).toHaveValue("3.15");
 
       await user.tab();
 
-      expect(storeVariables(api)[0]?.defaultValue).toBe(3.14);
+      expect(storeVariables(api)[0]?.defaultValue).toBe(3.15);
     });
 
     it("commits valid JSON on blur without re-stringifying under the cursor", async () => {

@@ -146,10 +146,20 @@ export const datetimeFieldDefinition: FieldDefinition = defineFieldDefinition<Da
 
 /* ----------------------------------------------------------------- date range */
 
-function parseRange(value: string[]): [ReturnType<typeof tryParseDate>, ReturnType<typeof tryParseDate>] | null {
-  return Array.isArray(value) && value.length === 2
-    ? [tryParseDate(String(value[0])), tryParseDate(String(value[1]))]
-    : null;
+/**
+ * A range is set only when it has two valid ends — a pair with an unparseable
+ * end resolves to "unset" rather than a half-filled picker, matching the
+ * mobile `toRange` semantics.
+ */
+function parseRange(value: string[]): [NonNullable<ReturnType<typeof tryParseDate>>, NonNullable<ReturnType<typeof tryParseDate>>] | null {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return null;
+  }
+
+  const start = tryParseDate(String(value[0]));
+  const end = tryParseDate(String(value[1]));
+
+  return start && end ? [start, end] : null;
 }
 
 function DateRangeInput({

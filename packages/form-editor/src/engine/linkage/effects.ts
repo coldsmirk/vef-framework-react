@@ -1,6 +1,6 @@
 import type {
   EffectAction,
-  ExpressionContext,
+  EvaluationContext,
   FieldLinkageRule,
   LinkageCondition,
   LinkageEvaluators,
@@ -90,7 +90,9 @@ export function collectConditionEffectRules(schema: RuntimeSchema): ConditionEff
 }
 
 function pushConditionEffectRules(rules: FieldLinkageRule[] | undefined, out: ConditionEffectRule[]): void {
-  for (const rule of rules ?? []) {
+  const linkageRules = rules ?? [];
+
+  for (const rule of linkageRules) {
     if (rule.trigger.kind !== "condition") {
       continue;
     }
@@ -121,7 +123,7 @@ export function evaluateConditionEffectTruths(
   rules: ConditionEffectRule[],
   values: Record<string, unknown>,
   evaluators: Required<LinkageEvaluators>,
-  context?: ExpressionContext
+  context?: EvaluationContext
 ): boolean[] {
   return rules.map(rule => matchCondition(rule.condition, values, evaluators, context));
 }
@@ -155,8 +157,9 @@ export function getFieldEventTriggerKinds(
   rules: FieldLinkageRule[] | undefined
 ): Set<LinkageTriggerKind> {
   const kinds = new Set<LinkageTriggerKind>();
+  const linkageRules = rules ?? [];
 
-  for (const rule of rules ?? []) {
+  for (const rule of linkageRules) {
     if (isFieldEventTriggerKind(rule.trigger.kind) && rule.actions.some(action => isEffectAction(action))) {
       kinds.add(rule.trigger.kind);
     }

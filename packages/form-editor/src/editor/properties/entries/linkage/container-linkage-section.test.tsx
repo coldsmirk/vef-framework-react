@@ -19,7 +19,7 @@ function sectionNode(linkage?: FieldLinkage): SectionNode {
     variant: "card",
     title: "联系方式",
     children: [],
-    ...linkage ? { linkage } : {}
+    ...linkage && { linkage }
   };
 }
 
@@ -140,7 +140,8 @@ describe("ContainerLinkageSection", () => {
 
   it("authors a hide-section rule by switching the action type", async () => {
     const user = userEvent.setup();
-    const api = setup(makeSchema(sectionNode(conditionShowLinkage())));
+    const schema = makeSchema(sectionNode(conditionShowLinkage()));
+    const api = setup(schema);
 
     // Combobox order on the card: trigger kind, leaf source, leaf operator,
     // then the action's type select.
@@ -149,12 +150,14 @@ describe("ContainerLinkageSection", () => {
     await user.click(await screen.findByText("隐藏"));
 
     // The action keeps its client-stable id across the type switch.
-    expect(storeSection(api).linkage?.rules?.[0]?.actions?.[0]).toEqual({ id: "A1", type: "hide" });
+    const action = storeSection(api).linkage?.rules?.[0]?.actions?.[0];
+    expect(action).toEqual({ id: "A1", type: "hide" });
   });
 
   it("limits container state actions to show/hide/enable/disable", async () => {
     const user = userEvent.setup();
-    setup(makeSchema(sectionNode(conditionShowLinkage())));
+    const schema = makeSchema(sectionNode(conditionShowLinkage()));
+    setup(schema);
 
     const selects = screen.getAllByRole("combobox");
     await user.click(selects[3] as HTMLElement);

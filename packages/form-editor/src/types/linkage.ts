@@ -15,8 +15,8 @@ import type { RemoteDataSourceRequest } from "./data-source";
  * - **Condition** is a discriminated union of three kinds — `leaf`, `group`,
  * `expression` — that compose freely. A leaf evaluates a single operator
  * against one source field; a group joins children with `all` / `any`
- * logic; an expression runs through the shared ZEN evaluator by default or a
- * host-supplied evaluator override.
+ * logic; an expression is plain JavaScript run through the default
+ * `new Function` evaluator or a host-supplied evaluator override.
  * - **Trigger** wraps a condition (a *level* signal) or names an *edge* — a
  * field event (`change` / `focus` / `blur` / `click`) or a form lifecycle
  * moment (`load` / `beforeSubmit` / `afterSubmit`).
@@ -294,7 +294,7 @@ export interface EffectDispatchContext {
  * an expression that only reads `field.x` / `$form.x` keeps working when no
  * context is supplied.
  */
-export interface ExpressionContext {
+export interface EvaluationContext {
   /**
    * Form-global variables (`$vars`), seeded from `FormSchema.variables`.
    */
@@ -310,12 +310,33 @@ export interface ExpressionContext {
 }
 
 /**
- * Pluggable evaluators for the dynamic parts of the model. Expression slots
- * default to the shared ZEN evaluator, script slots default to `new Function`,
- * and `dispatchEffect` defaults to a no-op. Hosts override any slot to swap in
+ * A host-declared global-context property the visual condition builder offers
+ * as a leaf-condition source alongside the form's own fields. `key` is the
+ * full scope path — rooted at `$form` / `$vars` / `$user` / `$node`, e.g.
+ * `"$user.departmentId"` — stored verbatim as the leaf's `sourceKey` and
+ * resolved at runtime against the live {@link EvaluationContext}. Declaring a
+ * source only affects the designer's pick list; evaluation reads the context
+ * either way, so an undeclared path written by hand still resolves.
+ */
+export interface LinkageContextSource {
+  /**
+   * Scope path rooted at `$form` / `$vars` / `$user` / `$node`,
+   * e.g. `"$user.departmentId"`.
+   */
+  key: string;
+  /**
+   * Display name shown in the source picker, e.g. `"发起人部门"`.
+   */
+  label: string;
+}
+
+/**
+ * Pluggable evaluators for the dynamic parts of the model. Expression and
+ * script slots default to plain-JavaScript `new Function` compilation, and
+ * `dispatchEffect` defaults to a no-op. Hosts override any slot to swap in
  * their own expression engine, script sandbox, or effect runtime.
  *
- * The optional `context` argument carries the {@link ExpressionContext}
+ * The optional `context` argument carries the {@link EvaluationContext}
  * (`$vars` / `$user` / `$node`); a host evaluator may ignore it.
  */
 export interface LinkageEvaluators {
@@ -324,17 +345,17 @@ export interface LinkageEvaluators {
    * form values and returns a boolean. Should return `false` (not throw)
    * when the source is malformed.
    */
-  evaluateExpression?: (source: string, values: Record<string, unknown>, context?: ExpressionContext) => boolean;
+  evaluateExpression?: (source: string, values: Record<string, unknown>, context?: EvaluationContext) => boolean;
   /**
    * Evaluates a script-action's `source` against the current form values
    * and returns a state patch. Returning `void` is treated as no-op.
    */
-  evaluateScriptAction?: (source: string, values: Record<string, unknown>, context?: ExpressionContext) => LinkageScriptResult | void;
+  evaluateScriptAction?: (source: string, values: Record<string, unknown>, context?: EvaluationContext) => LinkageScriptResult | void;
   /**
    * Evaluates an assignment / value expression's `source` and returns the
    * computed value. Used by every action value with `{ kind: "expression" }`.
    */
-  evaluateAssignExpression?: (source: string, values: Record<string, unknown>, context?: ExpressionContext) => unknown;
+  evaluateAssignExpression?: (source: string, values: Record<string, unknown>, context?: EvaluationContext) => unknown;
   /**
    * Handles the host-delegated effect actions (`alert` / `api_call` /
    * `navigate`). The runtime handles `set_field` / `set_variable` /

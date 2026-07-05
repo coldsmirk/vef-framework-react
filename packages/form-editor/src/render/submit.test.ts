@@ -68,7 +68,7 @@ describe("filterSubmitValues", () => {
     const values = filterSubmitValues({
       blocks,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       values: { kept: "a", dropped: "b" }
     });
 
@@ -84,7 +84,7 @@ describe("filterSubmitValues", () => {
     const values = filterSubmitValues({
       blocks,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       values: { mode: "off", inner: "secret" }
     });
 
@@ -100,7 +100,7 @@ describe("filterSubmitValues", () => {
     const values = filterSubmitValues({
       blocks,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       values: { mode: "on", inner: "kept" }
     });
 
@@ -122,7 +122,7 @@ describe("filterSubmitValues", () => {
     const values = filterSubmitValues({
       blocks: [subform],
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       values: {
         lines: [
           { category: "food", note: "stripped" },
@@ -149,7 +149,7 @@ describe("filterSubmitValues", () => {
     const values = filterSubmitValues({
       blocks: [subform],
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       values: { lines: [{ amount: "1" }] }
     });
 
@@ -163,7 +163,7 @@ describe("collectSubmitErrors", () => {
       blocks: [field("name", { validate: { required: true } })],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { name: "" }
     });
@@ -176,7 +176,7 @@ describe("collectSubmitErrors", () => {
       blocks: [field("name", { validate: { minLength: 3 } })],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { name: "ab" }
     });
@@ -192,7 +192,7 @@ describe("collectSubmitErrors", () => {
       ],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { mode: "off", inner: "" }
     });
@@ -226,7 +226,7 @@ describe("collectSubmitErrors", () => {
       ],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { mode: "locked", inner: "" }
     });
@@ -247,7 +247,7 @@ describe("collectSubmitErrors", () => {
       blocks: [subform],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { lines: [{ amount: "" }, { amount: "5" }] }
     });
@@ -260,7 +260,7 @@ describe("collectSubmitErrors", () => {
       blocks: [field("name", { validate: { required: true } })],
       disabled: true,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { name: "" }
     });
@@ -282,7 +282,7 @@ describe("collectSubmitErrors", () => {
       blocks: [subform],
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       namePrefix: "",
       values: { lines: [{ amount: "" }] }
     });
@@ -296,7 +296,7 @@ describe("validateRuntimeField", () => {
     const error = validateRuntimeField({
       disabled: true,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       field: field("name", { validate: { required: true } }),
       namePrefix: "",
       value: "",
@@ -310,7 +310,7 @@ describe("validateRuntimeField", () => {
     const error = validateRuntimeField({
       disabled: false,
       evaluators: undefined,
-      expressionContext: undefined,
+      evaluationContext: undefined,
       field: field("amount", { validate: { required: true } }),
       namePrefix: "lines[0].",
       value: "",

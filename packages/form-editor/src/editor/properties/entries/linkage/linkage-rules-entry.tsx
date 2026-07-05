@@ -39,21 +39,19 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   const linkage = readLinkage(entry.read(field));
   const rules = linkage.rules ?? [];
   const isTargetKeyed = isKeyedField(field);
-  // Field options, data-source options, variable names, and deferred rule
-  // diagnostics — resolved in the target field's own value scope (a subform
-  // field references its row siblings, not the outer form). The one field-option
-  // list feeds both the condition source and the `set_field` target picker, and
-  // includes the field itself — a rule may key off its own value.
+  // Field options, data-source options, and deferred rule diagnostics —
+  // resolved in the target field's own value scope (a subform field references
+  // its row siblings, not the outer form). The one field-option list feeds both
+  // the condition source and the `set_field` target picker, and includes the
+  // field itself — a rule may key off its own value.
   const {
     dataSourceOptions,
     fieldOptions,
-    issuesByRule,
-    variableNames
+    issuesByRule
   } = useLinkageEditorModel({
     layer,
     nodeId: field.id,
-    dataSources: schema.dataSources,
-    variables: schema.variables
+    dataSources: schema.dataSources
   });
   // Seed a new rule's condition off a SIBLING so it reads naturally; a field
   // whose only in-scope source is itself falls back to an edge rule rather than
@@ -125,7 +123,6 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
         sourceOptions={fieldOptions}
         targetOptions={fieldOptions}
         triggerKinds={triggerKinds}
-        variableNames={variableNames}
         onChange={next => commit({ ...linkage, rules: next })}
       />
     </div>

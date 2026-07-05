@@ -55,11 +55,6 @@ export interface RuleListEditorProps {
    */
   sourceOptions: SourceFieldOption[];
   /**
-   * Declared form-variable names, feeding `$vars.` autocompletion in the
-   * expression-mode condition editor.
-   */
-  variableNames?: string[];
-  /**
    * The owning block's data-binding key (when keyed). Seeds the expression →
    * visual switch with a different field, mirroring rule creation.
    */
@@ -112,7 +107,6 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
   noun,
   rules,
   selfKey,
-  variableNames,
   sourceOptions,
   targetOptions,
   triggerKinds,
@@ -187,7 +181,6 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
                   sourceOptions={sourceOptions}
                   targetOptions={targetOptions}
                   triggerKinds={triggerKinds}
-                  variableNames={variableNames}
                   onActionsChange={handleActionsChange}
                   onRemove={handleRemove}
                   onTriggerChange={handleTriggerChange}
@@ -220,7 +213,6 @@ interface RuleCardProps {
   rule: FieldLinkageRule;
   selfKey?: string;
   sourceOptions: SourceFieldOption[];
-  variableNames?: string[];
   targetOptions: SourceFieldOption[];
   triggerKinds: readonly LinkageTriggerKind[];
   onActionsChange: (ruleId: string, actions: FieldLinkageAction[]) => void;
@@ -240,7 +232,6 @@ const RuleCardBase: FC<RuleCardProps> = ({
   sourceOptions,
   targetOptions,
   triggerKinds,
-  variableNames,
   onActionsChange,
   onRemove,
   onTriggerChange
@@ -281,7 +272,6 @@ const RuleCardBase: FC<RuleCardProps> = ({
           sourceOptions={sourceOptions}
           trigger={rule.trigger}
           triggerKinds={triggerKinds}
-          variableNames={variableNames}
           onChange={trigger => onTriggerChange(rule.id, trigger)}
         />
 
@@ -293,7 +283,6 @@ const RuleCardBase: FC<RuleCardProps> = ({
           isTargetKeyed={isTargetKeyed}
           targetOptions={targetOptions}
           triggerKind={rule.trigger.kind}
-          variableNames={variableNames}
           onChange={actions => onActionsChange(rule.id, actions)}
         />
 

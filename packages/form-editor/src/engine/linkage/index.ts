@@ -19,7 +19,7 @@ export {
 } from "./effects";
 export {
   deriveDefaultValues,
-  deriveExpressionVariables,
+  deriveEvaluationVariables,
   emptyRuntimeState,
   evaluateLinkage,
   evaluateRuntimeStates,

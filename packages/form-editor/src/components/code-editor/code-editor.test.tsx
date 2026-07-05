@@ -16,27 +16,27 @@ const mockCodeEditorProps = vi.hoisted(() => {
   };
 });
 
+function CodeEditor(props: CodeEditorProps): ReactElement {
+  useEffect(() => {
+    mockCodeEditorProps.latest = props;
+  });
+
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
+    props.onChange?.(event.target.value);
+  };
+
+  return (
+    <textarea
+      aria-label="mock-code-editor"
+      defaultValue={props.value}
+      readOnly={props.readOnly}
+      onChange={handleChange}
+    />
+  );
+}
+
 vi.mock("@vef-framework-react/components", async importOriginal => {
   const actual = await importOriginal<typeof ComponentsModule>();
-
-  function CodeEditor(props: CodeEditorProps): ReactElement {
-    useEffect(() => {
-      mockCodeEditorProps.latest = props;
-    });
-
-    const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
-      props.onChange?.(event.target.value);
-    };
-
-    return (
-      <textarea
-        aria-label="mock-code-editor"
-        defaultValue={props.value}
-        readOnly={props.readOnly}
-        onChange={handleChange}
-      />
-    );
-  }
 
   return {
     ...actual,

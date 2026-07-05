@@ -95,7 +95,7 @@ export interface FormVariablesPanelProps {
 
 /**
  * Form-global variable manager. Each variable surfaces to expressions as
- * `$vars.<name>` with its `defaultValue`; the runtime seeds the expression scope
+ * `$vars.<name>` with its `defaultValue`; the runtime seeds the evaluation scope
  * from this list.
  *
  * Add and type/default edits flow through `onChange` (the drawer patches
@@ -231,10 +231,12 @@ function VariableNameInput({ name, onCommit }: VariableNameInputProps): ReactEle
   const [draft, setDraft] = useState<string | null>(null);
 
   const commit = (): void => {
-    if (draft !== null) {
-      onCommit(draft);
-      setDraft(null);
+    if (draft === null) {
+      return;
     }
+
+    onCommit(draft);
+    setDraft(null);
   };
 
   return (
@@ -265,10 +267,12 @@ function VariableDefaultInput({ value, onCommit }: VariableDefaultInputProps): R
   const [draft, setDraft] = useState<string | null>(null);
 
   const commit = (): void => {
-    if (draft !== null) {
-      onCommit(draft);
-      setDraft(null);
+    if (draft === null) {
+      return;
     }
+
+    onCommit(draft);
+    setDraft(null);
   };
 
   return (

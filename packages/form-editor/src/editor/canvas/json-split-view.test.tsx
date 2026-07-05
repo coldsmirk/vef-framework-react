@@ -16,20 +16,20 @@ import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { JsonSplitView } from "./json-split-view";
 
+// CodeMirror does not run under jsdom; a textarea stand-in keeps the
+// value/onChange contract (the established boundary mock).
+function CodeEditor(props: CodeEditorProps): ReactElement {
+  return (
+    <textarea
+      aria-label="schema-json"
+      value={props.value ?? ""}
+      onChange={(event: ChangeEvent<HTMLTextAreaElement>) => props.onChange?.(event.target.value)}
+    />
+  );
+}
+
 vi.mock("@vef-framework-react/components", async importOriginal => {
   const actual = await importOriginal<typeof ComponentsModule>();
-
-  // CodeMirror does not run under jsdom; a textarea stand-in keeps the
-  // value/onChange contract (the established boundary mock).
-  function CodeEditor(props: CodeEditorProps): ReactElement {
-    return (
-      <textarea
-        aria-label="schema-json"
-        value={props.value ?? ""}
-        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => props.onChange?.(event.target.value)}
-      />
-    );
-  }
 
   return { ...actual, CodeEditor };
 });
@@ -63,6 +63,9 @@ function setupView(schema: FormSchema = makeSchema(), runtime?: PreviewRuntime):
 
     useEffect(() => {
       storeApi = api;
+      // The split view is kept alive (hidden) across mode switches and only
+      // renders its live preview while the editor is actually in json mode.
+      api.getState().setViewMode("json");
     }, [api]);
 
     return <JsonSplitView device="pc" runtime={runtime} schema={liveSchema} />;

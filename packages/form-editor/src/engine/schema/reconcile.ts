@@ -54,18 +54,7 @@ import { isContainerNode, isLeafField, isRootScope, scopeEquals } from "./walk";
 type NodePatch = (node: Block, scope: ScopePath) => Block;
 
 function reconcileBlocks(blocks: Block[], scope: ScopePath, patch: NodePatch): Block[] {
-  let changed = false;
-  const next = blocks.map(block => {
-    const rewritten = reconcileBlock(block, scope, patch);
-
-    if (rewritten !== block) {
-      changed = true;
-    }
-
-    return rewritten;
-  });
-
-  return changed ? next : blocks;
+  return mapPreservingIdentity(blocks, block => reconcileBlock(block, scope, patch));
 }
 
 function reconcileBlock(block: Block, scope: ScopePath, patch: NodePatch): Block {

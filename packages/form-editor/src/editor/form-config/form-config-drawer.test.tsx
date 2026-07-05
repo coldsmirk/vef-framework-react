@@ -32,7 +32,7 @@ function makeSchema(): FormSchema {
   };
 }
 
-function setupDrawer(tab?: FormConfigTabId): FormEditorStoreApi {
+function setupDrawer(tab?: FormConfigTabId, schema: FormSchema = makeSchema()): FormEditorStoreApi {
   let storeApi: FormEditorStoreApi | null = null;
 
   function Harness(): ReactElement {
@@ -50,7 +50,7 @@ function setupDrawer(tab?: FormConfigTabId): FormEditorStoreApi {
   }
 
   render(
-    <FormEditorStoreProvider initialState={{ schema: makeSchema() }}>
+    <FormEditorStoreProvider initialState={{ schema }}>
       <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
         <Harness />
       </RegistryProvider>
@@ -62,6 +62,36 @@ function setupDrawer(tab?: FormConfigTabId): FormEditorStoreApi {
   }
 
   return storeApi;
+}
+
+function makeLinkageSchema(): FormSchema {
+  const schema = makeSchema();
+  schema.presentations.pc.children.push({
+    id: "Field_2",
+    type: "textfield",
+    key: "note",
+    label: "备注",
+    linkage: {
+      rules: [
+        {
+          id: "Rule_1",
+          trigger: {
+            kind: "condition",
+            condition: {
+              kind: "leaf",
+              id: "Cond_1",
+              sourceKey: "name",
+              operator: "eq",
+              value: "x"
+            }
+          },
+          actions: [{ id: "Action_1", type: "show" }]
+        }
+      ]
+    }
+  });
+
+  return schema;
 }
 
 describe("FormConfigDrawer", () => {
@@ -91,6 +121,51 @@ describe("FormConfigDrawer", () => {
     await user.click(await screen.findByRole("button", { name: /新增变量/ }));
 
     expect(storeApi.getState().schema.variables).toHaveLength(1);
+  });
+
+  it("indexes field-level linkage rules on the linkage tab", async () => {
+    setupDrawer("linkage", makeLinkageSchema());
+
+    // The bearer field is listed with its rule count; the form-level event
+    // editor renders beneath as its own section.
+    expect(await screen.findByText("备注")).toBeInTheDocument();
+    expect(screen.getByText(/1\s*条规则/)).toBeInTheDocument();
+    expect(screen.getByText("还没有事件规则")).toBeInTheDocument();
+  });
+
+  it("selects the bearer field when its overview row is clicked", async () => {
+    const user = userEvent.setup();
+    const storeApi = setupDrawer("linkage", makeLinkageSchema());
+
+    await user.click(await screen.findByText("备注"));
+
+    expect(storeApi.getState().selectedId).toBe("Field_2");
+  });
+
+  it("counts field rules plus form events in the linkage tab badge", async () => {
+    const schema = makeLinkageSchema();
+    schema.linkage = {
+      rules: [
+        {
+          id: "Form_rule_1",
+          trigger: { kind: "load" },
+          actions: [
+            {
+              id: "Action_form_1",
+              type: "set_field",
+              targetKey: "name",
+              value: { kind: "literal", value: "seed" }
+            }
+          ]
+        }
+      ]
+    };
+    setupDrawer("linkage", schema);
+
+    // 1 field rule + 1 form event — the same aggregate the footer chip shows.
+    const tabs = await screen.findAllByRole("tab");
+    const linkageTab = tabs.find(tab => tab.textContent?.includes("联动"));
+    expect(linkageTab).toHaveTextContent(/^联动2$/);
   });
 
   it("collapses when the header close button is clicked", async () => {

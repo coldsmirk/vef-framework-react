@@ -9,11 +9,6 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormRenderer } from "./form-renderer";
 
-vi.mock("@vef-framework-react/expression", async () => {
-  const { mockExpressionPackage } = await import("../test-expression-engine");
-  return mockExpressionPackage();
-});
-
 /**
  * Render-count fence for the runtime renderer's O(k)-per-keystroke guarantee.
  *
@@ -40,9 +35,14 @@ const ProbeInput: FC<FieldComponentProps<TextfieldField, string>> = ({
   value = "",
   onChange
 }) => {
-  renderCounts.set(domId, (renderCounts.get(domId) ?? 0) + 1);
+  // The renderer prefixes every domId with its useId instance id (so two
+  // renderers can share a page); strip it back to the schema-relative
+  // `field-...` form the counters and label queries below are written in.
+  const scopedId = domId.slice(domId.indexOf("field-"));
 
-  return <input aria-label={domId} value={value} onChange={event => onChange(event.target.value)} />;
+  renderCounts.set(scopedId, (renderCounts.get(scopedId) ?? 0) + 1);
+
+  return <input aria-label={scopedId} value={value} onChange={event => onChange(event.target.value)} />;
 };
 
 // A synthetic keyed field whose Component just counts its renders. The casts
@@ -176,7 +176,8 @@ beforeEach(() => {
 describe("FormRenderer render bound", () => {
   it("does not re-render an unrelated field when typing into a sibling", async () => {
     const user = userEvent.setup();
-    renderRuntime(stack(probe("a"), probe("b"), probe("c", { linkage: showWhen("a", "x") })));
+    const schema = stack(probe("a"), probe("b"), probe("c", { linkage: showWhen("a", "x") }));
+    renderRuntime(schema);
 
     const before = new Map(renderCounts);
     await user.type(screen.getByLabelText("field-Field_b"), "z");
@@ -189,7 +190,8 @@ describe("FormRenderer render bound", () => {
 
   it("re-renders only the field whose linkage outcome flips", async () => {
     const user = userEvent.setup();
-    renderRuntime(stack(probe("a"), probe("c", { linkage: showWhen("a", "x") }), probe("d")));
+    const schema = stack(probe("a"), probe("c", { linkage: showWhen("a", "x") }), probe("d"));
+    renderRuntime(schema);
 
     const before = new Map(renderCounts);
     await user.type(screen.getByLabelText("field-Field_a"), "x");
@@ -237,11 +239,12 @@ describe("FormRenderer render bound", () => {
     // reference reuse in stabilizeStateMap keeps it from re-rendering when an
     // unrelated source (`a`, which flips `b`) changes. Revert the stabilizer to
     // `return next` and this fails.
-    renderRuntime(stack(
+    const schema = stack(
       probe("a"),
       probe("b", { linkage: showWhen("a", "x") }),
       probe("e", { linkage: disableWhen("a", "ZZZ") })
-    ));
+    );
+    renderRuntime(schema);
 
     const before = new Map(renderCounts);
     await user.type(screen.getByLabelText("field-Field_a"), "x");

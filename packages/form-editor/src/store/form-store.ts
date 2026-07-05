@@ -127,6 +127,13 @@ export interface FormEditorStoreState {
   future: HistoryEntry[];
 
   setSchema: (schema: FormSchema) => void;
+  /**
+   * Reset the document to an empty schema as an ordinary checkpointed edit —
+   * unlike {@link setSchema}, the undo timeline survives, so a clear is one
+   * undo away from recovery (the toolbar's confirm dialog promises exactly
+   * that).
+   */
+  clearSchema: () => void;
   patchSchema: (patch: FormSchemaPatch) => void;
   selectNode: (id: string | null) => void;
   /**
@@ -311,10 +318,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
      * `key`), so a stream of keystrokes collapses into one undoable step.
      */
     function checkpointCoalescing(key: string): void {
-      if (coalesceKey !== key) {
-        pushHistory();
-        coalesceKey = key;
+      if (coalesceKey === key) {
+        return;
       }
+
+      pushHistory();
+      coalesceKey = key;
     }
 
     return {
@@ -336,6 +345,14 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           selectedId: null,
           past: [],
           future: []
+        });
+      },
+
+      clearSchema: () => {
+        checkpoint();
+        set({
+          schema: createEmptySchema(),
+          selectedId: null
         });
       },
 
@@ -366,7 +383,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // patches `key: undefined`; drop the key rather than leaving a dangling
         // `undefined` value on the schema.
         for (const key of ["linkage", "variables", "dataSources"] as const) {
-          if (key in shared && shared[key] === undefined) {
+          if (Object.hasOwn(shared, key) && shared[key] === undefined) {
             delete next[key];
           }
         }
@@ -621,7 +638,10 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpoint();
+        // Coalesced like every property edit: these are driven per keystroke
+        // from InputNumber fields, and one undo must revert the typed value,
+        // not one digit of it.
+        checkpointCoalescing(`span:${nodeId}`);
         set({ schema: withPresentation(schema, device, next) });
       },
 
@@ -634,7 +654,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpoint();
+        checkpointCoalescing(`flex:${nodeId}`);
         set({ schema: withPresentation(schema, device, next) });
       },
 
@@ -649,7 +669,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpoint();
+        checkpointCoalescing(`column-width:${nodeId}`);
         set({ schema: withPresentation(schema, device, next) });
       },
 
@@ -739,7 +759,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         if (
           nextName === name
           || !isValidVariableName(nextName)
-          || !variables.some(variable => variable.name === name)
+          || variables.every(variable => variable.name !== name)
           || variables.some(variable => variable.name === nextName)
         ) {
           return;
@@ -758,7 +778,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const { schema } = get();
         const variables = schema.variables ?? [];
 
-        if (!variables.some(variable => variable.name === name)) {
+        if (variables.every(variable => variable.name !== name)) {
           return;
         }
 
@@ -779,7 +799,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const { schema } = get();
         const dataSources = schema.dataSources ?? [];
 
-        if (!dataSources.some(source => source.id === id)) {
+        if (dataSources.every(source => source.id !== id)) {
           return;
         }
 

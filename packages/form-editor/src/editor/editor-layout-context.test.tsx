@@ -12,9 +12,9 @@ import { resolveEditorLayoutMode, useEditorLayoutMeasure } from "./editor-layout
 class FakeResizeObserver {
   static instances: FakeResizeObserver[] = [];
 
-  observed: Element[] = [];
-
   readonly #callback: ResizeObserverCallback;
+
+  observed: Element[] = [];
 
   constructor(callback: ResizeObserverCallback) {
     this.#callback = callback;

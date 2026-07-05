@@ -41,7 +41,9 @@ describe("walk", () => {
       const schema = schemaOf(tf("f1", "a"), section);
       const seen: string[] = [];
 
-      walkFields(schema, field => seen.push(field.id));
+      walkFields(schema, field => {
+        seen.push(field.id);
+      });
 
       expect(seen).toEqual(["f1", "f2"]);
     });
@@ -77,7 +79,9 @@ describe("walk", () => {
       const schema = schemaOf(tf("f1", "a"), section);
       const ids: string[] = [];
 
-      walkNodes(schema, node => ids.push(id(node.id, node.type)));
+      walkNodes(schema, node => {
+        ids.push(id(node.id, node.type));
+      });
 
       expect(ids).toEqual(["f1:textfield", "s1:section", "f2:textfield"]);
     });
@@ -131,7 +135,9 @@ describe("walk", () => {
       const schema = schemaOf(tabs, tf("f3", "c"));
       const ids: string[] = [];
 
-      walkNodes(schema, node => ids.push(node.id));
+      walkNodes(schema, node => {
+        ids.push(node.id);
+      });
 
       expect(ids).toEqual(["t1", "f1", "f2", "f3"]);
     });

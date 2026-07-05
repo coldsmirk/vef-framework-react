@@ -11,21 +11,21 @@ import { useState } from "react";
 
 import { ConditionEditor } from "./condition-editor";
 
+// CodeMirror does not run under jsdom; a textarea stand-in keeps the
+// value/onChange contract (the established boundary mock — see
+// components/code-editor/code-editor.spec.tsx).
+function CodeEditor(props: CodeEditorProps): ReactElement {
+  return (
+    <textarea
+      aria-label="mock-code-editor"
+      value={props.value ?? ""}
+      onChange={(event: ChangeEvent<HTMLTextAreaElement>) => props.onChange?.(event.target.value)}
+    />
+  );
+}
+
 vi.mock("@vef-framework-react/components", async importOriginal => {
   const actual = await importOriginal<typeof ComponentsModule>();
-
-  // CodeMirror does not run under jsdom; a textarea stand-in keeps the
-  // value/onChange contract (the established boundary mock — see
-  // components/code-editor/code-editor.spec.tsx).
-  function CodeEditor(props: CodeEditorProps): ReactElement {
-    return (
-      <textarea
-        aria-label="mock-code-editor"
-        value={props.value ?? ""}
-        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => props.onChange?.(event.target.value)}
-      />
-    );
-  }
 
   return {
     ...actual,

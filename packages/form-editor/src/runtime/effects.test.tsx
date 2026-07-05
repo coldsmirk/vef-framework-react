@@ -10,11 +10,6 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { FormRenderer } from "../render/form-renderer";
 import { RegistryProvider } from "../store/engine-provider";
 
-vi.mock("@vef-framework-react/expression", async () => {
-  const { mockExpressionPackage } = await import("../test-expression-engine");
-  return mockExpressionPackage();
-});
-
 function field(key: string, overrides: Partial<TextfieldField> = {}): TextfieldField {
   return {
     id: `Field_${key}`,
@@ -57,7 +52,7 @@ function gatedSchema(unlocked: boolean): FormSchema {
           rules: [
             {
               id: "R1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.unlocked == true" } },
+              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.unlocked === true" } },
               actions: [{ type: "show" }]
             }
           ]
@@ -77,7 +72,7 @@ function gatedSchema(unlocked: boolean): FormSchema {
 
 /**
  * A form where typing in `trigger` fires a `change` → `set_variable` count = "1",
- * and `watcher` (hidden by default) shows once `$vars.count == "1"`.
+ * and `watcher` (hidden by default) shows once `$vars.count === "1"`.
  */
 function countingSchema(): FormSchema {
   return {
@@ -105,7 +100,7 @@ function countingSchema(): FormSchema {
           rules: [
             {
               id: "R2",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.count == '1'" } },
+              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.count === '1'" } },
               actions: [{ type: "show" }]
             }
           ]
@@ -358,7 +353,7 @@ describe("runtime effect lane", () => {
       const dispatchEffect = vi.fn();
       // The loop combo (all UI-authorable): an opaque expression condition has
       // no tracked source keys, `always` re-fires it, and `set_variable`
-      // re-runs the detector through the expression context. It must re-fire
+      // re-runs the detector through the evaluation context. It must re-fire
       // once per actual VALUE change — a context-only re-run (its own write)
       // or an identical-value write must not cascade.
       const schema = stack(
@@ -735,7 +730,7 @@ describe("runtime effect lane", () => {
     });
   });
 
-  describe("expression scope", () => {
+  describe("evaluation scope", () => {
     it("sources $vars from schema variables so linkage reads them at runtime", () => {
       renderForm(<FormRenderer schema={gatedSchema(true)} />);
 
@@ -770,23 +765,23 @@ describe("runtime effect lane", () => {
       const schema = countingSchema();
       const registry = createDefaultRegistry();
       // Stable registries reference across both renders, so only the fresh
-      // `expressionContext` wrapper differs between them.
+      // `evaluationContext` wrapper differs between them.
       const registries = { pc: registry, mobile: registry };
 
       const { rerender } = render(
         <RegistryProvider registries={registries}>
-          <FormRenderer expressionContext={{}} schema={schema} />
+          <FormRenderer evaluationContext={{}} schema={schema} />
         </RegistryProvider>
       );
 
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "x");
       expect(await screen.findByRole("textbox", { name: "watcher" })).toBeInTheDocument();
 
-      // A fresh `expressionContext` wrapper (stable inner) must NOT re-seed `$vars`
+      // A fresh `evaluationContext` wrapper (stable inner) must NOT re-seed `$vars`
       // and clobber the `set_variable` write — the watcher stays visible.
       rerender(
         <RegistryProvider registries={registries}>
-          <FormRenderer expressionContext={{}} schema={schema} />
+          <FormRenderer evaluationContext={{}} schema={schema} />
         </RegistryProvider>
       );
 

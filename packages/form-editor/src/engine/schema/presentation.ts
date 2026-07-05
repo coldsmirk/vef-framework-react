@@ -16,9 +16,9 @@ import type { FormSchema, PresentationDevice, PresentationLayer, RuntimeSchema }
  * freezing turns any future in-place mutation into a loud TypeError instead of
  * silently corrupting the module constant for every store instance.
  */
-const EMPTY_LAYER: PresentationLayer = Object.freeze({ children: [] });
-
-Object.freeze(EMPTY_LAYER.children);
+const EMPTY_LAYER: PresentationLayer = Object.freeze({
+  children: Object.freeze([]) as unknown as PresentationLayer["children"]
+});
 
 /**
  * The shared empty presentation layer. Used to materialize a device on first

@@ -8,10 +8,10 @@ import { useRef } from "react";
  * The candidate walks rebuild the array on every store edit (the layer
  * reference moves per keystroke), but the candidate SET only changes when a
  * field is added / removed / re-keyed / re-labeled. Downstream the array
- * identity feeds the expression editors' `assistExtensions` memo — a fresh
- * reference per keystroke would rebuild the CodeMirror completion / lint
- * extensions and reconfigure the editor mid-typing (closing an open
- * completion popup).
+ * identity feeds `RuleCard`'s memo props (`sourceOptions` / `targetOptions`,
+ * see linkage-rules-entry.tsx) — a fresh reference per keystroke would
+ * re-render every rule card (and its mounted CodeMirror) on every edit
+ * anywhere in the form.
  *
  * The ref write happens during render but is idempotent for a given content,
  * so StrictMode double-renders and discarded concurrent renders stay

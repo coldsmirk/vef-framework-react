@@ -446,12 +446,15 @@ describe("reconcile", () => {
 
   describe("renameVariableReferences", () => {
     it("rewrites set_variable actions across both presentations and the form linkage", () => {
+      const rootLayer = layerOf(tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "count")] } }));
+      const pcLayer = layerOf(tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "count")] } }));
+      const mobileLayer = layerOf(tf("m1", "a", { linkage: { rules: [setVariableRule("r2", "count")] } }));
       const schema = schemaOf(
-        layerOf(tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "count")] } })),
+        rootLayer,
         {
           presentations: {
-            pc: layerOf(tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "count")] } })),
-            mobile: layerOf(tf("m1", "a", { linkage: { rules: [setVariableRule("r2", "count")] } }))
+            pc: pcLayer,
+            mobile: mobileLayer
           },
           linkage: { rules: [setVariableRule("r3", "count")] }
         }
@@ -467,11 +470,11 @@ describe("reconcile", () => {
     });
 
     it("leaves other variables and non-variable actions untouched", () => {
-      const schema = schemaOf(layerOf(
-        tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "other")] } })
-      ));
+      const layer = layerOf(tf("f1", "a", { linkage: { rules: [setVariableRule("r1", "other")] } }));
+      const schema = schemaOf(layer);
 
-      expect(renameVariableReferences(schema, "count", "total")).toBe(schema);
+      const next = renameVariableReferences(schema, "count", "total");
+      expect(next).toBe(schema);
     });
   });
 

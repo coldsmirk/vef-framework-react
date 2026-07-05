@@ -35,13 +35,11 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
   const {
     dataSourceOptions,
     fieldOptions: sourceOptions,
-    issuesByRule,
-    variableNames
+    issuesByRule
   } = useLinkageEditorModel({
     layer: pcLayer,
     nodeId: null,
     dataSources: schema.dataSources,
-    variables: schema.variables,
     formLinkage: schema.linkage
   });
   // A `condition` trigger with no comparable root-scope source field yields an
@@ -67,7 +65,6 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
       // targets are the same root-scope keyed-field list.
       targetOptions={sourceOptions}
       triggerKinds={triggerKinds}
-      variableNames={variableNames}
       onChange={commit}
     />
   );

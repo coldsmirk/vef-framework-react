@@ -14,23 +14,23 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormRenderer } from "./form-renderer";
 
+function CodeEditor(props: CodeEditorProps): ReactElement {
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
+    props.onChange?.(event.target.value);
+  };
+
+  return (
+    <textarea
+      aria-label="mock-code-editor"
+      defaultValue={props.value}
+      readOnly={props.readOnly}
+      onChange={handleChange}
+    />
+  );
+}
+
 vi.mock("@vef-framework-react/components", async importOriginal => {
   const actual = await importOriginal<typeof ComponentsModule>();
-
-  function CodeEditor(props: CodeEditorProps): ReactElement {
-    const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
-      props.onChange?.(event.target.value);
-    };
-
-    return (
-      <textarea
-        aria-label="mock-code-editor"
-        defaultValue={props.value}
-        readOnly={props.readOnly}
-        onChange={handleChange}
-      />
-    );
-  }
 
   return {
     ...actual,
@@ -446,6 +446,21 @@ describe("FormRenderer", () => {
     await user.click(screen.getByRole("button", { name: "提交" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("此项为必填");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed required check once after submit", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema = stack(makeField("name", { validate: { required: true } }), submitButton());
+
+    renderRuntime(<FormRenderer schema={schema} onSubmit={onSubmit} />);
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    // Exact match: the change and submit lanes must not both report the same
+    // validator, which would render "此项为必填、此项为必填".
+    expect(await screen.findByRole("alert")).toHaveTextContent(/^此项为必填$/);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

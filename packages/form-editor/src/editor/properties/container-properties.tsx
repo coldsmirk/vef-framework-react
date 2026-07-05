@@ -291,15 +291,17 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
       }
 
       return { ...node, variant: "stack" };
-    }, "variant");
+    });
   };
 
+  // No coalesceKey on these: picking a preset / variant is a discrete click —
+  // one undo step per pick, matching the Section / Tabs gap selects.
   const setGap = (gap?: GapScale): void => {
-    update(node => node.type === "subform" && node.variant === "stack" ? { ...node, gap } : node, "gap");
+    update(node => node.type === "subform" && node.variant === "stack" ? { ...node, gap } : node);
   };
 
   const setSize = (size: NonNullable<TableSubform["size"]>): void => {
-    update(node => node.type === "subform" && node.variant === "table" ? { ...node, size } : node, "size");
+    update(node => node.type === "subform" && node.variant === "table" ? { ...node, size } : node);
   };
 
   return (
@@ -359,14 +361,12 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
           style={numberInputStyle}
           value={subform.minRows}
           onChange={value => {
-            if (typeof value !== "number") {
-              patch({ minRows: undefined }, "minRows");
-              return;
-            }
-
-            // Keep the bounds coherent on commit: a minimum above the current
-            // maximum clamps down to it.
-            patch({ minRows: subform.maxRows === undefined ? value : Math.min(value, subform.maxRows) }, "minRows");
+            // No mid-typing clamp: antd fires onChange with out-of-range
+            // values while the user types ("15" fires at "1" then "15") and
+            // clamps against min/max itself on blur — clamping here would
+            // snap the input to a different number under the user's cursor.
+            // The validator flags a transiently inverted min/max until then.
+            patch({ minRows: typeof value === "number" ? value : undefined }, "minRows");
           }}
         />
       </div>
@@ -379,13 +379,9 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
           style={numberInputStyle}
           value={subform.maxRows}
           onChange={value => {
-            if (typeof value !== "number") {
-              patch({ maxRows: undefined }, "maxRows");
-              return;
-            }
-
-            // Mirror of minRows: a maximum below the current minimum clamps up.
-            patch({ maxRows: subform.minRows === undefined ? value : Math.max(value, subform.minRows) }, "maxRows");
+            // Mirror of minRows: rely on the native bounds' blur clamp
+            // instead of snapping the value mid-typing.
+            patch({ maxRows: typeof value === "number" ? value : undefined }, "maxRows");
           }}
         />
       </div>

@@ -1,7 +1,7 @@
-import type { Block, FormField, KeyedFormField, KeyedNodeUnion, PresentationLayer, Validatable } from "../types";
+import type { Block, FormField, FormSchema, KeyedFormField, KeyedNodeUnion, PresentationLayer, Validatable } from "../types";
 import type { ScopePath } from "./schema/walk";
 
-import { scopeEquals, walkNodes } from "./schema/walk";
+import { isRootScope, scopeEquals, walkFields, walkNodes } from "./schema/walk";
 
 /**
  * Generate a unique data-binding key for a keyed node within a value scope.
@@ -85,6 +85,37 @@ export function isValidatableField(field: FormField): field is FormField & Valid
 }
 
 /**
+ * Visit each root-scope keyed leaf field across both device presentations,
+ * de-duplicated by key with the pc tree scanned first (so pc wins a label /
+ * config collision). The shared projection walk behind `toColumnDefinitions`
+ * and `toFormFieldDefinitions` — the cross-package field inventories must
+ * agree on which fields exist, so they share one definition of the scan.
+ * Subform-scoped fields are excluded: consumers address fields by bare `key`,
+ * which cannot reach a scoped `lines[i].amount` path.
+ */
+export function walkUniqueRootKeyedFields(schema: FormSchema, visit: (field: KeyedFormField) => void): void {
+  const seen = new Set<string>();
+
+  const collect = (layer: PresentationLayer | undefined): void => {
+    if (layer === undefined) {
+      return;
+    }
+
+    walkFields(layer, (field, scope) => {
+      if (!isRootScope(scope) || !isKeyedField(field) || seen.has(field.key)) {
+        return;
+      }
+
+      seen.add(field.key);
+      visit(field);
+    });
+  };
+
+  collect(schema.presentations.pc);
+  collect(schema.presentations.mobile);
+}
+
+/**
  * Collect the data-binding keys used directly within one value scope (siblings
  * that must stay mutually unique). Keys nested under a deeper subform scope are
  * excluded — they live in their own namespace.
@@ -134,5 +165,5 @@ export function collectSubtreeKeysByScope(node: Block, baseScope: ScopePath): Sc
     buckets.set(scopeId, bucket);
   });
 
-  return [...buckets.values()];
+  return buckets.values().toArray();
 }

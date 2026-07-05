@@ -269,10 +269,12 @@ describe("form store", () => {
 
     it("prunes a sibling rule that referenced the removed field's key", () => {
       const api = setup();
-      act(() => api.getState().setSchema(schemaOf([
+      const nextSchema = schemaOf([
         tf("fa", "amount"),
         tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
-      ])));
+      ]);
+
+      act(() => api.getState().setSchema(nextSchema));
 
       act(() => api.getState().removeNode("fa"));
 
@@ -338,10 +340,12 @@ describe("form store", () => {
 
     it("restores the pruned references together with the node on undo", () => {
       const api = setup();
-      act(() => api.getState().setSchema(schemaOf([
+      const nextSchema = schemaOf([
         tf("fa", "amount"),
         tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
-      ])));
+      ]);
+
+      act(() => api.getState().setSchema(nextSchema));
 
       act(() => api.getState().removeNode("fa"));
       act(() => api.getState().undo());
@@ -462,10 +466,12 @@ describe("form store", () => {
 
     it("keeps sibling rules when the move stays inside one scope", () => {
       const api = setup();
-      act(() => api.getState().setSchema(schemaOf([
+      const nextSchema = schemaOf([
         tf("fa", "amount"),
         tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
-      ])));
+      ]);
+
+      act(() => api.getState().setSchema(nextSchema));
 
       act(() => api.getState().moveNode({
         nodeId: "fa",
@@ -595,6 +601,23 @@ describe("form store", () => {
       expect(api.getState().schema).toBe(afterInsert);
     });
 
+    it("restores the cleared schema through undo", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const beforeClear = api.getState().schema;
+
+      // clearSchema is an ordinary checkpointed edit — unlike setSchema (a
+      // document swap that resets the timeline), the confirm dialog promises
+      // the clear is recoverable.
+      act(() => api.getState().clearSchema());
+      expect(rootKeys(api.getState().schema)).toEqual([]);
+      expect(api.getState().selectedId).toBeNull();
+      expect(api.getState().canUndo()).toBe(true);
+
+      act(() => api.getState().undo());
+      expect(api.getState().schema).toBe(beforeClear);
+    });
+
     it("undoes and redoes a form-level metadata edit (variables)", () => {
       const api = setup();
 
@@ -695,7 +718,7 @@ describe("form store", () => {
       }));
 
       // Two edits to the same field share one history entry.
-      expect(api.getState().past.length).toBe(pastAfterInsert + 1);
+      expect(api.getState().past).toHaveLength(pastAfterInsert + 1);
 
       act(() => api.getState().undo());
       // A single undo reverts the whole edit run back to the inserted state.
@@ -721,7 +744,7 @@ describe("form store", () => {
 
       // The intervening selection breaks coalescing, so the two edits are two
       // distinct undoable steps.
-      expect(api.getState().past.length).toBe(base + 2);
+      expect(api.getState().past).toHaveLength(base + 2);
     });
 
     it("keeps edits to different properties separate via the coalesceKey option", () => {
@@ -753,7 +776,7 @@ describe("form store", () => {
       ));
 
       // Label keystrokes fold into one step; the placeholder edit starts its own.
-      expect(api.getState().past.length).toBe(base + 2);
+      expect(api.getState().past).toHaveLength(base + 2);
     });
 
     it("breaks a coalescing run on a view-mode round trip", () => {
@@ -773,7 +796,7 @@ describe("form store", () => {
         updater: field => { return { ...field, label: "AB" }; }
       }));
 
-      expect(api.getState().past.length).toBe(base + 2);
+      expect(api.getState().past).toHaveLength(base + 2);
     });
   });
 
@@ -815,11 +838,12 @@ describe("form store", () => {
 
     it("rewrites sibling rules and the form linkage to follow a root-scope rename", () => {
       const api = setup();
-      act(() => api.getState().setSchema(schemaOf(
-        [
-          tf("fa", "amount"),
-          tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
-        ],
+      const fields = [
+        tf("fa", "amount"),
+        tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
+      ];
+      const nextSchema = schemaOf(
+        fields,
         {
           linkage: {
             rules: [
@@ -837,7 +861,9 @@ describe("form store", () => {
             ]
           }
         }
-      )));
+      );
+
+      act(() => api.getState().setSchema(nextSchema));
 
       act(() => api.getState().setFieldKey({ fieldId: "fa", key: "total" }));
 

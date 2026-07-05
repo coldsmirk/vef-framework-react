@@ -353,7 +353,8 @@ describe("conditionHasAuthoredContent", () => {
   });
 
   it("treats a group with one pristine seeded leaf as unauthored", () => {
-    expect(conditionHasAuthoredContent(createGroup([createLeaf("a")]))).toBe(false);
+    const group = createGroup([createLeaf("a")]);
+    expect(conditionHasAuthoredContent(group)).toBe(false);
   });
 
   it("detects an authored leaf value", () => {
@@ -369,7 +370,8 @@ describe("conditionHasAuthoredContent", () => {
   });
 
   it("treats multiple children as authored", () => {
-    expect(conditionHasAuthoredContent(createGroup([createLeaf("a"), createLeaf("b")]))).toBe(true);
+    const group = createGroup([createLeaf("a"), createLeaf("b")]);
+    expect(conditionHasAuthoredContent(group)).toBe(true);
   });
 
   it("keys an expression off a non-blank source", () => {

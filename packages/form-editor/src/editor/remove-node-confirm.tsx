@@ -28,39 +28,37 @@ const undoHintCss = css({
   color: globalCssVars.colorTextTertiary
 });
 
-function RemovalImpactSummary({ impact }: { impact: RemovalImpact }): ReactElement {
+/**
+ * The impact rendered as one plain-text line per consequence — the single
+ * source for both the rich modal body and the `$vef`-less native fallback's
+ * `detail`, so the two surfaces can never drift.
+ */
+function removalImpactLines(impact: RemovalImpact): string[] {
+  const lines: string[] = [];
   const ruleCount = impact.removedRules.reduce((sum, owner) => sum + owner.count, 0) + impact.formRulesRemoved;
-  const owners = impact.removedRules.map(owner => `「${owner.ownerLabel}」`).join("、");
 
+  if (ruleCount > 0) {
+    // ruleCount > 0 guarantees at least one source below, so the parenthetical
+    // source list is never empty.
+    const sources = [
+      ...impact.removedRules.map(owner => `「${owner.ownerLabel}」`),
+      ...impact.formRulesRemoved > 0 ? ["表单级事件"] : []
+    ];
+
+    lines.push(`将同时移除 ${ruleCount} 条引用它的联动规则（来自 ${sources.join("、")}）`);
+  }
+
+  for (const field of impact.unreachable) {
+    lines.push(`「${field.label}」默认隐藏且将失去全部「显示」规则，运行时将不可见`);
+  }
+
+  return lines;
+}
+
+function RemovalImpactSummary({ lines }: { lines: string[] }): ReactElement {
   return (
     <ul css={summaryCss}>
-      {ruleCount > 0
-        ? (
-            <li>
-              将同时移除
-              {" "}
-              {ruleCount}
-              {" "}
-              条引用它的联动规则
-              {owners.length > 0 ? `（来自 ${owners}` : ""}
-
-              {impact.formRulesRemoved > 0
-                ? `${owners.length > 0 ? "、" : "（来自 "}表单级事件`
-                : ""}
-
-              {owners.length > 0 || impact.formRulesRemoved > 0 ? "）" : ""}
-            </li>
-          )
-        : null}
-
-      {impact.unreachable.map(field => (
-        <li key={field.id}>
-          「
-          {field.label}
-          」默认隐藏且将失去全部「显示」规则，运行时将不可见
-        </li>
-      ))}
-
+      {lines.map(line => <li key={line}>{line}</li>)}
       <li css={undoHintCss}>该操作可通过撤销恢复。</li>
     </ul>
   );
@@ -83,9 +81,14 @@ export function removeNodeWithConfirm(storeApi: FormEditorStoreApi, nodeId: stri
     return;
   }
 
+  const lines = removalImpactLines(impact);
+
   confirmDialog(
     "删除该控件将影响联动规则",
-    <RemovalImpactSummary impact={impact} />,
-    () => storeApi.getState().removeNode(nodeId)
+    <RemovalImpactSummary lines={lines} />,
+    {
+      onOk: () => storeApi.getState().removeNode(nodeId),
+      detail: lines.join("\n")
+    }
   );
 }

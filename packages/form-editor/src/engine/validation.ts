@@ -52,6 +52,7 @@ export type ValidationIssueCode
     | "gap_invalid"
     | "columns_invalid"
     | "variant_invalid"
+    | "subform_variant_invalid"
     | "title_invalid"
     | "display_text_invalid"
     | "rows_bound_invalid"
@@ -185,6 +186,7 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   column_width_invalid: "columnWidth 必须为正数（表格子表单列的固定像素宽度）",
   gap_invalid: "间距取值非法（需为预设档位或非负整数）",
   variant_invalid: "variant 必须为 \"card\" 或 \"collapse\"",
+  subform_variant_invalid: "variant 必须为 \"stack\" 或 \"table\"",
   title_invalid: "title 必须为字符串",
   rows_bound_invalid: "行数限制无效：minRows / maxRows 须为非负整数且 minRows ≤ maxRows",
   subform_table_column: "表格子表单的列必须是绑定字段（不能是容器或展示 / 按钮类组件）",
@@ -251,7 +253,7 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
 };
 
 function isParamCode(code: ValidationIssueCode): code is ParamCode {
-  return code in PARAM_MESSAGES;
+  return Object.hasOwn(PARAM_MESSAGES, code);
 }
 
 function renderMessage(code: ValidationIssueCode, params: unknown): string {
@@ -282,6 +284,15 @@ export function formatIssueMessage(code: ValidationIssueCode, params?: unknown):
 }
 
 /**
+ * One issue rendered as `path：message` (or the bare message when it carries
+ * no path) — the plain-text line format shared by the apply pipeline's
+ * error/warning reports and the dialogs' `$vef`-less fallbacks.
+ */
+export function formatIssueLine(issue: ValidationIssue): string {
+  return issue.path.length > 0 ? `${issue.path}：${issue.message}` : issue.message;
+}
+
+/**
  * Build a {@link ValidationIssue}, deriving `severity` and `message` from the
  * central tables so emit sites only state location + code (+ params / rule id).
  */
@@ -304,7 +315,7 @@ export function createIssue(
     code,
     severity: WARNING_CODES.has(code) ? "warning" : "error",
     message: renderMessage(code, params),
-    ...ruleId === undefined ? {} : { ruleId }
+    ...ruleId !== undefined && { ruleId }
   };
 }
 

@@ -145,7 +145,7 @@ export function validateSchema(candidate: unknown, registries: DeviceRegistries)
 
   return {
     valid,
-    ...valid ? { schema: schema as FormSchema } : {},
+    ...valid && { schema: schema as FormSchema },
     issues
   };
 }
@@ -154,7 +154,7 @@ export function validateSchema(candidate: unknown, registries: DeviceRegistries)
  * `schema.variables` must be an array of plain objects, each carrying a
  * non-empty `id`, an identifier `name` (the `$vars` access key — `\w+` only),
  * and a known `type`, with names unique across the form. A malformed entry
- * would crash `deriveExpressionVariables` or silently shadow another variable.
+ * would crash `deriveEvaluationVariables` or silently shadow another variable.
  */
 function validateVariables(variables: unknown, issues: ValidationIssue[]): void {
   if (variables === undefined) {
@@ -181,17 +181,13 @@ function validateVariables(variables: unknown, issues: ValidationIssue[]): void 
     // Ids must be unique: the variables panel edits and removes by id, so a
     // duplicate id silently aliases two declarations onto one row (the
     // structurally-parallel data-source validator enforces the same).
-    if (typeof entry.id !== "string" || entry.id.length === 0) {
-      issues.push(createIssue(`${where}.id`, "variables_invalid"));
-    } else if (seenIds.has(entry.id)) {
+    if (typeof entry.id !== "string" || entry.id.length === 0 || seenIds.has(entry.id)) {
       issues.push(createIssue(`${where}.id`, "variables_invalid"));
     } else {
       seenIds.add(entry.id);
     }
 
-    if (typeof entry.name !== "string" || !isValidVariableName(entry.name)) {
-      issues.push(createIssue(`${where}.name`, "variables_invalid"));
-    } else if (seenNames.has(entry.name)) {
+    if (typeof entry.name !== "string" || !isValidVariableName(entry.name) || seenNames.has(entry.name)) {
       issues.push(createIssue(`${where}.name`, "variables_invalid"));
     } else {
       seenNames.add(entry.name);
@@ -232,9 +228,7 @@ function validateDataSources(dataSources: unknown, issues: ValidationIssue[]): R
       continue;
     }
 
-    if (typeof entry.id !== "string" || entry.id.length === 0) {
-      issues.push(createIssue(`${where}.id`, "data_sources_invalid"));
-    } else if (ids.has(entry.id)) {
+    if (typeof entry.id !== "string" || entry.id.length === 0 || ids.has(entry.id)) {
       issues.push(createIssue(`${where}.id`, "data_sources_invalid"));
     } else {
       ids.add(entry.id);
@@ -244,25 +238,29 @@ function validateDataSources(dataSources: unknown, issues: ValidationIssue[]): R
       issues.push(createIssue(`${where}.name`, "data_sources_invalid"));
     }
 
-    switch (entry.kind) {
-      case "static": {
-        validateOptionList(entry.options, `${where}.options`, "data_sources_invalid", issues);
-        break;
-      }
-
-      case "remote": {
-        issues.push(...validateRemoteRequest(entry.request, `${where}.request`));
-        validateOptionMapping(entry.mapping, `${where}.mapping`, "data_sources_invalid", issues);
-        break;
-      }
-
-      default: {
-        issues.push(createIssue(`${where}.kind`, "data_sources_invalid"));
-      }
-    }
+    validateDataSourcePayload(entry, where, issues);
   }
 
   return ids;
+}
+
+function validateDataSourcePayload(entry: Record<string, unknown>, where: string, issues: ValidationIssue[]): void {
+  switch (entry.kind) {
+    case "static": {
+      validateOptionList(entry.options, `${where}.options`, "data_sources_invalid", issues);
+      return;
+    }
+
+    case "remote": {
+      issues.push(...validateRemoteRequest(entry.request, `${where}.request`));
+      validateOptionMapping(entry.mapping, `${where}.mapping`, "data_sources_invalid", issues);
+      return;
+    }
+
+    default: {
+      issues.push(createIssue(`${where}.kind`, "data_sources_invalid"));
+    }
+  }
 }
 
 /**
@@ -651,7 +649,7 @@ function validateGrid(raw: Record<string, unknown>, where: string, scope: string
   rejectStrayContainerKey(raw, "grid", where, ctx);
 
   if (raw.columns !== undefined
-    && (typeof raw.columns !== "number" || !Number.isInteger(raw.columns) || raw.columns < 1 || raw.columns > ROW_COLS)) {
+    && (typeof raw.columns !== "number" || !Number.isSafeInteger(raw.columns) || raw.columns < 1 || raw.columns > ROW_COLS)) {
     ctx.issues.push(createIssue(`${where}.columns`, "columns_invalid", { max: ROW_COLS }));
   }
 
@@ -667,7 +665,7 @@ function validateGrid(raw: Record<string, unknown>, where: string, scope: string
 }
 
 function isNonNegativeInteger(value: unknown): boolean {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function validateTabs(raw: Record<string, unknown>, where: string, scope: string[], ctx: Ctx): void {
@@ -705,11 +703,12 @@ function validateTabs(raw: Record<string, unknown>, where: string, scope: string
 }
 
 function validateSubform(raw: Record<string, unknown>, where: string, scope: string[], ctx: Ctx): void {
-  // Normalize the variant at ingest: only "table" is recognized; anything else —
-  // a legacy schema predating the variant, or an invalid value — defaults to the
-  // free-layout "stack", keeping the persisted discriminated union well-formed.
+  // `variant` is the subform's presentation discriminant and is required —
+  // reported (like the section variant) rather than silently rewritten: this
+  // validator is a pure read used by live diagnostic surfaces, never a
+  // normalizer.
   if (raw.variant !== "table" && raw.variant !== "stack") {
-    raw.variant = "stack";
+    ctx.issues.push(createIssue(`${where}.variant`, "subform_variant_invalid"));
   }
 
   const hasKey = typeof raw.key === "string" && raw.key.length > 0;
@@ -809,7 +808,7 @@ function validateSpan(span: unknown, where: string, ctx: Ctx): void {
     return;
   }
 
-  if (typeof span !== "number" || !Number.isInteger(span) || span < 1 || span > ROW_COLS) {
+  if (typeof span !== "number" || !Number.isSafeInteger(span) || span < 1 || span > ROW_COLS) {
     ctx.issues.push(createIssue(`${where}.span`, "span_invalid", { max: ROW_COLS }));
   }
 }

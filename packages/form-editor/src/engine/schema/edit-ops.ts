@@ -221,7 +221,10 @@ function clampFlex(flex: FlexSlot | undefined): FlexSlot | undefined {
     next.basis = flex.basis;
   }
 
-  return next;
+  // Every axis dropped as invalid/absent collapses back to "no flex config",
+  // matching how clampSpan / clampColumnWidth clear to auto — a `flex: {}`
+  // would otherwise persist as dead clutter.
+  return Object.keys(next).length === 0 ? undefined : next;
 }
 
 function sameFlex(a: FlexSlot | undefined, b: FlexSlot | undefined): boolean {
@@ -574,17 +577,26 @@ function remapActionKeys(action: FieldLinkageAction, keyMap: Map<string, string>
 }
 
 function remapConditionKeys(condition: LinkageCondition, keyMap: Map<string, string>): LinkageCondition {
-  if (condition.kind === "group") {
-    return { ...condition, children: condition.children.map(child => remapConditionKeys(child, keyMap)) };
+  switch (condition.kind) {
+    case "group": {
+      return { ...condition, children: condition.children.map(child => remapConditionKeys(child, keyMap)) };
+    }
+
+    case "leaf": {
+      const mapped = keyMap.get(condition.sourceKey);
+
+      return mapped === undefined ? condition : { ...condition, sourceKey: mapped };
+    }
+
+    case "expression": {
+      // Expression sources are opaque host code — never rewritten.
+      return condition;
+    }
+
+    default: {
+      return assertNever(condition);
+    }
   }
-
-  if (condition.kind === "leaf") {
-    const mapped = keyMap.get(condition.sourceKey);
-
-    return mapped === undefined ? condition : { ...condition, sourceKey: mapped };
-  }
-
-  return condition;
 }
 
 /**

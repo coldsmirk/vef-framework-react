@@ -129,7 +129,8 @@ export function createActionFor(type: LinkageActionType): FieldLinkageAction {
  */
 export function createTrigger(kind: LinkageTriggerKind, sourceKey?: string): LinkageTrigger {
   if (kind === "condition") {
-    return { kind, condition: sourceKey ? createGroup([createLeaf(sourceKey)]) : createGroup([]) };
+    const children = sourceKey ? [createLeaf(sourceKey)] : [];
+    return { kind, condition: createGroup(children) };
   }
 
   // Edge triggers are payload-free; the early return above narrowed `kind` off
@@ -217,30 +218,28 @@ export function reconcileRuleTrigger(
  * that loses real work and deserves a confirmation.
  */
 export function conditionHasAuthoredContent(condition: LinkageCondition): boolean {
-  switch (condition.kind) {
-    case "expression": {
-      return condition.source.trim().length > 0;
+  let current = condition;
+
+  while (current.kind === "group") {
+    const { children } = current;
+
+    if (children.length === 0) {
+      return false;
     }
 
-    case "leaf": {
-      // The sourceKey is auto-seeded, so it alone does not count as authored.
-      return condition.operator !== "eq" || (condition.value !== "" && condition.value !== undefined);
-    }
-
-    case "group": {
-      const { children } = condition;
-
-      if (children.length === 0) {
-        return false;
-      }
-
-      if (children.length === 1 && children[0] !== undefined) {
-        return conditionHasAuthoredContent(children[0]);
-      }
-
+    if (children.length !== 1 || children[0] === undefined) {
       return true;
     }
+
+    current = children[0];
   }
+
+  if (current.kind === "expression") {
+    return current.source.trim().length > 0;
+  }
+
+  // The sourceKey is auto-seeded, so it alone does not count as authored.
+  return current.operator !== "eq" || (current.value !== "" && current.value !== undefined);
 }
 
 /**
@@ -268,9 +267,9 @@ export function normalizeLinkage(linkage: FieldLinkage): FieldLinkage | undefine
     && (defaults.hidden === true || defaults.disabled === true || defaults.required === true);
   const nextDefaults = hasDefaults
     ? {
-        ...defaults.hidden === true ? { hidden: true } : {},
-        ...defaults.disabled === true ? { disabled: true } : {},
-        ...defaults.required === true ? { required: true } : {}
+        ...(defaults.hidden === true) && { hidden: true },
+        ...(defaults.disabled === true) && { disabled: true },
+        ...(defaults.required === true) && { required: true }
       }
     : undefined;
   const nextRules = linkage.rules?.length ? linkage.rules : undefined;
@@ -280,8 +279,8 @@ export function normalizeLinkage(linkage: FieldLinkage): FieldLinkage | undefine
   }
 
   return {
-    ...nextDefaults ? { defaults: nextDefaults } : {},
-    ...nextRules ? { rules: nextRules } : {}
+    ...nextDefaults && { defaults: nextDefaults },
+    ...nextRules && { rules: nextRules }
   };
 }
 

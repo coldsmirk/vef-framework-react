@@ -332,7 +332,7 @@ function TabContent({
 
               if (!Entry) {
                 return (
-                  <div key={entry.id} css={unknownEntryCss} data-unknown-entry-type={entry.type}>
+                  <div key={`${field.id}:${entry.id}`} css={unknownEntryCss} data-unknown-entry-type={entry.type}>
                     未注册的属性编辑器：
                     {entry.type}
                   </div>
@@ -341,7 +341,12 @@ function TabContent({
 
               return (
                 <Entry
-                  key={entry.id}
+                  // Keyed by FIELD identity too, not just the entry slot:
+                  // switching the selection must remount every entry so a
+                  // draft-buffered editor (KeyEntry's uncommitted key) can
+                  // never leak the previous field's in-flight text onto — and
+                  // later commit it over — the newly selected field.
+                  key={`${field.id}:${entry.id}`}
                   entry={entry}
                   field={field}
                   schema={schema}

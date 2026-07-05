@@ -29,13 +29,13 @@ function installVefGlobal(): VefMock {
     }
   };
 
-  (globalThis as { $vef?: unknown }).$vef = vef;
+  vi.stubGlobal("$vef", vef);
 
   return vef;
 }
 
 afterEach(() => {
-  delete (globalThis as { $vef?: unknown }).$vef;
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -99,7 +99,7 @@ describe("confirmDialog", () => {
       const vef = installVefGlobal();
       const onOk = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", onOk);
+      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
 
       expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({
         title: "确认清空？",
@@ -116,7 +116,7 @@ describe("confirmDialog", () => {
       vi.spyOn(globalThis, "confirm").mockReturnValue(true);
       const onOk = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", onOk);
+      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
 
       expect(onOk).toHaveBeenCalledTimes(1);
     });
@@ -125,9 +125,24 @@ describe("confirmDialog", () => {
       vi.spyOn(globalThis, "confirm").mockReturnValue(false);
       const onOk = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", onOk);
+      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
 
       expect(onOk).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the plain-text detail for a rich content body", () => {
+      const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+      const onOk = vi.fn();
+
+      // A ReactNode content cannot be shown natively; `detail` carries its
+      // substance so the question is never reduced to the bare title.
+      confirmDialog("删除该控件将影响联动规则", { rich: true } as never, {
+        onOk,
+        detail: "将同时移除 2 条引用它的联动规则"
+      });
+
+      expect(confirm).toHaveBeenCalledWith("删除该控件将影响联动规则\n\n将同时移除 2 条引用它的联动规则");
+      expect(onOk).toHaveBeenCalledTimes(1);
     });
   });
 });

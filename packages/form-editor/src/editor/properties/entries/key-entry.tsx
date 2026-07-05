@@ -28,10 +28,12 @@ export const KeyEntry: FC<EntryComponentProps> = ({
   const [draft, setDraft] = useState<string | null>(null);
 
   const commit = (): void => {
-    if (draft !== null) {
-      onChange(draft);
-      setDraft(null);
+    if (draft === null) {
+      return;
     }
+
+    onChange(draft);
+    setDraft(null);
   };
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {

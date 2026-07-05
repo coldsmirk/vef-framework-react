@@ -38,11 +38,6 @@ export interface ActionsEditorProps {
    * Form-global data sources offered as a `refresh_data_source` target.
    */
   dataSourceOptions: SourceFieldOption[];
-  /**
-   * Declared form-variable names, forwarded into each action's expression
-   * editors for completion / lint.
-   */
-  variableNames?: string[];
   onChange: (next: FieldLinkageAction[]) => void;
 }
 
@@ -60,7 +55,6 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   isTargetKeyed,
   targetOptions,
   triggerKind,
-  variableNames,
   onChange
 }) => {
   const availableActions = useMemo(
@@ -106,7 +100,6 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
             dataSourceOptions={dataSourceOptions}
             isConditionTrigger={triggerKind === "condition"}
             targetOptions={targetOptions}
-            variableNames={variableNames}
             onChange={next => updateAt(index, next)}
             onRemove={() => removeAt(index)}
           />

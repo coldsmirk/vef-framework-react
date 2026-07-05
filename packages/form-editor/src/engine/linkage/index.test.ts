@@ -15,7 +15,7 @@ import {
   defaultEvaluateAssignExpression,
   defaultEvaluateExpression,
   deriveDefaultValues,
-  deriveExpressionVariables,
+  deriveEvaluationVariables,
   evaluateConditionEffectTruths,
   evaluateLinkage,
   evaluateRuntimeStates,
@@ -27,11 +27,6 @@ import {
   validateLinkageSchema
 } from "./index";
 import { matchLeaf } from "./operators";
-
-vi.mock("@vef-framework-react/expression", async () => {
-  const { mockExpressionPackage } = await import("../../test-expression-engine");
-  return mockExpressionPackage();
-});
 
 function makeField(key: string, overrides: Partial<TextfieldField> = {}): TextfieldField {
   return {
@@ -576,7 +571,7 @@ describe("linkage engine", () => {
   });
 
   describe("state lane — expression conditions", () => {
-    it("invokes the default ZEN evaluator and returns a boolean", () => {
+    it("invokes the default JS evaluator and returns a boolean", () => {
       const field = makeField("target", {
         linkage: {
           rules: [
@@ -586,7 +581,7 @@ describe("linkage engine", () => {
                 kind: "condition",
                 condition: {
                   kind: "expression",
-                  source: "field.type == 'enterprise' and field.amount > 10"
+                  source: "field.type === 'enterprise' && field.amount > 10"
                 }
               },
               actions: [{ type: "hide" }]
@@ -605,7 +600,7 @@ describe("linkage engine", () => {
           rules: [
             {
               id: "Rule_1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "this is not zen" } },
+              trigger: { kind: "condition", condition: { kind: "expression", source: "this is not javascript" } },
               actions: [{ type: "hide" }]
             }
           ]
@@ -634,28 +629,28 @@ describe("linkage engine", () => {
 
       const state = evaluateLinkage(field, { foo: 1 }, { evaluators });
       expect(state.hidden).toBe(false);
-      // The evaluator now also receives the (here absent) expression context.
+      // The evaluator now also receives the (here absent) evaluation context.
       expect(evaluators.evaluateExpression).toHaveBeenCalledWith("ignored", { foo: 1 }, undefined);
     });
   });
 
-  describe("expression scope", () => {
+  describe("evaluation scope", () => {
     it("exposes $vars and $form to an expression condition", () => {
       const field = makeField("target", {
         linkage: {
           rules: [
             {
               id: "R1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.flag == true and $form.amount > 5" } },
+              trigger: { kind: "condition", condition: { kind: "expression", source: "$vars.flag === true && $form.amount > 5" } },
               actions: [{ type: "hide" }]
             }
           ]
         }
       });
 
-      expect(evaluateLinkage(field, { amount: 10 }, { expressionContext: { variables: { flag: true } } }).hidden).toBe(true);
-      expect(evaluateLinkage(field, { amount: 10 }, { expressionContext: { variables: { flag: false } } }).hidden).toBe(false);
-      expect(evaluateLinkage(field, { amount: 3 }, { expressionContext: { variables: { flag: true } } }).hidden).toBe(false);
+      expect(evaluateLinkage(field, { amount: 10 }, { evaluationContext: { variables: { flag: true } } }).hidden).toBe(true);
+      expect(evaluateLinkage(field, { amount: 10 }, { evaluationContext: { variables: { flag: false } } }).hidden).toBe(false);
+      expect(evaluateLinkage(field, { amount: 3 }, { evaluationContext: { variables: { flag: true } } }).hidden).toBe(false);
     });
 
     it("keeps the legacy `field` alias working alongside $form", () => {
@@ -664,7 +659,7 @@ describe("linkage engine", () => {
           rules: [
             {
               id: "R1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "field.amount == $form.amount" } },
+              trigger: { kind: "condition", condition: { kind: "expression", source: "field.amount === $form.amount" } },
               actions: [{ type: "hide" }]
             }
           ]
@@ -694,7 +689,111 @@ describe("linkage engine", () => {
         }
       });
 
-      expect(evaluateLinkage(field, { base: 100 }, { expressionContext: { variables: { tax: 8 } } }).assignedValue).toBe(108);
+      expect(evaluateLinkage(field, { base: 100 }, { evaluationContext: { variables: { tax: 8 } } }).assignedValue).toBe(108);
+    });
+
+    it("resolves a $-rooted leaf source path against the evaluation context", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "$user.departmentId",
+                  operator: "eq",
+                  value: "dept-1"
+                }
+              },
+              actions: [{ type: "hide" }]
+            }
+          ]
+        }
+      });
+
+      expect(evaluateLinkage(field, {}, { evaluationContext: { user: { departmentId: "dept-1" } } }).hidden).toBe(true);
+      expect(evaluateLinkage(field, {}, { evaluationContext: { user: { departmentId: "dept-2" } } }).hidden).toBe(false);
+      // No context at all: the path resolves to undefined and never matches.
+      expect(evaluateLinkage(field, {}).hidden).toBe(false);
+    });
+
+    it("resolves a broken or unknown context path to undefined instead of crashing", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "$user.profile.city",
+                  operator: "empty"
+                }
+              },
+              actions: [{ type: "hide" }]
+            },
+            {
+              id: "R2",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "$unknown.thing",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [{ type: "disable" }]
+            }
+          ]
+        }
+      });
+
+      // `$user.profile` is a primitive — the deeper segment degrades to
+      // undefined, which `empty` matches; the unknown root never matches.
+      const state = evaluateLinkage(field, {}, { evaluationContext: { user: { profile: "not-an-object" } } });
+
+      expect(state.hidden).toBe(true);
+      expect(state.disabled).toBe(false);
+    });
+
+    it("excludes $-rooted leaf sources from linkage source keys", () => {
+      const keys = getLinkageSourceKeys({
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: [
+                    {
+                      kind: "leaf",
+                      sourceKey: "amount",
+                      operator: "notEmpty"
+                    },
+                    {
+                      kind: "leaf",
+                      sourceKey: "$user.departmentId",
+                      operator: "eq",
+                      value: "dept-1"
+                    }
+                  ]
+                }
+              },
+              actions: [{ type: "require" }]
+            }
+          ]
+        }
+      });
+
+      // The context path re-evaluates with the scope, not via a field's
+      // onChangeListenTo — only the real form key is tracked.
+      expect(keys).toEqual(["amount"]);
     });
 
     it("derives $vars from schema variable defaults", () => {
@@ -713,7 +812,7 @@ describe("linkage engine", () => {
         }
       ];
 
-      expect(deriveExpressionVariables(schema)).toEqual({ threshold: 5, blank: undefined });
+      expect(deriveEvaluationVariables(schema)).toEqual({ threshold: 5, blank: undefined });
     });
   });
 
@@ -735,7 +834,7 @@ describe("linkage engine", () => {
               actions: [
                 {
                   type: "script",
-                  source: "return { hidden: field.trigger == \"off\", value: field.trigger + \"!\" };"
+                  source: "return { hidden: field.trigger === \"off\", value: field.trigger + \"!\" };"
                 }
               ]
             }
@@ -779,6 +878,119 @@ describe("linkage engine", () => {
 
       expect(evaluateLinkage(field, { trigger: "any" }).hidden).toBe(true);
     });
+
+    it("treats a truthy non-object return as no patch instead of crashing", () => {
+      // `return true;` is a plausible slip for `return { hidden: true }` — the
+      // `in` operator on a primitive would throw mid-render without the guard.
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: { kind: "condition", condition: { kind: "expression", source: "true" } },
+              actions: [{ type: "script", source: "return true;" }]
+            }
+          ]
+        }
+      });
+
+      expect(() => evaluateLinkage(field, {})).not.toThrow();
+      expect(evaluateLinkage(field, {})).toMatchObject({ hidden: false, assigned: false });
+    });
+
+    it("suppresses a script value patch on a non-keyed-leaf node", () => {
+      // A subform's own script returning { value } computes an assignment no
+      // downstream consumer can apply (applyScopedAssignments walks leaf
+      // fields only) — the evaluator drops it so assigned ⇒ keyed leaf holds.
+      const subform: Block = {
+        id: "Sub_1",
+        type: "subform",
+        variant: "stack",
+        key: "lines",
+        template: [],
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: { kind: "condition", condition: { kind: "expression", source: "true" } },
+              actions: [{ type: "script", source: "return { value: [], hidden: true };" }]
+            }
+          ]
+        }
+      };
+
+      const state = evaluateLinkage(subform, {});
+
+      expect(state.assigned).toBe(false);
+      expect(state.assignedValue).toBeUndefined();
+      // The state half of the patch still applies — containers may be hidden.
+      expect(state.hidden).toBe(true);
+    });
+  });
+
+  describe("malformed schema resilience", () => {
+    it("skips a condition rule whose trigger or condition is structurally missing", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: { kind: "condition" },
+              actions: [{ type: "hide" }]
+            },
+            { id: "Rule_2", actions: [{ type: "hide" }] }
+          ] as never
+        }
+      });
+
+      expect(() => evaluateLinkage(field, {})).not.toThrow();
+      expect(evaluateLinkage(field, {}).hidden).toBe(false);
+    });
+
+    it("treats a group without a children array as non-matching", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: { kind: "condition", condition: { kind: "group", logic: "all" } as never },
+              actions: [{ type: "hide" }]
+            }
+          ]
+        }
+      });
+
+      expect(() => evaluateLinkage(field, {})).not.toThrow();
+      expect(evaluateLinkage(field, {}).hidden).toBe(false);
+    });
+
+    it("collects no source keys from a structurally malformed condition tree", () => {
+      const keys = getLinkageSourceKeys({
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: { kind: "condition", condition: { kind: "group", children: null } as never },
+              actions: [{ type: "require" }]
+            },
+            {
+              id: "Rule_2",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: null,
+                  operator: "eq"
+                } as never
+              },
+              actions: [{ type: "require" }]
+            }
+          ]
+        }
+      });
+
+      expect(keys).toEqual([]);
+    });
   });
 
   describe("state lane — assign expressions", () => {
@@ -808,13 +1020,24 @@ describe("linkage engine", () => {
 
   describe("default evaluator failure handling", () => {
     it("returns false on every evaluation of an uncompilable expression", () => {
-      expect(defaultEvaluateExpression("not valid zen (", { a: 1 })).toBe(false);
-      expect(defaultEvaluateExpression("not valid zen (", { a: 2 })).toBe(false);
+      expect(defaultEvaluateExpression("not valid js (", { a: 1 })).toBe(false);
+      expect(defaultEvaluateExpression("not valid js (", { a: 2 })).toBe(false);
     });
 
     it("returns undefined on every evaluation of an uncompilable assign expression", () => {
-      expect(defaultEvaluateAssignExpression("also not valid zen (", {})).toBeUndefined();
-      expect(defaultEvaluateAssignExpression("also not valid zen (", {})).toBeUndefined();
+      expect(defaultEvaluateAssignExpression("also not valid js (", {})).toBeUndefined();
+      expect(defaultEvaluateAssignExpression("also not valid js (", {})).toBeUndefined();
+    });
+
+    it("returns false rather than throw on a runtime error inside an expression", () => {
+      // Compiles fine, throws at run time (member access on undefined).
+      expect(defaultEvaluateExpression("field.missing.deeper === 1", {})).toBe(false);
+    });
+
+    it("rejects statement blocks in the expression lane", () => {
+      // `return (...)` wrapping makes a statement block a syntax error — the
+      // expression lane must not silently accept script-style sources.
+      expect(defaultEvaluateAssignExpression("const x = 1; x", { a: 1 })).toBeUndefined();
     });
   });
 
@@ -839,7 +1062,7 @@ describe("linkage engine", () => {
     });
 
     it("treats NaN as equal to itself (Object.is semantics)", () => {
-      expect(matchLeaf(leafOf("eq", Number.NaN), { v: Number.NaN })).toBe(true);
+      expect(matchLeaf(leafOf("eq", NaN), { v: NaN })).toBe(true);
     });
 
     it("returns true for ne when exactly one operand is nullish", () => {
@@ -2279,6 +2502,35 @@ describe("linkage engine", () => {
           code: "source_key_unresolved",
           severity: "warning"
         }));
+      });
+
+      it("never flags a $-rooted context source path as unresolved", () => {
+        // The path resolves against the host's evaluation context, which the
+        // static pass cannot see into — same policy as `$user` members inside
+        // an expression source.
+        const schema = makeSchema([
+          makeField("a", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_1",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "$user.departmentId",
+                      operator: "eq",
+                      value: "dept-1"
+                    }
+                  },
+                  actions: [{ type: "show" }]
+                }
+              ]
+            }
+          })
+        ]);
+
+        expect(validateLinkageSchema(schema).issues).toEqual([]);
       });
     });
   });

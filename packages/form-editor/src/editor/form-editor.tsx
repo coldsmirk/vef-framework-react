@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode, Ref, RefObject } from "react";
 
 import type { DeviceRegistries, FormFieldRegistry } from "../engine/registry/form-field-registry";
 import type { EditorDeviceMode, EditorViewMode } from "../store/form-store";
-import type { DataSourceResolver, ExpressionContext, FormSchema, LinkageEvaluators } from "../types";
+import type { DataSourceResolver, EvaluationContext, FormSchema, LinkageContextSource, LinkageEvaluators } from "../types";
 import type { ToolbarBrand } from "./toolbar/toolbar";
 
 import { css } from "@emotion/react";
@@ -16,6 +16,7 @@ import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile"
 import { DeviceProvider, RegistryProvider } from "../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../store/form-store";
 import { Canvas } from "./canvas/canvas";
+import { ContextSourcesProvider } from "./context-sources";
 import { editorSensors, useEditorDragEnd } from "./dnd";
 import { EditorLayoutProvider, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
@@ -121,10 +122,18 @@ export interface FormEditorProviderProps {
    */
   dataSourceResolver?: DataSourceResolver;
   /**
-   * Host expression scope (`$user` / `$node`, variable overrides), forwarded to
+   * Host evaluation scope (`$user` / `$node`, variable overrides), forwarded to
    * the live preview so host-context expressions evaluate truthfully.
    */
-  expressionContext?: ExpressionContext;
+  evaluationContext?: EvaluationContext;
+  /**
+   * Host-declared global-context properties the visual condition builder
+   * offers as leaf-condition sources beside the form's own fields — e.g.
+   * `{ key: "$user.departmentId", label: "发起人部门" }`. Pure design-time
+   * metadata: the runtime resolves the path against `evaluationContext`
+   * whether or not it was declared here.
+   */
+  contextSources?: LinkageContextSource[];
   onSchemaChange?: (schema: FormSchema) => void;
   /**
    * Curated imperative handle — lets a host shell read/replace the schema and
@@ -183,9 +192,10 @@ function HostBridge({ apiRef, onSchemaChange }: Pick<FormEditorProviderProps, "a
 export function FormEditorProvider({
   apiRef,
   children,
+  contextSources,
   dataSourceResolver,
   evaluators,
-  expressionContext,
+  evaluationContext,
   initialSchema,
   onSchemaChange,
   registries: registriesProp,
@@ -212,9 +222,9 @@ export function FormEditorProvider({
   const previewEvaluators = useMemo<LinkageEvaluators>(
     () => {
       return {
-        ...evaluateExpression === undefined ? {} : { evaluateExpression },
-        ...evaluateScriptAction === undefined ? {} : { evaluateScriptAction },
-        ...evaluateAssignExpression === undefined ? {} : { evaluateAssignExpression },
+        ...evaluateExpression !== undefined && { evaluateExpression },
+        ...evaluateScriptAction !== undefined && { evaluateScriptAction },
+        ...evaluateAssignExpression !== undefined && { evaluateAssignExpression },
         dispatchEffect: dispatchEffect ?? previewDispatchEffect
       };
     },
@@ -227,11 +237,13 @@ export function FormEditorProvider({
         <PreviewRuntimeProvider value={{
           dataSourceResolver,
           evaluators: previewEvaluators,
-          expressionContext
+          evaluationContext
         }}
         >
-          <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
-          {children}
+          <ContextSourcesProvider sources={contextSources}>
+            <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
+            {children}
+          </ContextSourcesProvider>
         </PreviewRuntimeProvider>
       </RegistryProvider>
     </FormEditorStoreProvider>

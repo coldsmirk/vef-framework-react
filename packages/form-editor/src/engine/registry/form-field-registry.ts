@@ -24,6 +24,14 @@ export class FormFieldRegistry {
    */
   private revision = 0;
 
+  private notify(): void {
+    this.revision += 1;
+
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
   register(definition: FieldDefinition): void {
     this.fields.set(definition.config.type, definition);
     this.notify();
@@ -48,7 +56,7 @@ export class FormFieldRegistry {
   }
 
   list(): FieldDefinition[] {
-    return [...this.fields.values()];
+    return this.fields.values().toArray();
   }
 
   /**
@@ -119,14 +127,6 @@ export class FormFieldRegistry {
    */
   getRevision(): number {
     return this.revision;
-  }
-
-  private notify(): void {
-    this.revision += 1;
-
-    for (const listener of this.listeners) {
-      listener();
-    }
   }
 }
 
