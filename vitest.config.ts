@@ -3,19 +3,20 @@ import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const rootDirectory = import.meta.dirname;
+
 export default defineConfig({
   plugins: [react()],
   // Pin the Vite cache to the workspace root so a per-package Vite sub-context
   // (triggered when a colocated spec resolves packages/<pkg>/vite.config.ts)
   // cannot create a stray node_modules/.vite cache under that package's src/.
-  cacheDir: resolve(__dirname, "node_modules/.vite"),
+  cacheDir: resolve(rootDirectory, "node_modules/.vite"),
   resolve: {
     alias: {
-      "@vef-framework-react/shared": resolve(__dirname, "./packages/shared/src"),
-      "@vef-framework-react/hooks": resolve(__dirname, "./packages/hooks/src"),
-      "@vef-framework-react/core": resolve(__dirname, "./packages/core/src"),
-      "@vef-framework-react/components": resolve(__dirname, "./packages/components/src"),
-      "@vef-framework-react/expression": resolve(__dirname, "./packages/expression/src")
+      "@vef-framework-react/shared": resolve(rootDirectory, "./packages/shared/src"),
+      "@vef-framework-react/hooks": resolve(rootDirectory, "./packages/hooks/src"),
+      "@vef-framework-react/core": resolve(rootDirectory, "./packages/core/src"),
+      "@vef-framework-react/components": resolve(rootDirectory, "./packages/components/src")
     },
     conditions: ["vef", "source", "module", "import", "browser", "development"]
   },
@@ -45,7 +46,6 @@ export default defineConfig({
         // Specs and test utilities
         "**/*.test.{ts,tsx}",
         "**/test-utils.tsx",
-        "**/test-expression-engine.ts",
         // Out-of-scope packages (see AGENTS.md > Testing Conventions > What Not to Test)
         "packages/starter/**",
         "packages/dev/**",

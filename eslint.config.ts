@@ -13,5 +13,11 @@ export default defineConfig(
     react: true,
     ignores: ["**/*.gen.ts", "**/mockServiceWorker.js"]
   }),
+  {
+    files: ["playground/src/mocks/**/*"],
+    rules: {
+      "unicorn/no-top-level-side-effects": "off"
+    }
+  },
   ...tanstackConfig
 );
