@@ -4,8 +4,9 @@ import type { FormSchema } from "@vef-framework-react/form-editor";
  * Default schema the form-editor playground route boots with, so the designer
  * always opens onto a small form that exercises validation and a few linkages
  * (condition → alert on the age field, condition → show/require on the bio
- * field). Handy for manually testing the editor without rebuilding a form each
- * time.
+ * field, `$user`-rooted condition → show on the finance-note field, driven by
+ * the route's `evaluationContext`). Handy for manually testing the editor
+ * without rebuilding a form each time.
  */
 export const DEMO_SCHEMA: FormSchema = {
   id: "Form_gdq7dcisy7ff6evn",
@@ -147,6 +148,47 @@ export const DEMO_SCHEMA: FormSchema = {
           },
           validate: {
             required: false
+          }
+        },
+        {
+          type: "textfield",
+          label: "财务备注",
+          id: "Field_finance_note_demo",
+          key: "financeNote",
+          placeholder: "仅财务部发起人可见",
+          helperText: "由 $user.departmentName 全局上下文条件控制显示",
+          linkage: {
+            defaults: {
+              hidden: true
+            },
+            rules: [
+              {
+                id: "Rule_finance_note_demo",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "group",
+                    id: "Condition_finance_group_demo",
+                    logic: "all",
+                    children: [
+                      {
+                        kind: "leaf",
+                        id: "Condition_finance_leaf_demo",
+                        sourceKey: "$user.departmentName",
+                        operator: "eq",
+                        value: "财务部"
+                      }
+                    ]
+                  }
+                },
+                actions: [
+                  {
+                    id: "Action_finance_show_demo",
+                    type: "show"
+                  }
+                ]
+              }
+            ]
           }
         },
         {

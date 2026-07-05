@@ -114,6 +114,26 @@ const initialValue: FlowDefinition = {
 };
 
 const plugins = {
+  // Host-declared globals resolved from the instance's server-side snapshot
+  // (`Instance.Globals`) — available to visual conditions and expressions
+  // alongside the built-in applicant subjects and the form fields below.
+  globalSubjects: [
+    {
+      key: "applicantLevel",
+      kind: "number" as const,
+      label: "发起人职级"
+    },
+    {
+      key: "applicantDepartmentName",
+      kind: "select" as const,
+      label: "发起人部门",
+      options: [
+        { label: "研发部", value: "研发部" },
+        { label: "销售部", value: "销售部" },
+        { label: "财务部", value: "财务部" }
+      ]
+    }
+  ],
   formFields: [
     {
       key: "amount",
