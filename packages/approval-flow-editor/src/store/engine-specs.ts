@@ -24,7 +24,7 @@ function engineSpec(kind: NodeKind): NodeSpec {
     label: NODE_KIND_LABELS[kind],
     handles: [],
     deletable: rule.deletable,
-    ...rule.maxCount === undefined ? {} : { maxCount: rule.maxCount },
+    ...rule.maxCount !== undefined && { maxCount: rule.maxCount },
     // Pure by contract (the engine may build throwaway candidates): a fresh clone of the frozen
     // default, resolved to fully-explicit designer defaults.
     createData: () => {

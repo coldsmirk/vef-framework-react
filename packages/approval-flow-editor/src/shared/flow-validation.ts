@@ -1,9 +1,11 @@
 import type {
+  AddAssigneeType,
   ApprovalMethod,
   ApprovalNodeData,
   AssigneeKind,
   CcDefinition,
   ConditionBranchDefinition,
+  ConditionDefinition,
   ConsecutiveApproverAction,
   EmptyAssigneeAction,
   ExecutionType,
@@ -16,9 +18,8 @@ import type {
   TimeoutAction
 } from "../types";
 
-import { CONDITION_OPERATORS as CONDITION_OPERATOR_LIST } from "@vef-framework-react/expression";
-
 import { isNodeKind } from "../constants";
+import { CONDITION_OPERATORS as CONDITION_OPERATOR_LIST } from "../types";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -68,6 +69,7 @@ export type FlowValidationCode
     | "invalid_consecutive_approver_action"
     | "invalid_rollback_type"
     | "invalid_rollback_data_strategy"
+    | "invalid_add_assignee_type"
     | "handle_execution_auto_reject"
     | "handle_timeout_auto_reject"
     | "fallback_users_required"
@@ -151,8 +153,13 @@ const ROLLBACK_TYPES = enumSet<RollbackType>({
   specified: null
 });
 const ROLLBACK_DATA_STRATEGIES = enumSet<RollbackDataStrategy>({ clear: null, keep: null });
-// The operator vocabulary is shared with the expression package (which the
-// backend's approval.ConditionOperator mirrors) — never re-declared here.
+const ADD_ASSIGNEE_TYPES = enumSet<AddAssigneeType>({
+  before: null,
+  after: null,
+  parallel: null
+});
+// The operator vocabulary is the closed set in types.ts (which the backend's
+// approval.ConditionOperator mirrors) — never re-declared here.
 const CONDITION_OPERATORS = new Set<string>(CONDITION_OPERATOR_LIST);
 
 /**
@@ -233,54 +240,45 @@ export function validateFlowDefinition(definition: FlowDefinition): FlowValidati
       continue;
     }
 
-    switch (node.kind) {
-      case "start": {
-        startCount++;
-        startId = node.id;
+    if (node.kind === "start") {
+      startCount++;
+      startId = node.id;
+      continue;
+    }
 
-        break;
+    if (node.kind === "end") {
+      endCount++;
+      endIds.push(node.id);
+      continue;
+    }
+
+    if (node.kind === "condition") {
+      conditionBranches.set(node.id, node.data?.branches);
+      validateBranchConditions(node.id, node.data?.branches, errors);
+      continue;
+    }
+
+    if (node.kind === "approval") {
+      taskNodeIds.add(node.id);
+      validateTaskNodeConfig(node.id, node.data, errors);
+      validateApprovalNodeConfig(node.id, node.data, errors);
+
+      if (node.data?.rollbackTargetKeys?.length) {
+        rollbackRefs.push({ nodeId: node.id, keys: node.data.rollbackTargetKeys });
       }
 
-      case "end": {
-        endCount++;
-        endIds.push(node.id);
+      continue;
+    }
 
-        break;
-      }
+    if (node.kind === "handle") {
+      taskNodeIds.add(node.id);
+      validateTaskNodeConfig(node.id, node.data, errors);
+      validateHandleNodeConfig(node.id, node.data, errors);
+      continue;
+    }
 
-      case "condition": {
-        conditionBranches.set(node.id, node.data?.branches);
-        validateBranchConditions(node.id, node.data?.branches, errors);
-
-        break;
-      }
-
-      case "approval": {
-        taskNodeIds.add(node.id);
-        validateTaskNodeConfig(node.id, node.data, errors);
-        validateApprovalNodeConfig(node.id, node.data, errors);
-
-        if (node.data?.rollbackTargetKeys?.length) {
-          rollbackRefs.push({ nodeId: node.id, keys: node.data.rollbackTargetKeys });
-        }
-
-        break;
-      }
-
-      case "handle": {
-        taskNodeIds.add(node.id);
-        validateTaskNodeConfig(node.id, node.data, errors);
-        validateHandleNodeConfig(node.id, node.data, errors);
-
-        break;
-      }
-
-      case "cc": {
-        validateCcDefinitions(node.id, node.data?.ccs, errors);
-
-        break;
-      }
-    // No default
+    if (node.kind === "cc") {
+      validateCcDefinitions(node.id, node.data?.ccs, errors);
     }
   }
 
@@ -507,7 +505,9 @@ function validateTaskNodeConfig(
     });
   }
 
-  for (const assignee of data?.assignees ?? []) {
+  const assignees = data?.assignees ?? [];
+
+  for (const assignee of assignees) {
     if (!ASSIGNEE_KINDS.has(assignee.kind)) {
       errors.push({
         code: "invalid_assignee_kind",
@@ -623,6 +623,22 @@ function validateApprovalNodeConfig(
       nodeId
     });
   }
+
+  // Unlike the other enums (rejected by backend deploy validation), an invalid
+  // AddAssigneeType fails on the backend at JSON decode time (its strict
+  // UnmarshalJSON), so it must be caught here for this validator to keep its
+  // "passes here ⇒ deploys" guarantee.
+  const addAssigneeTypes = data?.addAssigneeTypes ?? [];
+
+  for (const type of addAssigneeTypes) {
+    if (!ADD_ASSIGNEE_TYPES.has(type)) {
+      errors.push({
+        code: "invalid_add_assignee_type",
+        message: `未知的加签类型：${type}`,
+        nodeId
+      });
+    }
+  }
 }
 
 /**
@@ -661,7 +677,9 @@ function validateCcDefinitions(
   ccs: CcDefinition[] | undefined,
   errors: FlowValidationError[]
 ): void {
-  for (const cc of ccs ?? []) {
+  const ccItems = ccs ?? [];
+
+  for (const cc of ccItems) {
     if (!CC_KINDS.has(cc.kind)) {
       errors.push({
         code: "invalid_cc_kind",
@@ -702,8 +720,9 @@ function validateBranchConditions(
   errors: FlowValidationError[]
 ): void {
   const seenPriorities = new Set<number>();
+  const conditionBranches = branches ?? [];
 
-  for (const branch of branches ?? []) {
+  for (const branch of conditionBranches) {
     if (branch.isDefault) {
       continue;
     }
@@ -720,53 +739,64 @@ function validateBranchConditions(
     }
   }
 
-  for (const branch of branches ?? []) {
-    for (const group of branch.conditionGroups ?? []) {
+  for (const branch of conditionBranches) {
+    const conditionGroups = branch.conditionGroups ?? [];
+
+    for (const group of conditionGroups) {
       for (const condition of group.conditions) {
-        switch (condition.kind) {
-          case "field": {
-            if (!condition.subject) {
-              errors.push({
-                code: "condition_subject_required",
-                message: `分支「${branch.label || branch.id}」存在未选择字段的条件`,
-                nodeId,
-                branchId: branch.id
-              });
-            } else if (!CONDITION_OPERATORS.has(condition.operator)) {
-              errors.push({
-                code: "invalid_condition_operator",
-                message: `分支「${branch.label || branch.id}」存在未选择运算符的条件`,
-                nodeId,
-                branchId: branch.id
-              });
-            }
-
-            break;
-          }
-
-          case "expression": {
-            if (!condition.expression.trim()) {
-              errors.push({
-                code: "condition_expression_required",
-                message: `分支「${branch.label || branch.id}」的表达式不能为空`,
-                nodeId,
-                branchId: branch.id
-              });
-            }
-
-            break;
-          }
-
-          default: {
-            errors.push({
-              code: "invalid_condition_kind",
-              message: `分支「${branch.label || branch.id}」存在未知的条件类型`,
-              nodeId,
-              branchId: branch.id
-            });
-          }
-        }
+        validateBranchCondition(nodeId, branch, condition, errors);
       }
+    }
+  }
+}
+
+function validateBranchCondition(
+  nodeId: string,
+  branch: ConditionBranchDefinition,
+  condition: ConditionDefinition,
+  errors: FlowValidationError[]
+): void {
+  switch (condition.kind) {
+    case "field": {
+      if (!condition.subject) {
+        errors.push({
+          code: "condition_subject_required",
+          message: `分支「${branch.label || branch.id}」存在未选择字段的条件`,
+          nodeId,
+          branchId: branch.id
+        });
+      } else if (!CONDITION_OPERATORS.has(condition.operator)) {
+        errors.push({
+          code: "invalid_condition_operator",
+          message: `分支「${branch.label || branch.id}」存在未选择运算符的条件`,
+          nodeId,
+          branchId: branch.id
+        });
+      }
+
+      return;
+    }
+
+    case "expression": {
+      if (!condition.expression.trim()) {
+        errors.push({
+          code: "condition_expression_required",
+          message: `分支「${branch.label || branch.id}」的表达式不能为空`,
+          nodeId,
+          branchId: branch.id
+        });
+      }
+
+      return;
+    }
+
+    default: {
+      errors.push({
+        code: "invalid_condition_kind",
+        message: `分支「${branch.label || branch.id}」存在未知的条件类型`,
+        nodeId,
+        branchId: branch.id
+      });
     }
   }
 }
@@ -889,7 +919,9 @@ function detectCycle(nodeIds: string[], adjacency: Map<string, string[]>): boole
   const visit = (node: string): boolean => {
     color.set(node, GRAY);
 
-    for (const next of adjacency.get(node) ?? []) {
+    const nextNodes = adjacency.get(node) ?? [];
+
+    for (const next of nextNodes) {
       const c = color.get(next) ?? WHITE;
 
       if (c === GRAY || (c === WHITE && visit(next))) {
@@ -921,15 +953,23 @@ function collectReachable(adjacency: Map<string, string[]>, starts: string[]): S
   while (queue.length > 0) {
     const current = queue.shift()!;
 
-    for (const next of adjacency.get(current) ?? []) {
-      if (!visited.has(next)) {
-        visited.add(next);
-        queue.push(next);
-      }
+    const nextNodes = adjacency.get(current) ?? [];
+
+    for (const next of nextNodes) {
+      visitReachableNode(next, visited, queue);
     }
   }
 
   return visited;
+}
+
+function visitReachableNode(next: string, visited: Set<string>, queue: string[]): void {
+  if (visited.has(next)) {
+    return;
+  }
+
+  visited.add(next);
+  queue.push(next);
 }
 
 function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {

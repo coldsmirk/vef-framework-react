@@ -38,6 +38,10 @@ export { NODE_KIND_COLORS } from "./styles/node-colors";
 // or settings UI without re-hardcoding the kind list.
 export { isPrincipalKind, PRINCIPAL_KINDS } from "./types";
 
+// Condition-operator vocabulary — the closed set the backend's
+// approval.ConditionOperator mirrors, for hosts building their own condition UI.
+export { CONDITION_OPERATORS } from "./types";
+
 // Types
 export type {
   AddAssigneeType,
@@ -56,6 +60,7 @@ export type {
   ConditionGroup,
   ConditionKind,
   ConditionNodeData,
+  ConditionOperator,
   ConsecutiveApproverAction,
   EdgeDefinition,
   EmptyAssigneeAction,

@@ -1,7 +1,6 @@
-import type { ConditionOperator } from "@vef-framework-react/expression";
 import type { FC } from "react";
 
-import type { ConditionDefinition, FormFieldDefinition } from "../../types";
+import type { ConditionDefinition, ConditionOperator, FormFieldDefinition } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
@@ -128,13 +127,16 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   onChange,
   onRemove
 }) => {
-  const { formFields = [] } = useEditorPlugins();
-  // Built-in subjects come first; a form field whose key collides with one is
-  // shadowed by the engine, so dropping the duplicate here mirrors runtime
-  // resolution instead of offering a dead option.
+  const { formFields = [], globalSubjects = [] } = useEditorPlugins();
+  // Resolution order mirrors the engine: built-in applicant subjects, then
+  // host-supplied globals, then form data. A key colliding with an earlier
+  // layer is shadowed at runtime, so the duplicate is dropped here instead of
+  // offering a dead option.
+  const globalSubjectFields = globalSubjects.filter(g => BUILT_IN_SUBJECT_FIELDS.every(b => b.key !== g.key));
+  const contextSubjectFields = [...BUILT_IN_SUBJECT_FIELDS, ...globalSubjectFields];
   const subjectFields = [
-    ...BUILT_IN_SUBJECT_FIELDS,
-    ...formFields.filter(f => !BUILT_IN_SUBJECT_FIELDS.some(b => b.key === f.key))
+    ...contextSubjectFields,
+    ...formFields.filter(f => contextSubjectFields.every(c => c.key !== f.key))
   ];
   const selectedField = subjectFields.find(f => f.key === condition.subject);
   const operators = selectedField ? getOperatorsForFieldKind(selectedField.kind) : [];

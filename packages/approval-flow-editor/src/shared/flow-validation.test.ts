@@ -88,6 +88,15 @@ describe("validateFlowDefinition node config rules", () => {
       .toContain("invalid_empty_assignee_action");
   });
 
+  it("rejects out-of-vocabulary addAssigneeTypes entries", () => {
+    // The backend rejects these at JSON decode time (strict UnmarshalJSON on
+    // AddAssigneeType), so the editor validator must catch them pre-deploy.
+    expect(codesOf(flowWith({ data: { name: "审批", addAssigneeTypes: ["before", "sideways" as never] } })))
+      .toContain("invalid_add_assignee_type");
+    expect(codesOf(flowWith({ data: { name: "审批", addAssigneeTypes: ["before", "after", "parallel"] } })))
+      .toEqual([]);
+  });
+
   it("rejects auto_reject on handle nodes", () => {
     const definition = flowWith({});
     const handleNode = definition.nodes[1]!;

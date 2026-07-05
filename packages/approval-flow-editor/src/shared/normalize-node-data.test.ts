@@ -48,6 +48,16 @@ describe("normalizeNodeData", () => {
     expect(normalized.addAssigneeTypes).toEqual(["before"]);
   });
 
+  it("folds rollbackType none into the isRollbackAllowed switch", () => {
+    // "none" is deny-by-configuration on the backend; the editor expresses
+    // that as isRollbackAllowed=false and never renders "none" in its
+    // target-type select.
+    const normalized = normalizeNodeData("approval", { name: "审批", rollbackType: "none" });
+
+    expect(normalized.isRollbackAllowed).toBe(false);
+    expect(normalized.rollbackType).toBe("previous");
+  });
+
   it("does not share the default addAssigneeTypes array between nodes", () => {
     const first = normalizeNodeData("approval", {});
     const second = normalizeNodeData("approval", {});

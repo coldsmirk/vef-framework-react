@@ -111,8 +111,8 @@ export const ConditionConfig: FC<ConditionConfigProps> = ({ nodeId }) => {
   // form does not re-render during drags.
   const data = useEditorStore(s => nodeConfig(s.nodes.find(n => n.id === nodeId), "condition"));
   const readonly = useEditorUiStore(s => s.readonly);
-  const { updateNodeData } = useApprovalActions();
   const {
+    updateNodeData,
     updateConditionBranch,
     addConditionBranch,
     removeConditionBranch

@@ -40,7 +40,7 @@ export function getSpecification(kind: NodeKind): NodeSpecification {
  * Get all registered specifications
  */
 export function getAllSpecifications(): NodeSpecification[] {
-  return [...specifications.values()];
+  return specifications.values().toArray();
 }
 
 /**

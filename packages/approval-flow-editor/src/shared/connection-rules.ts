@@ -54,12 +54,12 @@ export function explainConnectionRejection(
   edges: FlowEdge[]
 ): ConnectionRejection | null {
   const { source, target } = connection;
-  const sourceHandle = connection.sourceHandle ?? null;
 
   if (source === target) {
     return "self";
   }
 
+  const sourceHandle = connection.sourceHandle ?? null;
   const hasOutgoing = edges.some(
     e => e.source === source && (e.sourceHandle ?? null) === sourceHandle
   );

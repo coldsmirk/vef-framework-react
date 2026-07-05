@@ -1,13 +1,13 @@
-import type { ConditionOperator } from "@vef-framework-react/expression";
 import type { XYPosition } from "@xyflow/react";
 
 /**
  * Node kind aligned with backend NodeKind enum.
  *
- * NOTE: inside the editor, React Flow owns the `type` discriminator on a node
- * (it drives `nodeTypes` rendering), so the in-memory `FlowNode` keeps `type`.
- * Only the wire-level `NodeDefinition` (the `value` / `onChange` contract) uses
- * `kind`; `toFlowDefinition` / `fromFlowDefinition` translate between the two.
+ * NOTE: every in-memory node shares the engine's single xyflow `type`
+ * ("flowNode"); the discriminator is `data.kind`, which carries one of these
+ * values. The wire-level `NodeDefinition` (the `value` / `onChange` contract)
+ * lifts it to a top-level `kind`; `toFlowDefinition` / `fromFlowDefinition`
+ * translate between the two shapes.
  */
 export type NodeKind = "start" | "approval" | "handle" | "condition" | "cc" | "end";
 
@@ -15,6 +15,34 @@ export type NodeKind = "start" | "approval" | "handle" | "condition" | "cc" | "e
  * Condition kind aligned with backend ConditionKind enum
  */
 export type ConditionKind = "field" | "expression";
+
+/**
+ * Closed condition-operator vocabulary — the set the backend's
+ * `approval.ConditionOperator` mirrors. The {@link ConditionOperator} type
+ * derives from this array: one definition site for both the type and the
+ * runtime allow-list flow validation checks against.
+ */
+export const CONDITION_OPERATORS = [
+  "eq",
+  "ne",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
+  "in",
+  "not_in",
+  "is_empty",
+  "is_not_empty"
+] as const;
+
+/**
+ * Operators understood by the approval condition model.
+ */
+export type ConditionOperator = typeof CONDITION_OPERATORS[number];
 
 /**
  * Approval method
@@ -127,10 +155,10 @@ export type FieldPermission = "visible" | "editable" | "hidden" | "required";
 export type CcFieldPermission = "visible" | "hidden";
 
 /**
- * Condition definition. `operator` is the shared vocabulary from
- * `@vef-framework-react/expression` — the same closed set the backend's
- * `approval.ConditionOperator` mirrors; the empty string is the editor's
- * "not yet chosen" draft state and never survives validation.
+ * Condition definition. `operator` draws from {@link CONDITION_OPERATORS} —
+ * the closed set the backend's `approval.ConditionOperator` mirrors; the
+ * empty string is the editor's "not yet chosen" draft state and never
+ * survives validation.
  */
 export interface ConditionDefinition {
   kind: ConditionKind;
@@ -304,8 +332,8 @@ export interface NodeDataMap {
 
 /**
  * Backend-compatible node definition — discriminated union keyed on `kind`
- * (the backend NodeDefinition tag). Inside the editor the live node uses
- * React Flow's `type`; the serializer maps `type` ↔ `kind`.
+ * (the backend NodeDefinition tag). Inside the editor the discriminator lives
+ * in `data.kind`; the serializer maps `data.kind` ↔ `kind`.
  */
 export type NodeDefinition = {
   [K in NodeKind]: {

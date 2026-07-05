@@ -7,7 +7,7 @@ import type { FlowDefinition } from "../types";
 import { NodeloomProvider, useEditorStore, useEditorStoreApi, useReactFlowProps } from "@coldsmirk/nodeloom-core";
 import { Global } from "@emotion/react";
 import { Button, globalCssVars, showWarningMessage } from "@vef-framework-react/components";
-import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useStore, useUpdateNodeInternals } from "@xyflow/react";
+import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EDGE_MARKER_END, isNodeKind } from "../constants";
@@ -147,12 +147,12 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   // store, where node chrome and the toolbar indicator subscribe to their own
   // slices.
   useEffect(() => {
-    const timer = globalThis.setTimeout(() => {
+    const timer = setTimeout(() => {
       uiStoreApi.getState().setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges)));
     }, VALIDATION_DEBOUNCE_MS);
 
     return () => {
-      globalThis.clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [nodes, edges, uiStoreApi]);
 
@@ -380,9 +380,11 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
   });
 
   return (
-    <ReactFlowProvider>
+    <>
       <Global styles={xyflowGlobalBaseStyle} />
 
+      {/* NodeloomProvider composes xyflow's ReactFlowProvider itself, so every
+          canvas hook below resolves to the engine-owned instance. */}
       <EditorPluginsContext value={plugins ?? EMPTY_PLUGINS}>
         <NodeloomProvider
           defaultValue={initialGraph}
@@ -403,6 +405,6 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
           </EditorUiProvider>
         </NodeloomProvider>
       </EditorPluginsContext>
-    </ReactFlowProvider>
+    </>
   );
 };

@@ -76,6 +76,17 @@ export function normalizeNodeData<K extends NodeKind>(kind: K, data: NodeDataMap
           (data as ApprovalNodeData).addAssigneeTypes ?? [...APPROVAL_NODE_DEFAULTS.addAssigneeTypes]
       };
 
+      // The engine treats rollbackType "none" as deny-by-configuration
+      // (ValidateRollbackTarget refuses every target), which the editor models
+      // as the isRollbackAllowed switch instead — its target-type select
+      // deliberately does not offer "none", because pairing it with
+      // isRollbackAllowed=true would configure a rollback button that always
+      // fails. Fold the wire value into the switch's canonical form.
+      if (approvalData.rollbackType === "none") {
+        approvalData.isRollbackAllowed = false;
+        approvalData.rollbackType = APPROVAL_NODE_DEFAULTS.rollbackType;
+      }
+
       return structuredClone(approvalData) as NodeDataMap[K];
     }
 

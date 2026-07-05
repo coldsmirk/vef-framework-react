@@ -27,4 +27,15 @@ export interface EditorPlugins {
    * field-permission table.
    */
   formFields?: FormFieldDefinition[];
+  /**
+   * Host-defined global subjects the condition editor offers alongside the
+   * built-in applicant attributes — variables the engine resolves from the
+   * instance's globals snapshot (`Instance.Globals` on the backend, supplied
+   * server-side by the host's `InstanceGlobalsResolver`) instead of form
+   * data. `kind` drives the operator set and value input exactly as it does
+   * for form fields; a key colliding with a built-in subject is dropped, and
+   * a form field colliding with either is shadowed (mirroring the engine's
+   * resolution order).
+   */
+  globalSubjects?: FormFieldDefinition[];
 }

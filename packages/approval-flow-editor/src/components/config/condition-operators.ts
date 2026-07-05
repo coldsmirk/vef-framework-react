@@ -1,6 +1,4 @@
-import type { ConditionOperator } from "@vef-framework-react/expression";
-
-import type { FieldKind } from "../../types";
+import type { ConditionOperator, FieldKind } from "../../types";
 
 export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   eq: "等于",

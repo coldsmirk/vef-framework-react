@@ -73,8 +73,9 @@ export function useAutoLayout() {
       });
 
       const positions = new Map<string, { x: number; y: number }>();
+      const layoutChildren = layouted.children ?? [];
 
-      for (const child of layouted.children ?? []) {
+      for (const child of layoutChildren) {
         if (child.x !== undefined && child.y !== undefined) {
           positions.set(child.id, { x: child.x, y: child.y });
         }

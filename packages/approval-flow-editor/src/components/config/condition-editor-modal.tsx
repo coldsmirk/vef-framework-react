@@ -4,11 +4,12 @@ import type { FC } from "react";
 import type { ConditionDefinition, ConditionGroup } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, Modal, Segmented, showConfirm } from "@vef-framework-react/components";
+import { Button, CodeEditor, globalCssVars, Modal, Segmented, showConfirm } from "@vef-framework-react/components";
 import { PlusIcon } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { useRowKeys } from "../../hooks/use-row-keys";
+import { useEditorPlugins } from "../../plugins";
 import { ConditionRuleItem } from "./condition-rule-item";
 
 const MODE_OPTIONS: DataOption[] = [
@@ -17,6 +18,10 @@ const MODE_OPTIONS: DataOption[] = [
 ];
 
 type EditorMode = "visual" | "expression";
+
+// The expression is the Go engine's own syntax — no CodeMirror language pack
+// can highlight it, and completion would only offer JS noise, so both stay off.
+const EXPRESSION_EDITOR_SETUP = { autocompletion: false } as const;
 
 const modalBodyStyle = css({
   display: "flex",
@@ -206,6 +211,11 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
   onOk,
   onCancel
 }) => {
+  const { globalSubjects = [] } = useEditorPlugins();
+  // The expression environment binds formData plus every context subject
+  // (built-ins and host-supplied globals) as a top-level variable — list them
+  // so the author doesn't have to guess the vocabulary.
+  const expressionVariables = ["formData.字段key", "applicantId", "applicantDepartmentId", ...globalSubjects.map(subject => subject.key)].join("、");
   const [groups, setGroups] = useState<ConditionGroup[]>([]);
   const [mode, setMode] = useState<EditorMode>("visual");
   const [expressionText, setExpressionText] = useState("");
@@ -385,16 +395,21 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
             )
           : (
               <>
-                <Input.TextArea
-                  autoSize={{ maxRows: 10, minRows: 4 }}
+                <CodeEditor
+                  basicSetupOptions={EXPRESSION_EDITOR_SETUP}
+                  maxHeight={224}
+                  minHeight={96}
                   placeholder="请输入条件表达式"
                   readOnly={readonly}
                   value={expressionText}
-                  onChange={event => setExpressionText(event.target.value)}
+                  onChange={setExpressionText}
                 />
 
                 <div css={expressionHintStyle}>
-                  可用变量: formData.字段key、applicantId、applicantDepartmentId；支持 and / or / not 组合，例如 formData.amount &gt; 1000 and applicantDepartmentId == "dept-1"
+                  可用变量:
+                  {" "}
+                  {expressionVariables}
+                  ；支持 and / or / not 组合，例如 formData.amount &gt; 1000 and applicantDepartmentId == "dept-1"
                 </div>
               </>
             )}
