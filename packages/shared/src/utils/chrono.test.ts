@@ -39,12 +39,14 @@ describe("utils/chrono", () => {
 
         expect(result).not.toBeNull();
 
-        if (result) {
-          // Year, month, and day should be correct
-          expect(result.year()).toBe(2025);
-          expect(result.month()).toBe(10);
-          expect(result.date()).toBe(10);
+        if (!result) {
+          throw new Error("Expected date to parse");
         }
+
+        // Year, month, and day should be correct
+        expect(result.year()).toBe(2025);
+        expect(result.month()).toBe(10);
+        expect(result.date()).toBe(10);
       });
 
       it("parses YYYYMMDDHHmmss format (compact)", () => {
@@ -439,7 +441,7 @@ describe("utils/chrono", () => {
       expect(formats).toContain("YYYY/MM");
       expect(formats).toContain("YYYY.MM");
       expect(formats).toContain("YYYYMM");
-      expect(formats.length).toBe(4);
+      expect(formats).toHaveLength(4);
     });
 
     it("returns week formats", () => {
@@ -458,7 +460,7 @@ describe("utils/chrono", () => {
       expect(formats).toContain("YY/MM/DD");
       expect(formats).toContain("YY.MM.DD");
       expect(formats).toContain("YYMMDD");
-      expect(formats.length).toBe(7);
+      expect(formats).toHaveLength(7);
     });
 
     it("returns time formats", () => {
@@ -467,7 +469,7 @@ describe("utils/chrono", () => {
       expect(formats).toContain("HH:mm:ss");
       expect(formats).toContain("HH.mm.ss");
       expect(formats).toContain("HHmmss");
-      expect(formats.length).toBe(3);
+      expect(formats).toHaveLength(3);
     });
 
     it("returns hour formats", () => {
@@ -482,7 +484,7 @@ describe("utils/chrono", () => {
       expect(formats).toContain("HH:mm");
       expect(formats).toContain("HH.mm");
       expect(formats).toContain("HHmm");
-      expect(formats.length).toBe(3);
+      expect(formats).toHaveLength(3);
     });
 
     it("returns datetime formats", () => {
@@ -496,7 +498,7 @@ describe("utils/chrono", () => {
       expect(formats).toContain("YY.MM.DD HH:mm:ss");
       expect(formats).toContain("YY.MM.DD HH.mm.ss");
       expect(formats).toContain("YYMMDDHHmmss");
-      expect(formats.length).toBe(8);
+      expect(formats).toHaveLength(8);
     });
 
     it("returns readonly arrays", () => {

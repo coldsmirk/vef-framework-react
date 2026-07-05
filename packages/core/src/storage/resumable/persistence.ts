@@ -86,6 +86,29 @@ export class LocalStoragePersistence implements ResumablePersistence {
     this.#keyPrefix = keyPrefix;
   }
 
+  #loadSync(fingerprint: string): ResumeRecord | null {
+    if (typeof localStorage === "undefined") {
+      return null;
+    }
+
+    const raw = localStorage.getItem(this.#storageKey(fingerprint));
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<ResumeRecord>;
+      return isValidRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  #storageKey(fingerprint: string): string {
+    return `${this.#keyPrefix}${fingerprint}`;
+  }
+
   public load(fingerprint: string): Promise<ResumeRecord | null> {
     return Promise.resolve(this.#loadSync(fingerprint));
   }
@@ -139,29 +162,6 @@ export class LocalStoragePersistence implements ResumablePersistence {
     }
 
     return Promise.resolve();
-  }
-
-  #loadSync(fingerprint: string): ResumeRecord | null {
-    if (typeof localStorage === "undefined") {
-      return null;
-    }
-
-    const raw = localStorage.getItem(this.#storageKey(fingerprint));
-
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as Partial<ResumeRecord>;
-      return isValidRecord(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-
-  #storageKey(fingerprint: string): string {
-    return `${this.#keyPrefix}${fingerprint}`;
   }
 }
 

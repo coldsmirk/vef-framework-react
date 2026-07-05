@@ -26,7 +26,7 @@ function leaf(name: string, path: string, icon?: string): UserMenu {
     type: "menu",
     name,
     path,
-    icon: icon ?? null
+    icon
   };
 }
 
@@ -77,7 +77,6 @@ function buildUserInfo(): UserInfo {
     id: MOCK_USER.id,
     name: MOCK_USER.name,
     gender: "unknown",
-    avatar: null,
     permissionTokens: ["*"],
     menus: MENUS,
     details: {}

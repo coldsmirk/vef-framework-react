@@ -74,17 +74,19 @@ export function Layout({
   }, [isSidebarCollapsed, menuLayout, hasSectionMenu, sectionItems, logo, title, isSidebarDark]);
 
   useEffect(() => {
-    const query = globalThis.matchMedia(`(max-width: ${breakpoints.md})`);
+    const query = matchMedia(`(max-width: ${breakpoints.md})`);
 
     function handleChange(event: MediaQueryListEvent): void {
-      if (event.matches) {
-        const { isSidebarCollapsed } = useThemeStore.getState();
+      if (!event.matches) {
+        return;
+      }
 
-        if (!isSidebarCollapsed) {
-          useThemeStore.setState(state => {
-            state.isSidebarCollapsed = true;
-          });
-        }
+      const { isSidebarCollapsed } = useThemeStore.getState();
+
+      if (!isSidebarCollapsed) {
+        useThemeStore.setState(state => {
+          state.isSidebarCollapsed = true;
+        });
       }
     }
 

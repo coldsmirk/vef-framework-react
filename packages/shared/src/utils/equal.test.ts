@@ -26,7 +26,7 @@ describe("utils/equal", () => {
       });
 
       it("handles special number values", () => {
-        expect(isShallowEqual(Number.NaN, Number.NaN)).toBe(true);
+        expect(isShallowEqual(NaN, NaN)).toBe(true);
         expect(isShallowEqual(0, -0)).toBe(false);
         expect(isShallowEqual(Infinity, Infinity)).toBe(true);
         expect(isShallowEqual(-Infinity, -Infinity)).toBe(true);
@@ -522,9 +522,9 @@ describe("utils/equal", () => {
       });
 
       it("handles NaN values", () => {
-        expect(isDeepEqual(Number.NaN, Number.NaN)).toBe(true);
-        expect(isDeepEqual(Number.NaN, 0)).toBe(false);
-        expect(isDeepEqual(0, Number.NaN)).toBe(false);
+        expect(isDeepEqual(NaN, NaN)).toBe(true);
+        expect(isDeepEqual(NaN, 0)).toBe(false);
+        expect(isDeepEqual(0, NaN)).toBe(false);
       });
 
       it("handles ArrayBuffer objects", () => {

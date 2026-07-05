@@ -184,7 +184,7 @@ function parseCli(): CliOptions {
     allowPositionals: false
   });
 
-  const releaseAge = Number.parseFloat(values["release-age"] as string);
+  const releaseAge = Number(values["release-age"] as string);
 
   if (!Number.isFinite(releaseAge) || releaseAge < 0) {
     consola.error(`Invalid --release-age: ${values["release-age"]}`);
@@ -194,7 +194,7 @@ function parseCli(): CliOptions {
 
   const sev = String(values.severity).toLowerCase() as Severity;
 
-  if (!(sev in SEVERITY_RANK)) {
+  if (!Object.hasOwn(SEVERITY_RANK, sev)) {
     consola.error(`Invalid --severity: ${values.severity}. Use low|moderate|high|critical.`);
     process.exitCode = 2;
     throw new Error("Invalid CLI arguments");
@@ -306,7 +306,9 @@ async function loadDirectDeps(): Promise<Set<string>> {
     const pkg = JSON.parse(text) as Record<string, Record<string, string> | undefined>;
 
     for (const section of sections) {
-      for (const dep of Object.keys(pkg[section] ?? {})) {
+      const dependencies = Object.keys(pkg[section] ?? {});
+
+      for (const dep of dependencies) {
         result.add(dep);
       }
     }
@@ -388,14 +390,12 @@ async function queryOsvBatch(
         for (const [i, r] of res.results.entries()) {
           const pkg = batch[i];
 
-          if (!pkg) {
-            continue;
-          }
+          if (pkg) {
+            const vulns = r.vulns ?? [];
 
-          const vulns = r.vulns ?? [];
-
-          if (vulns.length > 0) {
-            result.set(`${pkg.name}@${pkg.version}`, vulns);
+            if (vulns.length > 0) {
+              result.set(`${pkg.name}@${pkg.version}`, vulns);
+            }
           }
         }
       }
@@ -429,7 +429,7 @@ async function getGithubToken(): Promise<string | null> {
 async function fetchGhsa(id: string, token: string): Promise<{ cvss?: number; references?: string[] } | null> {
   const raw = await fetchJsonSafe<{
     cvss?: { score?: number };
-    references?: Array<{ url?: string } | string>;
+    references?: Array<string | { url?: string }>;
   }>(
     `https://api.github.com/advisories/${encodeURIComponent(id)}`,
     {
@@ -470,8 +470,9 @@ async function fetchNpmMeta(name: string): Promise<NpmPackageMeta | null> {
   }
 
   const deprecated: Record<string, string> = {};
+  const versionEntries = Object.entries(data.versions ?? {});
 
-  for (const [v, info] of Object.entries(data.versions ?? {})) {
+  for (const [v, info] of versionEntries) {
     if (info?.deprecated) {
       deprecated[v] = info.deprecated;
     }
@@ -792,7 +793,7 @@ function ingestPnpmAudit(audit: PnpmAuditOutput): AdvisoryEnv {
       const key = `${a.module_name}@${finding.version}`;
       const arr = byPackage.get(key) ?? [];
 
-      if (!arr.some(x => x.id === advisory.id)) {
+      if (arr.every(x => x.id !== advisory.id)) {
         arr.push(advisory);
       }
 
@@ -811,6 +812,40 @@ function ingestPnpmAudit(audit: PnpmAuditOutput): AdvisoryEnv {
   }
 
   return { byPackage, affectedPaths };
+}
+
+function collectFixedVersions(detail: OsvDetail): string[] {
+  const fixedVersions: string[] = [];
+  const affected = detail.affected ?? [];
+
+  for (const aff of affected) {
+    const ranges = aff.ranges ?? [];
+
+    for (const range of ranges) {
+      for (const ev of range.events) {
+        if (ev.fixed) {
+          fixedVersions.push(ev.fixed);
+        }
+      }
+    }
+  }
+
+  return fixedVersions;
+}
+
+function addOsvAdvisory(existing: Advisory[], detail: OsvDetail, ref: OsvVulnRef, ghsa: string): void {
+  const fixedVersions = collectFixedVersions(detail);
+  const sevText = detail.database_specific?.severity?.toLowerCase() as Severity | undefined;
+
+  existing.push({
+    id: ghsa,
+    title: detail.summary ?? ref.id,
+    severity: sevText && Object.hasOwn(SEVERITY_RANK, sevText) ? sevText : "unknown",
+    patchedRange: fixedVersions.length > 0 ? `>=${fixedVersions[0]}` : "",
+    vulnerableRange: "",
+    url: `https://osv.dev/vulnerability/${ref.id}`,
+    source: "osv"
+  });
 }
 
 async function crossCheckWithOsv(env: AdvisoryEnv): Promise<void> {
@@ -861,38 +896,13 @@ async function crossCheckWithOsv(env: AdvisoryEnv): Promise<void> {
     for (const ref of refs) {
       const detail = details.get(ref.id);
 
-      if (!detail) {
-        continue;
-      }
+      if (detail) {
+        const ghsa = detail.aliases?.find(alias => alias.startsWith("GHSA-")) ?? ref.id;
 
-      const ghsa = detail.aliases?.find(alias => alias.startsWith("GHSA-")) ?? ref.id;
-
-      if (existing.some(x => x.id === ghsa || x.id === ref.id)) {
-        continue;
-      }
-
-      const fixedVersions: string[] = [];
-
-      for (const aff of detail.affected ?? []) {
-        for (const range of aff.ranges ?? []) {
-          for (const ev of range.events) {
-            if (ev.fixed) {
-              fixedVersions.push(ev.fixed);
-            }
-          }
+        if (existing.every(x => x.id !== ghsa && x.id !== ref.id)) {
+          addOsvAdvisory(existing, detail, ref, ghsa);
         }
       }
-
-      const sevText = detail.database_specific?.severity?.toLowerCase() as Severity | undefined;
-      existing.push({
-        id: ghsa,
-        title: detail.summary ?? ref.id,
-        severity: sevText && sevText in SEVERITY_RANK ? sevText : "unknown",
-        patchedRange: fixedVersions.length > 0 ? `>=${fixedVersions[0]}` : "",
-        vulnerableRange: "",
-        url: `https://osv.dev/vulnerability/${ref.id}`,
-        source: "osv"
-      });
     }
 
     env.byPackage.set(key, existing);
@@ -1008,10 +1018,10 @@ async function buildReports(
     });
   }
 
-  const uniqueNames = new Set([...reports.values()].map(r => r.name));
+  const uniqueNames = new Set(reports.values().map(r => r.name));
   const metaCache = new Map<string, NpmPackageMeta | null>();
   await Promise.all(
-    [...uniqueNames].map(async name => {
+    uniqueNames.values().map(async name => {
       metaCache.set(name, await fetchNpmMeta(name));
     })
   );
@@ -1045,7 +1055,7 @@ async function buildReports(
     report.recommendedAction = result.action;
   }
 
-  return [...reports.values()].toSorted((a, b) => {
+  return reports.values().toArray().toSorted((a, b) => {
     const sa = pickSeverity(a.vulnerabilities);
     const sb = pickSeverity(b.vulnerabilities);
 
@@ -1097,6 +1107,39 @@ interface Stats {
   deprecated: number;
 }
 
+function incrementSummaryClassification(stats: Stats, classification: Classification): void {
+  switch (classification) {
+    case "safe-patch": {
+      stats.safePatch++;
+      break;
+    }
+
+    case "safe-minor": {
+      stats.safeMinor++;
+      break;
+    }
+
+    case "requires-major": {
+      stats.major++;
+      break;
+    }
+
+    case "held-by-cooldown": {
+      stats.cooldown++;
+      break;
+    }
+
+    case "deprecated": {
+      stats.deprecated++;
+      break;
+    }
+
+    default: {
+      break;
+    }
+  }
+}
+
 function countByClassification(reports: PackageReport[]): Stats {
   const s: Stats = {
     vuln: 0,
@@ -1112,36 +1155,7 @@ function countByClassification(reports: PackageReport[]): Stats {
       s.vuln++;
     }
 
-    switch (r.classification) {
-      case "safe-patch": {
-        s.safePatch++;
-        break;
-      }
-
-      case "safe-minor": {
-        s.safeMinor++;
-        break;
-      }
-
-      case "requires-major": {
-        s.major++;
-        break;
-      }
-
-      case "held-by-cooldown": {
-        s.cooldown++;
-        break;
-      }
-
-      case "deprecated": {
-        s.deprecated++;
-        break;
-      }
-
-      default: {
-        break;
-      }
-    }
+    incrementSummaryClassification(s, r.classification);
   }
 
   return s;
@@ -1413,7 +1427,7 @@ async function main(): Promise<void> {
   consola.start("Running pnpm audit and pnpm outdated...");
   const [auditRaw, outdated] = await Promise.all([runPnpmAudit(), runPnpmOutdated()]);
   const env = ingestPnpmAudit(auditRaw);
-  const baseVulnCount = [...env.byPackage.values()].reduce((n, l) => n + l.length, 0);
+  const baseVulnCount = env.byPackage.values().reduce((n, l) => n + l.length, 0);
   consola.info(`pnpm audit: ${baseVulnCount} advisory finding(s). pnpm outdated: ${Object.keys(outdated).length} candidate(s).`);
 
   consola.start("Cross-checking with OSV.dev...");

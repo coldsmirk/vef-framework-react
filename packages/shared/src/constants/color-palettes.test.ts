@@ -44,7 +44,7 @@ describe("constants/color-palettes", () => {
         expect(colorPaletteMap.has(name as any)).toBe(true);
       }
 
-      expect([...colorPaletteMap.keys()].toSorted()).toEqual(expectedNames.toSorted());
+      expect(colorPaletteMap.keys().toArray().toSorted()).toEqual(expectedNames.toSorted());
     });
 
     it("has nested Maps as values", () => {
@@ -70,7 +70,7 @@ describe("constants/color-palettes", () => {
         for (const hex of paletteMap.values()) {
           expect(hex).toMatch(/^#[0-9a-f]{6}$/);
           expect(typeof hex).toBe("string");
-          expect(hex.length).toBe(7);
+          expect(hex).toHaveLength(7);
         }
       }
     });

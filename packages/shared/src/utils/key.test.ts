@@ -18,8 +18,8 @@ describe("shared/utils/key/hashKey", () => {
 
     it("hashes null and undefined to different JSON literals", () => {
       expect(hashKey(null)).toBe("null");
-      // eslint-disable-next-line unicorn/no-useless-undefined -- explicitly asserting the `undefined` input/return behavior under test
-      expect(hashKey(undefined)).toBe(undefined);
+
+      expect(hashKey(undefined)).toBeUndefined();
     });
   });
 

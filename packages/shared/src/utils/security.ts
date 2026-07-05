@@ -114,7 +114,16 @@ export function obfuscateEncodeToBase64(plainText: string): string {
     return "";
   }
 
+  const toBase64 = "toBase64" in encoded && typeof encoded.toBase64 === "function"
+    ? encoded.toBase64
+    : undefined;
+
+  if (toBase64) {
+    return toBase64.call(encoded);
+  }
+
   const binaryString = String.fromCodePoint(...encoded);
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array#toBase64 is still not universal.
   return btoa(binaryString);
 }
 
@@ -129,6 +138,15 @@ export function obfuscateDecodeFromBase64(base64String: string): string {
     return "";
   }
 
+  const fromBase64 = "fromBase64" in Uint8Array && typeof Uint8Array.fromBase64 === "function"
+    ? Uint8Array.fromBase64
+    : undefined;
+
+  if (fromBase64) {
+    return obfuscateDecode(fromBase64(base64String));
+  }
+
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array.fromBase64 is still not universal.
   const binaryString = atob(base64String);
   const bytes = new Uint8Array(binaryString.length);
 

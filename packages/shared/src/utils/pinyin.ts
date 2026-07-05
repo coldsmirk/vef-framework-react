@@ -5,8 +5,6 @@ import { addDict, pinyin } from "pinyin-pro";
 
 import { isString } from "./lib";
 
-addDict(ModernChineseDict);
-
 export type WithPinyin<
   T extends AnyObject,
   K extends keyof T & string
@@ -35,6 +33,17 @@ type ExtractSecondOverload<T> = T extends {
 
 type Options = ExtractSecondOverload<typeof pinyin>;
 
+let pinyinDictConfigured = false;
+
+function ensurePinyinDictConfigured(): void {
+  if (pinyinDictConfigured) {
+    return;
+  }
+
+  addDict(ModernChineseDict);
+  pinyinDictConfigured = true;
+}
+
 const baseOptions: Options = {
   type: "array",
   toneType: "none",
@@ -62,6 +71,8 @@ export function getPinyin(text: string): string[] {
     return cached;
   }
 
+  ensurePinyinDictConfigured();
+
   const result = pinyin(
     text,
     {
@@ -86,6 +97,8 @@ export function getPinyinInitials(text: string): string[] {
   if (cached) {
     return cached;
   }
+
+  ensurePinyinDictConfigured();
 
   const result = pinyin(
     text,

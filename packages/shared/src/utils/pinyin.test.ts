@@ -149,7 +149,7 @@ describe("utils/pinyin", () => {
       for (const text of testCases) {
         const pinyin = getPinyin(text);
         const initials = getPinyinInitials(text);
-        expect(initials.length).toBe(pinyin.length);
+        expect(initials).toHaveLength(pinyin.length);
       }
     });
   });
@@ -169,13 +169,15 @@ describe("utils/pinyin", () => {
         const initials = getPinyinInitials(text);
 
         // Should have same array length
-        expect(initials.length).toBe(pinyin.length);
+        expect(initials).toHaveLength(pinyin.length);
 
         // For Chinese characters, each initial should be the first character of corresponding pinyin
-        for (const [index, py] of pinyin.entries()) {
-          if (py.length > 0) {
-            expect(initials[index]).toBe(py.charAt(0));
-          }
+        const nonEmptyPinyin = pinyin
+          .map((py, index) => { return { py, initial: initials[index] }; })
+          .filter(({ py }) => py.length > 0);
+
+        for (const { py, initial } of nonEmptyPinyin) {
+          expect(initial).toBe(py.charAt(0));
         }
       }
     });
@@ -215,7 +217,7 @@ describe("utils/pinyin", () => {
 
         expect(pinyin).toEqual(expectedPinyin);
         expect(initials).toEqual(expectedInitials);
-        expect(initials.length).toBe(pinyin.length);
+        expect(initials).toHaveLength(pinyin.length);
       }
     });
 
@@ -237,7 +239,7 @@ describe("utils/pinyin", () => {
         const pinyin = getPinyin(text);
         const initials = getPinyinInitials(text);
 
-        expect(initials.length).toBe(pinyin.length);
+        expect(initials).toHaveLength(pinyin.length);
 
         // For these edge cases, they should be identical
         for (const [index, py] of pinyin.entries()) {

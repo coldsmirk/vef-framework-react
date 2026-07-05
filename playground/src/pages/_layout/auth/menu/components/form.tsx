@@ -28,9 +28,7 @@ function handleMenuTypeChange(value: MenuType, form: any): void {
   if (value === "P") {
     form.resetField("path");
     form.resetField("icon");
-  }
-
-  if (value === "V") {
+  } else if (value === "V") {
     form.resetField("icon");
   }
 
@@ -112,12 +110,14 @@ export function Form() {
           name="icon"
           validators={{
             onChange: ({ value, fieldApi: { form } }) => {
-              if (form.state.values.type === "D") {
-                const result = validators.icon.safeParse(value);
+              if (form.state.values.type !== "D") {
+                return;
+              }
 
-                if (!result.success) {
-                  return result.error.issues;
-                }
+              const result = validators.icon.safeParse(value);
+
+              if (!result.success) {
+                return result.error.issues;
               }
             }
           }}
@@ -142,12 +142,14 @@ export function Form() {
           name="path"
           validators={{
             onBlur: ({ value, fieldApi: { form } }) => {
-              if (form.state.values.type !== "P") {
-                const result = validators.path.safeParse(value);
+              if (form.state.values.type === "P") {
+                return;
+              }
 
-                if (!result.success) {
-                  return result.error.issues;
-                }
+              const result = validators.path.safeParse(value);
+
+              if (!result.success) {
+                return result.error.issues;
               }
             }
           }}
@@ -171,12 +173,14 @@ export function Form() {
           name="permissionCode"
           validators={{
             onBlur: ({ value, fieldApi: { form } }) => {
-              if (form.state.values.type === "P") {
-                const result = validators.permissionCode.safeParse(value);
+              if (form.state.values.type !== "P") {
+                return;
+              }
 
-                if (!result.success) {
-                  return result.error.issues;
-                }
+              const result = validators.permissionCode.safeParse(value);
+
+              if (!result.success) {
+                return result.error.issues;
               }
             }
           }}

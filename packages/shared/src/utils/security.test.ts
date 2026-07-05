@@ -34,6 +34,17 @@ xFxdU6jE0NQ+Z+zEdhUTooNRaY5nZiu5PgDB0ED/ZKBUSLKL7eibMxZtMlUDHjm4
 gwQco1KRMDSmXSMkDwIDAQAB
 -----END PUBLIC KEY-----`;
 
+type RsaRoundTripResult = { ok: true; value: string } | { ok: false; error: unknown };
+
+function tryRoundTripRSA(value: string, publicKey: string, privateKey: string): RsaRoundTripResult {
+  try {
+    const encrypted = encryptUsingRSA(value, publicKey);
+    return { ok: true, value: decryptUsingRSA(encrypted, privateKey) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
 describe("utils/security", () => {
   // The RSA helpers log to console.error before rethrowing. Several negative-case
   // tests deliberately exercise that path; silence the side-effect so stderr stays
@@ -171,15 +182,8 @@ describe("utils/security", () => {
 
       // Some RSA implementations may not handle empty strings well
       // Let's test if encryption works first
-      try {
-        const encrypted = encryptUsingRSA(originalText, publicKey);
-        const decrypted = decryptUsingRSA(encrypted, privateKey);
-        expect(decrypted).toBe(originalText);
-      } catch (error) {
-        // If empty string encryption fails, that's acceptable behavior
-        // for some RSA implementations
-        expect(error).toBeInstanceOf(Error);
-      }
+      const result = tryRoundTripRSA(originalText, publicKey, privateKey);
+      expect(result.ok ? result.value === originalText : result.error instanceof Error).toBe(true);
     });
 
     it("decrypts complex data", () => {
@@ -297,15 +301,10 @@ MIICXgIBAAKBgQDifferentKeyContentHereForTestingPurposes
       }
 
       // Test empty string separately due to potential RSA implementation limitations
-      try {
-        const emptyText = "";
-        const encrypted = encryptUsingRSA(emptyText, publicKey);
-        const decrypted = decryptUsingRSA(encrypted, privateKey);
-        expect(decrypted).toBe(emptyText);
-      } catch (error) {
-        // Empty string encryption may fail in some RSA implementations - this is acceptable
-        expect(error).toBeInstanceOf(Error);
-      }
+      const emptyText = "";
+      const result = tryRoundTripRSA(emptyText, publicKey, privateKey);
+      // Empty string encryption may fail in some RSA implementations - this is acceptable
+      expect(result.ok ? result.value === emptyText : result.error instanceof Error).toBe(true);
     });
 
     it("produces different encrypted results for same input", () => {
@@ -373,25 +372,35 @@ MIICXgIBAAKBgQDifferentKeyContentHereForTestingPurposes
     it("provides meaningful error messages for encryption failures", () => {
       const plainText = "Test message";
 
+      let caught: unknown;
+
       try {
         encryptUsingRSA(plainText, "invalid-key");
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Failed to encrypt data");
-        expect((error as Error).message).not.toContain(plainText);
+        caught = error;
       }
+
+      expect(caught).toBeInstanceOf(Error);
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain("Failed to encrypt data");
+      expect(message).not.toContain(plainText);
     });
 
     it("provides meaningful error messages for decryption failures", () => {
       const invalidEncrypted = "invalid-data";
 
+      let caught: unknown;
+
       try {
         decryptUsingRSA(invalidEncrypted, privateKey);
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Failed to decrypt data");
-        expect((error as Error).message).not.toContain(invalidEncrypted);
+        caught = error;
       }
+
+      expect(caught).toBeInstanceOf(Error);
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain("Failed to decrypt data");
+      expect(message).not.toContain(invalidEncrypted);
     });
 
     it("handles null and undefined inputs gracefully", () => {
@@ -456,7 +465,7 @@ describe("utils/security - string obfuscation", () => {
       const encoded = obfuscateEncode(plainText);
       const decoded = obfuscateDecode(encoded);
 
-      expect(encoded.length).toBe(0);
+      expect(encoded).toHaveLength(0);
       expect(decoded).toBe("");
     });
 

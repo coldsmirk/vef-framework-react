@@ -16,14 +16,8 @@ describe("shared/utils/task/scheduleMicrotask", () => {
   });
 
   it("falls back to a Promise microtask when queueMicrotask is unavailable", async () => {
-    const originalQueueMicrotask = globalThis.queueMicrotask;
-
-    const restore = (): void => {
-      globalThis.queueMicrotask = originalQueueMicrotask;
-    };
-
     try {
-      Reflect.deleteProperty(globalThis, "queueMicrotask");
+      vi.stubGlobal("queueMicrotask", undefined);
 
       const task = vi.fn();
       scheduleMicrotask(task);
@@ -32,7 +26,7 @@ describe("shared/utils/task/scheduleMicrotask", () => {
       await Promise.resolve();
       expect(task).toHaveBeenCalledTimes(1);
     } finally {
-      restore();
+      vi.unstubAllGlobals();
     }
   });
 });

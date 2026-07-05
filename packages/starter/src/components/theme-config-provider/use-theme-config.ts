@@ -13,7 +13,7 @@ function getSystemDarkMode(): boolean {
     return false;
   }
 
-  return globalThis.matchMedia(prefersDarkModeQuery).matches;
+  return matchMedia(prefersDarkModeQuery).matches;
 }
 
 export function useThemeConfig(): ThemeConfig {
@@ -69,7 +69,7 @@ export function useThemeConfig(): ThemeConfig {
       return;
     }
 
-    const query = globalThis.matchMedia(prefersDarkModeQuery);
+    const query = matchMedia(prefersDarkModeQuery);
 
     // Always sync with system preference when switching to system mode
     // or on first render

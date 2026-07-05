@@ -70,9 +70,9 @@ describe("constants/color-names", () => {
     });
 
     it("has unique hex keys", () => {
-      const hexValues = [...colorNameMap.keys()];
+      const hexValues = colorNameMap.keys().toArray();
       const uniqueHexValues = new Set(hexValues);
-      expect(hexValues.length).toBe(uniqueHexValues.size);
+      expect(hexValues).toHaveLength(uniqueHexValues.size);
     });
 
     it("performs fast lookups", () => {

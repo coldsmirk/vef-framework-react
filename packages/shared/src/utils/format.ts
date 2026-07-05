@@ -46,7 +46,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
   const dm = Math.max(decimals, 0);
   const i = Math.floor(Math.log(bytes) / LOG_BYTES_UNIT);
 
-  return `${Number.parseFloat((bytes / BYTES_UNIT ** i).toFixed(dm))} ${BYTE_SIZES[i]}`;
+  return `${Number((bytes / BYTES_UNIT ** i).toFixed(dm))} ${BYTE_SIZES[i]}`;
 }
 
 /**
@@ -76,5 +76,5 @@ export function formatNumber(num: number, decimals = 2): string {
   const dm = Math.max(decimals, 0);
   const i = Math.floor(Math.log(num) / LOG_NUMBER_UNIT);
 
-  return `${Number.parseFloat((num / NUMBER_UNIT ** i).toFixed(dm))} ${NUMBER_UNITS[i]}`;
+  return `${Number((num / NUMBER_UNIT ** i).toFixed(dm))} ${NUMBER_UNITS[i]}`;
 }

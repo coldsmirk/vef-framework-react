@@ -32,20 +32,6 @@ export class ApiClient {
   readonly #queryClient: QueryClient;
   #currentSignal?: GenericAbortSignal;
 
-  /**
-   * Access the underlying QueryClient.
-   */
-  get [QUERY_CLIENT](): QueryClient {
-    return this.#queryClient;
-  }
-
-  /**
-   * Access the underlying HttpClient.
-   */
-  get [HTTP_CLIENT](): Readonly<HttpClient> {
-    return this.#httpClient;
-  }
-
   constructor(options: ApiClientOptions) {
     const { http, query } = options;
 
@@ -78,6 +64,20 @@ export class ApiClient {
         return proxyCache.get(prop);
       }
     });
+  }
+
+  /**
+   * Access the underlying QueryClient.
+   */
+  get [QUERY_CLIENT](): QueryClient {
+    return this.#queryClient;
+  }
+
+  /**
+   * Access the underlying HttpClient.
+   */
+  get [HTTP_CLIENT](): Readonly<HttpClient> {
+    return this.#httpClient;
   }
 
   /**

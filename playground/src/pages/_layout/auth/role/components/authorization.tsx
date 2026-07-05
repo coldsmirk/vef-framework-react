@@ -112,19 +112,21 @@ export function Authorization() {
     }
 
     traverseTree(options, node => {
-      if (node.meta?.type === "P") {
-        const permission = { ...normalizedPermissions[node.value] } as RolePermissionItem;
-
-        if (isNullish(permission.dataScope)) {
-          permission.dataScope = "A";
-        }
-
-        if (isNullish(permission.granted)) {
-          permission.granted = false;
-        }
-
-        normalizedPermissions[node.value] = permission;
+      if (node.meta?.type !== "P") {
+        return;
       }
+
+      const permission = { ...normalizedPermissions[node.value] } as RolePermissionItem;
+
+      if (isNullish(permission.dataScope)) {
+        permission.dataScope = "A";
+      }
+
+      if (isNullish(permission.granted)) {
+        permission.granted = false;
+      }
+
+      normalizedPermissions[node.value] = permission;
     });
 
     reset({

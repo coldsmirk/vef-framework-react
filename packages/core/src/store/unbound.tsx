@@ -77,19 +77,22 @@ export function createComponentStore<TState, TInitialState extends Partial<TStat
       if (storageKey && persistOptions) {
         const fullStorageKey = `${STORAGE_KEY_PREFIX}${constantCase(storageKey)}__`;
         const storageProvider = persistOptions.storage === "local" ? localStorage : sessionStorage;
+        const immerInitializer = immer(
+          castedInitializer as StateCreator<
+            TState,
+            [["zustand/subscribeWithSelector", never], ["zustand/persist", unknown], ["zustand/immer", never]],
+            []
+          >
+        );
+        const persistedInitializer = persist(immerInitializer, {
+          name: fullStorageKey,
+          version: 1,
+          storage: createJSONStorage(() => storageProvider),
+          partialize: (persistOptions.selector ?? identity) as (state: TState) => Partial<TState>
+        });
 
         storeRef.current = createStore<TState>()(
-          subscribeWithSelector(
-            persist(
-              immer(castedInitializer as StateCreator<TState, [["zustand/subscribeWithSelector", never], ["zustand/persist", unknown], ["zustand/immer", never]], []>),
-              {
-                name: fullStorageKey,
-                version: 1,
-                storage: createJSONStorage(() => storageProvider),
-                partialize: (persistOptions.selector ?? identity) as (state: TState) => Partial<TState>
-              }
-            )
-          )
+          subscribeWithSelector(persistedInitializer)
         );
       } else {
         storeRef.current = createStore<TState>()(

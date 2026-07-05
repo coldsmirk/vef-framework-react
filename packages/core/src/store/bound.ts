@@ -45,15 +45,14 @@ export function createPersistedStore<TState>(
   } = persistenceOptions;
   const storageKey = `__VEF_STORE__${constantCase(name)}__`;
   const storageProvider = storage === "local" ? localStorage : sessionStorage;
+  const persistedInitializer = persist(immer(initializer), {
+    name: storageKey,
+    version: 1,
+    storage: createJSONStorage(() => storageProvider),
+    partialize: selector ?? identity
+  });
 
   return create<TState>()(
-    subscribeWithSelector(
-      persist(immer(initializer), {
-        name: storageKey,
-        version: 1,
-        storage: createJSONStorage(() => storageProvider),
-        partialize: selector ?? identity
-      })
-    )
+    subscribeWithSelector(persistedInitializer)
   );
 }

@@ -5,9 +5,22 @@ import labPlugin from "colord/plugins/lab";
 import mixPlugin from "colord/plugins/mix";
 import namesPlugin from "colord/plugins/names";
 
-extend([namesPlugin, mixPlugin, labPlugin]);
-
 const WHITE_COLOR = "#ffffff";
+let colorPluginsConfigured = false;
+
+function ensureColorPluginsConfigured(): void {
+  if (colorPluginsConfigured) {
+    return;
+  }
+
+  extend([namesPlugin, mixPlugin, labPlugin]);
+  colorPluginsConfigured = true;
+}
+
+function createColor(color: AnyColor) {
+  ensureColorPluginsConfigured();
+  return colord(color);
+}
 
 /**
  * Check if the given color is valid
@@ -16,7 +29,7 @@ const WHITE_COLOR = "#ffffff";
  * @returns True if the color is valid, false otherwise
  */
 export function isValidColor(color: AnyColor): boolean {
-  return colord(color).isValid();
+  return createColor(color).isValid();
 }
 
 /**
@@ -26,7 +39,7 @@ export function isValidColor(color: AnyColor): boolean {
  * @returns The color in hexadecimal format (e.g., "#ff0000")
  */
 export function toHexColor(color: AnyColor): string {
-  return colord(color).toHex();
+  return createColor(color).toHex();
 }
 
 /**
@@ -36,7 +49,7 @@ export function toHexColor(color: AnyColor): string {
  * @returns The color in RGBA format with r, g, b, a properties
  */
 export function toRgbColor(color: AnyColor): RgbaColor {
-  return colord(color).toRgb();
+  return createColor(color).toRgb();
 }
 
 /**
@@ -46,7 +59,7 @@ export function toRgbColor(color: AnyColor): RgbaColor {
  * @returns The color in HSLA format with h, s, l, a properties
  */
 export function toHslColor(color: AnyColor): HslaColor {
-  return colord(color).toHsl();
+  return createColor(color).toHsl();
 }
 
 /**
@@ -56,7 +69,7 @@ export function toHslColor(color: AnyColor): HslaColor {
  * @returns The color in HSVA format with h, s, v, a properties
  */
 export function toHsvColor(color: AnyColor): HsvaColor {
-  return colord(color).toHsv();
+  return createColor(color).toHsv();
 }
 
 /**
@@ -67,7 +80,7 @@ export function toHsvColor(color: AnyColor): HsvaColor {
  * @returns The Delta E value (lower values indicate more similar colors)
  */
 export function getColorDifference(firstColor: AnyColor, secondColor: AnyColor): number {
-  return colord(firstColor).delta(secondColor);
+  return createColor(firstColor).delta(secondColor);
 }
 
 /**
@@ -77,7 +90,7 @@ export function getColorDifference(firstColor: AnyColor, secondColor: AnyColor):
  * @returns The color in hexadecimal format
  */
 export function convertHslToHex(hslColor: HslColor): string {
-  return colord(hslColor).toHex();
+  return createColor(hslColor).toHex();
 }
 
 /**
@@ -88,7 +101,7 @@ export function convertHslToHex(hslColor: HslColor): string {
  * @returns The color with the specified alpha value in hexadecimal format
  */
 export function setColorAlpha(color: AnyColor, alphaValue: number): string {
-  return colord(color).alpha(alphaValue).toHex();
+  return createColor(color).alpha(alphaValue).toHex();
 }
 
 /**
@@ -100,7 +113,7 @@ export function setColorAlpha(color: AnyColor, alphaValue: number): string {
  * @returns The mixed color in hexadecimal format
  */
 export function mixColor(baseColor: AnyColor, blendColor: AnyColor, blendRatio: number): string {
-  return colord(baseColor).mix(blendColor, blendRatio).toHex();
+  return createColor(baseColor).mix(blendColor, blendRatio).toHex();
 }
 
 /**
@@ -117,8 +130,8 @@ export function convertTransparentToOpaque(
   backgroundColor = WHITE_COLOR
 ): string {
   const transparentColor = setColorAlpha(color, alphaValue);
-  const foreground = colord(transparentColor).toRgb();
-  const background = colord(backgroundColor).toRgb();
+  const foreground = createColor(transparentColor).toRgb();
+  const background = createColor(backgroundColor).toRgb();
 
   const resultRgb: RgbColor = {
     r: calculateRgbComponent(foreground.r, background.r, alphaValue),
@@ -126,7 +139,7 @@ export function convertTransparentToOpaque(
     b: calculateRgbComponent(foreground.b, background.b, alphaValue)
   };
 
-  return colord(resultRgb).toHex();
+  return createColor(resultRgb).toHex();
 }
 
 /**
@@ -136,7 +149,7 @@ export function convertTransparentToOpaque(
  * @returns True if the color is white, false otherwise
  */
 export function isWhiteColor(color: AnyColor): boolean {
-  return colord(color).isEqual(WHITE_COLOR);
+  return createColor(color).isEqual(WHITE_COLOR);
 }
 
 /**

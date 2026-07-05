@@ -153,7 +153,16 @@ export function createLayoutRouteOptions<
   }
 
   return {
-    beforeLoad: async (args: LayoutBeforeLoadArgs): Promise<TBeforeLoadContext> => {
+    // The wrapper handlers declare their parameter as `unknown` on purpose. TanStack's
+    // beforeLoad/loader option constraints reference the global Register in their parameter
+    // types; once an app registers a fully-typed router (Register.router carries the concrete
+    // routeTree), checking a pre-built handler's precise parameter type against that constraint
+    // forces TS to resolve `typeof router` → routeTree → the very Route being inferred — TS7022.
+    // `unknown` is the top type, so the contravariant parameter check passes without expanding
+    // the constraint; the single cast below re-narrows for the body and the user-facing
+    // `LayoutBeforeLoadArgs` / `LayoutLoaderArgs` callback types stay precise.
+    beforeLoad: async (rawArgs: unknown): Promise<TBeforeLoadContext> => {
+      const args = rawArgs as LayoutBeforeLoadArgs;
       const { location, context } = args;
       const { isAuthenticated, menuPathSet } = useAppStore.getState();
 
@@ -169,7 +178,8 @@ export function createLayoutRouteOptions<
 
       return beforeLoadContext ?? ({} as TBeforeLoadContext);
     },
-    loader: async (args: LayoutLoaderArgs<TBeforeLoadContext>): Promise<TLoaderData | undefined> => {
+    loader: async (rawArgs: unknown): Promise<TLoaderData | undefined> => {
+      const args = rawArgs as LayoutLoaderArgs<TBeforeLoadContext>;
       const { location, context } = args;
       const { permissionTokens, ...userInfo } = await fetchUserInfo();
       const { menus } = userInfo;

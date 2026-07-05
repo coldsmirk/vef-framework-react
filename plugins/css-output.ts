@@ -15,12 +15,10 @@ export default function cssOutputPlugin(): Plugin {
       // Phase 1: Collect renames
       const renames = new Map<string, string>();
 
-      for (const fileName of Object.keys(bundle)) {
+      for (const [fileName, chunk] of Object.entries(bundle)) {
         if (!fileName.includes("node_modules/")) {
           continue;
         }
-
-        const chunk = bundle[fileName];
 
         if (!chunk) {
           continue;
@@ -54,7 +52,7 @@ export default function cssOutputPlugin(): Plugin {
       }
 
       // Phase 2: Update import paths in all chunks, then rename
-      for (const [, chunk] of Object.entries(bundle)) {
+      for (const chunk of Object.values(bundle)) {
         if (chunk.type !== "chunk" || !chunk.code) {
           continue;
         }
@@ -67,8 +65,14 @@ export default function cssOutputPlugin(): Plugin {
           const escaped = oldPath.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
           code = code
-            .replaceAll(new RegExp(String.raw`(from\s+['"])([^'"]*${escaped})(['"])`, "g"), `$1${relativePath}$3`)
-            .replaceAll(new RegExp(String.raw`(require\s*\(\s*['"])([^'"]*${escaped})(['"]\s*\))`, "g"), `$1${relativePath}$3`);
+            .replaceAll(
+              new RegExp(String.raw`(from\s+['"])([^'"]*${escaped})(['"])`, "g"),
+              (_match, prefix: string, _importPath: string, suffix: string) => `${prefix}${relativePath}${suffix}`
+            )
+            .replaceAll(
+              new RegExp(String.raw`(require\s*\(\s*['"])([^'"]*${escaped})(['"]\s*\))`, "g"),
+              (_match, prefix: string, _importPath: string, suffix: string) => `${prefix}${relativePath}${suffix}`
+            );
         }
 
         if (code !== chunk.code) {

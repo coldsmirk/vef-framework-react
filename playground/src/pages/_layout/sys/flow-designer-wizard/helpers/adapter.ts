@@ -49,10 +49,10 @@ export function toBackendFormDefinition(schema: FormSchema): BackendFormDefiniti
       kind: definition.kind,
       label: definition.label,
       sortOrder: index,
-      ...placeholder ? { placeholder } : {},
-      ...required ? { isRequired: true } : {},
-      ...definition.options ? { options: definition.options } : {},
-      ...hasRule ? { validation: rule } : {}
+      ...placeholder && { placeholder },
+      ...required && { isRequired: true },
+      ...definition.options && { options: definition.options },
+      ...hasRule && { validation: rule }
     };
   });
 

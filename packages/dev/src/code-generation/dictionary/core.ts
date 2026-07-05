@@ -15,6 +15,18 @@ const KEY_CHARSET_PATTERN = /^[\w.-]+$/;
 const KEY_CHARSET_DESCRIPTION = "letters, digits, underscore, dot, hyphen";
 const DEFAULT_WARN: (message: string) => void = message => console.warn(message);
 
+function compareDictionaryKey(first: DictionaryKeyEntry, second: DictionaryKeyEntry): number {
+  if (first.key < second.key) {
+    return -1;
+  }
+
+  if (first.key > second.key) {
+    return 1;
+  }
+
+  return 0;
+}
+
 export interface GenerateDictionaryKeysOptions {
   /**
    * Absolute path to the project root.
@@ -187,17 +199,7 @@ function dedupeAndSort(
   // Code-point ordering: deterministic across platforms and Node ICU variants
   // (small-icu / full-icu / no-icu). The key charset is ASCII so locale-aware
   // ordering would not produce different results, just less predictable ones.
-  return [...map.values()].toSorted((a, b) => {
-    if (a.key < b.key) {
-      return -1;
-    }
-
-    if (a.key > b.key) {
-      return 1;
-    }
-
-    return 0;
-  });
+  return map.values().toArray().toSorted(compareDictionaryKey);
 }
 
 function resolveOutputPath(projectDir: string, outputRelative: string): string {

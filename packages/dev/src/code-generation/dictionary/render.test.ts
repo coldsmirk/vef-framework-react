@@ -53,7 +53,7 @@ describe("code-generation/dictionary/renderDictionaryKeysFile", () => {
       renderDictionaryKeysFile([
         {
           key: "k",
-          comment: "first\u2028second\u2029third"
+          comment: "first\u{2028}second\u{2029}third"
         }
       ], OPTIONS)
     ).toContain("first second third");

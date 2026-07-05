@@ -55,38 +55,6 @@ export class AutoEnhanceCore {
     };
   }
 
-  registerPlugin(plugin: AutoEnhancePlugin): void {
-    this.plugins.push(plugin);
-  }
-
-  registerPlugins(plugins: AutoEnhancePlugin[]): void {
-    for (const plugin of plugins) {
-      this.plugins.push(plugin);
-    }
-  }
-
-  getRegisteredPlugins(): Array<Pick<AutoEnhancePlugin, "name" | "description">> {
-    return this.plugins.map(({ name, description }) => {
-      return {
-        name,
-        description
-      };
-    });
-  }
-
-  transform(code: string, id: string): TransformResult | null {
-    if (!this.shouldProcessFile(id) || this.plugins.length === 0) {
-      return null;
-    }
-
-    try {
-      return this.executeTransform(code, id);
-    } catch (error) {
-      console.warn(`${this.options.logPrefix}: Error processing ${id}:`, error);
-      return null;
-    }
-  }
-
   private shouldProcessFile(id: string): boolean {
     const { include, exclude } = this.options;
 
@@ -94,11 +62,7 @@ export class AutoEnhanceCore {
       return false;
     }
 
-    if (include && !matchesPattern(include, id)) {
-      return false;
-    }
-
-    return true;
+    return !include || matchesPattern(include, id);
   }
 
   private buildTransformInfo(id: string, code: string): AutoEnhanceContext {
@@ -174,5 +138,37 @@ export class AutoEnhanceCore {
     }
 
     return { hasChanges, logs };
+  }
+
+  registerPlugin(plugin: AutoEnhancePlugin): void {
+    this.plugins.push(plugin);
+  }
+
+  registerPlugins(plugins: AutoEnhancePlugin[]): void {
+    for (const plugin of plugins) {
+      this.plugins.push(plugin);
+    }
+  }
+
+  getRegisteredPlugins(): Array<Pick<AutoEnhancePlugin, "name" | "description">> {
+    return this.plugins.map(({ name, description }) => {
+      return {
+        name,
+        description
+      };
+    });
+  }
+
+  transform(code: string, id: string): TransformResult | null {
+    if (!this.shouldProcessFile(id) || this.plugins.length === 0) {
+      return null;
+    }
+
+    try {
+      return this.executeTransform(code, id);
+    } catch (error) {
+      console.warn(`${this.options.logPrefix}: Error processing ${id}:`, error);
+      return null;
+    }
   }
 }

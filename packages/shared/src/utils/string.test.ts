@@ -31,7 +31,6 @@ describe("shared/utils/string/stringify", () => {
     });
 
     it("returns an empty string for undefined", () => {
-      // eslint-disable-next-line unicorn/no-useless-undefined -- explicitly asserting the `undefined` input is stringified to ""
       expect(stringify(undefined)).toBe("");
     });
   });

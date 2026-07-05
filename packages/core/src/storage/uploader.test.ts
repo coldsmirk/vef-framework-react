@@ -23,12 +23,12 @@ interface Deferred<T> {
  * observe in-flight counts before resolving.
  */
 function defer<T = void>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
+  const {
+    promise,
+    resolve,
+    reject
+  } = Promise.withResolvers<T>();
+
   return {
     resolve,
     reject,
@@ -526,7 +526,9 @@ describe("Uploader / progress + status", () => {
     const statuses: string[] = [];
 
     const uploader = new Uploader(http, makeFile(1024), {
-      onStatusChange: s => statuses.push(s)
+      onStatusChange: s => {
+        statuses.push(s);
+      }
     });
     await uploader.start();
 
@@ -544,7 +546,9 @@ describe("Uploader / progress + status", () => {
     const progressLog: number[] = [];
 
     const uploader = new Uploader(http, makeFile(2048), {
-      onProgress: p => progressLog.push(p.loaded)
+      onProgress: p => {
+        progressLog.push(p.loaded);
+      }
     });
     await uploader.start();
 
@@ -626,7 +630,9 @@ describe("Uploader / resume", () => {
     // 2048 bytes should be credited up front from the listed sizes,
     // independent of how the local Blob would slice.
     const uploader = new Uploader(http, makeFile(4096), {
-      onProgress: p => progressLog.push(p.loaded)
+      onProgress: p => {
+        progressLog.push(p.loaded);
+      }
     });
     await uploader.start({
       kind: "resume",
@@ -655,7 +661,9 @@ describe("Uploader / resume", () => {
     const expectedExpiry = new Date(Date.now() + 60_000).toISOString();
 
     await new Uploader(http, makeFile(2048), {
-      onSessionOpened: snapshot => sessions.push({ claimId: snapshot.claimId, expiresAt: snapshot.expiresAt })
+      onSessionOpened: snapshot => {
+        sessions.push({ claimId: snapshot.claimId, expiresAt: snapshot.expiresAt });
+      }
     }).start({
       kind: "resume",
       claimId: "claim-resumed",
@@ -675,6 +683,8 @@ describe("Uploader / resume", () => {
     // File is 4 KiB but the saved plan claims 6 parts × 1 KiB.
     // The minimum valid file size for that plan is 5 KiB + 1 byte.
     const uploader = new Uploader(http, makeFile(4096));
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+
     await expect(
       uploader.start({
         kind: "resume",
@@ -682,7 +692,7 @@ describe("Uploader / resume", () => {
         key: "priv/resume/stale.bin",
         partSize: 1024,
         partCount: 6,
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        expiresAt,
         completedParts: [{ partNumber: 1, size: 1024 }]
       })
     ).rejects.toBeInstanceOf(UploadProtocolError);

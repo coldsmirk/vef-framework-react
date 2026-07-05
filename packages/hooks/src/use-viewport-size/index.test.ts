@@ -33,9 +33,11 @@ describe("hooks/useViewportSize", () => {
     });
 
     act(() => {
-      Object.defineProperty(globalThis, "innerWidth", { configurable: true, value: 1366 });
-      Object.defineProperty(globalThis, "innerHeight", { configurable: true, value: 768 });
-      globalThis.dispatchEvent(new Event("resize"));
+      Object.defineProperties(globalThis, {
+        innerWidth: { configurable: true, value: 1366 },
+        innerHeight: { configurable: true, value: 768 }
+      });
+      dispatchEvent(new Event("resize"));
       vi.advanceTimersByTime(16);
     });
 
@@ -50,9 +52,11 @@ describe("hooks/useViewportSize", () => {
     });
 
     act(() => {
-      Object.defineProperty(globalThis, "innerWidth", { configurable: true, value: 800 });
-      Object.defineProperty(globalThis, "innerHeight", { configurable: true, value: 1200 });
-      globalThis.dispatchEvent(new Event("orientationchange"));
+      Object.defineProperties(globalThis, {
+        innerWidth: { configurable: true, value: 800 },
+        innerHeight: { configurable: true, value: 1200 }
+      });
+      dispatchEvent(new Event("orientationchange"));
       vi.advanceTimersByTime(16);
     });
 

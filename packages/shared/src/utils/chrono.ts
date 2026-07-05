@@ -9,13 +9,21 @@ import duration from "dayjs/plugin/duration";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import relativeTime from "dayjs/plugin/relativeTime";
 
-dayjs.locale(locale);
-dayjs.extend(localizedFormat);
-dayjs.extend(customParseFormat);
-dayjs.extend(duration);
-dayjs.extend(relativeTime);
-
 export type Dayjs = dayjs.Dayjs;
+let dayjsConfigured = false;
+
+function ensureDayjsConfigured(): void {
+  if (dayjsConfigured) {
+    return;
+  }
+
+  dayjs.locale(locale);
+  dayjs.extend(localizedFormat);
+  dayjs.extend(customParseFormat);
+  dayjs.extend(duration);
+  dayjs.extend(relativeTime);
+  dayjsConfigured = true;
+}
 
 /**
  * Temporal picker mode type.
@@ -78,6 +86,8 @@ const DATETIME_FORMATS = [
  * ```
  */
 export function formatDuration(value: number, unit: DurationUnitType = "seconds"): string {
+  ensureDayjsConfigured();
+
   const duration = dayjs.duration(value, unit);
   const days = Math.floor(duration.asDays());
   const hours = duration.hours();
@@ -117,6 +127,8 @@ export function formatDuration(value: number, unit: DurationUnitType = "seconds"
  * ```
  */
 export function parseDate(date: string | Date, format?: string): Dayjs {
+  ensureDayjsConfigured();
+
   if (date instanceof Date) {
     return dayjs(date);
   }
@@ -139,6 +151,8 @@ export function parseDate(date: string | Date, format?: string): Dayjs {
  * ```
  */
 export function tryParseDate(date: string): MaybeNull<Dayjs> {
+  ensureDayjsConfigured();
+
   const allFormats = [...DATETIME_FORMATS, ...DATE_FORMATS];
 
   for (const format of allFormats) {
@@ -173,6 +187,8 @@ export function tryParseDate(date: string): MaybeNull<Dayjs> {
  * ```
  */
 export function tryParseTime(time: string): MaybeNull<Dayjs> {
+  ensureDayjsConfigured();
+
   const allFormats = [...TIME_FORMATS, ...MINUTE_FORMATS, ...HOUR_FORMATS];
 
   for (const format of allFormats) {
@@ -200,6 +216,8 @@ export function tryParseTime(time: string): MaybeNull<Dayjs> {
  * ```
  */
 export function formatDate(date: Dayjs, format: string = DEFAULT_DATETIME_FORMAT): string {
+  ensureDayjsConfigured();
+
   return date.format(format);
 }
 
@@ -214,6 +232,8 @@ export function formatDate(date: Dayjs, format: string = DEFAULT_DATETIME_FORMAT
  * ```
  */
 export function getNow(): Dayjs {
+  ensureDayjsConfigured();
+
   return dayjs();
 }
 
@@ -227,6 +247,8 @@ export function getNow(): Dayjs {
  * ```
  */
 export function getNowDateString(): string {
+  ensureDayjsConfigured();
+
   return dayjs().format(DEFAULT_DATE_FORMAT);
 }
 
@@ -240,6 +262,8 @@ export function getNowDateString(): string {
  * ```
  */
 export function getNowTimeString(): string {
+  ensureDayjsConfigured();
+
   return dayjs().format(DEFAULT_TIME_FORMAT);
 }
 
@@ -253,6 +277,8 @@ export function getNowTimeString(): string {
  * ```
  */
 export function getNowDateTimeString(): string {
+  ensureDayjsConfigured();
+
   return dayjs().format(DEFAULT_DATETIME_FORMAT);
 }
 
@@ -268,6 +294,8 @@ export function getNowDateTimeString(): string {
  * ```
  */
 export function getLocalizedDateTime(includeTime = true): string {
+  ensureDayjsConfigured();
+
   return dayjs().format(includeTime ? LOCALIZED_DATETIME_FORMAT : LOCALIZED_DATE_FORMAT);
 }
 

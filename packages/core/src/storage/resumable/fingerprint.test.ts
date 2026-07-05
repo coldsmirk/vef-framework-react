@@ -38,7 +38,7 @@ describe("PrefixFingerprinter", () => {
   // the SHA-256 path directly. Skip cleanly if the environment lacks it.
   const supported = typeof crypto !== "undefined" && crypto.subtle !== undefined;
 
-  (supported ? it : it.skip)("distinguishes files whose content differs but metadata matches", async () => {
+  it.skipIf(!supported)("distinguishes files whose content differs but metadata matches", async () => {
     const fp = new PrefixFingerprinter();
 
     const a = await fp.fingerprint(makeFile(new Uint8Array(8).fill(0x11)));
@@ -46,7 +46,7 @@ describe("PrefixFingerprinter", () => {
     expect(a).not.toBe(b);
   });
 
-  (supported ? it : it.skip)("returns identical fingerprints for byte-identical files", async () => {
+  it.skipIf(!supported)("returns identical fingerprints for byte-identical files", async () => {
     const fp = new PrefixFingerprinter();
 
     const bytes = new Uint8Array(8).fill(0xAB);

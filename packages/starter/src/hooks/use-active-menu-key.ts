@@ -13,9 +13,8 @@ import { useAppStore } from "../stores";
  */
 export function useActiveMenuKey(): string | undefined {
   const router = useRouter();
-  const { pathname, search } = useLocation({
-    select: location => { return { pathname: location.pathname, search: location.search }; }
-  });
+  const pathname = useLocation({ select: location => location.pathname });
+  const search = useLocation({ select: location => location.search });
   const userMenuMap = useAppStore(state => state.userMenuMap);
 
   return useMemo(() => {

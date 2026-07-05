@@ -28,11 +28,9 @@ export function GridItem({
       "--vef-grid-item-column": suffix
         ? `${gridColumns + 1 - childSpan} / span ${childSpan}`
         : `span ${childSpan}`,
-      ...childOffset > 0 && !suffix
-        ? {
-            "--vef-grid-item-margin-left": `calc(100% * ${childOffset} / ${childSpan})`
-          }
-        : {}
+      ...childOffset > 0 && !suffix && {
+        "--vef-grid-item-margin-left": `calc(100% * ${childOffset} / ${childSpan})`
+      }
     };
 
     return {

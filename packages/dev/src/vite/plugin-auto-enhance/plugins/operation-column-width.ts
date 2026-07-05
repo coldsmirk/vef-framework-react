@@ -17,7 +17,7 @@ interface WidthCalculationResult {
 /**
  * CJK character regex for width calculation
  */
-const CJK_CHAR_REGEX = /[\u4E00-\u9FFF\u3400-\u4DBF\uFF00-\uFFEF]/;
+const CJK_CHAR_REGEX = /[\u{4E00}-\u{9FFF}\u{3400}-\u{4DBF}\u{FF00}-\u{FFEF}]/u;
 
 const OPERATION_COLUMN_ATTR = "operationColumn";
 const OPERATION_BUTTON_COMPONENT = "OperationButton";
@@ -48,7 +48,9 @@ function collectOperationButtonAliases(ast: types.ASTNode): ImportAliasMap {
         return false;
       }
 
-      for (const specifier of path.node.specifiers || []) {
+      const specifiers = path.node.specifiers || [];
+
+      for (const specifier of specifiers) {
         if (!types.namedTypes.ImportSpecifier.check(specifier)) {
           continue;
         }
@@ -153,7 +155,9 @@ function extractButtonInfo(
     textContent: ""
   };
 
-  for (const attr of openingElement.attributes || []) {
+  const attributes = openingElement.attributes || [];
+
+  for (const attr of attributes) {
     if (types.namedTypes.JSXAttribute.check(attr)
       && types.namedTypes.JSXIdentifier.check(attr.name)
       && attr.name.name === "icon") {
@@ -162,7 +166,9 @@ function extractButtonInfo(
     }
   }
 
-  for (const child of jsxElement.children || []) {
+  const children = jsxElement.children || [];
+
+  for (const child of children) {
     if (types.namedTypes.JSXText.check(child)) {
       buttonInfo.textContent += child.value.trim();
     } else if (types.namedTypes.JSXExpressionContainer.check(child)

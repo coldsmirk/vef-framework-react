@@ -36,7 +36,9 @@ function findFirstLeafMenu(menu: UserMenu): UserMenu | undefined {
     return menu;
   }
 
-  for (const child of menu.children ?? []) {
+  const children = menu.children ?? [];
+
+  for (const child of children) {
     if (child.type === "view") {
       continue;
     }

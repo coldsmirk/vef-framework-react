@@ -47,7 +47,7 @@ function handleAppChange(appId: string): void {
   });
   // Switching the whole sub-app: hard-reload to its home so the menu, permissions
   // and query cache rebuild cleanly for the freshly selected app.
-  globalThis.location.assign("/");
+  location.assign("/");
 }
 
 export const Route = createFileRoute("/_layout")(

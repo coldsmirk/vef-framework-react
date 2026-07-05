@@ -12,8 +12,10 @@ const originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototyp
 const originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
 
 beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 320 });
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 264 });
+  Object.defineProperties(HTMLElement.prototype, {
+    offsetWidth: { configurable: true, get: () => 320 },
+    offsetHeight: { configurable: true, get: () => 264 }
+  });
 });
 
 afterAll(() => {

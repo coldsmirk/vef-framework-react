@@ -27,7 +27,7 @@ function parseRootMargin(margin: string) {
   }
 
   return {
-    value: Number.parseFloat(match.groups.value),
+    value: Number(match.groups.value),
     unit: (match.groups.unit ?? "px") as "px" | "em" | "rem" | "%"
   };
 }

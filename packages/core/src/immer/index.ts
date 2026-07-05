@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-top-level-side-effects -- This module configures Immer before re-exporting its APIs. */
 import { enableMapSet, enablePatches, setAutoFreeze } from "immer";
 
 // Enable Map and Set support for immutable operations

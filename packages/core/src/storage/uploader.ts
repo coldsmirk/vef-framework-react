@@ -197,72 +197,6 @@ export class Uploader {
   }
 
   /**
-   * Current lifecycle status.
-   */
-  public get status(): UploadStatus {
-    return this.#lastStatus;
-  }
-
-  /**
-   * Latest aggregated progress snapshot.
-   */
-  public get progress(): UploadProgress {
-    return this.#progress;
-  }
-
-  /**
-   * Start the upload. Returns the eventual `UploadResult` on success or
-   * rejects with an `UploadError` (use `instanceof UploadAbortedError` /
-   * `UploadProtocolError` / `UploadPartError` to discriminate). Calling
-   * `start()` more than once returns the original promise.
-   *
-   * When called with a `plan` of kind `"resume"`, the uploader skips
-   * `init_upload` and synthesises the session from the plan's
-   * `claimId`/`partSize`/`partCount`. Workers will skip every part
-   * number in `plan.completedParts`. The default behaviour
-   * (no plan, or `kind: "fresh"`) is unchanged.
-   */
-  public start(plan?: ResumePlan): Promise<UploadResult> {
-    if (this.#startPromise) {
-      return this.#startPromise;
-    }
-
-    this.#startPromise = new Promise<UploadResult>((resolve, reject) => {
-      this.#settle = {
-        resolve,
-        reject
-      };
-    });
-
-    this.#actor.send({ type: "START", plan: plan ?? { kind: "fresh" } });
-
-    return this.#startPromise;
-  }
-
-  /**
-   * Cancel an in-flight upload and best-effort abort the backend session.
-   * Safe to call from any state — terminal states are a no-op. Returns when
-   * the backend has been notified (or never reachable in the first place).
-   */
-  public async abort(): Promise<void> {
-    if (this.#actor.getSnapshot().status === "done") {
-      return;
-    }
-
-    this.#requestAbort();
-
-    const pending = this.#startPromise;
-
-    if (pending) {
-      try {
-        await pending;
-      } catch {
-        // Swallowed: the rejection is the caller's await on start().
-      }
-    }
-  }
-
-  /**
    * Route a cancellation into the statechart AND trip the transport
    * controller. The event settles the lifecycle when a run is active; the
    * controller latch covers the not-yet-started case (the machine drops
@@ -623,6 +557,72 @@ export class Uploader {
     }
 
     return new UploadProtocolError("unknown", String(error));
+  }
+
+  /**
+   * Current lifecycle status.
+   */
+  public get status(): UploadStatus {
+    return this.#lastStatus;
+  }
+
+  /**
+   * Latest aggregated progress snapshot.
+   */
+  public get progress(): UploadProgress {
+    return this.#progress;
+  }
+
+  /**
+   * Start the upload. Returns the eventual `UploadResult` on success or
+   * rejects with an `UploadError` (use `instanceof UploadAbortedError` /
+   * `UploadProtocolError` / `UploadPartError` to discriminate). Calling
+   * `start()` more than once returns the original promise.
+   *
+   * When called with a `plan` of kind `"resume"`, the uploader skips
+   * `init_upload` and synthesises the session from the plan's
+   * `claimId`/`partSize`/`partCount`. Workers will skip every part
+   * number in `plan.completedParts`. The default behaviour
+   * (no plan, or `kind: "fresh"`) is unchanged.
+   */
+  public start(plan?: ResumePlan): Promise<UploadResult> {
+    if (this.#startPromise) {
+      return this.#startPromise;
+    }
+
+    this.#startPromise = new Promise<UploadResult>((resolve, reject) => {
+      this.#settle = {
+        resolve,
+        reject
+      };
+    });
+
+    this.#actor.send({ type: "START", plan: plan ?? { kind: "fresh" } });
+
+    return this.#startPromise;
+  }
+
+  /**
+   * Cancel an in-flight upload and best-effort abort the backend session.
+   * Safe to call from any state — terminal states are a no-op. Returns when
+   * the backend has been notified (or never reachable in the first place).
+   */
+  public async abort(): Promise<void> {
+    if (this.#actor.getSnapshot().status === "done") {
+      return;
+    }
+
+    this.#requestAbort();
+
+    const pending = this.#startPromise;
+
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        // Swallowed: the rejection is the caller's await on start().
+      }
+    }
   }
 }
 

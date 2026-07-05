@@ -127,19 +127,7 @@ export function createTreeMock<T extends TreeRow>(options: TreeOptions<T>): Tree
 
           if (haystack.includes(needle)) {
             matched.add(row.id);
-            // Also include ancestors so the tree stays connected.
-            let cur: T | undefined = row;
-
-            while (true) {
-              const next: string | null | undefined = cur?.parentId;
-
-              if (!next) {
-                break;
-              }
-
-              matched.add(next);
-              cur = rows.find(r => r.id === next);
-            }
+            addAncestors(row, rows, matched);
           }
         }
 
@@ -206,6 +194,17 @@ export function createTreeMock<T extends TreeRow>(options: TreeOptions<T>): Tree
   });
 
   return { store: flat };
+}
+
+function addAncestors<T extends TreeRow>(row: T, rows: T[], matched: Set<string>): void {
+  // Also include ancestors so the tree stays connected.
+  let current: T | undefined = row;
+
+  while (current?.parentId) {
+    const next: string = current.parentId;
+    matched.add(next);
+    current = rows.find(candidate => candidate.id === next);
+  }
 }
 
 export { flatten as flattenTree, nest as nestTree };

@@ -21,7 +21,12 @@ import type {} from "../../global";
  * inside an effect.
  */
 export function setVefGlobal(value: VefGlobal): void {
-  globalThis.$vef = value;
+  Object.defineProperty(globalThis, "$vef", {
+    value,
+    configurable: true,
+    enumerable: true,
+    writable: true
+  });
 }
 
 /**

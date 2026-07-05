@@ -58,56 +58,6 @@ export class SseClient {
   }
 
   /**
-   * Start an SSE stream request. Resolves when the stream ends — normally,
-   * by abort, or after a reported auth failure; rejects with the original
-   * error when the stream fails past its retry budget.
-   */
-  stream(config: SseRequestConfig, handlers: SseEventHandlers): Promise<void> {
-    let failure: unknown;
-
-    const actor = createActor(createStreamMachine({
-      runAttempt: () => this.#runAttempt(config, handlers),
-      refreshToken: () => this.#tryTokenRefresh(),
-      reportAuthFailure: () => {
-        const error = new Error("Authentication failed: token expired");
-        handlers.onError?.(error);
-        this.#options.showErrorMessage?.(error.message);
-      },
-      recordFailure: error => {
-        failure = error;
-      }
-    }));
-
-    return new Promise<void>((resolve, reject) => {
-      actor.subscribe(snapshot => {
-        if (snapshot.status !== "done") {
-          return;
-        }
-
-        if (snapshot.value === "failed") {
-          // Reject with the original instance — callers discriminate on it.
-          reject(failure);
-          return;
-        }
-
-        resolve();
-      });
-      actor.start();
-    });
-  }
-
-  /**
-   * Abort all active stream requests.
-   */
-  abort(): void {
-    for (const controller of this.#controllers) {
-      controller.abort();
-    }
-
-    this.#controllers.clear();
-  }
-
-  /**
    * One connection attempt: prepare headers, open the event source, pump
    * events until the stream ends. Throws `TokenExpiredError` upward so the
    * statechart can route through the refresh path.
@@ -248,5 +198,55 @@ export class SseClient {
       console.error("Failed to refresh token:", error);
       return false;
     }
+  }
+
+  /**
+   * Start an SSE stream request. Resolves when the stream ends — normally,
+   * by abort, or after a reported auth failure; rejects with the original
+   * error when the stream fails past its retry budget.
+   */
+  stream(config: SseRequestConfig, handlers: SseEventHandlers): Promise<void> {
+    let failure: unknown;
+
+    const actor = createActor(createStreamMachine({
+      runAttempt: () => this.#runAttempt(config, handlers),
+      refreshToken: () => this.#tryTokenRefresh(),
+      reportAuthFailure: () => {
+        const error = new Error("Authentication failed: token expired");
+        handlers.onError?.(error);
+        this.#options.showErrorMessage?.(error.message);
+      },
+      recordFailure: error => {
+        failure = error;
+      }
+    }));
+
+    return new Promise<void>((resolve, reject) => {
+      actor.subscribe(snapshot => {
+        if (snapshot.status !== "done") {
+          return;
+        }
+
+        if (snapshot.value === "failed") {
+          // Reject with the original instance — callers discriminate on it.
+          reject(failure);
+          return;
+        }
+
+        resolve();
+      });
+      actor.start();
+    });
+  }
+
+  /**
+   * Abort all active stream requests.
+   */
+  abort(): void {
+    for (const controller of this.#controllers) {
+      controller.abort();
+    }
+
+    this.#controllers.clear();
   }
 }

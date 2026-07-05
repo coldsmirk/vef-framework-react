@@ -4,7 +4,6 @@ import { renderHook } from "../../test-utils";
 import { useDeepCompare } from "./index";
 
 function useDeepCompareUndefined(): readonly [number] {
-  // eslint-disable-next-line unicorn/no-useless-undefined -- explicit undefined exercises the "trigger on every render" branch
   return useDeepCompare(undefined);
 }
 

@@ -130,9 +130,7 @@ export function Menu({
       for (const key of keys) {
         const keyLevel = menuLevelMap.get(key)!;
 
-        if (keyLevel < newKeyLevel) {
-          newKeys.push(key);
-        } else if (keyLevel === newKeyLevel && key === newOpenedKey) {
+        if (keyLevel < newKeyLevel || (keyLevel === newKeyLevel && key === newOpenedKey)) {
           newKeys.push(key);
         }
       }

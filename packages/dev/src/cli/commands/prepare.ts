@@ -44,10 +44,14 @@ export async function handlePrepare(cwd: string = process.cwd()): Promise<void> 
   let changed = false;
 
   for (const [name, command] of Object.entries(REQUIRED_SCRIPTS)) {
-    if (!scripts[name]) {
-      scripts[name] = command;
-      changed = true;
+    const existingScript = scripts[name];
+
+    if (existingScript) {
+      continue;
     }
+
+    scripts[name] = command;
+    changed = true;
   }
 
   if (!packageJson["lint-staged"]) {

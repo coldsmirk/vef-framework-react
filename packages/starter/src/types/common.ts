@@ -1,4 +1,4 @@
-import type { AnyObject, LiteralUnion, MaybeNull } from "@vef-framework-react/shared";
+import type { AnyObject, LiteralUnion } from "@vef-framework-react/shared";
 
 export type Gender = "male" | "female" | "unknown";
 
@@ -101,7 +101,7 @@ export interface UserInfo {
   id: string;
   name: string;
   gender: Gender;
-  avatar?: MaybeNull<string>;
+  avatar?: string;
   permissionTokens: string[];
   menus: UserMenu[];
   details: ResolvedUserDetails;

@@ -15,12 +15,12 @@
 .welcome-stats {
   height: 100%;
 
-  .welcome-stat-item {
-    :global(.vef-typography) {
+  & .welcome-stat-item {
+    & :global(.vef-typography) {
       font-size: var(--vef-font-size-lg);
     }
 
-    :global(span:last-child) {
+    & :global(span:last-child) {
       font-family: var(--vef-font-family-code);
       font-size: var(--vef-font-size-heading-3);
       font-weight: 500;
@@ -28,13 +28,11 @@
   }
 }
 
-.stat-card {
-  :global(.vef-statistic-content) {
-    font-family: var(--vef-font-family-code);
-    font-size: var(--vef-font-size-heading-2);
-    font-weight: 700;
-    color: var(--vef-color-text);
-  }
+.stat-card :global(.vef-statistic-content) {
+  font-family: var(--vef-font-family-code);
+  font-size: var(--vef-font-size-heading-2);
+  font-weight: 700;
+  color: var(--vef-color-text);
 }
 
 .stat-card-icon-wrapper {

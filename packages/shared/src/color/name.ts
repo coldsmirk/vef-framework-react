@@ -32,7 +32,7 @@ export function getColorName(color: string): string {
   const inputHsl = toHslColor(color);
 
   let closestColorName = "Unknown";
-  let smallestDistance = Number.POSITIVE_INFINITY;
+  let smallestDistance = Infinity;
 
   for (const [hexValue, colorName] of colorEntries) {
     const distance = calculateColorDistance(inputRgb, inputHsl, hexValue);

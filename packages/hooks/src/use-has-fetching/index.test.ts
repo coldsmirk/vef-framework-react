@@ -9,9 +9,10 @@ import { useHasFetching } from "./index";
 let pendingResolver: ((value: string) => void) | undefined;
 
 function pendingHandler(): Promise<string> {
-  return new Promise<string>(resolve => {
-    pendingResolver = resolve;
-  });
+  const { promise, resolve } = Promise.withResolvers<string>();
+
+  pendingResolver = resolve;
+  return promise;
 }
 
 function buildPendingQuery(_http: Readonly<HttpClient>): typeof pendingHandler {

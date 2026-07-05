@@ -202,7 +202,12 @@ export type BuildTreeResultNode<TNode extends AnyObject, TChildrenKey extends st
  * @internal
  */
 function getNodeValue<T extends AnyObject>(node: T, accessor: KeyAccessor<NoInfer<T>>): unknown {
-  return isFunction(accessor) ? accessor(node) : node[accessor];
+  if (isFunction(accessor)) {
+    return accessor(node);
+  }
+
+  const key: string | symbol = typeof accessor === "symbol" ? accessor : String(accessor);
+  return Reflect.get(node, key);
 }
 
 /**

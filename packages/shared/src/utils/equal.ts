@@ -141,21 +141,22 @@ export function isDeepEqual(value1: unknown, value2: unknown): boolean {
       }
 
       for (const value of firstSet) {
-        let found = false;
-
-        for (const secondValue of secondSet) {
-          if (compareValues(value, secondValue)) {
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
+        if (!setHasDeepValue(secondSet, value)) {
           return false;
         }
       }
 
       return true;
+    }
+
+    function setHasDeepValue(values: Set<unknown>, target: unknown): boolean {
+      for (const value of values) {
+        if (compareValues(target, value)) {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     // Handle ArrayBuffer objects

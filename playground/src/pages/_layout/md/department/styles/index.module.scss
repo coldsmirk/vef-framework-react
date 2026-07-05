@@ -1,7 +1,5 @@
-.card-container {
-  :global(.vef-card-head) {
-    padding-block: var(--vef-spacing-md);
-  }
+.card-container :global(.vef-card-head) {
+  padding-block: var(--vef-spacing-md);
 }
 
 .card-title {

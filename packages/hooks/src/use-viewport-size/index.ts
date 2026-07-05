@@ -29,7 +29,7 @@ export interface ViewportSize {
  * ```
  */
 export function useViewportSize(): ViewportSize {
-  const isWindowDefined = !isUndefined(globalThis.window);
+  const isWindowDefined = !isUndefined(globalThis);
   const [viewportSize, setViewportSize] = useRafState<ViewportSize>(() => {
     return {
       width: isWindowDefined ? window.innerWidth : 0,
@@ -39,7 +39,7 @@ export function useViewportSize(): ViewportSize {
 
   useEffect(() => {
     function updateSize(): void {
-      if (!isUndefined(globalThis.window)) {
+      if (!isUndefined(globalThis)) {
         setViewportSize({
           width: window.innerWidth,
           height: window.innerHeight
@@ -51,7 +51,7 @@ export function useViewportSize(): ViewportSize {
   }, [setViewportSize]);
 
   useWindowEvent("resize", () => {
-    if (!isUndefined(globalThis.window)) {
+    if (!isUndefined(globalThis)) {
       setViewportSize({
         width: window.innerWidth,
         height: window.innerHeight
@@ -60,7 +60,7 @@ export function useViewportSize(): ViewportSize {
   }, eventListenerOptions);
 
   useWindowEvent("orientationchange", () => {
-    if (!isUndefined(globalThis.window)) {
+    if (!isUndefined(globalThis)) {
       setViewportSize({
         width: window.innerWidth,
         height: window.innerHeight

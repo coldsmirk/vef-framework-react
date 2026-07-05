@@ -323,29 +323,6 @@ export class HttpClient {
   }
 
   /**
-   * Ensure the token is refreshed. Can be called proactively by external code
-   * (e.g., fetch-based SSE) to refresh token before/after request.
-   *
-   * @param triggerCallback - Whether to trigger onUnauthenticated callback on failure.
-   * @returns True if token refresh succeeded, false otherwise.
-   */
-  public async ensureTokenRefreshed(triggerCallback = true): Promise<boolean> {
-    if (this.#isRefreshing) {
-      return new Promise<boolean>(resolve => {
-        this.#waitingQueue.push(resolve);
-      });
-    }
-
-    const success = await this.tryRefreshToken();
-
-    if (!success && triggerCallback) {
-      await this.#options.onUnauthenticated?.();
-    }
-
-    return success;
-  }
-
-  /**
    * Try to refresh the token using the provided refresh callback.
    */
   private async tryRefreshToken(): Promise<boolean> {
@@ -394,6 +371,29 @@ export class HttpClient {
     const newConfig = { ...config };
     await this.injectAccessToken(newConfig);
     return this.#axiosInstance(newConfig);
+  }
+
+  /**
+   * Ensure the token is refreshed. Can be called proactively by external code
+   * (e.g., fetch-based SSE) to refresh token before/after request.
+   *
+   * @param triggerCallback - Whether to trigger onUnauthenticated callback on failure.
+   * @returns True if token refresh succeeded, false otherwise.
+   */
+  public async ensureTokenRefreshed(triggerCallback = true): Promise<boolean> {
+    if (this.#isRefreshing) {
+      return new Promise<boolean>(resolve => {
+        this.#waitingQueue.push(resolve);
+      });
+    }
+
+    const success = await this.tryRefreshToken();
+
+    if (!success && triggerCallback) {
+      await this.#options.onUnauthenticated?.();
+    }
+
+    return success;
   }
 
   /**

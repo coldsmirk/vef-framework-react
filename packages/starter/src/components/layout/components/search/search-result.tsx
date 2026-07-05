@@ -31,7 +31,7 @@ export function SearchResult({ keyword }: SearchResultProps) {
   const setIsSearchVisible = useLayoutStore(state => state.setIsSearchVisible);
   const userMenuMap = useAppStore(state => state.userMenuMap);
   const menuItems = useMemo(
-    () => buildMenuItems(userMenuMap ? [...userMenuMap.values()] : []),
+    () => buildMenuItems(userMenuMap ? userMenuMap.values().toArray() : []),
     [userMenuMap]
   );
   const matchedMenuItems = useMemo(
@@ -75,11 +75,13 @@ export function SearchResult({ keyword }: SearchResultProps) {
   useHotkeys("down", () => handleMenuSelect(1), { enableOnFormTags: true });
 
   useEffect(() => {
-    if (matchedMenuItems.length > 0) {
-      const first = matchedMenuItems[0]!;
-
-      setActiveMenuKey(menuKeyOf(first.path, first.meta));
+    if (matchedMenuItems.length === 0) {
+      return;
     }
+
+    const first = matchedMenuItems[0]!;
+
+    setActiveMenuKey(menuKeyOf(first.path, first.meta));
   }, [matchedMenuItems]);
 
   return (

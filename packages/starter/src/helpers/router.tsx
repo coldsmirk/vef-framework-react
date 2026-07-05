@@ -13,19 +13,19 @@ import { handleClientLogout } from "./auth";
 import { onAccessDenied, onUnauthenticated } from "./event";
 import { resolveActiveMenuKey } from "./menu-key";
 
-export interface RouterOptions {
+export interface RouterOptions<TRouteTree extends AnyRouteWithContext<RouterContext> = AnyRouteWithContext<RouterContext>> {
   history: "hash" | "browser";
-  routeTree: AnyRouteWithContext<RouterContext>;
+  routeTree: TRouteTree;
   context: RouterContext;
 }
 
 const DEFAULT_GC_TIME = 10 * 60 * 1000;
 
-export function createRouter({
+export function createRouter<TRouteTree extends AnyRouteWithContext<RouterContext>>({
   history,
   routeTree,
   context
-}: RouterOptions) {
+}: RouterOptions<TRouteTree>) {
   const router = createRouterInternal({
     routeTree,
     context,

@@ -10,7 +10,7 @@ interface RootProps {
 
 export function createRootRouteOptions({ appTitle }: RootProps) {
   function RootComponent() {
-    const title = useRouteContext({ strict: false, select: context => context.title });
+    const title = useRouteContext({ strict: false, select: context => context.routeTitle });
     const activeMenuKey = useActiveMenuKey();
     const userMenuMap = useAppStore(state => state.userMenuMap);
 

@@ -116,7 +116,7 @@ async function fetchPostgresDictionaryKeys(): Promise<readonly DictionaryKeyEntr
 function toDictionaryKeyEntry({ key, comment }: PostgresDictionaryKeyRow): DictionaryKeyEntry {
   return {
     key,
-    ...comment ? { comment } : {}
+    ...comment && { comment }
   };
 }
 

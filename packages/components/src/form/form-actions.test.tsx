@@ -86,8 +86,9 @@ describe("form/FormActions", () => {
       const user = userEvent.setup();
       render(<TestForm />);
 
-      // Should not throw when no onReset is provided.
-      await user.click(screen.getByRole("button", { name: /重\s*置/ }));
+      const resetButton = screen.getByRole("button", { name: /重\s*置/ });
+
+      await expect(user.click(resetButton)).resolves.toBeUndefined();
     });
   });
 });

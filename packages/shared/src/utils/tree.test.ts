@@ -763,7 +763,9 @@ describe("utils/tree", () => {
 
       const ids: number[] = [];
 
-      traverseTree(customTree, node => ids.push(node.id), { childrenKey: "items" });
+      traverseTree(customTree, node => {
+        ids.push(node.id);
+      }, { childrenKey: "items" });
 
       expect(ids).toEqual([1, 2, 3]);
     });
@@ -772,7 +774,9 @@ describe("utils/tree", () => {
       const singleNode: TreeNode[] = [{ id: 1, name: "Single" }];
       const ids: number[] = [];
 
-      traverseTree(singleNode, node => ids.push(node.id));
+      traverseTree(singleNode, node => {
+        ids.push(node.id);
+      });
 
       expect(ids).toEqual([1]);
     });
@@ -802,7 +806,9 @@ describe("utils/tree", () => {
 
       const ids: number[] = [];
 
-      traverseTree(deepTree, node => ids.push(node.id));
+      traverseTree(deepTree, node => {
+        ids.push(node.id);
+      });
 
       expect(ids).toEqual([1, 2, 3, 4]);
     });
@@ -1100,7 +1106,9 @@ describe("utils/tree", () => {
       const filtered = filterTree(sampleTree, node => node.id % 2 === 0);
       const ids: number[] = [];
 
-      traverseTree(filtered, node => ids.push(node.id));
+      traverseTree(filtered, node => {
+        ids.push(node.id);
+      });
 
       expect(ids).toEqual([6, 8]);
     });

@@ -59,6 +59,7 @@ export function defineBuildConfig(options: BuildConfigOptions) {
     useEmotion,
     entries = ["src/index.ts"]
   } = options;
+  const sourceRoot = resolve(cwd(), "src");
 
   // const compilerPlugin = [
   //   "react-compiler",
@@ -125,14 +126,14 @@ export function defineBuildConfig(options: BuildConfigOptions) {
           ]
         : [],
       dts({
-        entryRoot: resolve(cwd(), "src"),
+        entryRoot: sourceRoot,
         // Pin the declaration rootDir to `src`. Each package's tsconfig `include`
         // also lists root-level files (`env.d.ts`, `vite.config.ts`), so TypeScript
         // would otherwise infer the rootDir as the package root and emit every
         // declaration one level deep under `dist/types/src/…`, which no longer
         // matches `exports.types: ./dist/types/index.d.ts`. Pinning the rootDir
         // keeps the emit flat at `dist/types/index.d.ts`.
-        compilerOptions: { rootDir: resolve(cwd(), "src") },
+        compilerOptions: { rootDir: sourceRoot },
         staticImport: true,
         outDirs: "dist/types",
         exclude: ["**/*.spec.{ts,tsx}", "test-utils.{ts,tsx}", "vite.config.ts"],

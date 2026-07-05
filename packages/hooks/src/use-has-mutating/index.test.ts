@@ -9,9 +9,10 @@ import { useHasMutating } from "./index";
 let pendingResolver: ((value: string) => void) | undefined;
 
 function pendingHandler(): Promise<string> {
-  return new Promise<string>(resolve => {
-    pendingResolver = resolve;
-  });
+  const { promise, resolve } = Promise.withResolvers<string>();
+
+  pendingResolver = resolve;
+  return promise;
 }
 
 function buildPendingMutation(_http: Readonly<HttpClient>): typeof pendingHandler {

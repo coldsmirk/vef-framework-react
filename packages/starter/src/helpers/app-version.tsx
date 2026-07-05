@@ -186,10 +186,12 @@ export function setupAppVersionNotification(options: AppVersionNotificationOptio
   }
 
   function stopCheckTimer(): void {
-    if (checkTimer) {
-      clearInterval(checkTimer);
-      checkTimer = null;
+    if (!checkTimer) {
+      return;
     }
+
+    clearInterval(checkTimer);
+    checkTimer = null;
   }
 
   function showUpdateNotification(changelog: AppChangelog): void {

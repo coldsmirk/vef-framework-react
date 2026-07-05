@@ -209,16 +209,18 @@ describe("resolveResumePlan", () => {
 
     expect(plan.kind).toBe("resume");
 
-    if (plan.kind === "resume") {
-      expect(plan.claimId).toBe("claim-1");
-      expect(plan.partSize).toBe(1024);
-      expect(plan.partCount).toBe(4);
-      expect(plan.expiresAt).toBe(seed.expiresAt);
-      expect(plan.completedParts.map(p => p.partNumber).toSorted()).toEqual([1, 3]);
-      // Sizes from list_parts must be preserved (not derived from partSize)
-      // so the Uploader can seed completedBytes from authoritative values.
-      expect(plan.completedParts.find(p => p.partNumber === 3)?.size).toBe(512);
+    if (plan.kind !== "resume") {
+      throw new Error("Expected resume plan");
     }
+
+    expect(plan.claimId).toBe("claim-1");
+    expect(plan.partSize).toBe(1024);
+    expect(plan.partCount).toBe(4);
+    expect(plan.expiresAt).toBe(seed.expiresAt);
+    expect(plan.completedParts.map(p => p.partNumber).toSorted()).toEqual([1, 3]);
+    // Sizes from list_parts must be preserved (not derived from partSize)
+    // so the Uploader can seed completedBytes from authoritative values.
+    expect(plan.completedParts.find(p => p.partNumber === 3)?.size).toBe(512);
 
     // Persistence is intentionally NOT cleared on resume — useUpload
     // refreshes the record after init/uploads so a future interruption

@@ -13,32 +13,36 @@ export function useContainerWidth() {
   }, []);
 
   useEffect(() => {
-    if (containerRef.current) {
-      const observer = new ResizeObserver(([entry]) => {
-        if (entry) {
-          if (rafIdRef.current) {
-            cancelAnimationFrame(rafIdRef.current);
-          }
-
-          rafIdRef.current = requestAnimationFrame(() => {
-            const width = entry.contentBoxSize.at(0)?.inlineSize ?? entry.contentRect.width;
-            setContainerWidth(width);
-          });
-        }
-      });
-
-      observer.observe(containerRef.current, {
-        box: "content-box"
-      });
-
-      return () => {
-        observer.disconnect();
-
-        if (rafIdRef.current) {
-          cancelAnimationFrame(rafIdRef.current);
-        }
-      };
+    if (!containerRef.current) {
+      return;
     }
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) {
+        return;
+      }
+
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+
+      rafIdRef.current = requestAnimationFrame(() => {
+        const width = entry.contentBoxSize.at(0)?.inlineSize ?? entry.contentRect.width;
+        setContainerWidth(width);
+      });
+    });
+
+    observer.observe(containerRef.current, {
+      box: "content-box"
+    });
+
+    return () => {
+      observer.disconnect();
+
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
   }, []);
 
   return {

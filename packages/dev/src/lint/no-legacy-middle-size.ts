@@ -12,13 +12,15 @@ const TYPE_ONLY_WRAPPERS = new Set(["TSAsExpression", "TSSatisfiesExpression", "
  * Walk past type-only wrappers (`as`, `satisfies`, angle-bracket assertion, `!`) and return the
  * offending "middle" node — a bare string literal or a no-interpolation template — or null.
  */
-function findMiddle(node: any): any {
-  if (!node) {
-    return null;
+function findMiddle(input: any): any {
+  let node = input;
+
+  while (node && TYPE_ONLY_WRAPPERS.has(node.type)) {
+    node = node.expression;
   }
 
-  if (TYPE_ONLY_WRAPPERS.has(node.type)) {
-    return findMiddle(node.expression);
+  if (!node) {
+    return null;
   }
 
   if (node.type === "Literal") {

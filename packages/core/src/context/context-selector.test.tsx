@@ -93,6 +93,6 @@ describe("context/createContextWithSelector", () => {
 
     expect(screen.getByTestId("primary")).toHaveTextContent("navy");
     expect(primaryRenders.mock.calls.length - primaryRendersBefore).toBe(1);
-    expect(secondaryRenders.mock.calls.length).toBe(secondaryRendersBefore);
+    expect(secondaryRenders.mock.calls).toHaveLength(secondaryRendersBefore);
   });
 });

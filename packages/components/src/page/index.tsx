@@ -176,10 +176,12 @@ export function Page({
         transition={pageTransition}
         variants={pageVariants}
         onAnimationComplete={definition => {
-          if (definition === "animate") {
-            entrance.setSettled(true);
-            rootRef.current?.setAttribute("data-entrance", "settled");
+          if (definition !== "animate") {
+            return;
           }
+
+          entrance.setSettled(true);
+          rootRef.current?.setAttribute("data-entrance", "settled");
         }}
         onAnimationStart={definition => {
           // A page reload remounts the motion.div and replays the entrance;

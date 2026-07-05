@@ -95,7 +95,7 @@ export function useBreakpoints<T extends string>(
       };
     }
 
-    const matchingBreakpoints = sortedBreakpoints.filter(bp => globalThis.matchMedia(bp.query).matches);
+    const matchingBreakpoints = sortedBreakpoints.filter(bp => matchMedia(bp.query).matches);
     const currentBreakpoint = matchingBreakpoints.at(-1);
 
     return {
@@ -110,7 +110,7 @@ export function useBreakpoints<T extends string>(
       return {
         name: bp.name,
         value: bp.value,
-        mql: globalThis.matchMedia(bp.query)
+        mql: matchMedia(bp.query)
       };
     });
 

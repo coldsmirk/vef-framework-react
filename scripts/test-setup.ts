@@ -55,7 +55,7 @@ class InMemoryStorage implements Storage {
   }
 
   key(index: number): string | null {
-    return [...this.#map.keys()][index] ?? null;
+    return this.#map.keys().toArray()[index] ?? null;
   }
 
   removeItem(key: string): void {
@@ -63,7 +63,7 @@ class InMemoryStorage implements Storage {
   }
 
   setItem(key: string, value: string): void {
-    this.#map.set(key, String(value));
+    this.#map.set(key, value);
   }
 }
 

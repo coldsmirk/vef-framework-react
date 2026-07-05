@@ -12,20 +12,28 @@ interface TestContext {
   role: string;
 }
 
-describe("ActionGroup", () => {
-  const basicButtons: ActionButtonConfig[] = [
-    {
-      key: "edit",
-      label: "Edit",
-      onClick: vi.fn()
-    },
-    {
-      key: "delete",
-      label: "Delete",
-      onClick: vi.fn()
-    }
-  ];
+function customWrapper(buttons: ReactNode) {
+  return (
+    <div className="custom-action-bar" data-testid="custom-wrapper">
+      {buttons}
+    </div>
+  );
+}
 
+const basicButtons: ActionButtonConfig[] = [
+  {
+    key: "edit",
+    label: "Edit",
+    onClick: vi.fn()
+  },
+  {
+    key: "delete",
+    label: "Delete",
+    onClick: vi.fn()
+  }
+];
+
+describe("ActionGroup", () => {
   it("renders buttons correctly", () => {
     render(<ActionGroup buttons={basicButtons} />);
 
@@ -172,12 +180,6 @@ describe("ActionGroup", () => {
   });
 
   it("supports custom renderWrapper", () => {
-    const customWrapper = (buttons: ReactNode) => (
-      <div className="custom-action-bar" data-testid="custom-wrapper">
-        {buttons}
-      </div>
-    );
-
     render(
       <ActionGroup
         buttons={basicButtons}

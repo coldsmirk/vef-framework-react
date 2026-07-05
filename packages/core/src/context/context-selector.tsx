@@ -53,10 +53,12 @@ export function createContextWithSelector<TValue>(defaultValue: TValue): Selecto
     const [store] = useState(() => createStore(value));
 
     useEffect(() => {
-      if (!Object.is(store.value, value)) {
-        store.value = value;
-        store.notify();
+      if (Object.is(store.value, value)) {
+        return;
       }
+
+      store.value = value;
+      store.notify();
     });
 
     return (

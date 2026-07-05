@@ -1,5 +1,3 @@
-.vef-input-suffix {
-  & > .input-suffix-icon {
-    color: var(--vef-color-text-quaternary);
-  }
+.vef-input-suffix > .input-suffix-icon {
+  color: var(--vef-color-text-quaternary);
 }

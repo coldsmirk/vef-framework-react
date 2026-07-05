@@ -66,7 +66,6 @@ export function EditableRowActions<TRow extends AnyObject>({
   );
 
   const editing = editingKey === rowKey;
-  const blocked = editingKey !== null && !editing;
 
   if (editing) {
     return (
@@ -81,6 +80,8 @@ export function EditableRowActions<TRow extends AnyObject>({
       </Group>
     );
   }
+
+  const blocked = editingKey !== null;
 
   return (
     <Group justify="center">

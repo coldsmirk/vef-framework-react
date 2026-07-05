@@ -67,15 +67,12 @@ export function withFormItem<TFieldProps>(
       noWrapper
     });
 
+    const { state } = useFieldContext();
     const {
-      state: {
-        meta: {
-          errors,
-          isValid,
-          isValidating
-        }
-      }
-    } = useFieldContext();
+      errors,
+      isValid,
+      isValidating
+    } = state.meta;
     const errorMessage = getFirstErrorMessage(errors);
 
     return (

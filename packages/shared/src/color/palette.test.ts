@@ -20,7 +20,7 @@ describe("color/palette", () => {
 
       // All values should be valid hex colors
       for (const [number, hex] of redPalette) {
-        expect(expectedNumbers.includes(number)).toBe(true);
+        expect(expectedNumbers).toContain(number);
         expect(hex).toMatch(/^#[0-9a-f]{6}$/);
         expect(isValidColor(hex)).toBe(true);
       }
@@ -359,7 +359,7 @@ describe("color/palette", () => {
       const palette = getColorPalette(testColor);
 
       // Get all hex values
-      const hexValues = [...palette.values()];
+      const hexValues = palette.values().toArray();
 
       // Should have no duplicate colors
       const uniqueColors = new Set(hexValues);

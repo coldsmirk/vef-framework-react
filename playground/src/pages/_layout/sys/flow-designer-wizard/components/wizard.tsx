@@ -105,6 +105,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     && (basic.bindingMode !== "business" || (!!basic.businessTable && !!basic.businessPkField))
     && initiators.length > 0;
   const stepValid = [basicValid, true, flowErrors.length === 0, true];
+  const currentStepValid = stepValid[step] ?? false;
 
   const payload: FlowDesignPayload = {
     basic,
@@ -177,7 +178,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
         {step < STEP_ITEMS.length - 1
           ? (
               <Button
-                disabled={!stepValid[step]}
+                disabled={!currentStepValid}
                 type="primary"
                 onClick={() => setStep(prev => prev + 1)}
               >

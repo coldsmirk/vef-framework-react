@@ -21,7 +21,9 @@ async function writeConfig(content: string): Promise<void> {
 function createWarnSpy(): { onWarn: (message: string) => void; warnings: string[] } {
   const warnings: string[] = [];
   return {
-    onWarn: message => warnings.push(message),
+    onWarn: message => {
+      warnings.push(message);
+    },
     warnings
   };
 }
@@ -345,7 +347,7 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
       `);
 
       const pending = generateDictionaryKeys({ projectDir });
-      const assertion = expect(pending).rejects.toThrow(/timed out after 50ms/);
+      const assertion = await expect(pending).rejects.toThrow(/timed out after 50ms/);
 
       await vi.advanceTimersByTimeAsync(60);
       await assertion;

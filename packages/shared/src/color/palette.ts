@@ -57,11 +57,12 @@ function generateMatchedColorPalette(inputColor: string): MatchedColorPalette {
 
   const colorMap = new Map(basePalette.swatches.map(swatch => [swatch.number, swatch.hex]));
   const mainColorSwatch = basePalette.swatches.find(swatch => swatch.number === MAIN_COLOR_NUMBER);
-  const matchedColorSwatch = basePalette.swatches.find(swatch => swatch.hex === inputColor);
 
   if (!mainColorSwatch) {
     throw new Error(`Main color swatch (${MAIN_COLOR_NUMBER}) not found in palette`);
   }
+
+  const matchedColorSwatch = basePalette.swatches.find(swatch => swatch.hex === inputColor);
 
   if (!matchedColorSwatch) {
     throw new Error("Matched color swatch not found in generated palette");

@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-top-level-side-effects -- This module exports the project-wide configured Zod instance. */
 import { z } from "zod";
 import { zhCN } from "zod/locales";
 
