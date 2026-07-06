@@ -16,6 +16,24 @@ function schemaOf(children: Block[], extra?: { dataSources?: FormDataSource[]; m
   };
 }
 
+function deviceSubform(deviceTag: string, columns: Array<{ key: string; type: "textfield" | "number" }>) {
+  return {
+    id: `Sub-${deviceTag}`,
+    type: "subform" as const,
+    variant: "stack" as const,
+    key: "items",
+    label: "明细",
+    template: columns.map((column, index) => {
+      return {
+        id: `${deviceTag}-C${index}`,
+        type: column.type,
+        key: column.key,
+        label: column.key
+      };
+    })
+  };
+}
+
 describe("projectFormSchema", () => {
   describe("scalar mapping", () => {
     it("projects a textfield with the full attribute set", () => {
@@ -78,6 +96,13 @@ describe("projectFormSchema", () => {
           label: "备注"
         },
         {
+          id: "F7",
+          type: "radio",
+          key: "grade",
+          label: "等级",
+          dataSource: { kind: "static", options: [{ label: "甲", value: 1 }] }
+        },
+        {
           id: "F4",
           type: "date",
           key: "day",
@@ -113,6 +138,12 @@ describe("projectFormSchema", () => {
           key: "remark",
           kind: "textarea",
           columnType: "text"
+        },
+        {
+          key: "grade",
+          kind: "select",
+          columnType: "text",
+          options: [{ label: "甲", value: 1 }]
         },
         {
           key: "day",
@@ -156,9 +187,80 @@ describe("projectFormSchema", () => {
           columnType: "decimal",
           scale: 2
         },
-        { kind: "number", columnType: "integer" }
+        { kind: "number" }
       ]);
+      // A precision-less number must stay ungated: emitting the inferred
+      // "integer" would make the Go runtime reject every fractional value.
+      expect(result.definition.fields[1]).not.toHaveProperty("columnType");
       expect(result.definition.fields[1]).not.toHaveProperty("scale");
+      expect(result.issues).toEqual([]);
+    });
+
+    it("warns when an explicit decimal column has no precision", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "number",
+          key: "amount",
+          label: "金额",
+          columnType: "decimal"
+        }
+      ]));
+
+      expect(result.valid).toBe(true);
+      expect(result.definition.fields).toMatchObject([{ columnType: "decimal" }]);
+      expect(result.definition.fields[0]).not.toHaveProperty("scale");
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "decimal_scale_missing",
+          severity: "warning",
+          path: "amount"
+        })
+      ]);
+    });
+
+    it.each([
+      ["a lookahead group", String.raw`(?=.*\d).+`],
+      ["a negative lookbehind group", String.raw`(?<!\d)\w+`],
+      ["a backreference", String.raw`(\w)\1`]
+    ])("rejects a pattern with %s as RE2-unsupported", (_, pattern) => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "code",
+          label: "编码",
+          validate: { pattern }
+        }
+      ]));
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "pattern_unsupported",
+          severity: "error",
+          path: "code"
+        })
+      ]);
+    });
+
+    it.each([
+      ["an escaped group prefix", String.raw`\(\?=`],
+      ["a character-class literal", "[(?=]+"],
+      ["a non-capturing group", "(?:ab)+"]
+    ])("accepts a pattern with %s", (_, pattern) => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "code",
+          label: "编码",
+          validate: { pattern }
+        }
+      ]));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
     });
 
     it("honors an explicit columnType override over inference", () => {
@@ -578,6 +680,73 @@ describe("projectFormSchema", () => {
       ]);
       expect(result.definition.fields[0]?.columns?.map(column => column.key)).toEqual(["desc"]);
     });
+
+    it("projects a duplicate column key once, first sighting winning", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "Sub",
+          type: "subform",
+          variant: "stack",
+          key: "items",
+          label: "明细",
+          template: [
+            {
+              id: "C1",
+              type: "textfield",
+              key: "desc",
+              label: "说明"
+            },
+            {
+              id: "C2",
+              type: "number",
+              key: "desc",
+              label: "重复键"
+            }
+          ]
+        }
+      ]));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.definition.fields[0]?.columns).toMatchObject([{ key: "desc", kind: "input" }]);
+    });
+
+    it("resolves a column's ref to a form-global static source", () => {
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "Sub",
+            type: "subform",
+            variant: "stack",
+            key: "items",
+            label: "明细",
+            template: [
+              {
+                id: "C1",
+                type: "select",
+                key: "unit",
+                label: "单位",
+                dataSource: { kind: "ref", dataSourceId: "DS1" }
+              }
+            ]
+          }
+        ],
+        {
+          dataSources: [
+            {
+              id: "DS1",
+              kind: "static",
+              name: "units",
+              options: [{ label: "个", value: "pcs" }]
+            }
+          ]
+        }
+      ));
+
+      expect(result.issues).toEqual([]);
+      expect(result.definition.fields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
+      expect(result.formFields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
+    });
   });
 
   describe("conservation", () => {
@@ -700,7 +869,9 @@ describe("projectFormSchema", () => {
       ]);
     });
 
-    it("warns when the same key projects to different kinds across devices", () => {
+    it("raises an error when the same key projects to different kinds across devices", () => {
+      // The losing device submits a value shape the deployed definition
+      // rejects, so this is contract-breaking, not a preference.
       const result = projectFormSchema(schemaOf(
         [
           {
@@ -724,15 +895,48 @@ describe("projectFormSchema", () => {
         }
       ));
 
-      expect(result.valid).toBe(true);
+      expect(result.valid).toBe(false);
       expect(result.definition.fields).toMatchObject([{ kind: "input" }]);
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "cross_device_kind_mismatch",
-          severity: "warning",
+          severity: "error",
           path: "value"
         })
       ]);
+    });
+
+    it("raises an error when the same detail table has different columns across devices", () => {
+      const shared = [
+        { key: "a", type: "textfield" as const },
+        { key: "b", type: "textfield" as const }
+      ];
+      const result = projectFormSchema(schemaOf(
+        [deviceSubform("pc", shared)],
+        { mobile: { children: [deviceSubform("mobile", [...shared, { key: "c", type: "textfield" as const }])] } }
+      ));
+
+      expect(result.valid).toBe(false);
+      expect(result.definition.fields[0]?.columns).toHaveLength(2);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_table_mismatch",
+          severity: "error",
+          path: "items"
+        })
+      ]);
+    });
+
+    it("accepts an identical detail table on both devices", () => {
+      const columns = [{ key: "qty", type: "number" as const }];
+      const result = projectFormSchema(schemaOf(
+        [deviceSubform("pc", columns)],
+        { mobile: { children: [deviceSubform("mobile", columns)] } }
+      ));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.definition.fields).toHaveLength(1);
     });
 
     it("reports an unprojectable key once across devices", () => {

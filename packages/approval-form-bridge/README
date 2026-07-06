@@ -44,10 +44,19 @@ const gate = validateApprovalSchema(candidate, registries);
   `date` values as strings — and raise error issues. Unknown keyed widget types do too, never a silent drop.
 - Options: static (inline or referenced) inline into `options`; remote sources omit `options` with a
   warning — the backend then accepts any submitted value.
-- `columnType` is always emitted (explicit override first, else `inferColumnType`). Note a precision-less
-  number infers `integer`, which the backend enforces at submit time (fractional values are rejected)
-  regardless of storage mode; give the field a `precision` (→ `decimal` + `scale`) when decimals are legal.
+- `columnType` is emitted from the explicit designer override, else from `inferColumnType` — EXCEPT a
+  precision-less number, which stays ungated (no columnType): the backend enforces `integer` at submit
+  time regardless of storage mode, so auto-inferring it would reject every fractional value. Configure a
+  `precision` (→ `decimal` + `scale`) or pin the type explicitly when you want the gate.
+- A `pattern` using constructs RE2 does not support (lookahead / lookbehind / backreferences) is an
+  error: JS accepts them, the Go deploy rejects them.
+- Cross-device conflicts on a shared key are errors when they break the submit contract: different
+  projected kinds, or a detail table whose column sets differ. Same-kind divergence in options /
+  validation between devices is NOT detected (pc wins silently) — keep those aligned by hand.
 - Linkage does not survive projection (warning): a linkage-hidden field's value is dropped from the
   submit payload, which can conflict with a static `isRequired`.
+- Under `table` storage the backend additionally constrains field keys at deploy time (reserved column
+  names such as `id` / `instance_id` / `row_index` / `created_at`, case-insensitive uniqueness, ≤63
+  chars, no leading digit). The bridge does not pre-check these — it cannot know the storage mode.
 - `defaultValue` and `props` are declared on the contract but never emitted today (no designer source /
   no consumer) — they are the extension points for host-enriched definitions.

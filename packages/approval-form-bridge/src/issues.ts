@@ -9,9 +9,12 @@ export type ProjectionIssueCode
     | "unknown_field_type_unprojectable"
     | "nested_subform_unsupported"
     | "table_columns_empty"
+    | "pattern_unsupported"
+    | "decimal_scale_missing"
     | "options_not_static"
     | "linkage_not_projected"
-    | "cross_device_kind_mismatch";
+    | "cross_device_kind_mismatch"
+    | "cross_device_table_mismatch";
 
 /**
  * One projection diagnostic. Structurally aligned with form-editor's
@@ -65,6 +68,24 @@ export function issueTableColumnsEmpty(path: string): ProjectionIssue {
   };
 }
 
+export function issuePatternUnsupported(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "pattern_unsupported",
+    severity: "error",
+    message: `字段 "${path}" 的正则包含服务端(RE2)不支持的构造(lookahead / lookbehind / 反向引用),部署将被拒绝`
+  };
+}
+
+export function issueDecimalScaleMissing(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "decimal_scale_missing",
+    severity: "warning",
+    message: `字段 "${path}" 的列类型为 decimal 但未配置小数位数(precision),独立表存储将按 0 位小数舍入`
+  };
+}
+
 export function issueOptionsNotStatic(path: string): ProjectionIssue {
   return {
     path,
@@ -87,7 +108,16 @@ export function issueCrossDeviceKindMismatch(path: string, pcKind: string, mobil
   return {
     path,
     code: "cross_device_kind_mismatch",
-    severity: "warning",
-    message: `字段 "${path}" 在 PC 与移动端映射到不同的类型("${pcKind}" / "${mobileKind}"),投影以 PC 为准`
+    severity: "error",
+    message: `字段 "${path}" 在 PC 与移动端映射到不同的类型("${pcKind}" / "${mobileKind}"),投影以 PC 为准——另一端提交的值形状不符,提交将被服务端拒绝`
+  };
+}
+
+export function issueCrossDeviceTableMismatch(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "cross_device_table_mismatch",
+    severity: "error",
+    message: `明细表 "${path}" 在 PC 与移动端的列结构不一致,投影以 PC 为准——另一端提交的行包含未定义的列,提交将被服务端拒绝`
   };
 }

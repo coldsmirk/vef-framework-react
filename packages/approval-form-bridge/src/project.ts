@@ -1,6 +1,7 @@
 import type { FormFieldDefinition as FlowFormFieldDefinition } from "@vef-framework-react/approval-flow-editor";
 import type {
   Block,
+  ColumnDataType,
   FieldLinkage,
   FieldOptionSource,
   FormDataSource,
@@ -18,9 +19,12 @@ import { inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/fo
 
 import {
   issueCrossDeviceKindMismatch,
+  issueCrossDeviceTableMismatch,
+  issueDecimalScaleMissing,
   issueLinkageNotProjected,
   issueNestedSubform,
   issueOptionsNotStatic,
+  issuePatternUnsupported,
   issueTableColumnsEmpty,
   issueUnknownFieldType,
   issueUnmappableFieldType
@@ -87,6 +91,19 @@ interface ProjectedField {
 }
 
 /**
+ * What the dedup map remembers about a projected key, enough to detect a
+ * cross-device contract conflict on a later sighting without re-projecting.
+ */
+interface SeenProjection {
+  kind: ApprovalFieldKind;
+  /**
+   * Column signature of a table field ({@link peekTableSignature}); absent
+   * for scalar kinds.
+   */
+  tableSignature?: string;
+}
+
+/**
  * Project a designed form schema onto the approval form contract.
  *
  * Both device presentations are walked (pc first) and deduped by key — the
@@ -106,10 +123,10 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
   const formFields: FlowFormFieldDefinition[] = [];
   const dataSources = new Map((schema.dataSources ?? []).map(source => [source.id, source]));
 
-  // key → projected kind, or null when the node was unprojectable. Dedup
-  // applies to both; the cross-device mismatch warning only fires between
-  // two successfully projected sightings.
-  const seen = new Map<string, ApprovalFieldKind | null>();
+  // key → what the first sighting projected, or null when it was
+  // unprojectable. Dedup applies to both; the cross-device conflict checks
+  // only fire between two successfully projectable sightings.
+  const seen = new Map<string, SeenProjection | null>();
 
   for (const layer of [schema.presentations.pc, schema.presentations.mobile]) {
     if (layer === undefined) {
@@ -124,20 +141,40 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
       const previous = seen.get(node.key);
 
       if (previous !== undefined) {
-        const kind = peekKind(node);
+        // The submitted data contract is shared across devices, so a second
+        // sighting that would project a DIFFERENT contract means the losing
+        // device submits values the deployed definition rejects — an error,
+        // not a preference. Kind conflicts and table column-set conflicts
+        // are detected; a same-kind options/validation divergence is not
+        // (documented limitation).
+        if (previous !== null) {
+          const kind = peekKind(node);
 
-        if (previous !== null && kind !== null && kind !== previous) {
-          issues.push(issueCrossDeviceKindMismatch(node.key, previous, kind));
+          if (kind !== null && kind !== previous.kind) {
+            issues.push(issueCrossDeviceKindMismatch(node.key, previous.kind, kind));
+          } else if (
+            kind === "table"
+            && previous.tableSignature !== undefined
+            && peekTableSignature(node as SubformNode) !== previous.tableSignature
+          ) {
+            issues.push(issueCrossDeviceTableMismatch(node.key));
+          }
         }
 
         return;
       }
 
-      const projected = node.type === "subform"
+      const isSubform = node.type === "subform";
+      const projected = isSubform
         ? projectSubform(node as SubformNode, dataSources, issues)
         : projectLeaf(node as KeyedField, node.key, dataSources, issues);
 
-      seen.set(node.key, projected === undefined ? null : projected.approval.kind);
+      seen.set(node.key, projected === undefined
+        ? null
+        : {
+            kind: projected.approval.kind,
+            ...isSubform && { tableSignature: peekTableSignature(node as SubformNode) }
+          });
 
       if (projected !== undefined) {
         fields.push({ ...projected.approval, sortOrder: fields.length });
@@ -164,6 +201,28 @@ function peekKind(node: Block & KeyedNode): ApprovalFieldKind | null {
   }
 
   return KIND_BY_TYPE[node.type] ?? null;
+}
+
+/**
+ * Contract signature of a subform's column set — the ordered, deduplicated
+ * `key:kind` pairs of its template's keyed leaves (layout containers are
+ * transparent, matching the projection walk). Two devices whose signatures
+ * differ deploy a definition at least one of them cannot submit against.
+ */
+function peekTableSignature(subform: SubformNode): string {
+  const parts: string[] = [];
+  const seenKeys = new Set<string>();
+
+  walkNodes({ children: subform.template }, (node, scope) => {
+    if (scope.length > 0 || !isKeyedNode(node) || seenKeys.has(node.key)) {
+      return;
+    }
+
+    seenKeys.add(node.key);
+    parts.push(`${node.key}:${node.type === "subform" ? "table" : KIND_BY_TYPE[node.type] ?? "?"}`);
+  });
+
+  return parts.join(",");
 }
 
 /**
@@ -195,9 +254,18 @@ function projectLeaf(
   const label = field.label ?? field.key;
   const options = resolveOptions(field, path, dataSources, issues);
   const { isRequired, rule } = splitValidation(field);
-  const columnType = inferColumnType(field);
+  const columnType = resolveColumnType(field);
   const { precision } = field as { precision?: number };
   const { placeholder } = field as { placeholder?: string };
+  const hasScale = precision !== undefined && precision > 0;
+
+  if (rule?.pattern !== undefined && hasRe2UnsupportedConstruct(rule.pattern)) {
+    issues.push(issuePatternUnsupported(path));
+  }
+
+  if (columnType === "decimal" && !hasScale) {
+    issues.push(issueDecimalScaleMissing(path));
+  }
 
   const approval: Omit<ApprovalFormField, "sortOrder"> = {
     key: field.key,
@@ -207,8 +275,8 @@ function projectLeaf(
     ...isRequired && { isRequired },
     ...options !== undefined && { options },
     ...rule !== undefined && { validation: rule },
-    columnType,
-    ...columnType === "decimal" && precision !== undefined && precision > 0 && { scale: precision }
+    ...columnType !== undefined && { columnType },
+    ...columnType === "decimal" && hasScale && { scale: precision }
   };
 
   const flow: FlowFormFieldDefinition = {
@@ -234,12 +302,17 @@ function projectSubform(
 ): ProjectedField | undefined {
   const columns: ApprovalFormField[] = [];
   const flowColumns: FlowFormFieldDefinition[] = [];
+  const seenColumns = new Set<string>();
   let nested = false;
 
   walkNodes({ children: subform.template }, (node, scope) => {
-    if (scope.length > 0 || !isKeyedNode(node)) {
+    // A duplicate column key is the same value binding twice, mirroring the
+    // root walk's dedup — first sighting wins.
+    if (scope.length > 0 || !isKeyedNode(node) || seenColumns.has(node.key)) {
       return;
     }
+
+    seenColumns.add(node.key);
 
     if (node.type === "subform") {
       nested = true;
@@ -327,6 +400,81 @@ function resolveOptions(
   issues.push(issueOptionsNotStatic(path));
 
   return undefined;
+}
+
+/**
+ * The column type to emit for a leaf field. An explicit designer override is
+ * always honored; otherwise the widget-derived inference applies — EXCEPT
+ * the number widget's precision-less "integer" fallback. The Go runtime
+ * rejects fractional values on an integer column regardless of storage mode,
+ * so a plain number field (no precision configured) must stay ungated: with
+ * no columnType the backend falls back to a gate-free numeric column.
+ */
+function resolveColumnType(field: KeyedField): ColumnDataType | undefined {
+  if (field.columnType !== undefined) {
+    return field.columnType;
+  }
+
+  const inferred = inferColumnType(field);
+
+  return field.type === "number" && inferred === "integer" ? undefined : inferred;
+}
+
+/**
+ * Whether a regex source uses a construct RE2 (the Go regexp engine)
+ * definitively does not support: lookahead / lookbehind groups and
+ * backreferences. JS accepts all of them, so neither the designer nor
+ * form-editor's validateSchema can catch this — without the check the
+ * pattern passes every frontend gate and the deploy fails server-side.
+ * Escapes and character classes are tracked so `\(?=` and `[(?=]` do not
+ * false-positive.
+ */
+function hasRe2UnsupportedConstruct(source: string): boolean {
+  let inClass = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+
+    if (char === "\\") {
+      const next = source[i + 1];
+
+      // A backreference is only meaningful outside a character class (inside
+      // one, \1 is an octal escape).
+      if (!inClass && next !== undefined && next >= "1" && next <= "9") {
+        return true;
+      }
+
+      i++;
+
+      continue;
+    }
+
+    if (char === "[") {
+      inClass = true;
+
+      continue;
+    }
+
+    if (char === "]") {
+      inClass = false;
+
+      continue;
+    }
+
+    if (inClass) {
+      continue;
+    }
+
+    if (char === "(" && source[i + 1] === "?") {
+      const rest = source.slice(i + 2);
+
+      if (rest.startsWith("=") || rest.startsWith("!") || rest.startsWith("<=") || rest.startsWith("<!")) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
