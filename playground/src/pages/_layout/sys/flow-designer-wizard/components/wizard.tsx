@@ -5,7 +5,7 @@ import type { CSSProperties, FC } from "react";
 import type { FlowBasicInfo, FlowDesignPayload, FlowInitiator, StorageMode } from "../types";
 
 import { validateFlowDefinition } from "@vef-framework-react/approval-flow-editor";
-import { projectFormSchema } from "@vef-framework-react/approval-form-bridge";
+import { createApprovalRegistries, projectFormSchema, validateApprovalSchema } from "@vef-framework-react/approval-form-bridge";
 import { Button, Steps } from "@vef-framework-react/components";
 import { useCallback, useMemo, useState } from "react";
 
@@ -80,9 +80,18 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
 
   const [initialFlow] = useState<FlowDefinition>(() => initialValue?.flowDefinition ?? EMPTY_FLOW);
 
-  // One projection feeds every consumer: the backend form definition, the
-  // flow editor's field metadata (detail tables included), and the step gate.
+  // The registries prop is honored on first mount only — keep one instance,
+  // shared between the editor (palette gating) and the save gate.
+  const [registries] = useState(createApprovalRegistries);
+
+  // One projection feeds the payload consumers (backend form definition +
+  // flow editor's field metadata); the two-layer gate (structural
+  // validateSchema + projection) drives the step gate and the issue list.
   const projection = useMemo(() => formSchema ? projectFormSchema(formSchema) : null, [formSchema]);
+  const formGate = useMemo(
+    () => formSchema ? validateApprovalSchema(formSchema, registries) : null,
+    [formSchema, registries]
+  );
   const formDefinition = useMemo(() => projection?.definition ?? { fields: [] }, [projection]);
   const flowPlugins = useMemo<EditorPlugins>(
     () => { return { ...plugins, formFields: projection?.formFields ?? [] }; },
@@ -102,7 +111,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     && basic.instanceTitleTemplate.trim() !== ""
     && (basic.bindingMode !== "business" || (!!basic.businessTable && !!basic.businessPkField))
     && initiators.length > 0;
-  const stepValid = [basicValid, projection === null || projection.valid, flowErrors.length === 0, true];
+  const stepValid = [basicValid, formGate === null || formGate.valid, flowErrors.length === 0, true];
   const currentStepValid = stepValid[step] ?? false;
 
   const payload: FlowDesignPayload = {
@@ -144,7 +153,8 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
 
         <div style={stepPaneStyle(step === 1, false)}>
           <FormDesignStep
-            issues={projection?.issues ?? []}
+            issues={formGate?.issues ?? []}
+            registries={registries}
             storageMode={storageMode}
             onSchemaChange={handleSchemaChange}
             onStorageModeChange={setStorageMode}
