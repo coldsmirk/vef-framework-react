@@ -5,11 +5,10 @@ import type { CSSProperties, FC } from "react";
 import type { FlowBasicInfo, FlowDesignPayload, FlowInitiator, StorageMode } from "../types";
 
 import { validateFlowDefinition } from "@vef-framework-react/approval-flow-editor";
+import { projectFormSchema } from "@vef-framework-react/approval-form-bridge";
 import { Button, Steps } from "@vef-framework-react/components";
-import { toFormFieldDefinitions } from "@vef-framework-react/form-editor";
 import { useCallback, useMemo, useState } from "react";
 
-import { toBackendFormDefinition } from "../helpers/adapter";
 import { BasicInfoStep } from "./steps/basic-info-step";
 import { FlowDesignStep } from "./steps/flow-design-step";
 import { FormDesignStep } from "./steps/form-design-step";
@@ -81,14 +80,13 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
 
   const [initialFlow] = useState<FlowDefinition>(() => initialValue?.flowDefinition ?? EMPTY_FLOW);
 
-  const formDefinition = useMemo(
-    () => formSchema ? toBackendFormDefinition(formSchema) : { fields: [] },
-    [formSchema]
-  );
-  const formFields = useMemo(() => formSchema ? toFormFieldDefinitions(formSchema) : [], [formSchema]);
+  // One projection feeds every consumer: the backend form definition, the
+  // flow editor's field metadata (detail tables included), and the step gate.
+  const projection = useMemo(() => formSchema ? projectFormSchema(formSchema) : null, [formSchema]);
+  const formDefinition = useMemo(() => projection?.definition ?? { fields: [] }, [projection]);
   const flowPlugins = useMemo<EditorPlugins>(
-    () => { return { ...plugins, formFields }; },
-    [plugins, formFields]
+    () => { return { ...plugins, formFields: projection?.formFields ?? [] }; },
+    [plugins, projection]
   );
   const flowErrors = useMemo(() => validateFlowDefinition(flowDefinition), [flowDefinition]);
 
@@ -104,7 +102,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     && basic.instanceTitleTemplate.trim() !== ""
     && (basic.bindingMode !== "business" || (!!basic.businessTable && !!basic.businessPkField))
     && initiators.length > 0;
-  const stepValid = [basicValid, true, flowErrors.length === 0, true];
+  const stepValid = [basicValid, projection === null || projection.valid, flowErrors.length === 0, true];
   const currentStepValid = stepValid[step] ?? false;
 
   const payload: FlowDesignPayload = {
@@ -146,6 +144,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
 
         <div style={stepPaneStyle(step === 1, false)}>
           <FormDesignStep
+            issues={projection?.issues ?? []}
             storageMode={storageMode}
             onSchemaChange={handleSchemaChange}
             onStorageModeChange={setStorageMode}

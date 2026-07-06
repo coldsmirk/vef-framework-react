@@ -1,4 +1,5 @@
 import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
+import type { ApprovalFormDefinition } from "@vef-framework-react/approval-form-bridge";
 
 /**
  * Form-data storage mode, aligned with the backend `FlowVersion.StorageMode`
@@ -19,12 +20,6 @@ export type BindingMode = "standalone" | "business";
  * needs a host-provided picker to resolve concrete ids.
  */
 export type InitiatorKind = "user" | "role" | "department";
-
-/**
- * Coarse field kind the backend stores (`approval/form_definition.go`
- * `FieldKind`).
- */
-export type BackendFieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload";
 
 /**
  * Flow initiator entry (flow-scoped — `apv_flow_initiator`).
@@ -54,45 +49,6 @@ export interface FlowBasicInfo {
 }
 
 /**
- * Per-field validation rule, structurally equal to the backend
- * `ValidationRule` (`approval/form_definition.go`).
- */
-export interface BackendValidationRule {
-  minLength?: number;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  pattern?: string;
-  message?: string;
-}
-
-export interface BackendFieldOption {
-  label: string;
-  value: string | number;
-}
-
-/**
- * A single form field flattened to the backend's `FormFieldDefinition`. The
- * field list IS the data model: in `table` storage mode each entry becomes a
- * column, in `json` mode a JSONB key.
- */
-export interface BackendFormFieldDefinition {
-  key: string;
-  kind: BackendFieldKind;
-  label: string;
-  placeholder?: string;
-  defaultValue?: unknown;
-  isRequired?: boolean;
-  options?: BackendFieldOption[];
-  validation?: BackendValidationRule;
-  sortOrder: number;
-}
-
-export interface BackendFormDefinition {
-  fields: BackendFormFieldDefinition[];
-}
-
-/**
  * The full payload the wizard emits on completion, aligned with the backend
  * create → deploy → publish sequence. The wizard is purely controlled: it
  * assembles this object and hands it to the host, which performs the actual API
@@ -114,7 +70,7 @@ export interface FlowDesignPayload {
   /**
    * Step 2 → `DeployFlowCmd.FormDefinition`.
    */
-  formDefinition: BackendFormDefinition;
+  formDefinition: ApprovalFormDefinition;
   /**
    * Step 3 → `DeployFlowCmd.FlowDefinition`.
    */
