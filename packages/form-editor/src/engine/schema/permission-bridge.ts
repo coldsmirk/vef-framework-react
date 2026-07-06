@@ -7,6 +7,13 @@ import { walkUniqueRootKeyedFields } from "../keys";
  * (`approval/form_definition.go` `FieldKind`). The form editor's own field
  * types are richer; this is the lowest-common-denominator the cross-package
  * field-permission matrix keys off.
+ *
+ * For approval-backend integrations use `projectFormSchema` from
+ * `@vef-framework-react/approval-form-bridge` instead — its mapping is the
+ * authoritative one there. This table intentionally stays lossy (switch /
+ * daterange collapse into a nearest kind, subforms are excluded, unknown
+ * types fall back to "input") because a permission row only needs a rough
+ * label, while the bridge must reject what the backend cannot carry.
  */
 export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload";
 

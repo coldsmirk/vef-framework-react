@@ -26,10 +26,11 @@ export interface ApprovalSchemaValidationResult {
  * legal in a general-purpose form, and `initialSchema` is ingested without
  * validation), so this is the single choke point.
  *
- * The projection runs whenever the candidate parses into a schema, even if
- * structural errors were raised — hosts get the complete issue list in one
- * pass instead of fixing structure first and discovering contract violations
- * after.
+ * Structural errors short-circuit the projection: `validateSchema` returns a
+ * schema only when it found no error, and the projector assumes well-typed
+ * input, so running it on a malformed tree would trade one clear structural
+ * diagnostic for a crash. Fix structure first; contract issues surface on
+ * the next pass.
  */
 export function validateApprovalSchema(candidate: unknown, registries: DeviceRegistries): ApprovalSchemaValidationResult {
   const structural = validateSchema(candidate, registries);
