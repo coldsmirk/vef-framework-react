@@ -119,3 +119,27 @@ describe("normalizeNodeData", () => {
     expect(normalized.branches?.[0]).not.toBe(conditionData.branches[0]);
   });
 });
+
+describe("normalizeNodeData sequential add-assignee defaults", () => {
+  it("excludes parallel from the expanded default on sequential nodes", () => {
+    const data = normalizeNodeData("approval", { name: "审批", approvalMethod: "sequential" } as never);
+
+    expect((data as { addAssigneeTypes?: string[] }).addAssigneeTypes).toEqual(["before", "after"]);
+  });
+
+  it("keeps the full default on parallel nodes", () => {
+    const data = normalizeNodeData("approval", { name: "审批", approvalMethod: "parallel" } as never);
+
+    expect((data as { addAssigneeTypes?: string[] }).addAssigneeTypes).toEqual(["before", "after", "parallel"]);
+  });
+
+  it("never overwrites an explicit choice", () => {
+    const data = normalizeNodeData("approval", {
+      name: "审批",
+      approvalMethod: "sequential",
+      addAssigneeTypes: ["before"]
+    } as never);
+
+    expect((data as { addAssigneeTypes?: string[] }).addAssigneeTypes).toEqual(["before"]);
+  });
+});

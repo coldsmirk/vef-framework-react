@@ -69,11 +69,19 @@ export const CC_NODE_DEFAULTS = {
 export function normalizeNodeData<K extends NodeKind>(kind: K, data: NodeDataMap[K]): NodeDataMap[K] {
   switch (kind) {
     case "approval": {
+      // A sequential queue has no parallel lane: the backend rejects a
+      // sequential node configured with the "parallel" add-assignee type at
+      // deploy, so the expanded default must not include it.
+      const isSequential = (data as ApprovalNodeData).approvalMethod === "sequential";
+      const defaultAddAssigneeTypes = isSequential
+        ? APPROVAL_NODE_DEFAULTS.addAssigneeTypes.filter(type => type !== "parallel")
+        : [...APPROVAL_NODE_DEFAULTS.addAssigneeTypes];
+
       const approvalData: ApprovalNodeData = {
         ...APPROVAL_NODE_DEFAULTS,
         ...(data as ApprovalNodeData),
         addAssigneeTypes:
-          (data as ApprovalNodeData).addAssigneeTypes ?? [...APPROVAL_NODE_DEFAULTS.addAssigneeTypes]
+          (data as ApprovalNodeData).addAssigneeTypes ?? defaultAddAssigneeTypes
       };
 
       // The engine treats rollbackType "none" as deny-by-configuration
