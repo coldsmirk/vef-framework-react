@@ -45,6 +45,26 @@ export const CONDITION_OPERATORS = [
 export type ConditionOperator = typeof CONDITION_OPERATORS[number];
 
 /**
+ * Closed aggregate vocabulary for detail-table field conditions — mirrors
+ * the backend's `approval.AggregateKind`. Semantics follow SQL aggregates:
+ * count folds rows, sum over an empty table is 0, avg over an empty table
+ * matches no comparison.
+ */
+export const AGGREGATE_KINDS = ["sum", "count", "avg"] as const;
+
+/**
+ * Aggregate kinds understood by the approval condition model.
+ */
+export type AggregateKind = typeof AGGREGATE_KINDS[number];
+
+/**
+ * Operators an aggregate condition may use — a fold produces one number,
+ * so only the numeric comparisons apply. Mirrors the backend's
+ * `validateConditionAggregateShape` whitelist.
+ */
+export const AGGREGATE_OPERATORS = ["eq", "ne", "gt", "gte", "lt", "lte"] as const satisfies readonly ConditionOperator[];
+
+/**
  * Approval method
  */
 export type ApprovalMethod = "sequential" | "parallel";
@@ -163,6 +183,13 @@ export type CcFieldPermission = "visible" | "hidden";
 export interface ConditionDefinition {
   kind: ConditionKind;
   subject: string;
+  /**
+   * Aggregate over a detail-table subject: `subject` names the table field,
+   * `column` the numeric column to fold (sum / avg; count folds rows and
+   * leaves it unset). Absent for scalar conditions.
+   */
+  aggregate?: AggregateKind;
+  column?: string;
   operator: ConditionOperator | "";
   value: unknown;
   expression: string;
@@ -171,7 +198,7 @@ export interface ConditionDefinition {
 /**
  * Field kind for form field metadata
  */
-export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload";
+export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload" | "table";
 
 /**
  * Option for select-type form fields
@@ -189,6 +216,12 @@ export interface FormFieldDefinition {
   kind: FieldKind;
   label: string;
   options?: FieldOptionDefinition[];
+  /**
+   * Row shape of a detail-table field (kind === "table"): the condition
+   * editor folds one of these columns through an aggregate. Single-level —
+   * columns never nest another table.
+   */
+  columns?: FormFieldDefinition[];
 }
 
 /**

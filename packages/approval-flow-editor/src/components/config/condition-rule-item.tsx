@@ -1,6 +1,6 @@
 import type { FC } from "react";
 
-import type { ConditionDefinition, ConditionOperator, FormFieldDefinition } from "../../types";
+import type { AggregateKind, ConditionDefinition, ConditionOperator, FormFieldDefinition } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
@@ -8,7 +8,8 @@ import dayjs from "dayjs";
 import { XIcon } from "lucide-react";
 
 import { useEditorPlugins } from "../../plugins";
-import { getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
+import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
+import { AGGREGATE_LABELS, getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
 
 const FULL_WIDTH_STYLE = { width: "100%" } as const;
 
@@ -139,16 +140,43 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
     ...formFields.filter(f => contextSubjectFields.every(c => c.key !== f.key))
   ];
   const selectedField = subjectFields.find(f => f.key === condition.subject);
-  const operators = selectedField ? getOperatorsForFieldKind(selectedField.kind) : [];
-  const isNoValue = (NO_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
-  const isMultiValue = (MULTI_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
+  // A table subject always compares through an aggregate: the fold yields
+  // one number, so the operator set narrows to the numeric comparisons and
+  // the value input is always numeric.
+  const isTableSubject = selectedField?.kind === "table";
+  const numericColumns = isTableSubject
+    ? (selectedField?.columns ?? []).filter(column => column.kind === "number")
+    : [];
+  const needsColumn = isTableSubject && condition.aggregate !== "count";
+  const operators = isTableSubject
+    ? [...AGGREGATE_OPERATORS]
+    : selectedField
+      ? getOperatorsForFieldKind(selectedField.kind)
+      : [];
+  const isNoValue = !isTableSubject && (NO_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
+  const isMultiValue = !isTableSubject && (MULTI_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
 
   const handleFieldChange = (key: string) => {
+    const nextField = subjectFields.find(f => f.key === key);
+
     onChange({
       ...condition,
       subject: key,
+      // Selecting a table defaults to the column-free count so the rule is
+      // immediately well-formed; scalar subjects carry no aggregate.
+      aggregate: nextField?.kind === "table" ? "count" : undefined,
+      column: undefined,
       operator: "",
       value: undefined
+    });
+  };
+
+  const handleAggregateChange = (aggregate: AggregateKind) => {
+    onChange({
+      ...condition,
+      aggregate,
+      // count folds rows; a stale column from sum/avg must not linger.
+      column: aggregate === "count" ? undefined : condition.column
     });
   };
 
@@ -164,6 +192,18 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   const renderValueInput = () => {
     if (isNoValue || !selectedField || !condition.operator) {
       return null;
+    }
+
+    if (isTableSubject) {
+      return (
+        <InputNumber
+          disabled={readonly}
+          placeholder="请输入数值"
+          style={FULL_WIDTH_STYLE}
+          value={asNumberValue(condition.value)}
+          onChange={value => onChange({ ...condition, value })}
+        />
+      );
     }
 
     const { kind } = selectedField;
@@ -258,6 +298,28 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
             value={condition.subject || undefined}
             onChange={handleFieldChange}
           />
+
+          {isTableSubject && (
+            <Select
+              css={operatorSelectStyle}
+              disabled={readonly}
+              options={AGGREGATE_KINDS.map(kind => { return { label: AGGREGATE_LABELS[kind], value: kind }; })}
+              placeholder="聚合"
+              value={condition.aggregate}
+              onChange={handleAggregateChange}
+            />
+          )}
+
+          {needsColumn && (
+            <Select
+              css={operatorSelectStyle}
+              disabled={readonly}
+              options={numericColumns.map(column => { return { label: column.label, value: column.key }; })}
+              placeholder="选择列"
+              value={condition.column || undefined}
+              onChange={column => onChange({ ...condition, column })}
+            />
+          )}
 
           {selectedField && (
             <Select

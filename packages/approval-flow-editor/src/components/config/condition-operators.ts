@@ -1,4 +1,4 @@
-import type { ConditionOperator, FieldKind } from "../../types";
+import type { AggregateKind, ConditionOperator, FieldKind } from "../../types";
 
 export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   eq: "等于",
@@ -21,13 +21,22 @@ export const NO_VALUE_OPERATORS: ConditionOperator[] = ["is_empty", "is_not_empt
 
 export const MULTI_VALUE_OPERATORS: ConditionOperator[] = ["in", "not_in"];
 
+export const AGGREGATE_LABELS: Record<AggregateKind, string> = {
+  count: "行数",
+  sum: "求和",
+  avg: "平均值"
+};
+
 const OPERATORS_BY_KIND: Record<FieldKind, ConditionOperator[]> = {
   input: ["eq", "ne", "contains", "not_contains", "starts_with", "ends_with", "in", "not_in", "is_empty", "is_not_empty"],
   textarea: ["eq", "ne", "contains", "not_contains", "starts_with", "ends_with", "is_empty", "is_not_empty"],
   number: ["eq", "ne", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
   date: ["eq", "ne", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
   select: ["eq", "ne", "in", "not_in", "is_empty", "is_not_empty"],
-  upload: ["is_empty", "is_not_empty"]
+  upload: ["is_empty", "is_not_empty"],
+  // Table subjects always compare through an aggregate; the rule item
+  // narrows the operator set to AGGREGATE_OPERATORS instead of this map.
+  table: []
 };
 
 export function getOperatorsForFieldKind(kind: FieldKind): ConditionOperator[] {
