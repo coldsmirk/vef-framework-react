@@ -374,3 +374,203 @@ describe("validateFlowDefinition node config rules", () => {
     expect(codes).toContain("condition_expression_required");
   });
 });
+
+/**
+ * Build a start → condition(+branches) → approval → end definition for
+ * branch-condition rules; the condition node routes b1 to the approval node
+ * and the default branch shares that edge target via a second handle edge.
+ */
+function conditionFlowWith(branches: unknown): FlowDefinition {
+  return {
+    nodes: [
+      {
+        id: "start_1",
+        kind: "start",
+        position: { x: 0, y: 0 },
+        data: { name: "开始" }
+      },
+      {
+        id: "cond_1",
+        kind: "condition",
+        position: { x: 200, y: 0 },
+        data: { name: "条件", branches } as never
+      },
+      {
+        id: "approval_1",
+        kind: "approval",
+        position: { x: 400, y: 0 },
+        data: { name: "审批" }
+      },
+      {
+        id: "end_1",
+        kind: "end",
+        position: { x: 600, y: 0 },
+        data: { name: "结束" }
+      }
+    ],
+    edges: [
+      {
+        id: "e1",
+        source: "start_1",
+        target: "cond_1"
+      },
+      {
+        id: "e2",
+        source: "cond_1",
+        target: "approval_1",
+        sourceHandle: "b1"
+      },
+      {
+        id: "e3",
+        source: "cond_1",
+        target: "approval_1",
+        sourceHandle: "b_default"
+      },
+      {
+        id: "e4",
+        source: "approval_1",
+        target: "end_1"
+      }
+    ]
+  };
+}
+
+const defaultBranch = {
+  id: "b_default",
+  label: "默认",
+  priority: 99,
+  isDefault: true
+};
+
+function aggregateBranch(condition: Record<string, unknown>) {
+  return [
+    {
+      id: "b1",
+      label: "条件1",
+      priority: 1,
+      conditionGroups: [
+        {
+          conditions: [
+            {
+              kind: "field",
+              subject: "items",
+              operator: "gt",
+              value: 1,
+              expression: "",
+              ...condition
+            }
+          ]
+        }
+      ]
+    },
+    defaultBranch
+  ];
+}
+
+describe("validateFlowDefinition branch condition structure", () => {
+  it("rejects a non-default branch without condition groups", () => {
+    const codes = codesOf(conditionFlowWith([
+      {
+        id: "b1",
+        label: "条件1",
+        priority: 1
+      },
+      defaultBranch
+    ]));
+
+    expect(codes).toContain("branch_conditions_required");
+  });
+
+  it("rejects an empty condition group", () => {
+    const codes = codesOf(conditionFlowWith([
+      {
+        id: "b1",
+        label: "条件1",
+        priority: 1,
+        conditionGroups: [{ conditions: [] }]
+      },
+      defaultBranch
+    ]));
+
+    expect(codes).toContain("condition_group_empty");
+  });
+});
+
+describe("validateFlowDefinition aggregate conditions", () => {
+  it("accepts a well-formed sum aggregate", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "qty" })));
+
+    expect(codes).toEqual([]);
+  });
+
+  it("accepts count without a column", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "count" })));
+
+    expect(codes).toEqual([]);
+  });
+
+  it("rejects an unknown aggregate kind", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "median", column: "qty" })));
+
+    expect(codes).toContain("invalid_aggregate");
+  });
+
+  it("rejects non-numeric operators over a fold", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({
+      aggregate: "sum",
+      column: "qty",
+      operator: "contains"
+    })));
+
+    expect(codes).toContain("aggregate_operator");
+  });
+
+  it("rejects count with a column", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "count", column: "qty" })));
+
+    expect(codes).toContain("aggregate_column_forbidden");
+  });
+
+  it("rejects sum without a column", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "sum" })));
+
+    expect(codes).toContain("aggregate_column_required");
+  });
+
+  it("rejects an aggregate on an expression condition", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({
+      kind: "expression",
+      expression: "true",
+      aggregate: "sum",
+      column: "qty"
+    })));
+
+    expect(codes).toContain("aggregate_on_expression");
+  });
+});
+
+describe("validateFlowDefinition sequential add-assignee", () => {
+  it("rejects the parallel add-assignee type on sequential nodes", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        approvalMethod: "sequential",
+        addAssigneeTypes: ["before", "parallel"]
+      } as never
+    }));
+
+    expect(codes).toContain("sequential_parallel_add_assignee");
+  });
+
+  it("accepts before/after on sequential nodes", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        approvalMethod: "sequential",
+        addAssigneeTypes: ["before", "after"]
+      } as never
+    }));
+
+    expect(codes).toEqual([]);
+  });
+});

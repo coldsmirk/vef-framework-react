@@ -6,6 +6,7 @@ import type {
   CcDefinition,
   ConditionBranchDefinition,
   ConditionDefinition,
+  ConditionGroup,
   ConsecutiveApproverAction,
   EmptyAssigneeAction,
   ExecutionType,
@@ -19,7 +20,7 @@ import type {
 } from "../types";
 
 import { isNodeKind } from "../constants";
-import { CONDITION_OPERATORS as CONDITION_OPERATOR_LIST } from "../types";
+import { AGGREGATE_KINDS, AGGREGATE_OPERATORS, CONDITION_OPERATORS as CONDITION_OPERATOR_LIST } from "../types";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -82,7 +83,15 @@ export type FlowValidationCode
     | "condition_subject_required"
     | "invalid_condition_operator"
     | "condition_expression_required"
-    | "invalid_condition_kind";
+    | "invalid_condition_kind"
+    | "branch_conditions_required"
+    | "condition_group_empty"
+    | "invalid_aggregate"
+    | "aggregate_operator"
+    | "aggregate_column_required"
+    | "aggregate_column_forbidden"
+    | "aggregate_on_expression"
+    | "sequential_parallel_add_assignee";
 
 /**
  * Build a Set from a Record keyed by every member of a string union: omitting
@@ -639,6 +648,16 @@ function validateApprovalNodeConfig(
       });
     }
   }
+
+  // A sequential queue has no parallel lane — mirrors the backend deploy
+  // rejection of the "parallel" add-assignee type on sequential nodes.
+  if (data?.approvalMethod === "sequential" && addAssigneeTypes.includes("parallel")) {
+    errors.push({
+      code: "sequential_parallel_add_assignee",
+      message: "依次审批节点不支持并行加签",
+      nodeId
+    });
+  }
 }
 
 /**
@@ -708,6 +727,91 @@ function validateCcDefinitions(
 }
 
 /**
+ * Validate one condition group: the engine treats an empty group as an
+ * unconditional match, so it is rejected before its conditions are checked.
+ */
+function validateConditionGroup(
+  nodeId: string,
+  branch: ConditionBranchDefinition,
+  group: ConditionGroup,
+  errors: FlowValidationError[]
+): void {
+  if (group.conditions.length === 0) {
+    errors.push({
+      code: "condition_group_empty",
+      message: `分支「${branch.label || branch.id}」存在空的条件组`,
+      nodeId,
+      branchId: branch.id
+    });
+
+    return;
+  }
+
+  for (const condition of group.conditions) {
+    validateBranchCondition(nodeId, branch, condition, errors);
+  }
+}
+
+/**
+ * Validate the structural rules of an aggregate field condition: a known
+ * aggregate kind, a numeric comparison operator, and the column contract —
+ * count folds rows and must not name a column, sum/avg fold a column and
+ * must name one. Mirrors the backend `validateConditionAggregateShape`.
+ */
+function validateConditionAggregateShape(
+  nodeId: string,
+  branch: ConditionBranchDefinition,
+  condition: ConditionDefinition,
+  errors: FlowValidationError[]
+): void {
+  if (!condition.aggregate) {
+    return;
+  }
+
+  if (!(AGGREGATE_KINDS as readonly string[]).includes(condition.aggregate)) {
+    errors.push({
+      code: "invalid_aggregate",
+      message: `分支「${branch.label || branch.id}」存在未知的聚合方式：${condition.aggregate}`,
+      nodeId,
+      branchId: branch.id
+    });
+
+    return;
+  }
+
+  if (condition.operator && !(AGGREGATE_OPERATORS as readonly string[]).includes(condition.operator)) {
+    errors.push({
+      code: "aggregate_operator",
+      message: `分支「${branch.label || branch.id}」的聚合条件仅支持数值比较运算符`,
+      nodeId,
+      branchId: branch.id
+    });
+  }
+
+  if (condition.aggregate === "count") {
+    if (condition.column) {
+      errors.push({
+        code: "aggregate_column_forbidden",
+        message: `分支「${branch.label || branch.id}」的行数聚合不能选择列`,
+        nodeId,
+        branchId: branch.id
+      });
+    }
+
+    return;
+  }
+
+  if (!condition.column) {
+    errors.push({
+      code: "aggregate_column_required",
+      message: `分支「${branch.label || branch.id}」的聚合条件未选择列`,
+      nodeId,
+      branchId: branch.id
+    });
+  }
+}
+
+/**
  * Validate every branch condition is executable: known kind, subject +
  * whitelisted operator for field conditions, non-blank source for expression
  * conditions. Non-default branches must also carry unique priorities —
@@ -742,10 +846,20 @@ function validateBranchConditions(
   for (const branch of conditionBranches) {
     const conditionGroups = branch.conditionGroups ?? [];
 
+    // The engine treats an empty group list (or an empty group) as an
+    // unconditional match that would shadow every lower-priority branch —
+    // mirrors the backend's structurally-empty-condition rejection.
+    if (!branch.isDefault && conditionGroups.length === 0) {
+      errors.push({
+        code: "branch_conditions_required",
+        message: `分支「${branch.label || branch.id}」至少需要一个条件组`,
+        nodeId,
+        branchId: branch.id
+      });
+    }
+
     for (const group of conditionGroups) {
-      for (const condition of group.conditions) {
-        validateBranchCondition(nodeId, branch, condition, errors);
-      }
+      validateConditionGroup(nodeId, branch, group, errors);
     }
   }
 }
@@ -774,10 +888,21 @@ function validateBranchCondition(
         });
       }
 
+      validateConditionAggregateShape(nodeId, branch, condition, errors);
+
       return;
     }
 
     case "expression": {
+      if (condition.aggregate) {
+        errors.push({
+          code: "aggregate_on_expression",
+          message: `分支「${branch.label || branch.id}」的表达式条件不能携带聚合`,
+          nodeId,
+          branchId: branch.id
+        });
+      }
+
       if (!condition.expression.trim()) {
         errors.push({
           code: "condition_expression_required",
