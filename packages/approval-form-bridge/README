@@ -1,0 +1,53 @@
+# @vef-framework-react/approval-form-bridge
+
+Projection bridge from `@vef-framework-react/form-editor` schemas to the approval form contract
+(`approval/form_definition.go` in the Go backend), plus the approval capability profile for the designer.
+
+## Installation
+
+```bash
+pnpm add @vef-framework-react/approval-form-bridge
+```
+
+## Usage
+
+```tsx
+import {
+  createApprovalRegistries,
+  projectFormSchema,
+  validateApprovalSchema
+} from "@vef-framework-react/approval-form-bridge";
+
+// 1. Design under the approval profile (no switch / daterange / button).
+//    The registries prop is honored on first mount only — keep one instance.
+const [registries] = useState(createApprovalRegistries);
+<FormEditor registries={registries} onSchemaChange={setSchema} />;
+
+// 2. One projection feeds every consumer.
+const { definition, formFields, issues, valid } = projectFormSchema(schema);
+//    definition → DeployFlowCmd.FormDefinition (backend payload)
+//    formFields → ApprovalFlowEditor plugins.formFields (condition / permission editors)
+//    valid      → gate persistence on it; errors are contract-breaking
+
+// 3. Save-time gate (structural validateSchema + projection in one pass).
+const gate = validateApprovalSchema(candidate, registries);
+```
+
+## Projection rules
+
+- Only root-scope keyed nodes project; both device presentations are walked (pc wins a key collision,
+  mobile-only fields still project — the backend's form data is a closed contract).
+- A subform becomes a single-level `table` field: template leaves are its columns, layout containers in
+  the template are transparent, a nested subform is an error. `minRows` / `maxRows` map to
+  `validation.minLength` / `maxLength` (row-count bounds); `minRows >= 1` sets `isRequired`.
+- `switch` (boolean) and `daterange` (array) are unprojectable — the Go runtime validates `input` /
+  `date` values as strings — and raise error issues. Unknown keyed widget types do too, never a silent drop.
+- Options: static (inline or referenced) inline into `options`; remote sources omit `options` with a
+  warning — the backend then accepts any submitted value.
+- `columnType` is always emitted (explicit override first, else `inferColumnType`). Note a precision-less
+  number infers `integer`, which the backend enforces at submit time (fractional values are rejected)
+  regardless of storage mode; give the field a `precision` (→ `decimal` + `scale`) when decimals are legal.
+- Linkage does not survive projection (warning): a linkage-hidden field's value is dropped from the
+  submit payload, which can conflict with a static `isRequired`.
+- `defaultValue` and `props` are declared on the contract but never emitted today (no designer source /
+  no consumer) — they are the extension points for host-enriched definitions.

@@ -1,0 +1,64 @@
+{
+  "name": "@vef-framework-react/approval-form-bridge",
+  "version": "2.7.0",
+  "private": false,
+  "description": "Projection bridge from form-editor schemas to the approval form contract",
+  "keywords": [
+    "vef",
+    "framework",
+    "react",
+    "approval",
+    "form"
+  ],
+  "homepage": "https://vef.ilxqx.com",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Venus",
+    "email": "iweixiaopeng@163.com",
+    "url": "https://github.com/ilxqx"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "vef": "./src/index.ts",
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/es/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/es/index.js",
+  "types": "dist/types/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vef-framework-react/approval-flow-editor": "workspace:*",
+    "@vef-framework-react/form-editor": "workspace:*"
+  },
+  "devDependencies": {
+    "react": "^19.2.7"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22.x"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

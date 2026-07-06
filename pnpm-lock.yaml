@@ -166,6 +166,19 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7
 
+  packages/approval-form-bridge:
+    dependencies:
+      '@vef-framework-react/approval-flow-editor':
+        specifier: workspace:*
+        version: link:../approval-flow-editor
+      '@vef-framework-react/form-editor':
+        specifier: workspace:*
+        version: link:../form-editor
+    devDependencies:
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+
   packages/components:
     dependencies:
       '@ant-design/cssinjs':
@@ -643,6 +656,9 @@ importers:
       '@vef-framework-react/approval-flow-editor':
         specifier: workspace:*
         version: link:../packages/approval-flow-editor
+      '@vef-framework-react/approval-form-bridge':
+        specifier: workspace:*
+        version: link:../packages/approval-form-bridge
       '@vef-framework-react/components':
         specifier: workspace:*
         version: link:../packages/components

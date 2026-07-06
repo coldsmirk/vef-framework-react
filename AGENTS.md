@@ -73,6 +73,7 @@ Packages publish under `@vef-framework-react/*` as dual ESM/CJS with TypeScript 
 | **starter**              | Ready-to-use layouts and auth components on top of TanStack Router                                                                                                                                                          |
 | **form-editor**          | Visual form schema editor; linkage expressions are plain JavaScript via `new Function`. Published under `@vef-framework-react/form-editor`; treat exported APIs and schema shapes as external surface. Targets forms with 100s of fields. |
 | **approval-flow-editor** | Visual approval flow editor on @xyflow/react v12 (ReactFlow) + elkjs auto-layout (excluded from test scope — visual canvas)                                                                                                 |
+| **approval-form-bridge** | Projection bridge from form-editor schemas to the Go approval form contract: `projectFormSchema` (one walk → backend `FormDefinition` + flow-editor `formFields`, conservation errors for unprojectable keyed fields), `createApprovalRegistries` (approval profile — no switch / daterange / button), `validateApprovalSchema` save gate |
 | **dev**                  | Shared ESLint / Stylelint / Commitlint configs, Vite plugins, TypeScript configs                                                                                                                                            |
 
 ### Key Patterns

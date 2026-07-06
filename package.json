@@ -47,6 +47,7 @@
     "test:watch": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest",
     "typecheck": "pnpm --filter=./packages/* run typecheck",
     "typecheck:approval-flow-editor": "pnpm --filter=./packages/approval-flow-editor run typecheck",
+    "typecheck:approval-form-bridge": "pnpm --filter=./packages/approval-form-bridge run typecheck",
     "typecheck:components": "pnpm --filter=./packages/components run typecheck",
     "typecheck:core": "pnpm --filter=./packages/core run typecheck",
     "typecheck:dev": "pnpm --filter=./packages/dev run typecheck",
