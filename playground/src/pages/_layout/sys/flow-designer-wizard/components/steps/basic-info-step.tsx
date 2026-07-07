@@ -189,21 +189,41 @@ export const BasicInfoStep: FC<BasicInfoStepProps> = ({
             )}
 
             {isBusiness && (
-              <Field label="标题字段">
+              <Field required label="状态字段">
                 <Input
-                  placeholder="business_title_field(可选)"
-                  value={basic.businessTitleField ?? ""}
-                  onChange={event => onBasicChange({ businessTitleField: event.target.value || undefined })}
+                  placeholder="business_status_field"
+                  value={basic.businessStatusField ?? ""}
+                  onChange={event => onBasicChange({ businessStatusField: event.target.value || undefined })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field label="状态字段">
+              <Field label="实例 ID 字段">
                 <Input
-                  placeholder="business_status_field(可选)"
-                  value={basic.businessStatusField ?? ""}
-                  onChange={event => onBasicChange({ businessStatusField: event.target.value || undefined })}
+                  placeholder="business_instance_id_field(可选,配置后引擎回写实例 ID)"
+                  value={basic.businessInstanceIdField ?? ""}
+                  onChange={event => onBasicChange({ businessInstanceIdField: event.target.value || undefined })}
+                />
+              </Field>
+            )}
+
+            {isBusiness && (
+              <Field label="开始时间字段">
+                <Input
+                  placeholder="business_started_at_field(可选)"
+                  value={basic.businessStartedAtField ?? ""}
+                  onChange={event => onBasicChange({ businessStartedAtField: event.target.value || undefined })}
+                />
+              </Field>
+            )}
+
+            {isBusiness && (
+              <Field label="结束时间字段">
+                <Input
+                  placeholder="business_finished_at_field(可选)"
+                  value={basic.businessFinishedAtField ?? ""}
+                  onChange={event => onBasicChange({ businessFinishedAtField: event.target.value || undefined })}
                 />
               </Field>
             )}

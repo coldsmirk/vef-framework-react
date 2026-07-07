@@ -106,10 +106,13 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     []
   );
 
+  // Business mode requires table + pk + status — the backend rejects a
+  // half-configured binding at save time (ErrBindingIncomplete).
   const basicValid = basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.instanceTitleTemplate.trim() !== ""
-    && (basic.bindingMode !== "business" || (!!basic.businessTable && !!basic.businessPkField))
+    && (basic.bindingMode !== "business"
+      || (!!basic.businessTable && !!basic.businessPkField && !!basic.businessStatusField))
     && initiators.length > 0;
   const stepValid = [basicValid, formGate === null || formGate.valid, flowErrors.length === 0, true];
   const currentStepValid = stepValid[step] ?? false;

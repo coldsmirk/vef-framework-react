@@ -41,8 +41,15 @@ export interface FlowBasicInfo {
   bindingMode: BindingMode;
   businessTable?: string;
   businessPkField?: string;
-  businessTitleField?: string;
   businessStatusField?: string;
+  /**
+   * Optional write-back columns: when set, the engine keeps them in sync with
+   * the instance (id / start time / finish time); when omitted the column is
+   * never touched. Table, pk and status are mandatory in business mode.
+   */
+  businessInstanceIdField?: string;
+  businessStartedAtField?: string;
+  businessFinishedAtField?: string;
   adminUserIds: string[];
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;
