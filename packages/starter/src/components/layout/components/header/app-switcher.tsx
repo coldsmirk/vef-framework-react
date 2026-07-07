@@ -15,8 +15,10 @@ interface AppSwitcherProps {
   className?: string;
 }
 
+// Wide enough for four 128px min-width columns plus gaps; auto-fit below
+// still collapses to fewer columns on narrow viewports via maxWidth.
 const scrollAreaStyle = css({
-  width: "420px",
+  width: "560px",
   maxWidth: "calc(100vw - 32px)"
 });
 
