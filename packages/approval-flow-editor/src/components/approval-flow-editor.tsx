@@ -2,7 +2,7 @@ import type { EdgeMouseHandler, NodeMouseHandler } from "@xyflow/react";
 import type { CSSProperties, FC, RefObject } from "react";
 
 import type { EditorPlugins } from "../plugins";
-import type { FlowDefinition } from "../types";
+import type { FlowDefinition, FormFieldDefinition } from "../types";
 
 import { NodeloomProvider, useEditorStore, useEditorStoreApi, useReactFlowProps } from "@coldsmirk/nodeloom-core";
 import { Global } from "@emotion/react";
@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EDGE_MARKER_END, isNodeKind } from "../constants";
 import { useDrop } from "../hooks/use-drag-drop";
 import { useHistoryShortcuts } from "../hooks/use-history-shortcuts";
-import { EditorPluginsContext } from "../plugins";
+import { EditorPluginsContext, useEditorPlugins } from "../plugins";
 import { validateFlowDefinition } from "../shared/flow-validation";
 import { createSeedFlow } from "../shared/seed-flow";
 import { fromFlowDefinition, toFlowDefinition } from "../shared/serialization";
@@ -79,6 +79,9 @@ export interface ApprovalFlowEditorProps {
 
 // Hoist stable object references to prevent ReactFlow from re-processing on every render
 const EMPTY_PLUGINS: EditorPlugins = {};
+// Stable fallback for EditorPlugins.formFields — a fresh [] default on every
+// render would retrigger the validation effect below on every keystroke.
+const EMPTY_FORM_FIELDS: FormFieldDefinition[] = [];
 const DEFAULT_EDGE_OPTIONS = { type: "approval", markerEnd: EDGE_MARKER_END } as const;
 const PRO_OPTIONS = { hideAttribution: true } as const;
 const MINIMAP_STYLE = {
@@ -126,6 +129,9 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   const selectNode = useEditorStore(s => s.selectNode);
   const storeApi = useEditorStoreApi();
   const uiStoreApi = useEditorUiStoreApi();
+  // The form's top-level field inventory, for cross-checking fieldPermissions
+  // keys — same source the condition editor and field-permission table read.
+  const { formFields = EMPTY_FORM_FIELDS } = useEditorPlugins();
 
   // The engine wires the canvas: graph, change dispatch, connection funnel (validation via
   // EditorOptions.validateConnection, rejected-drop reporting via onInvalidConnection), and the
@@ -148,13 +154,13 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   // slices.
   useEffect(() => {
     const timer = setTimeout(() => {
-      uiStoreApi.getState().setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges)));
+      uiStoreApi.getState().setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges), formFields));
     }, VALIDATION_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [nodes, edges, uiStoreApi]);
+  }, [nodes, edges, uiStoreApi, formFields]);
 
   // Re-measure every handle once ancestor transforms have settled. xyflow
   // measures node sizes through ResizeObserver (layout-based, immune to CSS
@@ -278,7 +284,7 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
 
     const document = storeApi.getState().getDocument();
     const definition = toFlowDefinition(document.nodes, document.edges);
-    const issues = validateFlowDefinition(definition);
+    const issues = validateFlowDefinition(definition, formFields);
 
     if (issues.length > 0) {
       showWarningMessage(`流程校验未通过（${issues.length} 项），请先修正后再继续`);
@@ -286,7 +292,7 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
     }
 
     onPublish(definition);
-  }, [onPublish, storeApi]);
+  }, [onPublish, storeApi, formFields]);
 
   return (
     // tabIndex makes the shell focusable, so the history shortcuts only fire

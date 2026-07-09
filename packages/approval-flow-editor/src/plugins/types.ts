@@ -23,8 +23,9 @@ export interface EditorPlugins {
    */
   pickers?: Partial<Record<PrincipalKind, FC<PickerProps>>>;
   /**
-   * Form field definitions, consumed by the condition editor and the
-   * field-permission table.
+   * Form field definitions, consumed by the condition editor, the
+   * field-permission table, and flow validation (fieldPermissions keys are
+   * cross-checked against this inventory).
    */
   formFields?: FormFieldDefinition[];
   /**

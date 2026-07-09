@@ -98,7 +98,10 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     () => { return { ...plugins, formFields: projection?.formFields ?? [] }; },
     [plugins, projection]
   );
-  const flowErrors = useMemo(() => validateFlowDefinition(flowDefinition), [flowDefinition]);
+  const flowErrors = useMemo(
+    () => validateFlowDefinition(flowDefinition, projection?.formFields ?? []),
+    [flowDefinition, projection]
+  );
 
   const handleSchemaChange = useCallback((schema: FormSchema) => setFormSchema(schema), []);
   const handleFlowChange = useCallback((definition: FlowDefinition) => setFlowDefinition(definition), []);

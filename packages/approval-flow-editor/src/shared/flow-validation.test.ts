@@ -1,4 +1,4 @@
-import type { FlowDefinition, NodeDefinition } from "../types";
+import type { FlowDefinition, FormFieldDefinition, NodeDefinition } from "../types";
 
 import { describe, expect, it } from "vitest";
 
@@ -46,8 +46,8 @@ function flowWith(approvalNode: Partial<Extract<NodeDefinition, { kind: "approva
   };
 }
 
-function codesOf(definition: FlowDefinition): string[] {
-  return validateFlowDefinition(definition).map(e => e.code);
+function codesOf(definition: FlowDefinition, formFields: FormFieldDefinition[] = []): string[] {
+  return validateFlowDefinition(definition, formFields).map(e => e.code);
 }
 
 describe("validateFlowDefinition node config rules", () => {
@@ -572,5 +572,97 @@ describe("validateFlowDefinition sequential add-assignee", () => {
     }));
 
     expect(codes).toEqual([]);
+  });
+});
+
+const FORM_FIELDS: FormFieldDefinition[] = [
+  {
+    key: "reason",
+    kind: "input",
+    label: "原因"
+  },
+  {
+    key: "amount",
+    kind: "number",
+    label: "金额"
+  }
+];
+
+/**
+ * Build a start → cc → end definition, swapping the default approval node for
+ * a cc node the same way {@link flowWith} builds approval-node cases — mirrors
+ * the existing handle-node swap (see "rejects auto_reject on handle nodes").
+ */
+function ccFlowWith(fieldPermissions: Record<string, string>): FlowDefinition {
+  const definition = flowWith({});
+  const ccNode = definition.nodes[1]!;
+
+  Object.assign(ccNode, {
+    kind: "cc",
+    data: { name: "抄送", fieldPermissions }
+  });
+
+  return definition;
+}
+
+describe("validateFlowDefinition field permissions", () => {
+  it("accepts the full vocabulary on an approval node", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        fieldPermissions: {
+          reason: "visible",
+          amount: "editable"
+        }
+      }
+    }), FORM_FIELDS);
+
+    expect(codes).toEqual([]);
+  });
+
+  it("accepts visible/hidden on a cc node", () => {
+    const codes = codesOf(ccFlowWith({ reason: "visible", amount: "hidden" }), FORM_FIELDS);
+
+    expect(codes).toEqual([]);
+  });
+
+  it("rejects an out-of-enum permission value", () => {
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { reason: "locked" as never } }
+    }), FORM_FIELDS);
+
+    expect(codes).toContain("invalid_field_permission");
+  });
+
+  it("rejects an unknown field key", () => {
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { ghost: "visible" } }
+    }), FORM_FIELDS);
+
+    expect(codes).toContain("field_permission_key_unknown");
+  });
+
+  it("rejects editable on a cc node", () => {
+    const codes = codesOf(ccFlowWith({ reason: "editable" }), FORM_FIELDS);
+
+    expect(codes).toContain("cc_field_permission_not_allowed");
+  });
+
+  it("rejects required on a cc node", () => {
+    const codes = codesOf(ccFlowWith({ reason: "required" }), FORM_FIELDS);
+
+    expect(codes).toContain("cc_field_permission_not_allowed");
+  });
+
+  it("accepts a node without field permissions", () => {
+    expect(codesOf(flowWith({}), FORM_FIELDS)).toEqual([]);
+  });
+
+  it("rejects field permissions when the form has zero fields", () => {
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { reason: "visible" } }
+    }));
+
+    expect(codes).toContain("field_permission_key_unknown");
   });
 });

@@ -4,13 +4,16 @@ import type {
   ApprovalNodeData,
   AssigneeKind,
   CcDefinition,
+  CcFieldPermission,
   ConditionBranchDefinition,
   ConditionDefinition,
   ConditionGroup,
   ConsecutiveApproverAction,
   EmptyAssigneeAction,
   ExecutionType,
+  FieldPermission,
   FlowDefinition,
+  FormFieldDefinition,
   PassRule,
   RollbackDataStrategy,
   RollbackType,
@@ -91,7 +94,10 @@ export type FlowValidationCode
     | "aggregate_column_required"
     | "aggregate_column_forbidden"
     | "aggregate_on_expression"
-    | "sequential_parallel_add_assignee";
+    | "sequential_parallel_add_assignee"
+    | "invalid_field_permission"
+    | "field_permission_key_unknown"
+    | "cc_field_permission_not_allowed";
 
 /**
  * Build a Set from a Record keyed by every member of a string union: omitting
@@ -170,6 +176,19 @@ const ADD_ASSIGNEE_TYPES = enumSet<AddAssigneeType>({
 // The operator vocabulary is the closed set in types.ts (which the backend's
 // approval.ConditionOperator mirrors) — never re-declared here.
 const CONDITION_OPERATORS = new Set<string>(CONDITION_OPERATOR_LIST);
+const FIELD_PERMISSIONS = enumSet<FieldPermission>({
+  visible: null,
+  editable: null,
+  hidden: null,
+  required: null
+});
+// CC nodes only observe the form, so their FieldPermissions matrix is
+// restricted to this subset of FIELD_PERMISSIONS — mirrors the backend's
+// validateFieldPermissionEntry CC gate.
+const CC_FIELD_PERMISSIONS = enumSet<CcFieldPermission>({
+  visible: null,
+  hidden: null
+});
 
 /**
  * A single structural problem with the flow definition.
@@ -203,8 +222,19 @@ export interface FlowValidationError {
  * Pass the `value` / `onChange` definition (or `toDefinition()` output) — the
  * `kind` discriminator and node `data` are read exactly as the backend reads
  * them off the wire.
+ *
+ * `formFields` is the form's top-level field inventory — the same list
+ * `EditorPlugins.formFields` feeds to the condition editor and the
+ * field-permission table — used to cross-check every node's
+ * `fieldPermissions` keys. It defaults to an empty list, mirroring the
+ * backend's "a flow whose form has zero fields" case: every
+ * `fieldPermissions` entry becomes a dangling reference, so an omitted
+ * argument is only safe when the definition carries no field permissions.
  */
-export function validateFlowDefinition(definition: FlowDefinition): FlowValidationError[] {
+export function validateFlowDefinition(
+  definition: FlowDefinition,
+  formFields: FormFieldDefinition[] = []
+): FlowValidationError[] {
   const errors: FlowValidationError[] = [];
 
   const { nodes, edges } = definition;
@@ -212,6 +242,8 @@ export function validateFlowDefinition(definition: FlowDefinition): FlowValidati
   if (nodes.length === 0) {
     return [{ code: "no_nodes", message: "流程至少需要一个节点" }];
   }
+
+  const formFieldKeys = new Set(formFields.map(field => field.key));
 
   // --- Phase 1: node validation ---
   const nodeIds = new Set<string>();
@@ -269,7 +301,7 @@ export function validateFlowDefinition(definition: FlowDefinition): FlowValidati
 
     if (node.kind === "approval") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, errors);
+      validateTaskNodeConfig(node.id, node.data, formFieldKeys, errors);
       validateApprovalNodeConfig(node.id, node.data, errors);
 
       if (node.data?.rollbackTargetKeys?.length) {
@@ -281,13 +313,14 @@ export function validateFlowDefinition(definition: FlowDefinition): FlowValidati
 
     if (node.kind === "handle") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, errors);
+      validateTaskNodeConfig(node.id, node.data, formFieldKeys, errors);
       validateHandleNodeConfig(node.id, node.data, errors);
       continue;
     }
 
     if (node.kind === "cc") {
       validateCcDefinitions(node.id, node.data?.ccs, errors);
+      validateFieldPermissions(node.id, node.data?.fieldPermissions, true, formFieldKeys, errors);
     }
   }
 
@@ -488,6 +521,7 @@ export function validateFlowDefinition(definition: FlowDefinition): FlowValidati
 function validateTaskNodeConfig(
   nodeId: string,
   data: TaskNodeData | undefined,
+  formFieldKeys: Set<string>,
   errors: FlowValidationError[]
 ): void {
   if (data?.executionType && !EXECUTION_TYPES.has(data.executionType)) {
@@ -552,6 +586,7 @@ function validateTaskNodeConfig(
   }
 
   validateCcDefinitions(nodeId, data?.ccs, errors);
+  validateFieldPermissions(nodeId, data?.fieldPermissions, false, formFieldKeys, errors);
 }
 
 /**
@@ -720,6 +755,54 @@ function validateCcDefinitions(
       errors.push({
         code: "invalid_cc_timing",
         message: `未知的抄送时机：${cc.timing}`,
+        nodeId
+      });
+    }
+  }
+}
+
+/**
+ * Validate a node's FieldPermissions matrix against the form schema: every
+ * value must be a defined permission, every key must name a top-level form
+ * field (a flow whose form has zero fields makes any entry a dangling
+ * reference), and — on CC nodes — the value is further restricted to
+ * visible/hidden, since a CC node only observes the form and can neither
+ * unlock editing nor demand a value. Mirrors the backend
+ * `ValidateFieldPermissions` / `validateFieldPermissionEntry`, except every
+ * violation is collected instead of stopping at the first.
+ */
+function validateFieldPermissions(
+  nodeId: string,
+  fieldPermissions: Record<string, string> | undefined,
+  isCC: boolean,
+  formFieldKeys: Set<string>,
+  errors: FlowValidationError[]
+): void {
+  const entries = Object.entries(fieldPermissions ?? {});
+
+  for (const [key, value] of entries) {
+    const isValidValue = FIELD_PERMISSIONS.has(value);
+
+    if (!isValidValue) {
+      errors.push({
+        code: "invalid_field_permission",
+        message: `字段「${key}」的表单权限值未知：${value}`,
+        nodeId
+      });
+    }
+
+    if (!formFieldKeys.has(key)) {
+      errors.push({
+        code: "field_permission_key_unknown",
+        message: `表单权限引用了不存在的表单字段：${key}`,
+        nodeId
+      });
+    }
+
+    if (isCC && isValidValue && !CC_FIELD_PERMISSIONS.has(value)) {
+      errors.push({
+        code: "cc_field_permission_not_allowed",
+        message: `抄送节点的字段「${key}」不支持「${value}」权限，仅允许 visible/hidden`,
         nodeId
       });
     }
