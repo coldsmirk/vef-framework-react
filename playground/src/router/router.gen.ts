@@ -30,6 +30,7 @@ import { Route as LayoutSysDictionaryRouteRouteImport } from "./../pages/_layout
 import { Route as LayoutSysConfigDefinitionRouteRouteImport } from "./../pages/_layout/sys/config-definition/route";
 import { Route as LayoutSysConfigRouteRouteImport } from "./../pages/_layout/sys/config/route";
 import { Route as LayoutSysAuditLogRouteRouteImport } from "./../pages/_layout/sys/audit-log/route";
+import { Route as LayoutSysApprovalTaskDemoRouteRouteImport } from "./../pages/_layout/sys/approval-task-demo/route";
 import { Route as LayoutSysApprovalFlowEditorRouteRouteImport } from "./../pages/_layout/sys/approval-flow-editor/route";
 import { Route as LayoutSysAppRouteRouteImport } from "./../pages/_layout/sys/app/route";
 import { Route as LayoutMdStaffRouteRouteImport } from "./../pages/_layout/md/staff/route";
@@ -133,6 +134,12 @@ const LayoutSysAuditLogRouteRoute = LayoutSysAuditLogRouteRouteImport.update({
   path: "/sys/audit-log",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
+const LayoutSysApprovalTaskDemoRouteRoute =
+  LayoutSysApprovalTaskDemoRouteRouteImport.update({
+    id: "/sys/approval-task-demo",
+    path: "/sys/approval-task-demo",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
 const LayoutSysApprovalFlowEditorRouteRoute =
   LayoutSysApprovalFlowEditorRouteRouteImport.update({
     id: "/sys/approval-flow-editor",
@@ -201,6 +208,7 @@ export interface FileRoutesByFullPath {
   "/md/staff": typeof LayoutMdStaffRouteRoute;
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
+  "/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -229,6 +237,7 @@ export interface FileRoutesByTo {
   "/md/staff": typeof LayoutMdStaffRouteRoute;
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
+  "/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -259,6 +268,7 @@ export interface FileRoutesById {
   "/_layout/md/staff": typeof LayoutMdStaffRouteRoute;
   "/_layout/sys/app": typeof LayoutSysAppRouteRoute;
   "/_layout/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
+  "/_layout/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/_layout/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/_layout/sys/config": typeof LayoutSysConfigRouteRoute;
   "/_layout/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | "/md/staff"
     | "/sys/app"
     | "/sys/approval-flow-editor"
+    | "/sys/approval-task-demo"
     | "/sys/audit-log"
     | "/sys/config"
     | "/sys/config-definition"
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | "/md/staff"
     | "/sys/app"
     | "/sys/approval-flow-editor"
+    | "/sys/approval-task-demo"
     | "/sys/audit-log"
     | "/sys/config"
     | "/sys/config-definition"
@@ -346,6 +358,7 @@ export interface FileRouteTypes {
     | "/_layout/md/staff"
     | "/_layout/sys/app"
     | "/_layout/sys/approval-flow-editor"
+    | "/_layout/sys/approval-task-demo"
     | "/_layout/sys/audit-log"
     | "/_layout/sys/config"
     | "/_layout/sys/config-definition"
@@ -488,6 +501,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutSysAuditLogRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
+    "/_layout/sys/approval-task-demo": {
+      id: "/_layout/sys/approval-task-demo";
+      path: "/sys/approval-task-demo";
+      fullPath: "/sys/approval-task-demo";
+      preLoaderRoute: typeof LayoutSysApprovalTaskDemoRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
     "/_layout/sys/approval-flow-editor": {
       id: "/_layout/sys/approval-flow-editor";
       path: "/sys/approval-flow-editor";
@@ -573,6 +593,7 @@ interface LayoutRouteRouteChildren {
   LayoutMdStaffRouteRoute: typeof LayoutMdStaffRouteRoute;
   LayoutSysAppRouteRoute: typeof LayoutSysAppRouteRoute;
   LayoutSysApprovalFlowEditorRouteRoute: typeof LayoutSysApprovalFlowEditorRouteRoute;
+  LayoutSysApprovalTaskDemoRouteRoute: typeof LayoutSysApprovalTaskDemoRouteRoute;
   LayoutSysAuditLogRouteRoute: typeof LayoutSysAuditLogRouteRoute;
   LayoutSysConfigRouteRoute: typeof LayoutSysConfigRouteRoute;
   LayoutSysConfigDefinitionRouteRoute: typeof LayoutSysConfigDefinitionRouteRoute;
@@ -599,6 +620,7 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutMdStaffRouteRoute: LayoutMdStaffRouteRoute,
   LayoutSysAppRouteRoute: LayoutSysAppRouteRoute,
   LayoutSysApprovalFlowEditorRouteRoute: LayoutSysApprovalFlowEditorRouteRoute,
+  LayoutSysApprovalTaskDemoRouteRoute: LayoutSysApprovalTaskDemoRouteRoute,
   LayoutSysAuditLogRouteRoute: LayoutSysAuditLogRouteRoute,
   LayoutSysConfigRouteRoute: LayoutSysConfigRouteRoute,
   LayoutSysConfigDefinitionRouteRoute: LayoutSysConfigDefinitionRouteRoute,
