@@ -28,8 +28,16 @@ export const contentRight = css({
   justifyContent: "flex-end",
   gap: globalCssVars.spacingSm,
   flexWrap: "wrap",
-  "&& :where(.vef-input)": {
+  // antd wraps the raw <input> in an affix wrapper when allowClear / prefix / suffix
+  // is set, so size that wrapper (the real control box); the bare .vef-input matches
+  // the standalone input otherwise.
+  "&& :where(.vef-input, .vef-input-affix-wrapper)": {
     width: "200px"
+  },
+  // Inside the affix wrapper the inner .vef-input must fill the fixed-width box, not
+  // re-apply the 200px above (which would overflow past the clear icon).
+  "&& :where(.vef-input-affix-wrapper) :where(.vef-input)": {
+    width: "100%"
   },
   "&& :where(.vef-select)": {
     width: "200px"
