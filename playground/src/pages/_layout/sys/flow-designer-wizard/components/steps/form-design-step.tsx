@@ -38,10 +38,13 @@ interface FormDesignStepProps {
 }
 
 /**
- * Step 2 — design the form. The flat field list IS the data model; the storage
- * mode decides how the backend persists it. The editor runs under the approval
- * registry profile (no switch / daterange / button), and the wizard projects
- * the rich form-editor schema through the approval-form-bridge on change.
+ * Step 2 — design the form. The rich schema is what deploys
+ * (`DeployFlowCmd.FormSchema`, raw JSON); the backend derives the flat field
+ * list — the data model — from it at deploy, and the storage mode decides how
+ * that model persists. The editor runs under the approval registry profile
+ * (no switch / daterange / button), and the wizard runs the
+ * approval-form-bridge projection on change as a client-side pre-check
+ * mirroring the server parser.
  */
 export const FormDesignStep: FC<FormDesignStepProps> = ({
   storageMode,

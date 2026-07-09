@@ -56,7 +56,7 @@ describe("projectFormSchema", () => {
 
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields).toEqual([
+      expect(result.fields).toEqual([
         {
           key: "name",
           kind: "input",
@@ -123,7 +123,7 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields).toMatchObject([
+      expect(result.fields).toMatchObject([
         {
           key: "plain",
           kind: "input",
@@ -181,7 +181,7 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields).toMatchObject([
+      expect(result.fields).toMatchObject([
         {
           kind: "number",
           columnType: "decimal",
@@ -191,8 +191,8 @@ describe("projectFormSchema", () => {
       ]);
       // A precision-less number must stay ungated: emitting the inferred
       // "integer" would make the Go runtime reject every fractional value.
-      expect(result.definition.fields[1]).not.toHaveProperty("columnType");
-      expect(result.definition.fields[1]).not.toHaveProperty("scale");
+      expect(result.fields[1]).not.toHaveProperty("columnType");
+      expect(result.fields[1]).not.toHaveProperty("scale");
       expect(result.issues).toEqual([]);
     });
 
@@ -208,8 +208,8 @@ describe("projectFormSchema", () => {
       ]));
 
       expect(result.valid).toBe(true);
-      expect(result.definition.fields).toMatchObject([{ columnType: "decimal" }]);
-      expect(result.definition.fields[0]).not.toHaveProperty("scale");
+      expect(result.fields).toMatchObject([{ columnType: "decimal" }]);
+      expect(result.fields[0]).not.toHaveProperty("scale");
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "decimal_scale_missing",
@@ -275,8 +275,8 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields).toMatchObject([{ columnType: "integer" }]);
-      expect(result.definition.fields[0]).not.toHaveProperty("scale");
+      expect(result.fields).toMatchObject([{ columnType: "integer" }]);
+      expect(result.fields[0]).not.toHaveProperty("scale");
     });
 
     it("falls back to the key when a field has no label", () => {
@@ -288,7 +288,7 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields).toMatchObject([{ label: "code" }]);
+      expect(result.fields).toMatchObject([{ label: "code" }]);
     });
   });
 
@@ -317,7 +317,7 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields[0]?.options).toEqual([{ label: "北京", value: "bj" }]);
+      expect(result.fields[0]?.options).toEqual([{ label: "北京", value: "bj" }]);
       expect(result.formFields[0]?.options).toEqual([{ label: "北京", value: "bj" }]);
       expect(result.issues).toEqual([]);
     });
@@ -336,7 +336,7 @@ describe("projectFormSchema", () => {
         { dataSources: [staticSource] }
       ));
 
-      expect(result.definition.fields[0]?.options).toEqual([{ label: "北京", value: "bj" }]);
+      expect(result.fields[0]?.options).toEqual([{ label: "北京", value: "bj" }]);
       expect(result.issues).toEqual([]);
     });
 
@@ -359,7 +359,7 @@ describe("projectFormSchema", () => {
       ));
 
       expect(result.valid).toBe(true);
-      expect(result.definition.fields[0]).not.toHaveProperty("options");
+      expect(result.fields[0]).not.toHaveProperty("options");
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "options_not_static",
@@ -379,7 +379,7 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields[0]).not.toHaveProperty("options");
+      expect(result.fields[0]).not.toHaveProperty("options");
       expect(result.issues).toEqual([]);
     });
   });
@@ -422,7 +422,7 @@ describe("projectFormSchema", () => {
       ]));
 
       expect(result.valid).toBe(true);
-      expect(result.definition.fields).toEqual([
+      expect(result.fields).toEqual([
         {
           key: "items",
           kind: "table",
@@ -504,8 +504,8 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields[0]).not.toHaveProperty("isRequired");
-      expect(result.definition.fields[0]).not.toHaveProperty("validation");
+      expect(result.fields[0]).not.toHaveProperty("isRequired");
+      expect(result.fields[0]).not.toHaveProperty("validation");
     });
 
     it("keeps a subform nested in a layout section a top-level table field", () => {
@@ -536,7 +536,7 @@ describe("projectFormSchema", () => {
       ]));
 
       expect(result.valid).toBe(true);
-      expect(result.definition.fields).toMatchObject([{ key: "items", kind: "table" }]);
+      expect(result.fields).toMatchObject([{ key: "items", kind: "table" }]);
     });
 
     it("flattens layout containers inside the template without an issue", () => {
@@ -574,7 +574,7 @@ describe("projectFormSchema", () => {
 
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields[0]?.columns?.map(column => column.key)).toEqual(["desc", "qty"]);
+      expect(result.fields[0]?.columns?.map(column => column.key)).toEqual(["desc", "qty"]);
     });
 
     it("rejects a nested subform while projecting sibling columns", () => {
@@ -619,7 +619,7 @@ describe("projectFormSchema", () => {
           path: "items.parts"
         })
       ]);
-      expect(result.definition.fields[0]?.columns?.map(column => column.key)).toEqual(["desc"]);
+      expect(result.fields[0]?.columns?.map(column => column.key)).toEqual(["desc"]);
     });
 
     it("rejects a subform whose template yields no columns", () => {
@@ -635,7 +635,7 @@ describe("projectFormSchema", () => {
       ]));
 
       expect(result.valid).toBe(false);
-      expect(result.definition.fields).toEqual([]);
+      expect(result.fields).toEqual([]);
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "table_columns_empty",
@@ -678,7 +678,7 @@ describe("projectFormSchema", () => {
           path: "items.flag"
         })
       ]);
-      expect(result.definition.fields[0]?.columns?.map(column => column.key)).toEqual(["desc"]);
+      expect(result.fields[0]?.columns?.map(column => column.key)).toEqual(["desc"]);
     });
 
     it("projects a duplicate column key once, first sighting winning", () => {
@@ -708,7 +708,7 @@ describe("projectFormSchema", () => {
 
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields[0]?.columns).toMatchObject([{ key: "desc", kind: "input" }]);
+      expect(result.fields[0]?.columns).toMatchObject([{ key: "desc", kind: "input" }]);
     });
 
     it("resolves a column's ref to a form-global static source", () => {
@@ -744,7 +744,7 @@ describe("projectFormSchema", () => {
       ));
 
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
+      expect(result.fields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
       expect(result.formFields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
     });
   });
@@ -785,7 +785,7 @@ describe("projectFormSchema", () => {
       const result = projectFormSchema(schemaOf([block]));
 
       expect(result.valid).toBe(false);
-      expect(result.definition.fields).toEqual([]);
+      expect(result.fields).toEqual([]);
       expect(result.issues).toEqual([
         expect.objectContaining({
           code,
@@ -827,7 +827,7 @@ describe("projectFormSchema", () => {
 
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields.map(field => field.key)).toEqual(["name"]);
+      expect(result.fields.map(field => field.key)).toEqual(["name"]);
     });
   });
 
@@ -863,7 +863,7 @@ describe("projectFormSchema", () => {
       ));
 
       expect(result.valid).toBe(true);
-      expect(result.definition.fields.map(field => [field.key, field.label, field.sortOrder])).toEqual([
+      expect(result.fields.map(field => [field.key, field.label, field.sortOrder])).toEqual([
         ["name", "PC 姓名", 0],
         ["mobileOnly", "仅移动端", 1]
       ]);
@@ -896,7 +896,7 @@ describe("projectFormSchema", () => {
       ));
 
       expect(result.valid).toBe(false);
-      expect(result.definition.fields).toMatchObject([{ kind: "input" }]);
+      expect(result.fields).toMatchObject([{ kind: "input" }]);
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "cross_device_kind_mismatch",
@@ -917,7 +917,7 @@ describe("projectFormSchema", () => {
       ));
 
       expect(result.valid).toBe(false);
-      expect(result.definition.fields[0]?.columns).toHaveLength(2);
+      expect(result.fields[0]?.columns).toHaveLength(2);
       expect(result.issues).toEqual([
         expect.objectContaining({
           code: "cross_device_table_mismatch",
@@ -936,7 +936,7 @@ describe("projectFormSchema", () => {
 
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
-      expect(result.definition.fields).toHaveLength(1);
+      expect(result.fields).toHaveLength(1);
     });
 
     it("reports an unprojectable key once across devices", () => {
@@ -1028,7 +1028,7 @@ describe("projectFormSchema", () => {
   });
 
   describe("result shape", () => {
-    it("keeps definition and formFields aligned in keys and order", () => {
+    it("keeps fields and formFields aligned in keys and order", () => {
       const result = projectFormSchema(schemaOf([
         {
           id: "F1",
@@ -1059,9 +1059,9 @@ describe("projectFormSchema", () => {
         }
       ]));
 
-      expect(result.definition.fields.map(field => field.key)).toEqual(["name", "items", "day"]);
+      expect(result.fields.map(field => field.key)).toEqual(["name", "items", "day"]);
       expect(result.formFields.map(field => field.key)).toEqual(["name", "items", "day"]);
-      expect(result.definition.fields.map(field => field.sortOrder)).toEqual([0, 1, 2]);
+      expect(result.fields.map(field => field.sortOrder)).toEqual([0, 1, 2]);
       expect(result.formFields[1]?.columns).toEqual([
         {
           key: "qty",

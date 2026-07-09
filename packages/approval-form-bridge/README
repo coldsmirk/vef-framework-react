@@ -1,7 +1,11 @@
 # @vef-framework-react/approval-form-bridge
 
 Projection bridge from `@vef-framework-react/form-editor` schemas to the approval form contract
-(`approval/form_definition.go` in the Go backend), plus the approval capability profile for the designer.
+(`approval/form_field.go` in the Go backend — a bare `ApprovalFormField[]`, no wrapper object), plus the
+approval capability profile for the designer. Deploy sends the rich schema verbatim
+(`DeployFlowCmd.FormSchema`); the backend derives the flat field list itself via its
+`internal/approval/formeditor` parser — the enforcement-side twin of `projectFormSchema`, kept in
+lockstep through the golden fixtures under `src/__fixtures__/formeditor-parity/`.
 
 ## Installation
 
@@ -23,9 +27,10 @@ import {
 const [registries] = useState(createApprovalRegistries);
 <FormEditor registries={registries} onSchemaChange={setSchema} />;
 
-// 2. One projection feeds every consumer.
-const { definition, formFields, issues, valid } = projectFormSchema(schema);
-//    definition → DeployFlowCmd.FormDefinition (backend payload)
+// 2. One projection feeds every designer-side consumer (deploy itself sends
+//    the rich schema raw — the backend re-derives `fields` at deploy).
+const { fields, formFields, issues, valid } = projectFormSchema(schema);
+//    fields     → live field inventory (preview of what the Go parser derives)
 //    formFields → ApprovalFlowEditor plugins.formFields (condition / permission editors)
 //    valid      → gate persistence on it; errors are contract-breaking
 

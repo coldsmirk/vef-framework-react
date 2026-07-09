@@ -1,7 +1,6 @@
 export {
   type ApprovalFieldKind,
   type ApprovalFieldOption,
-  type ApprovalFormDefinition,
   type ApprovalFormField,
   type ApprovalValidationRule
 } from "./contract";

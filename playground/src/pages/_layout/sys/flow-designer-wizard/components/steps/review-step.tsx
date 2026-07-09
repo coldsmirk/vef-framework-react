@@ -1,3 +1,4 @@
+import type { ApprovalFormField } from "@vef-framework-react/approval-form-bridge";
 import type { CSSProperties, FC } from "react";
 
 import type { FlowDesignPayload } from "../../types";
@@ -50,6 +51,12 @@ const codeStyle: CSSProperties = {
 
 interface ReviewStepProps {
   payload: FlowDesignPayload;
+  /**
+   * Designer-side field inventory projected from the payload's `formSchema` —
+   * a preview of the flat list the backend derives at deploy. Not part of the
+   * payload itself.
+   */
+  fields: ApprovalFormField[];
 }
 
 /**
@@ -58,12 +65,11 @@ interface ReviewStepProps {
  * right. The payload maps to the backend `CreateFlowCmd` → `DeployFlowCmd` →
  * `PublishVersionCmd` sequence, which the host performs once handed over.
  */
-export const ReviewStep: FC<ReviewStepProps> = ({ payload }) => {
+export const ReviewStep: FC<ReviewStepProps> = ({ payload, fields }) => {
   const {
     basic,
     initiators,
     storageMode,
-    formDefinition,
     flowDefinition
   } = payload;
 
@@ -128,9 +134,9 @@ export const ReviewStep: FC<ReviewStepProps> = ({ payload }) => {
           <div style={columnsStyle}>
             <Card
               style={{ flex: "1.4 1 320px", minWidth: 0 }}
-              title={`表单与数据模型 → FormDefinition(${STORAGE_LABEL[storageMode]})`}
+              title={`表单与数据模型 → FormSchema(${STORAGE_LABEL[storageMode]})`}
             >
-              {formDefinition.fields.length === 0
+              {fields.length === 0
                 ? <Empty description="未设计任何字段" />
                 : (
                     <div style={{
@@ -139,7 +145,7 @@ export const ReviewStep: FC<ReviewStepProps> = ({ payload }) => {
                       gap: 8
                     }}
                     >
-                      {formDefinition.fields.map(field => (
+                      {fields.map(field => (
                         <div
                           key={field.key}
                           style={{

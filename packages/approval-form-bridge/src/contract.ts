@@ -1,7 +1,7 @@
 import type { ColumnDataType } from "@vef-framework-react/form-editor";
 
 /**
- * Field kind stored by the approval backend (`approval/form_definition.go`
+ * Field kind stored by the approval backend (`approval/form_field.go`
  * `FieldKind` / `approval/enums.go`). The Go enum is the source of truth;
  * this union mirrors it literal-for-literal so drift fails the type-check at
  * every assignment site.
@@ -40,10 +40,11 @@ export interface ApprovalValidationRule {
 }
 
 /**
- * A single form field flattened to the Go backend's `FormFieldDefinition`.
- * The field list IS the data model: under `table` storage each entry becomes
- * a column (each `table` field its own child table), under `json` storage a
- * JSONB key.
+ * A single form field flattened to the Go backend's `FormFieldDefinition`
+ * (`approval/form_field.go`). The contract's top-level artifact is a bare
+ * `ApprovalFormField[]` — there is no wrapper object. The field list IS the
+ * data model: under `table` storage each entry becomes a column (each `table`
+ * field its own child table), under `json` storage a JSONB key.
  *
  * `defaultValue` and `props` exist on the wire contract but are never emitted
  * by the projector today — the designer has no static default-value source,
@@ -77,12 +78,4 @@ export interface ApprovalFormField {
    * and by the projector).
    */
   columns?: ApprovalFormField[];
-}
-
-/**
- * The flat form definition the approval backend deploys
- * (`DeployFlowCmd.FormDefinition`).
- */
-export interface ApprovalFormDefinition {
-  fields: ApprovalFormField[];
 }

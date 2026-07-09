@@ -84,15 +84,16 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
   // shared between the editor (palette gating) and the save gate.
   const [registries] = useState(createApprovalRegistries);
 
-  // One projection feeds the payload consumers (backend form definition +
-  // flow editor's field metadata); the two-layer gate (structural
-  // validateSchema + projection) drives the step gate and the issue list.
+  // The payload carries the rich schema itself (the backend derives the flat
+  // fields at deploy); the projection is designer-side only — it feeds the
+  // flow editor's field metadata and the review inventory, while the
+  // two-layer gate (structural validateSchema + projection) drives the step
+  // gate and the issue list as a client-side pre-check of the server parser.
   const projection = useMemo(() => formSchema ? projectFormSchema(formSchema) : null, [formSchema]);
   const formGate = useMemo(
     () => formSchema ? validateApprovalSchema(formSchema, registries) : null,
     [formSchema, registries]
   );
-  const formDefinition = useMemo(() => projection?.definition ?? { fields: [] }, [projection]);
   const flowPlugins = useMemo<EditorPlugins>(
     () => { return { ...plugins, formFields: projection?.formFields ?? [] }; },
     [plugins, projection]
@@ -121,7 +122,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     basic,
     initiators,
     storageMode,
-    formDefinition,
+    formSchema,
     flowDefinition
   };
 
@@ -174,7 +175,7 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
         </div>
 
         <div style={stepPaneStyle(step === 3, true)}>
-          <ReviewStep payload={payload} />
+          <ReviewStep fields={projection?.fields ?? []} payload={payload} />
         </div>
       </div>
 

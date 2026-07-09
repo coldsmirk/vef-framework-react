@@ -1,5 +1,5 @@
 import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
-import type { ApprovalFormDefinition } from "@vef-framework-react/approval-form-bridge";
+import type { FormSchema } from "@vef-framework-react/form-editor";
 
 /**
  * Form-data storage mode, aligned with the backend `FlowVersion.StorageMode`
@@ -75,9 +75,12 @@ export interface FlowDesignPayload {
    */
   storageMode: StorageMode;
   /**
-   * Step 2 → `DeployFlowCmd.FormDefinition`.
+   * Step 2 → `DeployFlowCmd.FormSchema`, sent as raw JSON. The rich
+   * form-editor document is stored verbatim server-side; the backend derives
+   * the flat field list itself at deploy (`internal/approval/formeditor`).
+   * `null` — no form was designed — deploys a flow without a form.
    */
-  formDefinition: ApprovalFormDefinition;
+  formSchema: FormSchema | null;
   /**
    * Step 3 → `DeployFlowCmd.FlowDefinition`.
    */

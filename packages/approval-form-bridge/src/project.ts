@@ -12,7 +12,7 @@ import type {
   Validatable
 } from "@vef-framework-react/form-editor";
 
-import type { ApprovalFieldKind, ApprovalFieldOption, ApprovalFormDefinition, ApprovalFormField, ApprovalValidationRule } from "./contract";
+import type { ApprovalFieldKind, ApprovalFieldOption, ApprovalFormField, ApprovalValidationRule } from "./contract";
 import type { ProjectionIssue } from "./issues";
 
 import { inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/form-editor";
@@ -33,20 +33,21 @@ import {
 /**
  * Result of projecting a designed {@link FormSchema} onto the approval form
  * contract. One walk feeds both consumers so they cannot disagree:
- * `definition` is the flat backend payload (`DeployFlowCmd.FormDefinition`),
- * `formFields` is the same inventory in the shape the approval flow editor
- * consumes through `EditorPlugins.formFields` (detail-table fields included,
- * with their columns, so the condition editor's aggregate UI works).
+ * `fields` is the flat field inventory — the same list the Go parser derives
+ * from the deployed schema — and `formFields` is that inventory in the shape
+ * the approval flow editor consumes through `EditorPlugins.formFields`
+ * (detail-table fields included, with their columns, so the condition
+ * editor's aggregate UI works).
  */
 export interface ProjectionResult {
-  definition: ApprovalFormDefinition;
+  fields: ApprovalFormField[];
   formFields: FlowFormFieldDefinition[];
   issues: ProjectionIssue[];
   /**
    * `true` when no error-severity issue was raised. The backend's form data
-   * is a closed contract — deploying an invalid projection either fails the
-   * deploy validation or poisons every submit — so hosts must gate
-   * persistence on this flag.
+   * is a closed contract — deploying a schema whose projection is invalid
+   * either fails the deploy validation or poisons every submit — so hosts
+   * must gate persistence on this flag.
    */
   valid: boolean;
 }
@@ -104,7 +105,14 @@ interface SeenProjection {
 }
 
 /**
- * Project a designed form schema onto the approval form contract.
+ * Project a designed form schema onto the approval form contract — a
+ * designer-side UX aid: the live field inventory behind the flow editor's
+ * permission / condition matrix, plus pre-deploy validation feedback that
+ * mirrors the Go parser. Deploy does not consume this projection: the backend
+ * receives the rich schema verbatim (`DeployFlowCmd.FormSchema`) and derives
+ * the flat field list itself via `internal/approval/formeditor` — the
+ * enforcement-side twin of this function, kept in lockstep through the shared
+ * golden fixtures under `__fixtures__/formeditor-parity/`.
  *
  * Both device presentations are walked (pc first) and deduped by key — the
  * submitted data contract is shared across devices, and the backend's form
@@ -184,7 +192,7 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
   }
 
   return {
-    definition: { fields },
+    fields,
     formFields,
     issues,
     valid: issues.every(issue => issue.severity !== "error")
