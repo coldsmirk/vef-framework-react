@@ -3,6 +3,7 @@ import type { RuntimeFormValues } from "../runtime/types";
 import type {
   Block,
   EvaluationContext,
+  FieldPermission,
   KeyedFormField,
   KeyedNodeUnion,
   LinkageEvaluators,
@@ -11,7 +12,13 @@ import type {
 } from "../types";
 
 import { isKeyedNode, isValidatableField } from "../engine/keys";
-import { deriveDefaultValues, evaluateLinkage, isEmptyRuntimeValue } from "../engine/linkage";
+import {
+  deriveDefaultValues,
+  evaluateLinkage,
+  getFieldPermission,
+  isEmptyRuntimeValue,
+  isWritableFieldPermission
+} from "../engine/linkage";
 import { containerBodies } from "../engine/schema/nodes";
 import { isContainerNode, walkNodes } from "../engine/schema/walk";
 import { resolveScopeValues } from "../runtime/resolve-scope-values";
@@ -79,19 +86,28 @@ function visitEffectiveKeyedNodes(
  * is not **effectively** hidden — by its own linkage or any ancestor container's
  * (a field inside a linkage-hidden section is just as invisible as a field
  * hidden directly) — contributes its value; a hidden one is dropped whole.
- * Subforms recurse per row against that row's own record, so "hidden ⇒ not
- * submitted" holds at every scope. Runs only on submit (a cold path), so the
- * per-call tree walk is fine.
+ * A key the server clamped non-writable (`"visible"` / `"hidden"`) is dropped
+ * too: the payload carries only writable keys (plus unclamped ones). Subforms
+ * recurse per row against that row's own record, so "hidden ⇒ not submitted"
+ * holds at every scope. Runs only on submit (a cold path), so the per-call tree
+ * walk is fine.
  */
 export function filterSubmitValues(args: {
   blocks: Block[];
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * Server-resolved clamp for THIS scope's keys. Only the root call passes it;
+   * the per-row recursion drops it — a template field is never clamped
+   * individually (the subform node itself carries the clamp).
+   */
+  fieldPermissions?: Record<string, FieldPermission>;
   values: RuntimeFormValues;
 }): RuntimeFormValues {
   const options: EvaluateLinkageOptions = {
     evaluators: args.evaluators,
-    evaluationContext: args.evaluationContext
+    evaluationContext: args.evaluationContext,
+    fieldPermissions: args.fieldPermissions
   };
   const submitValues: RuntimeFormValues = {};
 
@@ -100,10 +116,19 @@ export function filterSubmitValues(args: {
       return;
     }
 
+    // Server clamp: only writable keys submit. A `"visible"` (read-only)
+    // field's value is display-only; `"hidden"` is already folded into
+    // `state.hidden` above, so this check exists for the visible case.
+    if (!isWritableFieldPermission(getFieldPermission(args.fieldPermissions, node.key))) {
+      return;
+    }
+
     if (node.type === "subform") {
       const raw = args.values[node.key];
       const rows: unknown[] = Array.isArray(raw) ? raw : [];
 
+      // No `fieldPermissions` for the row scope: the clamp stops at the
+      // subform node — top-level permissions never address template fields.
       submitValues[node.key] = rows.map(rowValue => filterSubmitValues({
         blocks: node.template,
         evaluators: args.evaluators,
@@ -147,6 +172,13 @@ export function collectSubmitErrors(args: {
   disabled: boolean;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * Server-resolved clamp for the root scope's keys. Folded into the linkage
+   * evaluation, so a non-writable field is exempt through the existing
+   * hidden / disabled exemption and a `"required"` clamp fails an empty value
+   * even without a static `validate.required`.
+   */
+  fieldPermissions?: Record<string, FieldPermission>;
   namePrefix: string;
   values: RuntimeFormValues;
 }): Record<string, string> {
@@ -159,7 +191,8 @@ export function collectSubmitErrors(args: {
 
   const options: EvaluateLinkageOptions = {
     evaluators: args.evaluators,
-    evaluationContext: args.evaluationContext
+    evaluationContext: args.evaluationContext,
+    fieldPermissions: args.fieldPermissions
   };
 
   collectScopeSubmitErrors(args.blocks, args.values, args.namePrefix, options, errors);
@@ -182,13 +215,17 @@ function collectScopeSubmitErrors(
     if (node.type === "subform") {
       const raw = values[node.key];
       const rows: unknown[] = Array.isArray(raw) ? raw : [];
+      // Row scopes evaluate unclamped — top-level permissions stop at the
+      // subform node itself (whose clamped hidden / disabled above already
+      // exempts the whole subtree).
+      const rowOptions: EvaluateLinkageOptions = { ...options, fieldPermissions: undefined };
 
       for (const [index, rowValue] of rows.entries()) {
         collectScopeSubmitErrors(
           node.template,
           asRecord(rowValue),
           `${namePrefix}${node.key}[${index}].`,
-          options,
+          rowOptions,
           errors
         );
       }
@@ -215,6 +252,13 @@ export function validateRuntimeField(args: {
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
   field: KeyedFormField;
+  /**
+   * Server-resolved clamp for the field's own value scope. The renderer passes
+   * the map for root-scope fields and `undefined` inside subform rows (a
+   * template field is never clamped individually), keeping "rendered
+   * read-only" and "skips validation" in agreement for clamped fields.
+   */
+  fieldPermissions?: Record<string, FieldPermission>;
   namePrefix: string;
   value: unknown;
   values: RuntimeFormValues;
@@ -234,7 +278,8 @@ export function validateRuntimeField(args: {
   const scopeValues = resolveScopeValues(args.values, args.namePrefix);
   const runtimeState = evaluateLinkage(args.field, scopeValues, {
     evaluators: args.evaluators,
-    evaluationContext: args.evaluationContext
+    evaluationContext: args.evaluationContext,
+    fieldPermissions: args.fieldPermissions
   });
 
   if (runtimeState.hidden || runtimeState.disabled) {

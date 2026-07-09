@@ -9,6 +9,7 @@ import type {
   DataSourceResolver,
   EvaluationContext,
   FieldLinkageRule,
+  FieldPermission,
   FlexNode,
   FormField,
   FormSchema,
@@ -71,6 +72,20 @@ export interface FormRendererProps {
   device?: PresentationDevice;
   defaultValues?: RuntimeFormValues;
   disabled?: boolean;
+  /**
+   * Server-resolved per-field interactivity clamp (see {@link FieldPermission}),
+   * keyed by the field's data-binding `key`. The clamp is the OUTER bound —
+   * linkage may narrow further but never widen past it: `"hidden"` unmounts the
+   * field and drops its value from the submit payload, `"visible"` renders it
+   * read-only (excluded from payload and validation), `"required"` forces the
+   * empty-value check even without a static `validate.required`, and
+   * `"editable"` changes nothing. An absent prop OR an absent key means no
+   * clamp for that field — the renderer stays fully generic; hosts that want a
+   * default-deny posture materialize the full map server-side. Keys address
+   * root-scope keyed nodes only: a keyed subform is clamped whole (its template
+   * fields are never addressed individually).
+   */
+  fieldPermissions?: Record<string, FieldPermission>;
   /**
    * Overrides for the dynamic linkage evaluators. Expression and script slots
    * fall back to plain-JavaScript `new Function` compilation. Host projects
@@ -159,6 +174,14 @@ interface RenderCtx {
    * runtime-state controllers (which must re-evaluate) via {@link EvaluationScopeContext}.
    */
   evaluationContextRef: RefObject<EvaluationContext | undefined>;
+  /**
+   * Server-resolved permission clamp for the CURRENT value scope's keys. The
+   * root ctx carries the host map; a subform row's ctx nulls it out (see
+   * {@link SubformRowBase}) — template fields are never clamped individually.
+   * Read by the live field validators, which must agree with the rendered
+   * (clamped) runtime state.
+   */
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeFormApi;
   /**
    * The form-level stack gap in pixels (from the schema's `gap`), used as the
@@ -187,7 +210,7 @@ interface RuntimeArrayFieldApi {
 }
 
 function useRuntimeForm(
-  args: Pick<FormRendererProps, "defaultValues" | "disabled" | "evaluators" | "onSubmit"> & {
+  args: Pick<FormRendererProps, "defaultValues" | "disabled" | "evaluators" | "fieldPermissions" | "onSubmit"> & {
     runtimeSchema: RuntimeSchema;
     evaluationContext: EvaluationContext | undefined;
     formRef: RefObject<RuntimeForm | null>;
@@ -226,6 +249,7 @@ function useRuntimeForm(
           disabled: args.disabled ?? false,
           evaluators: args.evaluators,
           evaluationContext: args.evaluationContext,
+          fieldPermissions: args.fieldPermissions,
           namePrefix: "",
           values: value
         });
@@ -256,6 +280,7 @@ function useRuntimeForm(
         blocks: args.runtimeSchema.children,
         evaluators: args.evaluators,
         evaluationContext: args.evaluationContext,
+        fieldPermissions: args.fieldPermissions,
         values: value
       }));
 
@@ -333,6 +358,7 @@ interface FormRendererInnerProps {
   runtimeSchema: RuntimeSchema;
   defaultValues?: RuntimeFormValues;
   disabled?: boolean;
+  fieldPermissions?: Record<string, FieldPermission>;
   evaluators?: LinkageEvaluators;
   dataSourceResolver?: DataSourceResolver;
   evaluationContext?: EvaluationContext;
@@ -355,6 +381,7 @@ function FormRendererInner({
   disabled = false,
   evaluators,
   evaluationContext: hostContext,
+  fieldPermissions,
   onSubmit,
   runtimeSchema
 }: FormRendererInnerProps): ReactElement {
@@ -448,6 +475,7 @@ function FormRendererInner({
     disabled,
     evaluators,
     evaluationContext,
+    fieldPermissions,
     formRef,
     onSubmit,
     runtimeSchema,
@@ -496,20 +524,28 @@ function FormRendererInner({
         domIdPrefix,
         evaluators,
         evaluationContextRef,
+        fieldPermissions,
         form,
         gutter: resolveStackGap(runtimeSchema.gap, DEFAULT_STACK_GAP),
         namePrefix: "",
         sinks
       };
     },
-    [disabled, domIdPrefix, evaluators, evaluationContextRef, form, runtimeSchema.gap, sinks]
+    [disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, runtimeSchema.gap, sinks]
   );
 
   return (
     <AppForm>
       <EvaluationScopeContext value={evaluationContext}>
         <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <RuntimeStateController evaluationContext={evaluationContext} evaluators={evaluators} form={form} schema={runtimeSchema} sinks={sinks}>
+          <RuntimeStateController
+            evaluationContext={evaluationContext}
+            evaluators={evaluators}
+            fieldPermissions={fieldPermissions}
+            form={form}
+            schema={runtimeSchema}
+            sinks={sinks}
+          >
             <Form css={rootCss} disabled={disabled}>
               <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
             </Form>
@@ -955,10 +991,16 @@ function SubformRowBase({
     [subform.id, subform.template]
   );
   // Re-prefixed ctx for the row's descendants; memoized so the row subtree's
-  // memoized cells don't thrash on the controller's re-renders.
+  // memoized cells don't thrash on the controller's re-renders. The permission
+  // clamp is dropped here: top-level permissions clamp the subform node itself,
+  // never a template field individually.
   const rowCtx = useMemo<RenderCtx>(
     () => {
-      return { ...ctx, namePrefix: rowPrefix };
+      return {
+        ...ctx,
+        namePrefix: rowPrefix,
+        fieldPermissions: undefined
+      };
     },
     [ctx, rowPrefix]
   );
@@ -1050,6 +1092,7 @@ function FieldSlot({
       evaluators: ctx.evaluators,
       evaluationContext: ctx.evaluationContextRef.current,
       field,
+      fieldPermissions: ctx.fieldPermissions,
       namePrefix: ctx.namePrefix,
       value,
       values: fieldApi.form.state.values

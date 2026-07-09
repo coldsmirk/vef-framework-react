@@ -16,6 +16,7 @@ import {
   defaultEvaluateExpression,
   deriveDefaultValues,
   deriveEvaluationVariables,
+  emptyRuntimeState,
   evaluateConditionEffectTruths,
   evaluateLinkage,
   evaluateRuntimeStates,
@@ -1345,6 +1346,114 @@ describe("linkage engine", () => {
       // Including the template would key every row's state under the one
       // shared template node id; the per-row controllers own that scope.
       expect(states.Field_row_note).toBeUndefined();
+    });
+  });
+
+  describe("field permission clamp", () => {
+    it("keeps a visible-clamped field read-only even when enable and show rules fire", () => {
+      const field = fieldWithRule("target", "type", [{ type: "enable" }, { type: "show" }]);
+
+      const state = evaluateLinkage(field, { type: "1" }, { fieldPermissions: { target: "visible" } });
+
+      expect(state.disabled, "a non-writable clamp must win over a fired enable rule").toBe(true);
+      expect(state.hidden, "visible keeps the field mounted").toBe(false);
+    });
+
+    it("suppresses linkage require and assign on a visible-clamped field", () => {
+      const field = fieldWithRule("target", "type", [
+        { type: "require" },
+        { type: "assign", value: { kind: "literal", value: "A001" } }
+      ]);
+
+      const state = evaluateLinkage(field, { type: "1" }, { fieldPermissions: { target: "visible" } });
+
+      expect(state.required, "a non-writable field is never required").toBe(false);
+      expect(state.assigned, "no phantom edit may land in a non-writable field").toBe(false);
+      expect(state.assignedValue, "the suppressed assignment carries no value").toBeUndefined();
+    });
+
+    it("hides a hidden-clamped field even when a show rule fires", () => {
+      const field = makeField("target", {
+        linkage: {
+          defaults: { hidden: true },
+          rules: [
+            {
+              id: "Rule_show",
+              trigger: leafTrigger("type"),
+              actions: [{ type: "show" }]
+            }
+          ]
+        }
+      });
+
+      const state = evaluateLinkage(field, { type: "1" }, { fieldPermissions: { target: "hidden" } });
+
+      expect(state.hidden, "the hidden clamp must win over a fired show rule").toBe(true);
+      expect(state.disabled, "a hidden-clamped field is also non-writable").toBe(true);
+    });
+
+    it("keeps a required clamp over a fired optional rule and stays writable", () => {
+      const field = makeField("target", {
+        linkage: {
+          defaults: { required: true },
+          rules: [
+            {
+              id: "Rule_optional",
+              trigger: leafTrigger("type"),
+              actions: [{ type: "optional" }]
+            }
+          ]
+        }
+      });
+
+      const state = evaluateLinkage(field, { type: "1" }, { fieldPermissions: { target: "required" } });
+
+      expect(state.required, "the required clamp must win over a fired optional rule").toBe(true);
+      expect(state.disabled, "a required clamp keeps the field writable").toBe(false);
+    });
+
+    it("lets linkage narrow within an editable clamp", () => {
+      const field = fieldWithRule("target", "type", [{ type: "hide" }]);
+
+      const state = evaluateLinkage(field, { type: "1" }, { fieldPermissions: { target: "editable" } });
+
+      expect(state.hidden, "editable grants no wider state than no clamp — the hide rule still applies").toBe(true);
+    });
+
+    it("preserves the un-clamped state reference for editable and unlisted keys", () => {
+      const field = makeField("target");
+
+      expect(
+        evaluateLinkage(field, {}, { fieldPermissions: { target: "editable" } }),
+        "editable must not mint a new state object (reference stabilization relies on identity)"
+      ).toBe(emptyRuntimeState);
+      expect(
+        evaluateLinkage(field, {}, { fieldPermissions: { other: "hidden" } }),
+        "a key without a clamp entry stays untouched"
+      ).toBe(emptyRuntimeState);
+    });
+
+    it("never reads a clamp off the Object prototype for a prototype-named key", () => {
+      const field = makeField("constructor");
+
+      const state = evaluateLinkage(field, {}, { fieldPermissions: {} });
+
+      expect(state, "a map without an own 'constructor' entry must not clamp the field").toBe(emptyRuntimeState);
+    });
+
+    it("clamps root-scope nodes by key in evaluateRuntimeStates, subform included", () => {
+      const states = evaluateRuntimeStates(statesSchema(), { status: "on" }, {
+        fieldPermissions: { target: "visible", lines: "hidden" }
+      });
+
+      expect(states.Field_target, "the visible-clamped root field renders read-only").toMatchObject({
+        hidden: false,
+        disabled: true
+      });
+      expect(states.Sub_lines, "the keyed subform is clamped whole").toMatchObject({
+        hidden: true,
+        disabled: true
+      });
     });
   });
 

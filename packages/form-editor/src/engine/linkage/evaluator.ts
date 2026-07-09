@@ -1,6 +1,7 @@
 import type {
   Block,
   EvaluationContext,
+  FieldPermission,
   KeyedFormField,
   LinkageActionValue,
   LinkageCondition,
@@ -11,7 +12,7 @@ import type {
 } from "../../types";
 
 import { exhaustive } from "../assert-never";
-import { isKeyedField } from "../keys";
+import { isKeyedField, isKeyedNode } from "../keys";
 import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
 import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
@@ -48,6 +49,83 @@ export interface EvaluateLinkageOptions {
    * variables and the host context.
    */
   evaluationContext?: EvaluationContext;
+  /**
+   * Server-resolved {@link FieldPermission} clamp, keyed by the field's
+   * data-binding `key`. Applied to keyed nodes after the linkage fold as the
+   * OUTER bound — linkage may narrow (hide / disable) but never widen past the
+   * permission. An absent map or absent key means no clamp. Callers evaluating
+   * a subform-template scope must NOT pass it: top-level permissions address
+   * root-scope keys only, never a template field.
+   */
+  fieldPermissions?: Record<string, FieldPermission>;
+}
+
+/**
+ * Resolve one key's clamp from a permission map. Own-property guarded so a
+ * field keyed like an Object prototype member (e.g. `"constructor"`) never
+ * reads a prototype slot off a JSON-parsed map.
+ */
+export function getFieldPermission(
+  permissions: Record<string, FieldPermission> | undefined,
+  key: string
+): FieldPermission | undefined {
+  return permissions !== undefined && Object.hasOwn(permissions, key) ? permissions[key] : undefined;
+}
+
+/**
+ * Whether a permission grants write access. `undefined` (no clamp entry) is
+ * writable — the renderer stays fully permissive unless the server says
+ * otherwise; hosts wanting default-deny materialize the full map server-side.
+ */
+export function isWritableFieldPermission(permission: FieldPermission | undefined): boolean {
+  return permission === undefined || permission === "editable" || permission === "required";
+}
+
+/**
+ * Fold a keyed node's server permission onto its linkage-derived state. The
+ * permission is the OUTER bound — linkage may only narrow, never widen:
+ *
+ * - `hidden` = permission `"hidden"` OR the linkage outcome.
+ * - `disabled` = non-writable OR the linkage outcome (a `"visible"` field
+ * renders read-only through the existing disabled channel).
+ * - `required` = permission `"required"` (winning over a linkage `optional`),
+ * else the linkage outcome — but never on a non-writable field.
+ * - a non-writable field's pending `assign` is suppressed so no phantom edit
+ * reaches a field the server would reject.
+ *
+ * `"editable"` (and an absent entry) changes nothing and preserves the
+ * un-clamped state reference, so unclamped fields keep their identity for the
+ * downstream reference stabilization.
+ */
+function clampToFieldPermission(
+  node: Block,
+  state: RuntimeFieldState,
+  permissions: Record<string, FieldPermission> | undefined
+): RuntimeFieldState {
+  if (permissions === undefined || !isKeyedNode(node)) {
+    return state;
+  }
+
+  const permission = getFieldPermission(permissions, node.key);
+
+  if (permission === undefined || permission === "editable") {
+    return state;
+  }
+
+  const writable = isWritableFieldPermission(permission);
+  const clamped: RuntimeFieldState = {
+    ...state,
+    hidden: permission === "hidden" || state.hidden,
+    disabled: !writable || state.disabled,
+    required: permission === "required" || (state.required && writable)
+  };
+
+  if (!writable && clamped.assigned) {
+    clamped.assigned = false;
+    clamped.assignedValue = undefined;
+  }
+
+  return clamped;
 }
 
 /**
@@ -60,13 +138,20 @@ export interface EvaluateLinkageOptions {
  * actions are applied (effect actions belong to the side-effect lane and are
  * skipped). Later rules overwrite earlier ones — order is the user's
  * tie-breaker.
+ *
+ * When `options.fieldPermissions` is supplied, the server clamp is composed
+ * onto the fold's outcome last (see {@link EvaluateLinkageOptions.fieldPermissions}).
  */
 export function evaluateLinkage(
   node: Block,
   values: Record<string, unknown>,
   options: EvaluateLinkageOptions = {}
 ): RuntimeFieldState {
-  return evaluateLinkageResolved(node, values, resolveLinkageEvaluators(options.evaluators), options.evaluationContext);
+  return clampToFieldPermission(
+    node,
+    evaluateLinkageResolved(node, values, resolveLinkageEvaluators(options.evaluators), options.evaluationContext),
+    options.fieldPermissions
+  );
 }
 
 /**
@@ -157,7 +242,14 @@ export function evaluateRuntimeStates(
       return;
     }
 
-    states[node.id] = evaluateLinkageResolved(node, values, evaluators, options.evaluationContext);
+    // The server permission clamp composes onto the fold's outcome here —
+    // after linkage evaluation, before the caller's reference stabilization —
+    // so field components consume it through the ordinary state channels.
+    states[node.id] = clampToFieldPermission(
+      node,
+      evaluateLinkageResolved(node, values, evaluators, options.evaluationContext),
+      options.fieldPermissions
+    );
   });
 
   return states;

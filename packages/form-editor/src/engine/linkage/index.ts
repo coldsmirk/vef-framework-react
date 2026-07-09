@@ -23,6 +23,8 @@ export {
   emptyRuntimeState,
   evaluateLinkage,
   evaluateRuntimeStates,
+  getFieldPermission,
+  isWritableFieldPermission,
   resolveActionValue,
   type EvaluateLinkageOptions,
   type RuntimeFieldState

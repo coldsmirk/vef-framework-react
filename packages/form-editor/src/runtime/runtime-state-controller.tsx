@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EvaluationContext, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EvaluationContext, FieldPermission, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { EffectSinks } from "./effects";
 import type { RuntimeForm, RuntimeFormValues, RuntimeStateMap } from "./types";
 
@@ -20,6 +20,13 @@ interface LinkageScopeProps {
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * Server-resolved permission clamp for THIS scope's keys. Only the root
+   * scope carries it — top-level permissions address root-scope keys, so the
+   * per-row controllers pass `undefined` (the subform node itself holds the
+   * clamp for its whole subtree).
+   */
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   prefix: string;
   schema: RuntimeSchema;
@@ -39,6 +46,7 @@ function LinkageScope({
   children,
   evaluators,
   evaluationContext,
+  fieldPermissions,
   form,
   prefix,
   schema,
@@ -57,7 +65,11 @@ function LinkageScope({
   // self-consistent. KEEP the render path side-effect-free — the only write
   // (`form.setFieldValue`) lives in the effect below; never add logging,
   // counters, or external writes here, or that safety breaks.
-  const next = evaluateRuntimeStates(schema, values, { evaluators, evaluationContext });
+  const next = evaluateRuntimeStates(schema, values, {
+    evaluators,
+    evaluationContext,
+    fieldPermissions
+  });
   const stateMap = stabilizeStateMap(prevRef.current, next);
   prevRef.current = stateMap;
 
@@ -112,6 +124,7 @@ export function RuntimeStateController({
   children,
   evaluators,
   evaluationContext,
+  fieldPermissions,
   form,
   schema,
   sinks
@@ -119,6 +132,7 @@ export function RuntimeStateController({
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   schema: RuntimeSchema;
   sinks: EffectSinks;
@@ -129,6 +143,7 @@ export function RuntimeStateController({
     <LinkageScope
       evaluationContext={evaluationContext}
       evaluators={evaluators}
+      fieldPermissions={fieldPermissions}
       form={form}
       prefix=""
       schema={schema}
@@ -174,6 +189,9 @@ export function SubformRowController({
     <LinkageScope
       evaluationContext={evaluationContext}
       evaluators={evaluators}
+      // Top-level permissions clamp the subform node itself, never a template
+      // field individually — a row scope always evaluates unclamped.
+      fieldPermissions={undefined}
       form={form}
       prefix={prefix}
       schema={templateSchema}

@@ -288,6 +288,23 @@ export interface EffectDispatchContext {
 }
 
 /**
+ * Server-resolved per-field interactivity clamp. Lockstep contract: mirrors the
+ * Go backend's `approval.Permission` and approval-flow-editor's
+ * `FieldPermission` literal-for-literal.
+ *
+ * The clamp is the OUTER bound on a keyed node's runtime state — linkage may
+ * only narrow (hide / disable) within it, never widen past it:
+ *
+ * - `"hidden"` — never mounted, value never submitted.
+ * - `"visible"` — mounted read-only (via the disabled channel), value never
+ * submitted, exempt from validation, never required.
+ * - `"editable"` — no clamp; linkage governs alone.
+ * - `"required"` — editable and always required, overruling a linkage
+ * `optional` outcome.
+ */
+export type FieldPermission = "visible" | "editable" | "hidden" | "required";
+
+/**
  * Extra scope surfaced to expressions and scripts alongside the form values.
  * The default evaluator exposes these as `$vars` / `$user` / `$node` (plus
  * `$form` for the values and `$now` for the current time); all are optional, so
