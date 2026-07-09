@@ -7,7 +7,7 @@ import { Button, globalCssVars } from "@vef-framework-react/components";
 import { useDraggable } from "@vef-framework-react/core";
 import { createContext, use } from "react";
 
-import { isLeafField } from "../../engine/schema/walk";
+import { isContainerNode, isLeafField } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { FIELD_DRAG_TYPE } from "../dnd";
@@ -282,7 +282,13 @@ export function CanvasField({
   } = useDraggable({
     id: block.id,
     type: FIELD_DRAG_TYPE,
-    data: { kind: "block", nodeId: block.id }
+    // `isContainer` lets the drag-overlay swap a container's full-subtree lift
+    // for a compact chip without re-deriving the node's kind mid-drag.
+    data: {
+      kind: "block",
+      nodeId: block.id,
+      isContainer: isContainerNode(block)
+    }
   });
 
   // This block is part of the drag ghost when it is itself dragged or any
@@ -310,6 +316,7 @@ export function CanvasField({
       ref={ref}
       data-canvas-field
       css={[wrapperCss, isSelected && selectedCss]}
+      data-node-id={block.id}
       data-selected={isSelected ? "true" : undefined}
       onClick={select}
     >

@@ -9,7 +9,7 @@ import type { DropZoneAccept, DropZoneDescriptor, ZoneOrientation } from "./drop
 import { css } from "@emotion/react";
 import { Flex, globalCssVars, Stack } from "@vef-framework-react/components";
 import { CollisionPriority, useDroppable } from "@vef-framework-react/core";
-import { Activity, createContext, lazy, memo, Suspense, use, useMemo, useState } from "react";
+import { Activity, createContext, lazy, memo, Suspense, use, useMemo, useRef, useState } from "react";
 
 import { MobileScope } from "../../components/mobile/scope";
 import { assertNever } from "../../engine/assert-never";
@@ -34,6 +34,7 @@ import { MobileSeedState } from "./mobile-seed-state";
 import { PhoneFrame, phoneViewportCss } from "./phone-frame";
 import { isTableColumnField, makeColumnAccept } from "./subform-column-eligibility";
 import { SampleCell } from "./subform-table-cell";
+import { useScrollSelectionIntoView } from "./use-scroll-selection-into-view";
 
 // The JSON workbench drags the whole CodeMirror stack (~1MB unminified) in
 // with it; the split keeps that out of the editor's first paint — the chunk
@@ -261,6 +262,13 @@ export function Canvas(): ReactElement {
   const storeApi = useFormEditorStoreApi();
   const previewRuntime = usePreviewRuntime();
 
+  // The scroll container for the design surface — the selection-scroll hook
+  // resolves `[data-node-id]` within it and lets `scrollIntoView` walk up to
+  // this scroller (or the nested phone viewport in mobile mode).
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  useScrollSelectionIntoView(canvasRef);
+
   // Clicking the blank surface only clears the current selection (closing the
   // control-property panel with it). Form-level config lives in the bottom
   // drawer now, so a blank click no longer toggles any panel.
@@ -285,7 +293,7 @@ export function Canvas(): ReactElement {
   );
 
   return (
-    <div css={canvasCss}>
+    <div ref={canvasRef} css={canvasCss}>
       {inPhoneFrame ? <PhoneFrame>{surface}</PhoneFrame> : surface}
     </div>
   );

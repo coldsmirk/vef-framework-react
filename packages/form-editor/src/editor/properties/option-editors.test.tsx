@@ -1,3 +1,4 @@
+import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ReactElement } from "react";
 
 import type { FieldOption } from "../../types";
@@ -6,7 +7,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { OptionListEditor } from "./option-editors";
+import { OptionListEditor, reorderOptionRows } from "./option-editors";
 
 interface HarnessProps {
   initial: FieldOption[];
@@ -37,6 +38,21 @@ function threeOptions(): FieldOption[] {
     { label: "B", value: "b" },
     { label: "C", value: "c" }
   ];
+}
+
+/**
+ * A minimal sortable drag-end event, populated with only the fields
+ * `moveDragItem` reads: the source row's id and its projected `index`, a target,
+ * and the cancel flag. Mirrors the fabricated-event approach in `dnd.test.tsx`.
+ */
+function reorderEvent(sourceId: string, toIndex: number, canceled = false): DragEndEvent {
+  return {
+    operation: {
+      canceled,
+      source: { id: sourceId, index: toIndex },
+      target: { id: sourceId }
+    }
+  } as unknown as DragEndEvent;
 }
 
 describe("OptionListEditor", () => {
@@ -76,43 +92,45 @@ describe("OptionListEditor", () => {
   });
 
   describe("reordering", () => {
-    it("moves a row down", async () => {
-      const user = userEvent.setup();
-      const onCommit = vi.fn();
+    it("moves a row down", () => {
+      const result = reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1));
 
-      render(<Harness initial={threeOptions()} onCommit={onCommit} />);
-
-      const downButtons = screen.getAllByRole("button", { name: "下移选项" });
-      await user.click(downButtons[0] as HTMLElement);
-
-      expect(onCommit).toHaveBeenLastCalledWith([
-        { label: "B", value: "b" },
-        { label: "A", value: "a" },
-        { label: "C", value: "c" }
-      ]);
+      expect(result).toEqual({
+        options: [
+          { label: "B", value: "b" },
+          { label: "A", value: "a" },
+          { label: "C", value: "c" }
+        ],
+        rowIds: ["r1", "r0", "r2"]
+      });
     });
 
-    it("moves a row up", async () => {
-      const user = userEvent.setup();
-      const onCommit = vi.fn();
+    it("moves a row up", () => {
+      const result = reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r2", 1));
 
-      render(<Harness initial={threeOptions()} onCommit={onCommit} />);
-
-      const upButtons = screen.getAllByRole("button", { name: "上移选项" });
-      await user.click(upButtons[2] as HTMLElement);
-
-      expect(onCommit).toHaveBeenLastCalledWith([
-        { label: "A", value: "a" },
-        { label: "C", value: "c" },
-        { label: "B", value: "b" }
-      ]);
+      expect(result).toEqual({
+        options: [
+          { label: "A", value: "a" },
+          { label: "C", value: "c" },
+          { label: "B", value: "b" }
+        ],
+        rowIds: ["r0", "r2", "r1"]
+      });
     });
 
-    it("disables the edge rows' out-of-range moves", () => {
+    it("returns null when the drag is canceled", () => {
+      expect(reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1, true))).toBeNull();
+    });
+
+    it("returns null when a row is dropped in its own slot", () => {
+      expect(reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 0))).toBeNull();
+    });
+
+    it("renders a drag handle per row and no step buttons", () => {
       render(<Harness initial={threeOptions()} />);
 
-      expect(screen.getAllByRole("button", { name: "上移选项" })[0]).toBeDisabled();
-      expect(screen.getAllByRole("button", { name: "下移选项" })[2]).toBeDisabled();
+      expect(screen.getAllByRole("button", { name: "拖动排序" })).toHaveLength(3);
+      expect(screen.queryByRole("button", { name: "上移选项" })).not.toBeInTheDocument();
     });
   });
 

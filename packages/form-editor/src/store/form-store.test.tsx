@@ -377,6 +377,26 @@ describe("form store", () => {
       expect(api.getState().schema.presentations.pc.children.map(block => block.id)).toEqual([first, second]);
     });
 
+    it("selects the moved node", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const [first, second] = api.getState().schema.presentations.pc.children.map(block => block.id);
+
+      // The second insert left the selection on `second`; moving `first` must
+      // hand the selection to the node that was just placed.
+      act(() => api.getState().moveNode({
+        nodeId: first ?? "",
+        target: {
+          kind: "beside",
+          anchorId: second ?? "",
+          side: "after"
+        }
+      }));
+
+      expect(api.getState().selectedId).toBe(first);
+    });
+
     it("pushes no history entry for a self-drop", () => {
       const api = setup();
       act(() => api.getState().insertField({ definition: textfieldDefinition }));

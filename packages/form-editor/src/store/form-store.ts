@@ -551,8 +551,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           }
         }
 
+        // Select the moved node, mirroring insertField / duplicateNode: a drop
+        // is a deliberate placement, so the block the designer just positioned
+        // stays selected (and the canvas scrolls it into view). The node still
+        // resolves — it was moved, not removed — so the id is always live here.
         checkpoint();
-        set({ schema: nextSchema });
+        set({ schema: nextSchema, selectedId: nodeId });
       },
 
       removeNode: nodeId => {

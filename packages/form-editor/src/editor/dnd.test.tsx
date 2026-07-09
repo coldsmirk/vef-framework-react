@@ -13,7 +13,7 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { walkFields } from "../engine/schema/walk";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../store/form-store";
-import { dropZoneId, fallbackDropZoneId, useEditorDragEnd } from "./dnd";
+import { dropZoneId, fallbackDropZoneId, isContainerDragData, useEditorDragEnd } from "./dnd";
 
 const registry = createDefaultRegistry();
 
@@ -76,7 +76,11 @@ describe("useEditorDragEnd", () => {
     const [first = "", second = ""] = fieldIds(api);
 
     act(() => dragEnd(dragEvent(
-      { kind: "block", nodeId: first },
+      {
+        kind: "block",
+        nodeId: first,
+        isContainer: false
+      },
       {
         zone: "beside",
         anchorId: second,
@@ -136,7 +140,11 @@ describe("useEditorDragEnd", () => {
 
     // A drop that misses every precise zone lands on the body fallback, whose
     // data is the same append target — the handler reads only `target.data`.
-    act(() => dragEnd(dragEvent({ kind: "block", nodeId: first }, { zone: "root" })));
+    act(() => dragEnd(dragEvent({
+      kind: "block",
+      nodeId: first,
+      isContainer: false
+    }, { zone: "root" })));
 
     expect(api.getState().schema.presentations.pc.children.map(block => block.id)).toEqual([second, first]);
   });
@@ -193,6 +201,37 @@ describe("useEditorDragEnd", () => {
 
       expect(fieldIds(api)).toHaveLength(0);
     });
+  });
+});
+
+describe("isContainerDragData", () => {
+  it("accepts a container block drag", () => {
+    expect(isContainerDragData({
+      kind: "block",
+      nodeId: "n1",
+      isContainer: true
+    })).toBe(true);
+  });
+
+  it("rejects a leaf block drag", () => {
+    expect(isContainerDragData({
+      kind: "block",
+      nodeId: "n1",
+      isContainer: false
+    })).toBe(false);
+  });
+
+  it("rejects a palette drag", () => {
+    expect(isContainerDragData({ kind: "palette", type: "textfield" })).toBe(false);
+  });
+
+  it("rejects a block drag missing the isContainer flag", () => {
+    expect(isContainerDragData({ kind: "block", nodeId: "n1" })).toBe(false);
+  });
+
+  it("rejects non-object payloads", () => {
+    expect(isContainerDragData(null)).toBe(false);
+    expect(isContainerDragData("block")).toBe(false);
   });
 });
 

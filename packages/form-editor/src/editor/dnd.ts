@@ -9,7 +9,7 @@ import { useFieldRegistry } from "../store/engine-provider";
 import { useFormEditorStoreApi } from "../store/form-store";
 
 /**
- * Shared drag-and-drop contract for the editor canvas, built on dnd-kit v0.4.
+ * Shared drag-and-drop contract for the editor canvas, built on dnd-kit v0.5.
  *
  * A drag originates from either a palette item (creates a new field) or an
  * existing canvas block (moves it). It lands on one of three drop-zone kinds.
@@ -54,10 +54,21 @@ export const palettePointerSensors = [editorPointerSensor];
 
 /**
  * Data attached to a draggable.
+ *
+ * A `block` drag carries `isContainer` so the drag-overlay can decide — without
+ * a store lookup — whether to swap the default full-subtree lift for a compact
+ * container chip (see {@link isContainerDragData}); leaves keep the in-place
+ * lift.
  */
 export type EditorDragData
   = | { kind: "palette"; type: string }
-    | { kind: "block"; nodeId: string };
+    | { kind: "block"; nodeId: string; isContainer: boolean };
+
+/**
+ * The block variant of {@link EditorDragData} — a drag that moves an existing
+ * canvas block (as opposed to creating one from a palette item).
+ */
+export type BlockDragData = Extract<EditorDragData, { kind: "block" }>;
 
 /**
  * Data attached to a drop zone.
@@ -171,17 +182,27 @@ export function isEditorDragData(value: unknown): value is EditorDragData {
     return false;
   }
 
-  const data = value as { kind?: unknown; type?: unknown; nodeId?: unknown };
+  const data = value as { kind?: unknown; type?: unknown; nodeId?: unknown; isContainer?: unknown };
 
   if (data.kind === "palette") {
     return typeof data.type === "string";
   }
 
   if (data.kind === "block") {
-    return typeof data.nodeId === "string";
+    return typeof data.nodeId === "string" && typeof data.isContainer === "boolean";
   }
 
   return false;
+}
+
+/**
+ * True when the drag moves an existing CONTAINER block — the signal the
+ * drag-overlay uses to render a compact chip instead of lifting the whole
+ * nested subtree. Palette drags and leaf-block drags return false (they keep
+ * dnd-kit's default in-place lift).
+ */
+export function isContainerDragData(value: unknown): value is BlockDragData {
+  return isEditorDragData(value) && value.kind === "block" && value.isContainer;
 }
 
 /**

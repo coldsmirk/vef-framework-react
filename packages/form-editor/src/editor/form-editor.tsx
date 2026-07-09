@@ -7,7 +7,7 @@ import type { ToolbarBrand } from "./toolbar/toolbar";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
-import { DragDropProvider, useDragOperation } from "@vef-framework-react/core";
+import { DragDropProvider, DragOverlay, useDragOperation } from "@vef-framework-react/core";
 import { isNullish } from "@vef-framework-react/shared";
 import { useEffect, useImperativeHandle, useMemo, useState } from "react";
 
@@ -16,8 +16,9 @@ import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile"
 import { DeviceProvider, RegistryProvider } from "../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../store/form-store";
 import { Canvas } from "./canvas/canvas";
+import { ContainerDragChip } from "./canvas/container-drag-chip";
 import { ContextSourcesProvider } from "./context-sources";
-import { editorSensors, useEditorDragEnd } from "./dnd";
+import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
 import { EditorLayoutProvider, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
 import { FormConfigDrawer } from "./form-config/form-config-drawer";
@@ -277,6 +278,24 @@ function DragPlacementFlag({ shellRef }: { shellRef: RefObject<HTMLDivElement | 
   return null;
 }
 
+/**
+ * A single global drag ghost, enabled only for CONTAINER moves. dnd-kit routes
+ * the active source's feedback through this one overlay element whenever it is
+ * enabled; the `disabled` predicate keeps it off for palette drags and leaf
+ * moves, so those keep dnd-kit's default in-place lift. A container move instead
+ * renders a compact {@link ContainerDragChip} here — lifting the whole nested
+ * subtree would occlude the very drop zones the designer is aiming at.
+ */
+function ContainerDragOverlay(): ReactElement {
+  return (
+    <DragOverlay disabled={source => !isContainerDragData(source?.data)}>
+      {source => isContainerDragData(source.data)
+        ? <ContainerDragChip nodeId={source.data.nodeId} />
+        : null}
+    </DragOverlay>
+  );
+}
+
 export interface FormEditorShellProps {
   children: ReactNode;
 }
@@ -302,6 +321,7 @@ export function FormEditorShell({ children }: FormEditorShellProps): ReactElemen
       <DeviceProvider device={device}>
         <DragDropProvider sensors={editorSensors} onDragEnd={handleDragEnd}>
           <DragPlacementFlag shellRef={ref} />
+          <ContainerDragOverlay />
 
           <div ref={ref} css={rootCss} data-layout={mode} tabIndex={-1}>
             {children}
