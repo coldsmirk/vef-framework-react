@@ -574,6 +574,49 @@ describe("form store", () => {
     });
   });
 
+  describe("setStackSlot", () => {
+    it("writes stack sizing and records a checkpoint", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const nodeId = api.getState().selectedId as string;
+      const before = api.getState();
+
+      act(() => api.getState().setStackSlot({ nodeId, slot: { width: { value: 500, unit: "px" }, align: "center" } }));
+
+      expect(api.getState().schema.presentations.pc?.children[0]?.stack).toEqual({
+        width: { value: 500, unit: "px" },
+        align: "center"
+      });
+      expect(api.getState().past).not.toBe(before.past);
+    });
+
+    it("pushes no history entry when the normalized slot is already in place", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const nodeId = api.getState().selectedId as string;
+      act(() => api.getState().setStackSlot({ nodeId, slot: { width: { value: 500, unit: "px" } } }));
+      const before = api.getState();
+
+      // The same slot value normalizes to the one already in place — the op
+      // reports identity, so no entry lands.
+      act(() => api.getState().setStackSlot({ nodeId, slot: { width: { value: 500, unit: "px" } } }));
+
+      expect(api.getState().schema).toBe(before.schema);
+      expect(api.getState().past).toBe(before.past);
+    });
+
+    it("pushes no history entry for a stale node id", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const before = api.getState();
+
+      act(() => api.getState().setStackSlot({ nodeId: "ghost", slot: { width: { value: 500, unit: "px" } } }));
+
+      expect(api.getState().schema).toBe(before.schema);
+      expect(api.getState().past).toBe(before.past);
+    });
+  });
+
   describe("editField / updateBlock", () => {
     it("pushes no history entry when the updater returns its input", () => {
       const api = setup();

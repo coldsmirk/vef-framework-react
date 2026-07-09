@@ -1,11 +1,13 @@
 import type {
   Block,
+  CssLength,
   FieldLinkage,
   FieldLinkageAction,
   FlexSlot,
   LinkageCondition,
   LinkageTrigger,
-  PresentationLayer
+  PresentationLayer,
+  StackSlot
 } from "../../types";
 import type { IdPrefix } from "../ids";
 import type { ScopePath } from "./walk";
@@ -186,6 +188,22 @@ export function setColumnWidth(schema: PresentationLayer, blockId: string, width
   return updateNode(schema, blockId, block => block.columnWidth === next ? block : patchBlock(block, { columnWidth: next }));
 }
 
+/**
+ * Set (or clear) a block's stack sizing + placement — honored when the block is
+ * a direct child of a stack body (root / section / tab / stack subform).
+ *
+ * The slot is normalized at the write so the schema only ever persists what
+ * `validateSchema` accepts: each length keeps a finite, non-negative `value` and
+ * a known `unit`; invalid lengths and an unknown `align` are dropped, and a slot
+ * left with no fields collapses to `undefined`. Writing a slot equal to the one
+ * already in place returns the input layer unchanged.
+ */
+export function setStackSlot(schema: PresentationLayer, blockId: string, slot: StackSlot | undefined): PresentationLayer {
+  const next = clampStack(slot);
+
+  return updateNode(schema, blockId, block => sameStack(block.stack, next) ? block : patchBlock(block, { stack: next }));
+}
+
 function clampSpan(span: number | undefined): number | undefined {
   if (span === undefined || !Number.isFinite(span)) {
     return undefined;
@@ -229,6 +247,67 @@ function clampFlex(flex: FlexSlot | undefined): FlexSlot | undefined {
 
 function sameFlex(a: FlexSlot | undefined, b: FlexSlot | undefined): boolean {
   return a === undefined || b === undefined ? a === b : isShallowEqual(a, b);
+}
+
+function clampLength(length: CssLength | undefined, minValue: number): CssLength | undefined {
+  if (length === undefined || !Number.isFinite(length.value) || (length.unit !== "px" && length.unit !== "%")) {
+    return undefined;
+  }
+
+  return { value: Math.max(minValue, length.value), unit: length.unit };
+}
+
+function clampStack(slot: StackSlot | undefined): StackSlot | undefined {
+  if (slot === undefined) {
+    return undefined;
+  }
+
+  const next: StackSlot = {};
+  // `width` / `maxWidth` floor at 1 — a zero box collapses the block with no
+  // hidden report, matching the columnWidth / span sibling. `minWidth` keeps 0
+  // (the CSS default: "no minimum").
+  const width = clampLength(slot.width, 1);
+  const minWidth = clampLength(slot.minWidth, 0);
+  const maxWidth = clampLength(slot.maxWidth, 1);
+
+  if (width !== undefined) {
+    next.width = width;
+  }
+
+  if (minWidth !== undefined) {
+    next.minWidth = minWidth;
+  }
+
+  if (maxWidth !== undefined) {
+    next.maxWidth = maxWidth;
+  }
+
+  if (slot.align === "start" || slot.align === "center" || slot.align === "end") {
+    next.align = slot.align;
+  }
+
+  // Every field dropped collapses back to "no stack config", matching
+  // clampFlex / clampSpan rather than persisting a `stack: {}`.
+  return Object.keys(next).length === 0 ? undefined : next;
+}
+
+function sameLength(a: CssLength | undefined, b: CssLength | undefined): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b;
+  }
+
+  return a.value === b.value && a.unit === b.unit;
+}
+
+function sameStack(a: StackSlot | undefined, b: StackSlot | undefined): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b;
+  }
+
+  return sameLength(a.width, b.width)
+    && sameLength(a.minWidth, b.minWidth)
+    && sameLength(a.maxWidth, b.maxWidth)
+    && a.align === b.align;
 }
 
 function placeBlock(schema: PresentationLayer, block: Block, target: DropTarget): PresentationLayer {

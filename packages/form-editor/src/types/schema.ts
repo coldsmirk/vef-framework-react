@@ -114,6 +114,37 @@ export interface FlexSlot {
 }
 
 /**
+ * A length as an explicit value + unit — the visual editor authors sizing this
+ * way rather than raw CSS strings, so a persisted length is always a valid,
+ * re-editable dimension (no `calc()` / typo to parse back). `px` is absolute;
+ * `%` is relative to the block's stack width.
+ */
+export interface CssLength {
+  value: number;
+  unit: "px" | "%";
+}
+
+/**
+ * Per-block sizing + horizontal placement, honored when the block is a direct
+ * child of a STACK body — the document root, a {@link SectionNode}, a
+ * {@link TabsNode} pane, or a {@link StackSubform}. That is the one parent
+ * context that otherwise leaves a block full-width; grid cells size by `span`
+ * and flex slots by {@link FlexSlot}, so this is ignored there (a block carries
+ * at most one meaningful layout prop, selected by its parent).
+ *
+ * `width` / `minWidth` / `maxWidth` map to the CSS box constraints of the same
+ * name; combine them for responsive sizing (e.g. `width` 100% capped by a
+ * `maxWidth`). `align` places the block on the cross axis once it is narrower
+ * than the stack (a no-op at full width).
+ */
+export interface StackSlot {
+  width?: CssLength;
+  minWidth?: CssLength;
+  maxWidth?: CssLength;
+  align?: "start" | "center" | "end";
+}
+
+/**
  * A "block" is any node in the layout tree — a leaf field or a container.
  * Blocks stack vertically in their parent's order.
  *
@@ -125,6 +156,9 @@ export interface FlexSlot {
  * - `columnWidth` is a fixed pixel width honored only when the block is a column
  * of a {@link TableSubform}; omitted means the column shares the table's
  * remaining width with the other auto columns. Ignored outside a table subform.
+ * - `stack` sizes and places the block when it is a direct child of a stack body
+ * (root / section / tab / stack subform); omitted means full width. Ignored in a
+ * grid / flex / table subform, where `span` / `flex` / `columnWidth` apply.
  * - `linkage` is honored on any block: `show` / `hide` / `enable` / `disable`
  * apply to leaves and containers alike (a container's `disable` propagates to
  * its descendants at runtime). The value-bearing actions (`require` /
@@ -135,6 +169,7 @@ interface BlockBase extends NodeBase {
   span?: number;
   flex?: FlexSlot;
   columnWidth?: number;
+  stack?: StackSlot;
   linkage?: FieldLinkage;
 }
 

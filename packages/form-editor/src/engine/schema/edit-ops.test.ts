@@ -11,7 +11,7 @@ import type {
   TextfieldField
 } from "../../types";
 
-import { cloneBlock, insertBlock, moveBlock, setColumnWidth, setFlex, setSpan, targetScope } from "./edit-ops";
+import { cloneBlock, insertBlock, moveBlock, setColumnWidth, setFlex, setSpan, setStackSlot, targetScope } from "./edit-ops";
 import { collectNodeIds, findField, findNode } from "./walk";
 
 function tf(id: string, key: string): TextfieldField {
@@ -742,6 +742,79 @@ describe("edit-ops", () => {
       const schema = schemaOf(tf("f1", "a"));
 
       expect(setColumnWidth(schema, "missing", 200)).toBe(schema);
+    });
+  });
+
+  describe("setStackSlot", () => {
+    it("sets width, min/max, and alignment on a block", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      const next = setStackSlot(schema, "f1", {
+        width: { value: 500, unit: "px" },
+        minWidth: { value: 300, unit: "px" },
+        maxWidth: { value: 60, unit: "%" },
+        align: "center"
+      });
+
+      expect(findField(next, "f1")?.stack).toEqual({
+        width: { value: 500, unit: "px" },
+        minWidth: { value: 300, unit: "px" },
+        maxWidth: { value: 60, unit: "%" },
+        align: "center"
+      });
+    });
+
+    it("floors width to 1 but keeps minWidth at 0", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      // width / maxWidth are degenerate at 0, so they floor at 1 (like columnWidth);
+      // minWidth of 0 is the CSS "no minimum" default and is kept.
+      const next = setStackSlot(schema, "f1", {
+        width: { value: -10, unit: "px" },
+        minWidth: { value: -5, unit: "px" },
+        maxWidth: { value: 0, unit: "px" }
+      });
+
+      expect(findField(next, "f1")?.stack).toEqual({
+        width: { value: 1, unit: "px" },
+        minWidth: { value: 0, unit: "px" },
+        maxWidth: { value: 1, unit: "px" }
+      });
+    });
+
+    it("drops a length with a non-finite value", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      const next = setStackSlot(schema, "f1", {
+        width: { value: NaN, unit: "px" },
+        align: "end"
+      });
+
+      expect(findField(next, "f1")?.stack).toEqual({ align: "end" });
+    });
+
+    it("collapses an all-empty slot to undefined", () => {
+      const schema = setStackSlot(schemaOf(tf("f1", "a")), "f1", { align: "center" });
+
+      expect(findField(setStackSlot(schema, "f1", { width: { value: NaN, unit: "px" } }), "f1")?.stack).toBeUndefined();
+    });
+
+    it("clears the slot when passed undefined", () => {
+      const schema = setStackSlot(schemaOf(tf("f1", "a")), "f1", { width: { value: 500, unit: "px" } });
+
+      expect(findField(setStackSlot(schema, "f1", undefined), "f1")?.stack).toBeUndefined();
+    });
+
+    it("returns the input layer reference when writing the slot already in place", () => {
+      const schema = setStackSlot(schemaOf(tf("f1", "a")), "f1", { width: { value: 500, unit: "px" }, align: "center" });
+
+      expect(setStackSlot(schema, "f1", { width: { value: 500, unit: "px" }, align: "center" })).toBe(schema);
+    });
+
+    it("returns the input layer reference for a missing block id", () => {
+      const schema = schemaOf(tf("f1", "a"));
+
+      expect(setStackSlot(schema, "missing", { width: { value: 500, unit: "px" } })).toBe(schema);
     });
   });
 

@@ -22,7 +22,7 @@ import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "../../render/fl
 import { FormFieldRenderer } from "../../render/form-field";
 import { FormRenderer } from "../../render/form-renderer";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "../../render/grid-style";
-import { DEFAULT_STACK_GAP, resolveStackGap } from "../../render/stack-style";
+import { DEFAULT_STACK_GAP, resolveStackGap, stackSlotStyle } from "../../render/stack-style";
 import { useContainerChrome, useFieldRegistry } from "../../store/engine-provider";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { dropZoneId, fallbackDropZoneId, FIELD_DRAG_TYPE } from "../dnd";
@@ -533,8 +533,19 @@ const StackSlot = memo(({ block }: StackSlotProps): ReactElement => {
   return (
     <div css={stackSlotCss}>
       {suppressed ? null : <Zone descriptor={stackGapDescriptor(block.id)} />}
-      {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
-      <EditorBlock block={block} />
+
+      {/* Size/place the block per its stack slot when set — wrapping only the
+          block, never the full-width drop Zone above, so drop targets stay the
+          whole row even when the block is narrowed and aligned. */}
+      {block.stack
+        ? (
+            <div style={stackSlotStyle(block.stack)}>
+              {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
+              <EditorBlock block={block} />
+            </div>
+          )
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
+        : <EditorBlock block={block} />}
     </div>
   );
 });

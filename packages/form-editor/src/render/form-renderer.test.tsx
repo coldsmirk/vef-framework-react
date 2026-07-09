@@ -379,6 +379,62 @@ describe("FormRenderer", () => {
     expect(screen.queryByRole("textbox", { name: "gone" })).not.toBeInTheDocument();
   });
 
+  it("applies a stack slot's width and alignment to the block wrapper", () => {
+    renderRuntime(
+      <FormRenderer schema={stack(makeField("name", { stack: { width: { value: 500, unit: "px" }, align: "center" } }))} />
+    );
+
+    const sized = [...document.querySelectorAll("div")].find(el => el.style.width === "500px");
+
+    expect(sized).toBeDefined();
+    expect(sized).toHaveStyle({ marginInline: "auto" });
+    // The field renders inside that sizing wrapper — the wrapper is real chrome,
+    // not a detached box.
+    expect((sized as HTMLElement).querySelector("input")).toBeInTheDocument();
+  });
+
+  it("renders no sized wrapper for a stack block hidden by linkage", () => {
+    renderRuntime(
+      <FormRenderer
+        schema={stack(
+          makeField("gone", { stack: { width: { value: 777, unit: "px" } }, linkage: { defaults: { hidden: true } } }),
+          makeField("shown")
+        )}
+      />
+    );
+
+    // The hidden block emits nothing — not an empty 777px box that would leave a
+    // hole in the stack's gap.
+    expect([...document.querySelectorAll("div")].some(el => el.style.width === "777px")).toBe(false);
+    expect(screen.getByRole("textbox", { name: "shown" })).toBeInTheDocument();
+  });
+
+  it("ignores a stack slot on a block inside a grid parent", () => {
+    const schema: FormSchema = {
+      id: "Form_1",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Grid_1",
+              type: "grid",
+              columns: 2,
+              children: [makeField("cell", { stack: { width: { value: 500, unit: "px" } } })]
+            }
+          ]
+        }
+      }
+    };
+
+    renderRuntime(<FormRenderer schema={schema} />);
+
+    // A grid cell sizes by `span`, so its parent-context sizing wins and the
+    // stack wrapper must not apply — the stale stack is ignored, not double-sized.
+    expect([...document.querySelectorAll("div")].some(el => el.style.width === "500px")).toBe(false);
+    expect(screen.getByRole("textbox", { name: "cell" })).toBeInTheDocument();
+  });
+
   it("updates assigned values without making the form uncontrolled", async () => {
     const user = userEvent.setup();
     const schema = stack(

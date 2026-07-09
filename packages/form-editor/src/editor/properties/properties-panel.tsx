@@ -113,8 +113,8 @@ const EMPTY_TAB_HINTS: Partial<Record<PropertyTabId, TabEmptyHint>> = {
  *
  * Layout when a field is selected:
  * - header: type icon + field label + field id + deselect button
- * - tabs: 属性 / 校验 / 联动 with count badges, plus a contextual 布局 tab
- * appended only when the field sits inside a flex / grid container or a table subform
+ * - tabs: 属性 / 校验 / 联动 with count badges, plus a 布局 tab shown for any
+ * selected field (its sizing control adapts to the field's parent context)
  * - body: scrollable, renders groups assigned to the active tab
  *
  * Empty / error states:
@@ -155,15 +155,11 @@ export function PropertiesPanel(): ReactElement {
     return buildPropertiesDescriptor(definition);
   }, [definition]);
 
-  // Layout sizing (flex grow / basis, grid span, table-subform column width)
-  // only exists for a field that lives inside a flex / grid container or a table
-  // subform, so the "布局" tab is contextual: shown only then, and dropped
-  // otherwise rather than left as a perpetually-empty tab. `located.parent` is
-  // the field's owning container from the same walk above.
-  const layoutParent = field ? located?.parent : undefined;
-  const showLayout = layoutParent?.type === "flex"
-    || layoutParent?.type === "grid"
-    || (layoutParent?.type === "subform" && layoutParent.variant === "table");
+  // Every selected field has a sizing control on the "布局" tab: a stack slot
+  // (width / min / max / align) at the root or in a section / tab / stack-subform
+  // body, a flex slot or grid span inside those containers, or a table-subform
+  // column width. So the tab is always shown for a field, never a dead tab.
+  const showLayout = field !== undefined;
   const tabs = useMemo(
     () => showLayout ? PROPERTY_TAB_ORDER : PROPERTY_TAB_ORDER.filter(tab => tab !== "layout"),
     [showLayout]
@@ -293,8 +289,9 @@ function TabContent({
 }: TabContentProps): ReactElement | null {
   const registry = useFieldRegistry();
 
-  // The contextual "布局" tab renders its own sizing control (flex grow / basis,
-  // grid span) rather than descriptor-driven property groups.
+  // The "布局" tab renders its own sizing control — stack width / min / max /
+  // align, or a flex slot / grid span / table-subform column width depending on
+  // the field's parent — rather than descriptor-driven property groups.
   if (activeTab === "layout") {
     return <BlockLayoutSection node={field} parent={parent} />;
   }

@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
 
-import type { Block, ContainerNode, FlexSlot } from "../../types";
+import type { Block, ContainerNode, CssLength, FlexSlot, StackSlot } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, InputNumber } from "@vef-framework-react/components";
+import { Button, globalCssVars, Input, InputNumber, Segmented, Select } from "@vef-framework-react/components";
 
 import { gridColumnCount } from "../../render/grid-style";
 import { useFormEditorStoreApi } from "../../store/form-store";
@@ -54,11 +54,12 @@ export interface BlockLayoutSectionProps {
 
 /**
  * Layout sizing for the selected block, shown above its type-specific
- * properties. The control adapts to the block's parent container: under a flex
- * container it edits the per-slot `flex` (grow / basis); under a table subform it
- * edits the column's fixed pixel width; anywhere else (a grid row) it edits the
- * column `span` — an empty span means auto, sharing the row's leftover width with
- * the other auto blocks.
+ * properties. The control adapts to the block's parent context: under a flex
+ * container it edits the per-slot `flex` (grow / shrink / basis); under a grid it
+ * edits the column `span`; under a table subform it edits the column's fixed
+ * pixel width; otherwise (the document root or a section / tab / stack-subform
+ * body) it edits the block's stack sizing — width with optional min / max bounds
+ * and a horizontal alignment, full-width when left empty.
  */
 export function BlockLayoutSection({ node, parent }: BlockLayoutSectionProps): ReactElement | null {
   if (parent?.type === "flex") {
@@ -76,10 +77,11 @@ export function BlockLayoutSection({ node, parent }: BlockLayoutSectionProps): R
     return <TableColumnWidthControl node={node} />;
   }
 
-  // The document body and section / tabs / stack-subform bodies are single-block
-  // vertical stacks — a block always fills the width, so there is nothing to
-  // size here. Side-by-side layout is configured inside an explicit grid / flex.
-  return null;
+  // The document body and section / tabs / stack-subform bodies are vertical
+  // stacks: a block is full-width by default, and this control lets it opt into a
+  // fixed / bounded width and a horizontal placement. Side-by-side layout still
+  // lives in an explicit grid / flex.
+  return <StackSlotControl node={node} />;
 }
 
 function GridSlotControl({ columns, node }: { columns: number; node: Block }): ReactElement {
@@ -223,6 +225,120 @@ function FlexSlotControl({ node }: { node: Block }): ReactElement {
       </div>
 
       <span css={hintCss}>放大比例 &gt; 0 时，该元素按比例分占多余空间；缩小比例 &gt; 0 时，空间不足时按比例收缩（默认 1）；基准宽度为槽位的初始宽度。</span>
+    </section>
+  );
+}
+
+const LENGTH_UNIT_OPTIONS = [
+  { label: "px", value: "px" as const },
+  { label: "%", value: "%" as const }
+];
+
+const ALIGN_OPTIONS = [
+  { label: "靠左", value: "start" as const },
+  { label: "居中", value: "center" as const },
+  { label: "靠右", value: "end" as const }
+];
+
+/**
+ * A single length control: a numeric value plus a px / % unit. Clearing the
+ * number clears the length; the unit toggle is inert until a value is entered
+ * (a length must carry both).
+ */
+function LengthRow({
+  label,
+  min = 0,
+  onChange,
+  value
+}: {
+  label: string;
+  value: CssLength | undefined;
+  min?: number;
+  onChange: (next: CssLength | undefined) => void;
+}): ReactElement {
+  const unit = value?.unit ?? "px";
+
+  return (
+    <div css={rowCss}>
+      <span css={labelCss}>{label}</span>
+
+      <InputNumber
+        min={min}
+        placeholder="自动"
+        style={controlStyle}
+        value={value?.value}
+        onChange={next => onChange(typeof next === "number" ? { value: next, unit } : undefined)}
+      />
+
+      <Segmented<CssLength["unit"]>
+        disabled={value === undefined}
+        options={LENGTH_UNIT_OPTIONS}
+        value={unit}
+        onChange={nextUnit => onChange(value === undefined ? undefined : { value: value.value, unit: nextUnit })}
+      />
+    </div>
+  );
+}
+
+/**
+ * Width sizing + horizontal placement for a block in a stack body — the control
+ * the layout section shows when the block is NOT in a grid / flex / table
+ * subform. Empty leaves the block full-width; a width (optionally bounded by
+ * min / max) plus an alignment lets a field or group sit at a fixed size,
+ * centered or edge-aligned. Mirrors {@link FlexSlotControl}'s merge-and-clean
+ * write so an all-empty slot clears back to `undefined`.
+ */
+function StackSlotControl({ node }: { node: Block }): ReactElement {
+  const storeApi = useFormEditorStoreApi();
+  const { stack } = node;
+
+  const patch = (next: Partial<StackSlot>): void => {
+    const merged: StackSlot = { ...stack, ...next };
+    const cleaned: StackSlot = {};
+
+    if (merged.width !== undefined) {
+      cleaned.width = merged.width;
+    }
+
+    if (merged.minWidth !== undefined) {
+      cleaned.minWidth = merged.minWidth;
+    }
+
+    if (merged.maxWidth !== undefined) {
+      cleaned.maxWidth = merged.maxWidth;
+    }
+
+    if (merged.align !== undefined) {
+      cleaned.align = merged.align;
+    }
+
+    storeApi.getState().setStackSlot({
+      nodeId: node.id,
+      slot: Object.keys(cleaned).length > 0 ? cleaned : undefined
+    });
+  };
+
+  return (
+    <section css={sectionCss}>
+      <span css={titleCss}>布局 · 宽度</span>
+      <LengthRow label="宽度" min={1} value={stack?.width} onChange={width => patch({ width })} />
+      <LengthRow label="最小宽度" value={stack?.minWidth} onChange={minWidth => patch({ minWidth })} />
+      <LengthRow label="最大宽度" min={1} value={stack?.maxWidth} onChange={maxWidth => patch({ maxWidth })} />
+
+      <div css={rowCss}>
+        <span css={labelCss}>水平对齐</span>
+
+        <Select<NonNullable<StackSlot["align"]>>
+          allowClear
+          options={ALIGN_OPTIONS}
+          placeholder="默认（靠左）"
+          style={controlStyle}
+          value={stack?.align}
+          onChange={align => patch({ align: align ?? undefined })}
+        />
+      </div>
+
+      <span css={hintCss}>留空为满宽；设定宽度后可用最小 / 最大宽度做响应式约束，并选择水平对齐。</span>
     </section>
   );
 }

@@ -408,6 +408,87 @@ describe("validateSchema", () => {
       expect(validate(candidate).valid).toBe(true);
     });
 
+    it("accepts a well-formed stack slot", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          stack: {
+            width: { value: 500, unit: "px" },
+            maxWidth: { value: 60, unit: "%" },
+            align: "center"
+          }
+        }
+      ]);
+
+      expect(validate(candidate).valid).toBe(true);
+    });
+
+    it("rejects a stack length with an unknown unit", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          stack: { width: { value: 500, unit: "em" } }
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "stack_invalid",
+        path: "presentations.pc.children[0].stack.width"
+      }));
+    });
+
+    it("rejects a stack slot with an invalid alignment", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          stack: { align: "middle" }
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "stack_invalid",
+        path: "presentations.pc.children[0].stack.align"
+      }));
+    });
+
+    it("rejects a zero width but accepts a zero minWidth", () => {
+      const candidate = schema([
+        {
+          id: "Field_1",
+          type: "textfield",
+          key: "a",
+          stack: {
+            width: { value: 0, unit: "px" },
+            minWidth: { value: 0, unit: "px" }
+          }
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "stack_invalid",
+        path: "presentations.pc.children[0].stack.width"
+      }));
+      // minWidth: 0 is the CSS default — not an error.
+      expect(result.issues).not.toContainEqual(expect.objectContaining({
+        path: "presentations.pc.children[0].stack.minWidth"
+      }));
+    });
+
     it("rejects a legacy row node (rows are no longer part of the schema)", () => {
       const candidate = schema([
         {

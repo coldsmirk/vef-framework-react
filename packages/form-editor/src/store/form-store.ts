@@ -2,13 +2,13 @@ import type { ReturnedComponentStoreResult, UnboundStore } from "@vef-framework-
 
 import type { DropTarget } from "../engine/schema/edit-ops";
 import type { ScopePath } from "../engine/schema/walk";
-import type { Block, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, GapScale, PresentationDevice, PresentationLayer } from "../types";
+import type { Block, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
 
 import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
 import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
-import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, targetScope } from "../engine/schema/edit-ops";
+import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, setStackSlot as setStackSlotOp, targetScope } from "../engine/schema/edit-ops";
 import {
   editField as editFieldOp,
   removeBlock as removeNodeOp,
@@ -192,6 +192,11 @@ export interface FormEditorStoreState {
    * subform).
    */
   setColumnWidth: (args: { nodeId: string; width: number | undefined }) => void;
+  /**
+   * Set a block's stack sizing + placement (used when the block is a direct child
+   * of a stack body — root / section / tab / stack subform).
+   */
+  setStackSlot: (args: { nodeId: string; slot: StackSlot | undefined }) => void;
   /**
    * Apply a pure updater to a single leaf field. The properties panel forwards
    * updaters from each `PropertyEntry.write` lens, keeping the action
@@ -674,6 +679,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         }
 
         checkpointCoalescing(`column-width:${nodeId}`);
+        set({ schema: withPresentation(schema, device, next) });
+      },
+
+      setStackSlot: ({ nodeId, slot }) => {
+        const { device, schema } = get();
+        const layer = currentLayer(schema, device);
+        // The op normalizes and compares by identity, so an unchanged slot is a
+        // no-op — no history entry, no fresh schema identity.
+        const next = setStackSlotOp(layer, nodeId, slot);
+
+        if (next === layer) {
+          return;
+        }
+
+        checkpointCoalescing(`stack:${nodeId}`);
         set({ schema: withPresentation(schema, device, next) });
       },
 

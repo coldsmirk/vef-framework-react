@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import type { FormEditorStoreApi } from "../../store/form-store";
 import type { FormSchema, SubformNode } from "../../types";
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 
@@ -120,9 +120,8 @@ describe("ContainerProperties", () => {
       const user = userEvent.setup();
       const api = setup(subformNode({ maxRows: 5 }));
 
-      // Spinbutton order mirrors the editor: 最少行数, then 最多行数.
-      const [minRowsInput] = screen.getAllByRole("spinbutton");
-      await user.type(minRowsInput as HTMLElement, "9");
+      const minRowsRow = screen.getByText("最少行数").closest("div") as HTMLElement;
+      await user.type(within(minRowsRow).getByRole("spinbutton"), "9");
       await user.tab();
 
       expect(storeSubform(api).minRows).toBe(5);
@@ -132,8 +131,8 @@ describe("ContainerProperties", () => {
       const user = userEvent.setup();
       const api = setup(subformNode({ minRows: 4 }));
 
-      const [, maxRowsInput] = screen.getAllByRole("spinbutton");
-      await user.type(maxRowsInput as HTMLElement, "2");
+      const maxRowsRow = screen.getByText("最多行数").closest("div") as HTMLElement;
+      await user.type(within(maxRowsRow).getByRole("spinbutton"), "2");
       await user.tab();
 
       expect(storeSubform(api).maxRows).toBe(4);

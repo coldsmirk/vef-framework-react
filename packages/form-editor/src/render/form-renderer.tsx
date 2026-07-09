@@ -49,7 +49,7 @@ import { DataSourceProvider } from "./data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
-import { DEFAULT_STACK_GAP, resolveStackGap } from "./stack-style";
+import { DEFAULT_STACK_GAP, resolveStackGap, stackSlotStyle } from "./stack-style";
 import { buildSubformColumns } from "./subform-columns";
 import {
   blankSubformRow,
@@ -571,7 +571,12 @@ function BlockCellBase({ block, ctx }: { block: Block; ctx: RenderCtx }): ReactE
     return null;
   }
 
-  return <BlockBody block={block} ctx={ctx} runtimeState={runtimeState} />;
+  const body = <BlockBody block={block} ctx={ctx} runtimeState={runtimeState} />;
+
+  // Size/place the block per its stack slot when set. The wrapper lives inside
+  // the hidden guard above, so a hidden block still emits nothing — never an
+  // empty sized box that would leave a hole in the stack's gap.
+  return block.stack === undefined ? body : <div style={stackSlotStyle(block.stack)}>{body}</div>;
 }
 
 const BlockCell = memo(BlockCellBase);

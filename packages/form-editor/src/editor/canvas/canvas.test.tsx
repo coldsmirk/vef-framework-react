@@ -248,6 +248,46 @@ describe("Canvas", () => {
     expect(shield?.closest("[data-canvas-field]")).not.toBeNull();
   });
 
+  describe("stack sizing", () => {
+    it("wraps a stack-sized block in a sized box, keeping its drop zone full-width", () => {
+      setupCanvas({
+        schema: {
+          id: "Form_1",
+          version: 2,
+          presentations: {
+            pc: {
+              children: [
+                {
+                  id: FIELD_ID,
+                  type: "textfield",
+                  key: "textfield",
+                  label: "文本框",
+                  stack: { width: { value: 500, unit: "px" }, align: "center" }
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      const sized = [...document.querySelectorAll("div")].find(el => el.style.width === "500px");
+
+      expect(sized).toBeDefined();
+      expect(sized).toHaveStyle({ marginInline: "auto" });
+      // The block sits inside the sized box…
+      expect((sized as HTMLElement).querySelector("[data-canvas-field]")).not.toBeNull();
+      // …but the gap drop zone stays a full-width sibling OUTSIDE it, so a drop
+      // still targets the whole row even when the block is narrowed.
+      expect((sized as HTMLElement).querySelector("[data-testid='drop-zone']")).toBeNull();
+    });
+
+    it("renders no sizing wrapper for a block without a stack slot", () => {
+      setupCanvas();
+
+      expect([...document.querySelectorAll("div")].some(el => el.style.width === "500px")).toBe(false);
+    });
+  });
+
   it("renders a live, interactive field preview in mobile edit mode too", () => {
     const storeApi = setupCanvas({ schema: makeMobileSchema() });
 

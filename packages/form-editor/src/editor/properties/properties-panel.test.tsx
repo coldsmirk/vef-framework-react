@@ -199,12 +199,15 @@ describe("PropertiesPanel", () => {
     expect(await screen.findByRole("tab", { name: "布局" })).toBeInTheDocument();
   });
 
-  it("omits the 布局 tab for a field outside any layout container", async () => {
+  it("shows a 布局 tab with stack sizing for a field outside any layout container", async () => {
+    const user = userEvent.setup();
     setupPropertiesPanel(FIELD_ID);
 
-    // Wait for the panel to render its tabs before asserting absence.
-    expect(await screen.findByRole("tab", { name: "属性" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "布局" })).not.toBeInTheDocument();
+    // A root-level field lives in the document stack, so its layout tab offers
+    // the stack sizing control (width / min / max / align).
+    await user.click(await screen.findByRole("tab", { name: "布局" }));
+
+    expect(screen.getByText("布局 · 宽度")).toBeInTheDocument();
   });
 
   it("shows flex sizing controls on the 布局 tab", async () => {

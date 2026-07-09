@@ -381,6 +381,7 @@ function validateBlock(raw: unknown, where: string, scope: string[], ctx: Ctx): 
   validateSpan(raw.span, where, ctx);
   validateFlexValue(raw.flex, where, ctx);
   validateColumnWidth(raw.columnWidth, where, ctx);
+  validateStackSlot(raw.stack, where, ctx);
 
   const { type } = raw;
 
@@ -838,6 +839,43 @@ function validateFlexValue(flex: unknown, where: string, ctx: Ctx): void {
 
   if (flex.basis !== undefined && typeof flex.basis !== "string") {
     ctx.issues.push(createIssue(`${where}.flex.basis`, "flex_invalid"));
+  }
+}
+
+function isCssLengthValue(length: unknown, minValue: number): boolean {
+  return isRecord(length)
+    && typeof length.value === "number"
+    && Number.isFinite(length.value)
+    && length.value >= minValue
+    && (length.unit === "px" || length.unit === "%");
+}
+
+// `width` / `maxWidth` must be positive (a zero box collapses the block, as the
+// columnWidth gate already enforces); `minWidth` of 0 is the CSS default.
+const STACK_LENGTH_MIN: Record<"width" | "minWidth" | "maxWidth", number> = {
+  width: 1,
+  minWidth: 0,
+  maxWidth: 1
+};
+
+function validateStackSlot(stack: unknown, where: string, ctx: Ctx): void {
+  if (stack === undefined) {
+    return;
+  }
+
+  if (!isRecord(stack)) {
+    ctx.issues.push(createIssue(`${where}.stack`, "stack_invalid"));
+    return;
+  }
+
+  for (const key of ["width", "minWidth", "maxWidth"] as const) {
+    if (stack[key] !== undefined && !isCssLengthValue(stack[key], STACK_LENGTH_MIN[key])) {
+      ctx.issues.push(createIssue(`${where}.stack.${key}`, "stack_invalid"));
+    }
+  }
+
+  if (stack.align !== undefined && stack.align !== "start" && stack.align !== "center" && stack.align !== "end") {
+    ctx.issues.push(createIssue(`${where}.stack.align`, "stack_invalid"));
   }
 }
 
