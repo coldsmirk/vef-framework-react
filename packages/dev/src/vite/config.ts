@@ -10,7 +10,7 @@ import consola from "consola";
 import fs from "fs-extra";
 import { defineConfig, loadEnv } from "vite";
 
-import { ENV_BUILD_PREFIX, ENV_DIR } from "./constants";
+import { ENV_APP_PREFIX, ENV_BUILD_PREFIX, ENV_DIR } from "./constants";
 import { createAppConfigPlugin } from "./plugin-app-config";
 import { createAutoEnhancePlugin, operationColumnWidthPlugin } from "./plugin-auto-enhance";
 import { createConventionalConfigPlugin } from "./plugin-conventional-config";
@@ -52,7 +52,7 @@ export function defineViteConfig(options: DefineConfigOptions = {}): UserConfigE
   const projectDir = process.cwd();
 
   return defineConfig(async ({ mode }) => {
-    const env = loadEnv(mode, ENV_DIR, ENV_BUILD_PREFIX);
+    const env = loadEnv(mode, ENV_DIR, [ENV_BUILD_PREFIX, ENV_APP_PREFIX]);
 
     if (Object.keys(env).length > 0) {
       consola.info("Loaded environment variables:");

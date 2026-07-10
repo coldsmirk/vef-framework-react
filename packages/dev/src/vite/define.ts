@@ -1,6 +1,7 @@
 import type { UserConfig } from "vite";
 
-import { DEFAULT_APP_NAME, ENV_APP_PREFIX, VEF_FRAMEWORK_VERSION } from "./constants";
+import { ENV_APP_PREFIX, VEF_FRAMEWORK_VERSION } from "./constants";
+import { resolveAppConfigName } from "./plugin-app-config";
 
 type DefineConfig = NonNullable<UserConfig["define"]>;
 
@@ -16,7 +17,7 @@ export function defineConstants(appName: string | undefined, appVersion: string,
           }, {});
         return Object.freeze(config);
       })()`
-    : `window.__PRODUCTION__VEF_${appName ?? DEFAULT_APP_NAME}__CONF__`;
+    : `window.__PRODUCTION__${resolveAppConfigName(appName)}__CONF__`;
 
   // Keys MUST mirror the global names declared in `packages/dev/types.d.ts`;
   // Vite injects them via string substitution at build time, so the casing

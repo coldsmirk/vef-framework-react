@@ -25,15 +25,24 @@ function toConstantCase(value: string): string {
 }
 
 /**
+ * Resolve the app config name shared by the generated `app.config.js` global
+ * (`__PRODUCTION__<name>__CONF__`, derived by unplugin-config) and the
+ * `__VEF_APP_CONFIG__` define constant — both sides must agree on this name.
+ */
+export function resolveAppConfigName(appName: string = DEFAULT_APP_NAME): string {
+  return `VEF_${toConstantCase(appName)}`;
+}
+
+/**
  * Create the app config plugin for runtime configuration injection
  */
 export function createAppConfigPlugin({
   basePublicPath,
   outputDir,
-  appName = DEFAULT_APP_NAME
+  appName
 }: PluginAppConfigOptions): PluginOption {
   return config({
-    appName: `VEF_${toConstantCase(appName)}`,
+    appName: resolveAppConfigName(appName),
     baseDir: basePublicPath,
     configFile: {
       generate: true,
