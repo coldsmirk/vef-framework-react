@@ -666,3 +666,110 @@ describe("validateFlowDefinition field permissions", () => {
     expect(codes).toContain("field_permission_key_unknown");
   });
 });
+
+describe("validateFlowDefinition formFields tri-state", () => {
+  it("skips only the key-existence check when the inventory is unavailable (undefined)", () => {
+    // No second argument at all — distinct from codesOf's own `= []` default,
+    // which simulates the "form has zero fields" state instead.
+    const codes = validateFlowDefinition(flowWith({
+      data: { name: "审批", fieldPermissions: { ghost: "locked" as never } }
+    })).map(e => e.code);
+
+    expect(codes).not.toContain("field_permission_key_unknown");
+    // The enum-validity check needs no inventory and still runs.
+    expect(codes).toContain("invalid_field_permission");
+  });
+
+  it("still runs the CC visible/hidden-subset check when the inventory is unavailable", () => {
+    const codes = validateFlowDefinition(ccFlowWith({ ghost: "editable" })).map(e => e.code);
+
+    expect(codes).not.toContain("field_permission_key_unknown");
+    expect(codes).toContain("cc_field_permission_not_allowed");
+  });
+
+  it("flags every key as dangling when the inventory is an explicit empty array", () => {
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { reason: "visible" } }
+    }), []);
+
+    expect(codes).toContain("field_permission_key_unknown");
+  });
+});
+
+describe("validateFlowDefinition required field permission vs. auto_pass timeout", () => {
+  it("rejects required + auto_pass on an approval node", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        timeoutAction: "auto_pass",
+        fieldPermissions: { reason: "required" }
+      }
+    }), FORM_FIELDS);
+
+    expect(codes).toContain("field_permission_required_auto_pass");
+  });
+
+  it("rejects required + auto_pass on a handle node", () => {
+    const definition = flowWith({});
+    const handleNode = definition.nodes[1]!;
+
+    Object.assign(handleNode, {
+      kind: "handle",
+      data: {
+        name: "办理",
+        timeoutAction: "auto_pass",
+        fieldPermissions: { reason: "required" }
+      }
+    });
+
+    const codes = codesOf(definition, FORM_FIELDS);
+
+    expect(codes).toContain("field_permission_required_auto_pass");
+  });
+
+  it("accepts required + auto_reject", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        timeoutAction: "auto_reject",
+        fieldPermissions: { reason: "required" }
+      }
+    }), FORM_FIELDS);
+
+    expect(codes).not.toContain("field_permission_required_auto_pass");
+  });
+
+  it("accepts visible-only + auto_pass", () => {
+    const codes = codesOf(flowWith({
+      data: {
+        name: "审批",
+        timeoutAction: "auto_pass",
+        fieldPermissions: { reason: "visible" }
+      }
+    }), FORM_FIELDS);
+
+    expect(codes).not.toContain("field_permission_required_auto_pass");
+  });
+
+  it("accepts required with an omitted timeout action, mirroring its normalized default (none)", () => {
+    // TASK_NODE_DEFAULTS.timeoutAction resolves an omitted field to "none",
+    // never "auto_pass", so a required permission alone never conflicts.
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { reason: "required" } }
+    }), FORM_FIELDS);
+
+    expect(codes).not.toContain("field_permission_required_auto_pass");
+  });
+
+  it("needs no form inventory: still runs when formFields is undefined", () => {
+    const codes = validateFlowDefinition(flowWith({
+      data: {
+        name: "审批",
+        timeoutAction: "auto_pass",
+        fieldPermissions: { reason: "required" }
+      }
+    })).map(e => e.code);
+
+    expect(codes).toContain("field_permission_required_auto_pass");
+  });
+});

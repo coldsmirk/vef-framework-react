@@ -97,7 +97,8 @@ export type FlowValidationCode
     | "sequential_parallel_add_assignee"
     | "invalid_field_permission"
     | "field_permission_key_unknown"
-    | "cc_field_permission_not_allowed";
+    | "cc_field_permission_not_allowed"
+    | "field_permission_required_auto_pass";
 
 /**
  * Build a Set from a Record keyed by every member of a string union: omitting
@@ -226,14 +227,28 @@ export interface FlowValidationError {
  * `formFields` is the form's top-level field inventory — the same list
  * `EditorPlugins.formFields` feeds to the condition editor and the
  * field-permission table — used to cross-check every node's
- * `fieldPermissions` keys. It defaults to an empty list, mirroring the
- * backend's "a flow whose form has zero fields" case: every
- * `fieldPermissions` entry becomes a dangling reference, so an omitted
- * argument is only safe when the definition carries no field permissions.
+ * `fieldPermissions` keys. It is tri-state, and the two "no fields" states
+ * are deliberately distinct:
+ * - `undefined` (omit the argument) — the inventory is UNAVAILABLE, e.g. a
+ * host that renders the flow editor without any form-editor integration.
+ * Only the key-existence check (`field_permission_key_unknown`) is
+ * skipped, since there is nothing to check keys against; the
+ * enum-validity check and the CC visible/hidden-subset check still run —
+ * neither needs the inventory. A definition with dangling
+ * `fieldPermissions` keys is NOT flagged in this state, so passing
+ * `undefined` never falsely blocks a host that genuinely has no form
+ * integration to supply the list.
+ * - `[]` (an explicit empty array) — the form is known to have NO fields:
+ * every `fieldPermissions` entry is a dangling reference, mirroring the
+ * backend's "flow whose form has zero fields" case.
+ *
+ * The wizard call sites always pass the projection's real `formFields`
+ * array (populated or `[]`, never omitted); a host with no form-editor
+ * integration at all should omit the argument rather than pass `[]`.
  */
 export function validateFlowDefinition(
   definition: FlowDefinition,
-  formFields: FormFieldDefinition[] = []
+  formFields?: FormFieldDefinition[]
 ): FlowValidationError[] {
   const errors: FlowValidationError[] = [];
 
@@ -243,7 +258,9 @@ export function validateFlowDefinition(
     return [{ code: "no_nodes", message: "流程至少需要一个节点" }];
   }
 
-  const formFieldKeys = new Set(formFields.map(field => field.key));
+  // undefined stays undefined (inventory unavailable, key-existence check
+  // skipped); an explicit array — including [] — becomes a lookup Set.
+  const formFieldKeys = formFields ? new Set(formFields.map(field => field.key)) : undefined;
 
   // --- Phase 1: node validation ---
   const nodeIds = new Set<string>();
@@ -521,7 +538,7 @@ export function validateFlowDefinition(
 function validateTaskNodeConfig(
   nodeId: string,
   data: TaskNodeData | undefined,
-  formFieldKeys: Set<string>,
+  formFieldKeys: Set<string> | undefined,
   errors: FlowValidationError[]
 ): void {
   if (data?.executionType && !EXECUTION_TYPES.has(data.executionType)) {
@@ -587,6 +604,7 @@ function validateTaskNodeConfig(
 
   validateCcDefinitions(nodeId, data?.ccs, errors);
   validateFieldPermissions(nodeId, data?.fieldPermissions, false, formFieldKeys, errors);
+  validateRequiredFieldTimeoutAutoPass(nodeId, data, errors);
 }
 
 /**
@@ -770,12 +788,17 @@ function validateCcDefinitions(
  * unlock editing nor demand a value. Mirrors the backend
  * `ValidateFieldPermissions` / `validateFieldPermissionEntry`, except every
  * violation is collected instead of stopping at the first.
+ *
+ * `formFieldKeys` is `undefined` when the caller has no field inventory to
+ * check against (see {@link validateFlowDefinition}'s `formFields` tri-state
+ * doc) — the key-existence check is skipped in that case, while the
+ * enum-validity and CC-subset checks below still run since neither needs it.
  */
 function validateFieldPermissions(
   nodeId: string,
   fieldPermissions: Record<string, string> | undefined,
   isCC: boolean,
-  formFieldKeys: Set<string>,
+  formFieldKeys: Set<string> | undefined,
   errors: FlowValidationError[]
 ): void {
   const entries = Object.entries(fieldPermissions ?? {});
@@ -791,7 +814,7 @@ function validateFieldPermissions(
       });
     }
 
-    if (!formFieldKeys.has(key)) {
+    if (formFieldKeys && !formFieldKeys.has(key)) {
       errors.push({
         code: "field_permission_key_unknown",
         message: `表单权限引用了不存在的表单字段：${key}`,
@@ -806,6 +829,38 @@ function validateFieldPermissions(
         nodeId
       });
     }
+  }
+}
+
+/**
+ * Reject a task node that pairs a "required" field permission with an
+ * auto_pass timeout action. The engine only enforces "node passes ⇒
+ * required fields filled" on the manual approve path
+ * (`ValidateRequiredPermissionFields`, called from the approve-task
+ * command); an auto_pass timeout finishes the node without going through
+ * that check at all, so the conflicting configuration would silently let a
+ * required field through empty. Mirrors the backend deploy rejection. CC
+ * nodes carry no timeout semantics and are not reachable here. Needs no
+ * form inventory — it inspects only the node's own data, so it runs
+ * regardless of the `formFields` tri-state.
+ */
+function validateRequiredFieldTimeoutAutoPass(
+  nodeId: string,
+  data: TaskNodeData | undefined,
+  errors: FlowValidationError[]
+): void {
+  if (data?.timeoutAction !== "auto_pass") {
+    return;
+  }
+
+  const hasRequiredField = Object.values(data.fieldPermissions ?? {}).includes("required");
+
+  if (hasRequiredField) {
+    errors.push({
+      code: "field_permission_required_auto_pass",
+      message: "存在「必填」表单权限的节点不能将超时处理设为自动通过",
+      nodeId
+    });
   }
 }
 

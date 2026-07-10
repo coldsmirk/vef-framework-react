@@ -2,7 +2,7 @@ import type { EdgeMouseHandler, NodeMouseHandler } from "@xyflow/react";
 import type { CSSProperties, FC, RefObject } from "react";
 
 import type { EditorPlugins } from "../plugins";
-import type { FlowDefinition, FormFieldDefinition } from "../types";
+import type { FlowDefinition } from "../types";
 
 import { NodeloomProvider, useEditorStore, useEditorStoreApi, useReactFlowProps } from "@coldsmirk/nodeloom-core";
 import { Global } from "@emotion/react";
@@ -79,9 +79,6 @@ export interface ApprovalFlowEditorProps {
 
 // Hoist stable object references to prevent ReactFlow from re-processing on every render
 const EMPTY_PLUGINS: EditorPlugins = {};
-// Stable fallback for EditorPlugins.formFields — a fresh [] default on every
-// render would retrigger the validation effect below on every keystroke.
-const EMPTY_FORM_FIELDS: FormFieldDefinition[] = [];
 const DEFAULT_EDGE_OPTIONS = { type: "approval", markerEnd: EDGE_MARKER_END } as const;
 const PRO_OPTIONS = { hideAttribution: true } as const;
 const MINIMAP_STYLE = {
@@ -131,7 +128,11 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   const uiStoreApi = useEditorUiStoreApi();
   // The form's top-level field inventory, for cross-checking fieldPermissions
   // keys — same source the condition editor and field-permission table read.
-  const { formFields = EMPTY_FORM_FIELDS } = useEditorPlugins();
+  // Passed through as-is (including undefined) to validateFlowDefinition,
+  // whose formFields parameter is tri-state: undefined means "no inventory
+  // to check against", distinct from an explicit empty array meaning "the
+  // form has zero fields".
+  const { formFields } = useEditorPlugins();
 
   // The engine wires the canvas: graph, change dispatch, connection funnel (validation via
   // EditorOptions.validateConnection, rejected-drop reporting via onInvalidConnection), and the
