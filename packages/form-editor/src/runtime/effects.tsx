@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EffectAction, EffectDispatchContext, EvaluationContext, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { RuntimeForm, RuntimeFormValues } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
@@ -13,6 +13,7 @@ import {
   resolveActionValue,
   resolveLinkageEvaluators
 } from "../engine/linkage";
+import { writeFieldValue } from "./field-write";
 import { resolveScopeValues } from "./resolve-scope-values";
 
 /**
@@ -78,6 +79,12 @@ async function runEffectActions(args: {
   actions: EffectAction[];
   evaluators: Required<LinkageEvaluators>;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * The firing scope's server permission clamp, gating `set_field` writes (see
+   * {@link writeFieldValue}). Threaded like the evaluation context: the root
+   * scope carries the host map, subform-row scopes pass `undefined`.
+   */
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   prefix: string;
   sinks: EffectSinks;
@@ -102,6 +109,7 @@ function runEffectAction(
   action: EffectAction,
   args: {
     evaluators: Required<LinkageEvaluators>;
+    fieldPermissions: Record<string, FieldPermission> | undefined;
     form: RuntimeForm;
     prefix: string;
     sinks: EffectSinks;
@@ -111,25 +119,15 @@ function runEffectAction(
 ): void {
   switch (action.type) {
     case "set_field": {
-      const name = `${args.prefix}${action.targetKey}`;
-      const next = context.resolveValue(action.value);
-
-      // A write of the value the target already holds is dropped: TanStack's
-      // `setBy` mints a new values object even for an identical leaf, which
-      // would read as a value change and re-fire an opaque-condition `always`
-      // rule forever. Mirrors `setVariable`'s no-op bail (deep-equal because
-      // an expression-resolved value may be a fresh but equal object).
-      if (!isDeepEqual(args.form.getFieldValue(name), next)) {
-        // Same options as `applyScopedAssignments`: a programmatic write must
-        // not run the target's onChange listeners or mark it touched, so an
-        // effect (e.g. a `load` write) never surfaces a premature validation
-        // error.
-        args.form.setFieldValue(name, next, {
-          dontRunListeners: true,
-          dontUpdateMeta: true
-        });
-      }
-
+      // All programmatic-write semantics — the permission guard, the no-op
+      // bail, the meta-free write options — live in the shared gate.
+      writeFieldValue({
+        fieldPermissions: args.fieldPermissions,
+        form: args.form,
+        key: action.targetKey,
+        prefix: args.prefix,
+        value: context.resolveValue(action.value)
+      });
       return;
     }
 
@@ -198,6 +196,11 @@ export function dispatchFormEffects(args: {
   actions: EffectAction[];
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * The root scope's server permission clamp — form-scope effects always fire
+   * against the root value scope, so their `set_field` writes gate on it.
+   */
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   sinks: EffectSinks;
 }): Promise<void> {
@@ -209,6 +212,7 @@ export function dispatchFormEffects(args: {
     actions: args.actions,
     evaluators: resolveLinkageEvaluators(args.evaluators),
     evaluationContext: args.evaluationContext,
+    fieldPermissions: args.fieldPermissions,
     form: args.form,
     prefix: "",
     sinks: args.sinks
@@ -251,6 +255,11 @@ function inputSignature(sourceKeys: string[], values: RuntimeFormValues): unknow
 export function useScopeEffects(args: {
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
+  /**
+   * This scope's server permission clamp for `set_field` writes. Root scope
+   * only — per-row controllers pass `undefined` (see `LinkageScope`).
+   */
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   prefix: string;
   schema: RuntimeSchema;
@@ -260,6 +269,7 @@ export function useScopeEffects(args: {
   const {
     evaluators,
     evaluationContext,
+    fieldPermissions,
     form,
     prefix,
     schema,
@@ -304,6 +314,11 @@ export function useScopeEffects(args: {
   const evaluationContextRef = useRef(evaluationContext);
   evaluationContextRef.current = evaluationContext;
 
+  // Same ref treatment as the evaluation context: the dispatcher identity must
+  // survive a host re-render minting a fresh (content-equal) permission map.
+  const fieldPermissionsRef = useRef(fieldPermissions);
+  fieldPermissionsRef.current = fieldPermissions;
+
   const runEffects = useCallback<RunEffects>(
     actions => {
       if (actions.length > 0) {
@@ -314,6 +329,7 @@ export function useScopeEffects(args: {
           actions,
           evaluators: resolved,
           evaluationContext: evaluationContextRef.current,
+          fieldPermissions: fieldPermissionsRef.current,
           form,
           prefix,
           sinks

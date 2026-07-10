@@ -11,9 +11,11 @@ import type {
   SubformNode,
   TextfieldField
 } from "../types";
+import type { FormRendererApi } from "./form-renderer";
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
@@ -197,6 +199,32 @@ describe("FormRenderer field permissions", () => {
     renderRuntime(<FormRenderer fieldPermissions={{ code: "required" }} schema={stack(field("code"))} />);
 
     expect(screen.getByText("*"), "the label must carry the required marker").toBeInTheDocument();
+  });
+
+  it("hides the required marker on a statically-required field clamped visible", () => {
+    renderRuntime(
+      <FormRenderer
+        fieldPermissions={{ locked: "visible" }}
+        schema={stack(field("locked", { validate: { required: true } }))}
+      />
+    );
+
+    // Read-only, validation-exempt, and never submitted — advertising
+    // "required" would be a lie. Display-only: validation semantics are
+    // covered by the submit / validator specs.
+    expect(screen.queryByText("*"), "a non-writable field must not advertise required").not.toBeInTheDocument();
+  });
+
+  it("keeps the required marker on a linkage-disabled statically-required field", () => {
+    renderRuntime(
+      <FormRenderer
+        schema={stack(field("locked", { validate: { required: true }, linkage: { defaults: { disabled: true } } }))}
+      />
+    );
+
+    // `disabled` is not the clamp verdict: an unclamped field disabled by
+    // linkage keeps its marker exactly as before.
+    expect(screen.getByText("*"), "linkage-disable must not hide the marker").toBeInTheDocument();
   });
 
   it("treats an editable-clamped field exactly as unclamped", async () => {
@@ -407,6 +435,62 @@ describe("FormRenderer field permissions", () => {
 
       expect(screen.queryByText("明细"), "the subform chrome must not mount").not.toBeInTheDocument();
       expect(screen.queryByText("42"), "no row content may render").not.toBeInTheDocument();
+    });
+  });
+
+  describe("imperative getSubmitValues", () => {
+    it("returns the filtered payload while getValues returns raw state", () => {
+      const api = createRef<FormRendererApi>();
+
+      renderRuntime(
+        <FormRenderer
+          apiRef={api}
+          fieldPermissions={{ readonly: "visible", secret: "hidden" }}
+          schema={stack(field("name"), field("readonly"), field("secret"), submitButton())}
+          defaultValues={{
+            name: "n",
+            readonly: "server",
+            secret: "s3cret"
+          }}
+        />
+      );
+
+      expect(
+        api.current?.getValues(),
+        "getValues stays the RAW state — read-only and hidden values included"
+      ).toMatchObject({
+        name: "n",
+        readonly: "server",
+        secret: "s3cret"
+      });
+      expect(
+        api.current?.getSubmitValues(),
+        "getSubmitValues carries only writable keys"
+      ).toEqual({ name: "n" });
+    });
+
+    it("matches the submit pipeline's payload exactly", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const api = createRef<FormRendererApi>();
+
+      renderRuntime(
+        <FormRenderer
+          apiRef={api}
+          defaultValues={{ name: "n", readonly: "server" }}
+          fieldPermissions={{ readonly: "visible" }}
+          schema={stack(field("name"), field("readonly"), submitButton())}
+          onSubmit={onSubmit}
+        />
+      );
+
+      const snapshot = api.current?.getSubmitValues();
+
+      await user.click(screen.getByRole("button", { name: "提交" }));
+
+      await waitFor(() => {
+        expect(onSubmit, "the imperative read and the pipeline must agree").toHaveBeenCalledWith(snapshot);
+      });
     });
   });
 

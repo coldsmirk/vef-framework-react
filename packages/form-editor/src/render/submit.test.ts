@@ -255,6 +255,42 @@ describe("collectSubmitErrors", () => {
     expect(errors).toEqual({ name: "此项为必填" });
   });
 
+  it("reports a whitespace-only value on a required field", () => {
+    // Trimmed emptiness in lockstep with the Go `isEmptyFormValue`: a
+    // whitespace-only value must fail here, not pass the client and be
+    // rejected server-side with no inline error.
+    const errors = collectSubmitErrors({
+      blocks: [field("name", { validate: { required: true } })],
+      disabled: false,
+      evaluators: undefined,
+      evaluationContext: undefined,
+      namePrefix: "",
+      values: { name: " ".repeat(3) }
+    });
+
+    expect(errors).toEqual({ name: "此项为必填" });
+  });
+
+  it("reports a linkage-required subform with zero rows", () => {
+    const subform: SubformNode = {
+      ...keyedSubform("lines"),
+      linkage: { defaults: { required: true } }
+    };
+
+    const errors = collectSubmitErrors({
+      blocks: [subform],
+      disabled: false,
+      evaluators: undefined,
+      evaluationContext: undefined,
+      namePrefix: "",
+      values: { lines: [] }
+    });
+
+    // Subform-level required means "at least one row" (the Go side's
+    // `len == 0` check) — zero rows must not sail through the client gate.
+    expect(errors).toEqual({ lines: "此项为必填" });
+  });
+
   it("reports a constraint violation on a present value", () => {
     const errors = collectSubmitErrors({
       blocks: [field("name", { validate: { minLength: 3 } })],
@@ -437,6 +473,55 @@ describe("collectSubmitErrors", () => {
       });
 
       expect(errors, "a read-only subform's rows are wholly exempt").toEqual({});
+    });
+
+    it("fails a required-clamped subform with zero rows", () => {
+      const errors = collectSubmitErrors({
+        blocks: [keyedSubform("lines")],
+        disabled: false,
+        evaluators: undefined,
+        evaluationContext: undefined,
+        fieldPermissions: { lines: "required" },
+        namePrefix: "",
+        values: { lines: [] }
+      });
+
+      expect(errors, "a required clamp demands at least one row").toEqual({ lines: "此项为必填" });
+    });
+
+    it("passes a required-clamped subform with one row", () => {
+      const errors = collectSubmitErrors({
+        blocks: [keyedSubform("lines")],
+        disabled: false,
+        evaluators: undefined,
+        evaluationContext: undefined,
+        fieldPermissions: { lines: "required" },
+        namePrefix: "",
+        values: { lines: [{ amount: "1" }] }
+      });
+
+      expect(errors, "one row satisfies the subform-level required").toEqual({});
+    });
+
+    it("exempts a linkage-required subform clamped visible", () => {
+      const subform: SubformNode = {
+        ...keyedSubform("lines"),
+        linkage: { defaults: { required: true } }
+      };
+
+      const errors = collectSubmitErrors({
+        blocks: [subform],
+        disabled: false,
+        evaluators: undefined,
+        evaluationContext: undefined,
+        fieldPermissions: { lines: "visible" },
+        namePrefix: "",
+        values: { lines: [] }
+      });
+
+      // The non-writable clamp folds into `disabled`, so the read-only
+      // subform must not hold the form hostage over its row count.
+      expect(errors, "a read-only subform is exempt from the row-count check").toEqual({});
     });
 
     it("does not require a template field whose key matches a root required clamp", () => {

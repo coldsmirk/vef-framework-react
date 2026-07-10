@@ -1,4 +1,4 @@
-import type { DeviceRegistries, FieldPermission, FormRendererApi } from "@vef-framework-react/form-editor";
+import type { DeviceRegistries, FormRendererApi } from "@vef-framework-react/form-editor";
 import type { ReactNode } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -45,25 +45,6 @@ const FIELD_REGISTRIES: DeviceRegistries = {
   mobile: createDefaultMobileRegistry()
 };
 
-/**
- * Mirrors `isWritableFieldPermission` from the form-editor engine (not part of
- * its public API): only a clamp-free key, `"editable"`, or `"required"` may
- * reach the backend — `"visible"` / `"hidden"` are read-only or never-mounted
- * and must never leak into a submitted payload.
- */
-function isWritablePermission(permission: FieldPermission | undefined): boolean {
-  return permission === undefined || permission === "editable" || permission === "required";
-}
-
-function pickWritableValues(
-  values: Record<string, unknown>,
-  fieldPermissions: Record<string, FieldPermission>
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(values).filter(([key]) => isWritablePermission(fieldPermissions[key]))
-  );
-}
-
 function RouteComponent(): ReactNode {
   const [presetId, setPresetId] = useState(VIEWER_PRESETS[0]!.id);
   const preset = useMemo(
@@ -98,15 +79,14 @@ function RouteComponent(): ReactNode {
 
   function handleReject(): void {
     // The backend never blocks a reject on required fields, so this bypasses
-    // the renderer's submit pipeline entirely and reads the live values
-    // straight off the imperative handle.
-    const values = formApiRef.current?.getValues() ?? {};
-
+    // the renderer's validation + submit lifecycle and reads the would-be
+    // payload straight off the imperative handle — `getSubmitValues` applies
+    // the same writable-keys-only filtering the approve pipeline uses.
     setPreview({
       taskId: MOCK_TASK_ID,
       action: "reject",
       opinion,
-      formData: pickWritableValues(values, preset.fieldPermissions)
+      formData: formApiRef.current?.getSubmitValues() ?? {}
     });
   }
 

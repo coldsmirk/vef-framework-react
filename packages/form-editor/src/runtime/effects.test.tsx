@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
+import type { FormRendererApi } from "../render/form-renderer";
 import type { Block, ButtonField, DataSourceResolver, FormSchema, SelectField, SubformNode, TextfieldField } from "../types";
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
@@ -156,6 +158,41 @@ function refreshDataSourceSchema(): FormSchema {
       }
     ]
   };
+}
+
+/**
+ * A form where typing in `source` fires a `change` → two `set_field` writes:
+ * "hacked" into `locked` (the clamp target under test) and "ok" into `mirror`
+ * (never clamped). The mirror write proves the effect ran, so a blocked
+ * `locked` assertion cannot pass vacuously.
+ */
+function setFieldPairSchema(): FormSchema {
+  return stack(
+    field("source", {
+      linkage: {
+        rules: [
+          {
+            id: "R1",
+            trigger: { kind: "change" },
+            actions: [
+              {
+                type: "set_field",
+                targetKey: "locked",
+                value: { kind: "literal", value: "hacked" }
+              },
+              {
+                type: "set_field",
+                targetKey: "mirror",
+                value: { kind: "literal", value: "ok" }
+              }
+            ]
+          }
+        ]
+      }
+    }),
+    field("locked"),
+    field("mirror")
+  );
 }
 
 describe("runtime effect lane", () => {
@@ -595,6 +632,210 @@ describe("runtime effect lane", () => {
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe("set_field permission gate", () => {
+    it("drops a change-edge set_field into a visible-clamped field", async () => {
+      const user = userEvent.setup();
+
+      renderForm(<FormRenderer fieldPermissions={{ locked: "visible" }} schema={setFieldPairSchema()} />);
+
+      await user.type(screen.getByRole("textbox", { name: "source" }), "x");
+
+      // The unclamped mirror write proves the effect ran, so the blocked
+      // target cannot pass vacuously.
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "mirror" })).toHaveValue("ok");
+      });
+      expect(
+        screen.getByRole("textbox", { name: "locked" }),
+        "no programmatic write may land in a read-only field"
+      ).toHaveValue("");
+    });
+
+    it("drops a change-edge set_field into a hidden-clamped field", async () => {
+      const user = userEvent.setup();
+      const api = createRef<FormRendererApi>();
+
+      renderForm(<FormRenderer apiRef={api} fieldPermissions={{ locked: "hidden" }} schema={setFieldPairSchema()} />);
+
+      await user.type(screen.getByRole("textbox", { name: "source" }), "x");
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "mirror" })).toHaveValue("ok");
+      });
+      // The hidden field never mounts; the raw form state shows its value
+      // stayed at the seeded default.
+      expect(
+        api.current?.getValues(),
+        "no programmatic write may land in a hidden field"
+      ).toMatchObject({ locked: "" });
+    });
+
+    it("applies a change-edge set_field into an editable-clamped field", async () => {
+      const user = userEvent.setup();
+
+      renderForm(<FormRenderer fieldPermissions={{ locked: "editable" }} schema={setFieldPairSchema()} />);
+
+      await user.type(screen.getByRole("textbox", { name: "source" }), "x");
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("textbox", { name: "locked" }),
+          "an editable clamp keeps the write path open"
+        ).toHaveValue("hacked");
+      });
+    });
+
+    it("drops a form-level load set_field into a visible-clamped field", async () => {
+      const schema: FormSchema = {
+        ...stack(field("locked"), field("mirror")),
+        linkage: {
+          rules: [
+            {
+              id: "F1",
+              trigger: { kind: "load" },
+              actions: [
+                {
+                  type: "set_field",
+                  targetKey: "locked",
+                  value: { kind: "literal", value: "hacked" }
+                },
+                {
+                  type: "set_field",
+                  targetKey: "mirror",
+                  value: { kind: "literal", value: "ok" }
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      renderForm(<FormRenderer fieldPermissions={{ locked: "visible" }} schema={schema} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "mirror" })).toHaveValue("ok");
+      });
+      expect(
+        screen.getByRole("textbox", { name: "locked" }),
+        "a load rule must not write past the clamp either"
+      ).toHaveValue("");
+    });
+
+    it("leaves a subform row's set_field unaffected by a same-named top-level clamp", async () => {
+      const user = userEvent.setup();
+      const subform: SubformNode = {
+        id: "Sub_lines",
+        type: "subform",
+        variant: "stack",
+        key: "lines",
+        template: [
+          field("flag", {
+            linkage: {
+              rules: [
+                {
+                  id: "R1",
+                  trigger: { kind: "change" },
+                  actions: [
+                    {
+                      type: "set_field",
+                      targetKey: "amount",
+                      value: { kind: "literal", value: "9" }
+                    }
+                  ]
+                }
+              ]
+            }
+          }),
+          field("amount")
+        ]
+      };
+
+      // The clamp addresses a root-scope `amount`; the row's own `amount`
+      // lives in the row scope, which evaluates (and writes) unclamped.
+      renderForm(
+        <FormRenderer
+          defaultValues={{ lines: [{ flag: "", amount: "" }] }}
+          fieldPermissions={{ amount: "hidden" }}
+          schema={stack(subform)}
+        />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "flag" }), "x");
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("textbox", { name: "amount" }),
+          "the top-level clamp must stop at the subform boundary"
+        ).toHaveValue("9");
+      });
+    });
+
+    it("keeps a reset effect working with a permission map present", async () => {
+      const user = userEvent.setup();
+      const button: ButtonField = {
+        id: "Field_reset",
+        type: "button",
+        label: "重置",
+        action: "button",
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: { kind: "click" },
+              actions: [{ type: "reset" }]
+            }
+          ]
+        }
+      };
+
+      renderForm(<FormRenderer fieldPermissions={{ name: "editable" }} schema={stack(field("name"), button)} />);
+
+      await user.type(screen.getByRole("textbox", { name: "name" }), "x");
+      await user.click(screen.getByRole("button", { name: "重置" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "name" }), "the gate only guards set_field").toHaveValue("");
+      });
+    });
+
+    it("keeps a submit effect working with a permission map present", async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      const button: ButtonField = {
+        id: "Field_go",
+        type: "button",
+        label: "执行",
+        action: "button",
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: { kind: "click" },
+              actions: [{ type: "submit" }]
+            }
+          ]
+        }
+      };
+
+      renderForm(
+        <FormRenderer
+          defaultValues={{ name: "n" }}
+          fieldPermissions={{ name: "visible" }}
+          schema={stack(field("name"), button)}
+          onSubmit={onSubmit}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: "执行" }));
+
+      // The submit pipeline itself keeps filtering: the read-only key stays
+      // out of the payload, but the submission goes through.
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith({});
       });
     });
   });

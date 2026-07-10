@@ -36,8 +36,10 @@ import {
   deriveDefaultValues,
   deriveEvaluationVariables,
   getFieldEventTriggerKinds,
+  getFieldPermission,
   getLinkageSourceKeys,
-  getTriggerEffectActions
+  getTriggerEffectActions,
+  isWritableFieldPermission
 } from "../engine/linkage";
 import { toRuntimeSchema } from "../engine/schema/presentation";
 import { EditorIcon } from "../icons";
@@ -129,7 +131,19 @@ export interface FormRendererProps {
 export interface FormRendererApi {
   submit: () => Promise<void>;
   reset: () => void;
+  /**
+   * The RAW live form state — including hidden fields' seeded defaults and
+   * read-only (non-writable-clamped) values. For the payload the submit
+   * pipeline would actually deliver, use {@link getSubmitValues}.
+   */
   getValues: () => RuntimeFormValues;
+  /**
+   * Exactly what the submit pipeline would deliver to `onSubmit` right now:
+   * the live values run through the same payload filtering (effectively-hidden
+   * fields dropped, non-writable-clamped keys excluded, subforms recursed per
+   * row) — without running validation or the submit lifecycle.
+   */
+  getSubmitValues: () => RuntimeFormValues;
 }
 
 type RuntimeFormApi = ReturnType<typeof useRuntimeForm>;
@@ -271,6 +285,7 @@ function useRuntimeForm(
           actions: getTriggerEffectActions(formRules, "beforeSubmit"),
           evaluators: args.evaluators,
           evaluationContext: args.evaluationContext,
+          fieldPermissions: args.fieldPermissions,
           form,
           sinks: args.sinks
         });
@@ -289,6 +304,7 @@ function useRuntimeForm(
           actions: getTriggerEffectActions(formRules, "afterSubmit"),
           evaluators: args.evaluators,
           evaluationContext: args.evaluationContext,
+          fieldPermissions: args.fieldPermissions,
           form,
           sinks: args.sinks
         });
@@ -487,9 +503,19 @@ function FormRendererInner({
     return {
       submit: () => form.handleSubmit(),
       reset: () => form.reset(),
-      getValues: () => form.state.values
+      getValues: () => form.state.values,
+      // The submit pipeline's own filtering, verbatim (see `useRuntimeForm`'s
+      // onSubmit) — reading the evaluation scope through the ref keeps the
+      // handle identity stable across `$vars` writes, like the validators.
+      getSubmitValues: () => filterSubmitValues({
+        blocks: runtimeSchema.children,
+        evaluators,
+        evaluationContext: evaluationContextRef.current,
+        fieldPermissions,
+        values: form.state.values
+      })
     };
-  }, [form]);
+  }, [evaluators, fieldPermissions, form, runtimeSchema]);
 
   useEffect(() => {
     formRef.current = form;
@@ -505,12 +531,13 @@ function FormRendererInner({
       actions: getTriggerEffectActions(runtimeSchema.linkage?.rules, "load"),
       evaluators,
       evaluationContext,
+      fieldPermissions,
       form,
       sinks
     }).catch((error: unknown) => {
       console.error("[form-editor] load effect failed:", error);
     });
-  }, [evaluators, evaluationContext, form, runtimeSchema, sinks]);
+  }, [evaluators, evaluationContext, fieldPermissions, form, runtimeSchema, sinks]);
 
   const domIdPrefix = useId();
 
@@ -1086,6 +1113,13 @@ function FieldSlot({
   let content: ReactElement;
 
   if (isKeyedField(field)) {
+    // Display-only clamp on the required marker: a non-writable-clamped field
+    // is read-only, validation-exempt, and never submits, so it must not
+    // advertise "required". The verdict comes from the permission map (the
+    // same lookup as `filterSubmitValues`), NOT from `disabled` — a linkage
+    // `disable` outcome keeps its marker. Validation semantics live in
+    // `validateRuntimeField` / `collectSubmitErrors`, untouched here.
+    const writable = isWritableFieldPermission(getFieldPermission(ctx.fieldPermissions, field.key));
     // Registered on the change lane only: TanStack Form's submit event runs the
     // change validator too (defaultValidationLogic), so submit-time coverage is
     // free — while a second registration under `onSubmit` would store the same
@@ -1118,7 +1152,7 @@ function FieldSlot({
             errors={formatErrors(fieldApi.state.meta.errors)}
             field={field}
             labelPosition={labelPosition}
-            required={isRuntimeRequired(field, runtimeState)}
+            required={writable && isRuntimeRequired(field, runtimeState)}
             value={fieldApi.state.value}
             onChange={value => {
               fieldApi.handleChange(value);

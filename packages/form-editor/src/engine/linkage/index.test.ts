@@ -1094,6 +1094,13 @@ describe("linkage engine", () => {
       expect(matchLeaf(leafOf("empty"), { v: {} })).toBe(false);
       expect(matchLeaf(leafOf("notEmpty"), { v: {} })).toBe(true);
     });
+
+    it("matches empty on a whitespace-only source", () => {
+      // Trimmed emptiness (the Go `isEmptyFormValue` lockstep) applies to the
+      // operators too, not just `required`.
+      expect(matchLeaf(leafOf("empty"), { v: "  " })).toBe(true);
+      expect(matchLeaf(leafOf("notEmpty"), { v: "  " })).toBe(false);
+    });
   });
 
   describe("effect lane — pure helpers", () => {
@@ -1526,6 +1533,15 @@ describe("linkage engine", () => {
       expect(isEmptyRuntimeValue(["2026-01-01", ""])).toBe(false);
       expect(isEmptyRuntimeValue([0])).toBe(false);
       expect(isEmptyRuntimeValue(["a"])).toBe(false);
+    });
+
+    it("treats a whitespace-only string as empty, in lockstep with the Go isEmptyFormValue", () => {
+      // Both sides trim: a whitespace-only value must fail `required` on the
+      // client instead of passing here and bouncing off the server.
+      expect(isEmptyRuntimeValue(" ")).toBe(true);
+      expect(isEmptyRuntimeValue("\t\n")).toBe(true);
+      expect(isEmptyRuntimeValue([" ", ""])).toBe(true);
+      expect(isEmptyRuntimeValue(" a ")).toBe(false);
     });
   });
 

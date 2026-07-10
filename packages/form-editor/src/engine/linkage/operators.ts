@@ -25,11 +25,19 @@ export const LINKAGE_OPERATORS: readonly LinkageOperator[] = [
 
 /**
  * True when a value is considered "empty" for linkage purposes — covers
- * the typical user-facing notion of empty (nullish / `""` / `[]`). Numbers
- * (including `0`), booleans, and non-empty objects are NOT empty. An array
- * counts as empty when it holds no meaningful entry, so a date range cleared
- * to `["", ""]` is treated the same as an unset `[]` by `required` and the
- * `empty` / `notEmpty` operators.
+ * the typical user-facing notion of empty (nullish / blank string / `[]`).
+ * Numbers (including `0`), booleans, and non-empty objects are NOT empty. An
+ * array counts as empty when it holds no meaningful entry, so a date range
+ * cleared to `["", ""]` is treated the same as an unset `[]` by `required` and
+ * the `empty` / `notEmpty` operators.
+ *
+ * Lockstep pair: the Go approval backend's `isEmptyFormValue`
+ * (`internal/approval/service/validation.go`). Strings are TRIMMED on both
+ * sides, so a whitespace-only value fails `required` here instead of passing
+ * the client and bouncing off the server with no inline error. Deliberate
+ * residual asymmetry: arrays here are empty when every element is empty
+ * (recursive), Go uses `len == 0` — the client is intentionally STRICTER
+ * (client-side strictness is safe; the server accepts more).
  */
 export function isEmptyRuntimeValue(value: unknown): boolean {
   if (isNullish(value)) {
@@ -37,7 +45,7 @@ export function isEmptyRuntimeValue(value: unknown): boolean {
   }
 
   if (typeof value === "string") {
-    return value.length === 0;
+    return value.trim().length === 0;
   }
 
   if (Array.isArray(value)) {

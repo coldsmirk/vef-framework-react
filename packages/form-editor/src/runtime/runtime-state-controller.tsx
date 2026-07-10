@@ -12,6 +12,7 @@ import { isKeyedField } from "../engine/keys";
 import { evaluateRuntimeStates } from "../engine/linkage";
 import { isRootScope, walkFields } from "../engine/schema/walk";
 import { EffectDispatchProvider, useScopeEffects } from "./effects";
+import { writeFieldValue } from "./field-write";
 import { resolveScopeValues } from "./resolve-scope-values";
 import { RuntimeStateContextProvider } from "./runtime-context";
 import { stabilizeStateMap } from "./stabilize-state-map";
@@ -87,10 +88,12 @@ function LinkageScope({
   const appliedAssignedValues = appliedAssignsRef.current.applied;
 
   // Side-effect lane: condition rising-edge detection + the event dispatcher
-  // published to descendant fields. Same scope (root / row), same `values`.
+  // published to descendant fields. Same scope (root / row), same `values`,
+  // same permission clamp (`set_field` writes gate on it).
   const runEffects = useScopeEffects({
     evaluators,
     evaluationContext,
+    fieldPermissions,
     form,
     prefix,
     schema,
@@ -101,12 +104,13 @@ function LinkageScope({
   useEffect(() => {
     applyScopedAssignments({
       appliedAssignedValues,
+      fieldPermissions,
       form,
       prefix,
       schema,
       stateMap
     });
-  }, [appliedAssignedValues, form, prefix, schema, stateMap]);
+  }, [appliedAssignedValues, fieldPermissions, form, prefix, schema, stateMap]);
 
   return (
     <RuntimeStateContextProvider value={stateMap}>
@@ -219,15 +223,22 @@ export function SubformRowController({
  * compare is sound for recomputed-but-equal objects because `stabilizeStateMap`
  * preserves the previous state entry (and so the previous `assignedValue`
  * reference) whenever an evaluation is deeply equal.
+ *
+ * Writes go through the shared {@link writeFieldValue} gate. Its permission
+ * guard is defense-in-depth here: the clamp already suppresses `assigned` on a
+ * non-writable field at evaluation time (which also drives the UI semantics),
+ * so the gate is the LAST line — no `assign` can reach a non-writable field
+ * even if a future state producer forgets the clamp.
  */
 function applyScopedAssignments(args: {
   appliedAssignedValues: Map<string, unknown>;
+  fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   prefix: string;
   schema: RuntimeSchema;
   stateMap: RuntimeStateMap;
 }): void {
-  const assignments: Array<{ name: string; value: unknown }> = [];
+  const assignments: Array<{ key: string; value: unknown }> = [];
 
   walkFields(args.schema, (field, scope) => {
     if (!isRootScope(scope) || !isKeyedField(field)) {
@@ -249,26 +260,22 @@ function applyScopedAssignments(args: {
 
     args.appliedAssignedValues.set(field.id, runtimeState.assignedValue);
 
-    const name = `${args.prefix}${field.key}`;
-
     // The field may already hold the computed value (e.g. a matching default):
     // record it as applied above, but skip the redundant write.
-    if (isDeepEqual(args.form.getFieldValue(name), runtimeState.assignedValue)) {
+    if (isDeepEqual(args.form.getFieldValue(`${args.prefix}${field.key}`), runtimeState.assignedValue)) {
       return;
     }
 
-    assignments.push({ name, value: runtimeState.assignedValue });
+    assignments.push({ key: field.key, value: runtimeState.assignedValue });
   });
 
-  if (assignments.length === 0) {
-    return;
-  }
-
   for (const assignment of assignments) {
-    args.form.setFieldValue(assignment.name, assignment.value, {
-      dontRunListeners: true,
-      dontUpdateMeta: true,
-      dontValidate: false
+    writeFieldValue({
+      fieldPermissions: args.fieldPermissions,
+      form: args.form,
+      key: assignment.key,
+      prefix: args.prefix,
+      value: assignment.value
     });
   }
 }

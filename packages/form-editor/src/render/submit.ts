@@ -31,6 +31,12 @@ import { resolveScopeValues } from "../runtime/resolve-scope-values";
  */
 
 /**
+ * The one required-failure text, shared by the leaf value check and the
+ * subform "at least one row" check so the two lanes never drift.
+ */
+const REQUIRED_MESSAGE = "此项为必填";
+
+/**
  * A keyed node's effective state within one value scope: its own evaluated
  * linkage outcome OR'd with every ancestor container's `hidden` / `disabled`.
  * `own` carries the node's un-folded state for the outcomes that do not inherit
@@ -215,6 +221,18 @@ function collectScopeSubmitErrors(
     if (node.type === "subform") {
       const raw = values[node.key];
       const rows: unknown[] = Array.isArray(raw) ? raw : [];
+
+      // Subform-level required means "at least one row" (matching the Go
+      // side's `len == 0` check). A subform carries no static `validate`
+      // slot, so the clamped `required` outcome — a `"required"` permission
+      // or a `require` linkage rule — is the complete truth here. The
+      // hidden / disabled exemptions above already cover a non-writable
+      // clamp (it folds into `disabled`).
+      if (state.own.required && rows.length === 0) {
+        errors[`${namePrefix}${node.key}`] = REQUIRED_MESSAGE;
+        return;
+      }
+
       // Row scopes evaluate unclamped — top-level permissions stop at the
       // subform node itself (whose clamped hidden / disabled above already
       // exempts the whole subtree).
@@ -296,7 +314,7 @@ export function validateRuntimeField(args: {
  */
 export function validateKeyedFieldValue(field: KeyedFormField, required: boolean, value: unknown): string | undefined {
   if (required && isEmptyRuntimeValue(value)) {
-    return "此项为必填";
+    return REQUIRED_MESSAGE;
   }
 
   return isEmptyRuntimeValue(value) ? undefined : validateFieldConstraints(field, value);
