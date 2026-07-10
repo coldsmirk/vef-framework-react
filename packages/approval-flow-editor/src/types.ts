@@ -222,6 +222,16 @@ export interface FormFieldDefinition {
    * columns never nest another table.
    */
   columns?: FormFieldDefinition[];
+  /**
+   * `true` when the field's visibility can be toggled off by form linkage —
+   * its own hide-capable linkage, a hidden default, or a hide-capable ancestor
+   * container. The field-permission table warns when a node grants `required`
+   * on such a field: the backend's `required` check is linkage-blind and would
+   * reject the approve forever while the field is hidden. Populated by
+   * `@vef-framework-react/approval-form-bridge`'s `projectFormSchema`; absent
+   * when the inventory came from elsewhere.
+   */
+  hasConditionalVisibility?: boolean;
 }
 
 /**

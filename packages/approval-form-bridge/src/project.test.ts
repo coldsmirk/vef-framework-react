@@ -965,6 +965,243 @@ describe("projectFormSchema", () => {
 
       expect(result.issues).toHaveLength(1);
     });
+
+    it("errors on a second-device unmappable sighting of an already-projected key", () => {
+      // pc textfield "a" projects; the mobile switch on the SAME key must still
+      // error — classification runs before the cross-device dedupe, so the
+      // conflicting type is not silently skipped (the losing device would
+      // submit a value the deployed definition rejects). Mirrors the Go parser.
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "textfield",
+            key: "a",
+            label: "文本"
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "switch",
+                key: "a",
+                label: "开关"
+              }
+            ]
+          }
+        }
+      ));
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "unmappable_field_type",
+          severity: "error",
+          path: "a"
+        })
+      ]);
+    });
+
+    it("errors and projects nothing when the unmappable widget is sighted first", () => {
+      // pc switch "a" errors and records the key unprojectable; the mobile
+      // textfield on the same key is deduped away — one issue, no field,
+      // matching the Go parser's abort-on-first-error.
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "switch",
+            key: "a",
+            label: "开关"
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "textfield",
+                key: "a",
+                label: "文本"
+              }
+            ]
+          }
+        }
+      ));
+
+      expect(result.valid).toBe(false);
+      expect(result.fields).toEqual([]);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "unmappable_field_type",
+          severity: "error",
+          path: "a"
+        })
+      ]);
+    });
+  });
+
+  describe("conditional visibility hint", () => {
+    it("flags a field whose own linkage can hide it", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "a",
+          label: "甲",
+          linkage: {
+            rules: [
+              {
+                id: "L1",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "b",
+                    operator: "eq",
+                    value: "x"
+                  }
+                },
+                actions: [{ type: "hide" }]
+              }
+            ]
+          }
+        }
+      ]));
+
+      expect(result.formFields[0]?.hasConditionalVisibility).toBe(true);
+    });
+
+    it("flags a field with a hidden default", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "a",
+          label: "甲",
+          linkage: { defaults: { hidden: true } }
+        }
+      ]));
+
+      expect(result.formFields[0]?.hasConditionalVisibility).toBe(true);
+    });
+
+    it("flags a field whose linkage uses a script action", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "a",
+          label: "甲",
+          linkage: {
+            rules: [
+              {
+                id: "L1",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "b",
+                    operator: "eq",
+                    value: "x"
+                  }
+                },
+                actions: [{ type: "script", source: "return { hidden: true };" }]
+              }
+            ]
+          }
+        }
+      ]));
+
+      expect(result.formFields[0]?.hasConditionalVisibility).toBe(true);
+    });
+
+    it("flags a field nested in a hide-capable ancestor container", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "Sec",
+          type: "section",
+          variant: "card",
+          title: "分组",
+          linkage: {
+            rules: [
+              {
+                id: "L1",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "b",
+                    operator: "eq",
+                    value: "x"
+                  }
+                },
+                actions: [{ type: "hide" }]
+              }
+            ]
+          },
+          children: [
+            {
+              id: "F1",
+              type: "textfield",
+              key: "a",
+              label: "甲"
+            }
+          ]
+        }
+      ]));
+
+      expect(result.fields.map(field => field.key)).toEqual(["a"]);
+      expect(result.formFields[0]?.hasConditionalVisibility).toBe(true);
+    });
+
+    it("does not flag a field carrying only value / require / disable linkage", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "a",
+          label: "甲",
+          linkage: {
+            defaults: { required: true, disabled: true },
+            rules: [
+              {
+                id: "L1",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "b",
+                    operator: "eq",
+                    value: "x"
+                  }
+                },
+                actions: [{ type: "require" }, { type: "disable" }]
+              }
+            ]
+          }
+        }
+      ]));
+
+      // The field still trips the linkage_not_projected warning, but its
+      // visibility is not linkage-governed, so the hint stays absent.
+      expect(result.formFields[0]?.hasConditionalVisibility).toBeUndefined();
+    });
+
+    it("does not flag a plain field", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "textfield",
+          key: "a",
+          label: "甲"
+        }
+      ]));
+
+      expect(result.formFields[0]?.hasConditionalVisibility).toBeUndefined();
+    });
   });
 
   describe("linkage", () => {

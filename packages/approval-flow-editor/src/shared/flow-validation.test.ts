@@ -665,6 +665,28 @@ describe("validateFlowDefinition field permissions", () => {
 
     expect(codes).toContain("field_permission_key_unknown");
   });
+
+  it("does not gate required on a conditionally-hidden field", () => {
+    // The required-on-conditionally-hidden deadlock hint is a NON-blocking
+    // FieldPermissionTable tooltip, never a validation issue — the consumers
+    // (handlePublish, the wizard step) gate on `errors.length === 0`, so a
+    // warning here would wrongly block publish. hasConditionalVisibility rides
+    // the field inventory but validateFlowDefinition only reads the key, so the
+    // gate stays clean.
+    const conditionallyHidden: FormFieldDefinition[] = [
+      {
+        key: "reason",
+        kind: "input",
+        label: "原因",
+        hasConditionalVisibility: true
+      }
+    ];
+    const codes = codesOf(flowWith({
+      data: { name: "审批", fieldPermissions: { reason: "required" } }
+    }), conditionallyHidden);
+
+    expect(codes).toEqual([]);
+  });
 });
 
 describe("validateFlowDefinition formFields tri-state", () => {

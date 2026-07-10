@@ -8,6 +8,7 @@ import type {
   FormField,
   FormSchema,
   KeyedNode,
+  PresentationLayer,
   SubformNode,
   Validatable
 } from "@vef-framework-react/form-editor";
@@ -15,7 +16,7 @@ import type {
 import type { ApprovalFieldKind, ApprovalFieldOption, ApprovalFormField, ApprovalValidationRule } from "./contract";
 import type { ProjectionIssue } from "./issues";
 
-import { inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/form-editor";
+import { findParentContainer, inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/form-editor";
 
 import {
   issueCrossDeviceKindMismatch,
@@ -131,9 +132,11 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
   const formFields: FlowFormFieldDefinition[] = [];
   const dataSources = new Map((schema.dataSources ?? []).map(source => [source.id, source]));
 
-  // key → what the first sighting projected, or null when it was
-  // unprojectable. Dedup applies to both; the cross-device conflict checks
-  // only fire between two successfully projectable sightings.
+  // key → the first sighting's projection, or null when it was unprojectable
+  // (a failed classify, or an empty / nested subform). Classification runs
+  // BEFORE this dedupe (see the loop), so an unmappable / unknown widget errors
+  // on every device; the cross-device conflict checks below only compare two
+  // successfully-projected sightings.
   const seen = new Map<string, SeenProjection | null>();
 
   for (const layer of [schema.presentations.pc, schema.presentations.mobile]) {
@@ -148,13 +151,35 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
 
       const previous = seen.get(node.key);
 
+      // Classify the widget's type BEFORE resolving the dedupe: an unmappable
+      // (switch / daterange) or unknown widget breaks the submit contract on
+      // EVERY device, so a key first sighted as a mappable widget and again as
+      // an unmappable one must still error — otherwise the losing device
+      // submits values the deployed definition rejects, the exact hazard the
+      // cross-device check exists to prevent. Mirrors the Go parser's
+      // classifyWidget-before-seen order (internal/approval/formeditor,
+      // parser.go). A repeat unprojectable sighting of an already-failed key
+      // (previous === null) is deduped to a single issue.
+      const classification = classifyWidget(node);
+
+      if (classification !== undefined) {
+        if (previous !== null) {
+          issues.push(classification);
+          seen.set(node.key, null);
+        }
+
+        return;
+      }
+
       if (previous !== undefined) {
         // The submitted data contract is shared across devices, so a second
         // sighting that would project a DIFFERENT contract means the losing
         // device submits values the deployed definition rejects — an error,
         // not a preference. Kind conflicts and table column-set conflicts
         // are detected; a same-kind options/validation divergence is not
-        // (documented limitation).
+        // (documented limitation). classifyWidget passed, so peekKind resolves
+        // to a real kind here; previous === null (first sighting unprojectable)
+        // deduped the losing device away, matching Go's abort-on-first-error.
         if (previous !== null) {
           const kind = peekKind(node);
 
@@ -186,7 +211,14 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
 
       if (projected !== undefined) {
         fields.push({ ...projected.approval, sortOrder: fields.length });
-        formFields.push(projected.flow);
+        // hasConditionalVisibility is a designer-side hint on the flow field
+        // (the FlowFormFieldDefinition the permission table reads), orthogonal
+        // to the linkage_not_projected warning warnOnLinkage already raised.
+        formFields.push(
+          hasConditionalVisibility(layer, node)
+            ? { ...projected.flow, hasConditionalVisibility: true }
+            : projected.flow
+        );
       }
     });
   }
@@ -197,6 +229,25 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
     issues,
     valid: issues.every(issue => issue.severity !== "error")
   };
+}
+
+/**
+ * The projection-blocking fault of a root-scope keyed node's widget type: an
+ * unmappable (switch / daterange) or unknown type. A subform (table) and every
+ * mapped leaf widget pass (return `undefined`). Run BEFORE the cross-device
+ * dedupe so a type conflict raises identically no matter which device sees the
+ * key first — mirrors the Go parser's `classifyWidget` (internal/approval/
+ * formeditor, project.go), whose walk (parser.go) classifies before the seen
+ * check.
+ */
+function classifyWidget(node: Block & KeyedNode): ProjectionIssue | undefined {
+  if (node.type === "subform" || KIND_BY_TYPE[node.type] !== undefined) {
+    return undefined;
+  }
+
+  return UNMAPPABLE_TYPES.has(node.type)
+    ? issueUnmappableFieldType(node.key, node.type)
+    : issueUnknownFieldType(node.key, node.type);
 }
 
 /**
@@ -511,4 +562,46 @@ function warnOnLinkage(node: { linkage?: FieldLinkage }, path: string, issues: P
   if (linkage !== undefined && (linkage.defaults !== undefined || (linkage.rules?.length ?? 0) > 0)) {
     issues.push(issueLinkageNotProjected(path));
   }
+}
+
+/**
+ * Whether a projected root field's visibility can be toggled off by linkage —
+ * its own linkage, or that of any layout-container ancestor on the path to it.
+ * The designer flags a node that grants `required` on such a field: the
+ * renderer exempts a linkage-hidden field from validation and drops its value,
+ * but the backend's `required` check is linkage-blind and would reject the
+ * approve forever while the field is hidden (a deadlock the backend cannot
+ * fix). A root field's ancestors are only layout containers — a subform
+ * ancestor would place the field in a deeper value scope, excluding it from the
+ * projection — so climbing `findParentContainer` never crosses a value scope.
+ */
+function hasConditionalVisibility(layer: PresentationLayer, node: Block & KeyedNode): boolean {
+  if (isHideCapableLinkage(node.linkage)) {
+    return true;
+  }
+
+  for (let container = findParentContainer(layer, node.id); container !== undefined; container = findParentContainer(layer, container.id)) {
+    if (isHideCapableLinkage(container.linkage)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Whether a linkage can drive a field hidden: a `hidden` default, a `hide` /
+ * `show` state action (visibility is linkage-governed either way), or a
+ * `script` action (its returned patch can set `hidden`).
+ */
+function isHideCapableLinkage(linkage: FieldLinkage | undefined): boolean {
+  if (linkage === undefined) {
+    return false;
+  }
+
+  if (linkage.defaults?.hidden === true) {
+    return true;
+  }
+
+  return (linkage.rules ?? []).some(rule => rule.actions.some(action => action.type === "hide" || action.type === "show" || action.type === "script"));
 }
