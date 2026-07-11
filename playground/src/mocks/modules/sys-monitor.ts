@@ -11,7 +11,7 @@ interface SystemOverview {
     kernelArch: string;
     uptime: number;
   };
-  cpu: { physicalCores: number; logicalCores: number; usagePercent: number };
+  cpu: { physicalCores: number; logicalCores: number; usagePercent: number; effectiveCores: number };
   memory: { total: number; used: number; usedPercent: number };
   disk: { total: number; used: number; usedPercent: number; partitions: number };
   network: { interfaces: number; bytesSent: number; bytesRecv: number; packetsSent: number; packetsRecv: number };
@@ -42,7 +42,10 @@ defineMock<void, SystemOverview>("sys/monitor", "get_overview", () => {
         min: 5,
         max: 70,
         fractionDigits: 2
-      })
+      }),
+      // Matches logicalCores on an unlimited host; a limited container would
+      // report its (possibly fractional) cgroup quota instead.
+      effectiveCores: 16
     },
     memory: {
       total: memTotal,
@@ -53,7 +56,8 @@ defineMock<void, SystemOverview>("sys/monitor", "get_overview", () => {
       total: diskTotal,
       used: diskUsed,
       usedPercent: Number(((diskUsed / diskTotal) * 100).toFixed(2)),
-      partitions: 3
+      // The Go side now reports the root filesystem only.
+      partitions: 1
     },
     network: {
       interfaces: 4,

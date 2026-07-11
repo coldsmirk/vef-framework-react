@@ -24,6 +24,12 @@ export interface CpuSummary {
   physicalCores: number;
   logicalCores: number;
   usagePercent: number;
+  /**
+   * The CPU capacity that usagePercent is normalized against: the cgroup
+   * quota/cpuset capacity inside a limited container (possibly fractional,
+   * e.g. 0.5), otherwise equal to logicalCores.
+   */
+  effectiveCores: number;
 }
 
 export interface MemorySummary {

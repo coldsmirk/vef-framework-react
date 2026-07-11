@@ -99,7 +99,10 @@ function RouteComponent(): ReactElement {
               usagePercent={Math.round(cpu?.usagePercent ?? 0)}
               extra={(
                 <span className={classes.chartCardExtra}>
-                  {cpu?.logicalCores ?? 0}
+                  {/* usagePercent is normalized against the effective capacity
+                      (cgroup quota inside a limited container), so the paired
+                      core count must be effectiveCores, not host topology. */}
+                  {cpu?.effectiveCores ?? 0}
                   {" 核"}
                 </span>
               )}
