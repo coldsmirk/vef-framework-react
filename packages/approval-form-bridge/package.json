@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/approval-form-bridge",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "private": false,
   "description": "Projection bridge from form-editor schemas to the approval form contract",
   "keywords": [
