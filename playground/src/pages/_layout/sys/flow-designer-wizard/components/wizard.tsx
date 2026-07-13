@@ -2,7 +2,7 @@ import type { EditorPlugins, FlowDefinition } from "@vef-framework-react/approva
 import type { FormSchema } from "@vef-framework-react/form-editor";
 import type { CSSProperties, FC } from "react";
 
-import type { FlowBasicInfo, FlowDesignPayload, FlowInitiator, StorageMode } from "../types";
+import type { BusinessBindingConfig, FlowBasicInfo, FlowDesignPayload, FlowInitiator, StorageMode } from "../types";
 
 import { validateFlowDefinition } from "@vef-framework-react/approval-flow-editor";
 import { createApprovalRegistries, projectFormSchema, validateApprovalSchema } from "@vef-framework-react/approval-form-bridge";
@@ -31,6 +31,33 @@ const DEFAULT_BASIC: FlowBasicInfo = {
 };
 
 const EMPTY_FLOW: FlowDefinition = { nodes: [], edges: [] };
+
+// Mirrors the backend's business-identifier whitelist (`approval.ValidateBusinessIdentifier`).
+const BUSINESS_IDENTIFIER_PATTERN = /^[A-Z_]\w{0,62}$/i;
+
+/**
+ * Client-side pre-check of the backend save gate (`binding.NormalizeConfig`):
+ * table, key columns, status column and instance-id column are mandatory,
+ * every table / column name must be a plain SQL identifier, and status-mapping
+ * values must not be blank.
+ */
+function isBindingValid(binding: BusinessBindingConfig | undefined): boolean {
+  if (!binding) {
+    return false;
+  }
+
+  const identifiers = [
+    binding.tableName,
+    ...binding.keyColumns,
+    binding.statusColumn,
+    binding.instanceIdColumn,
+    ...[binding.startedAtColumn, binding.finishedAtColumn].filter(column => column !== undefined)
+  ];
+
+  return binding.keyColumns.length > 0
+    && identifiers.every(identifier => BUSINESS_IDENTIFIER_PATTERN.test(identifier))
+    && Object.values(binding.statusMapping ?? {}).every(value => value.trim() !== "");
+}
 
 export interface FlowDesignerWizardInitialValue {
   basic?: Partial<FlowBasicInfo>;
@@ -110,19 +137,18 @@ export const FlowDesignerWizard: FC<FlowDesignerWizardProps> = ({
     []
   );
 
-  // Business mode requires table + pk + status — the backend rejects a
-  // half-configured binding at save time (ErrBindingIncomplete).
   const basicValid = basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.instanceTitleTemplate.trim() !== ""
-    && (basic.bindingMode !== "business"
-      || (!!basic.businessTable && !!basic.businessPkField && !!basic.businessStatusField))
+    && (basic.bindingMode !== "business" || isBindingValid(basic.businessBinding))
     && initiators.length > 0;
   const stepValid = [basicValid, formGate === null || formGate.valid, flowErrors.length === 0, true];
   const currentStepValid = stepValid[step] ?? false;
 
   const payload: FlowDesignPayload = {
-    basic,
+    // Standalone flows must not carry a binding (ErrBindingUnexpected); the
+    // in-progress binding state is kept so switching modes doesn't lose input.
+    basic: basic.bindingMode === "business" ? basic : { ...basic, businessBinding: undefined },
     initiators,
     storageMode,
     formSchema,

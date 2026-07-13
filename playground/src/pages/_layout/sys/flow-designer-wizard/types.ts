@@ -30,6 +30,46 @@ export interface FlowInitiator {
 }
 
 /**
+ * Instance statuses the engine projects into the business status column,
+ * aligned with the backend `isProjectableStatus`
+ * (`internal/approval/binding/config_validator.go`).
+ */
+export type ProjectableInstanceStatus
+  = | "running"
+    | "approved"
+    | "rejected"
+    | "withdrawn"
+    | "returned"
+    | "terminated";
+
+/**
+ * Business binding for a `business`-mode flow, aligned with the backend
+ * `approval.BusinessBindingConfig` (`approval/binding.go`). All table / column
+ * names must be plain SQL identifiers (`^[A-Za-z_][A-Za-z0-9_]{0,62}$`).
+ */
+export interface BusinessBindingConfig {
+  tableName: string;
+  /**
+   * Columns identifying the bound record — must exactly match a non-null
+   * primary or unique key on `tableName` (composite keys supported).
+   */
+  keyColumns: string[];
+  statusColumn: string;
+  /**
+   * Mandatory: the engine uses it as a compare-and-set fence so a stale
+   * instance cannot overwrite the state owned by a newer approval round.
+   */
+  instanceIdColumn: string;
+  startedAtColumn?: string;
+  finishedAtColumn?: string;
+  /**
+   * Translates instance statuses into host business status values. Missing
+   * entries fall back to the instance-status string itself.
+   */
+  statusMapping?: Partial<Record<ProjectableInstanceStatus, string>>;
+}
+
+/**
  * Step 1 data — the `Flow` record (`approval/models.go` `Flow`).
  */
 export interface FlowBasicInfo {
@@ -39,17 +79,12 @@ export interface FlowBasicInfo {
   icon?: string;
   description?: string;
   bindingMode: BindingMode;
-  businessTable?: string;
-  businessPkField?: string;
-  businessStatusField?: string;
   /**
-   * Optional write-back columns: when set, the engine keeps them in sync with
-   * the instance (id / start time / finish time); when omitted the column is
-   * never touched. Table, pk and status are mandatory in business mode.
+   * Required in `business` mode, forbidden in `standalone` mode — the backend
+   * rejects a half-configured or unexpected binding at save time
+   * (`ErrBindingIncomplete` / `ErrBindingUnexpected`).
    */
-  businessInstanceIdField?: string;
-  businessStartedAtField?: string;
-  businessFinishedAtField?: string;
+  businessBinding?: BusinessBindingConfig;
   adminUserIds: string[];
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;

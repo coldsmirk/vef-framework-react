@@ -102,7 +102,9 @@ export const ReviewStep: FC<ReviewStepProps> = ({ payload, fields }) => {
               <Descriptions.Item label="编码">{basic.code || "—"}</Descriptions.Item>
 
               <Descriptions.Item label="绑定模式">
-                {basic.bindingMode === "business" ? `绑定业务表 ${basic.businessTable ?? ""}` : "独立存储"}
+                {basic.bindingMode === "business" && basic.businessBinding
+                  ? `绑定业务表 ${basic.businessBinding.tableName}(${basic.businessBinding.keyColumns.join(" + ")})`
+                  : "独立存储"}
               </Descriptions.Item>
 
               <Descriptions.Item label="标题模板">{basic.instanceTitleTemplate || "—"}</Descriptions.Item>

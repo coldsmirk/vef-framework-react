@@ -1,9 +1,9 @@
 import type { EditorPlugins } from "@vef-framework-react/approval-flow-editor";
 import type { CSSProperties, FC, ReactNode } from "react";
 
-import type { BindingMode, FlowBasicInfo, FlowInitiator } from "../../types";
+import type { BindingMode, BusinessBindingConfig, FlowBasicInfo, FlowInitiator, ProjectableInstanceStatus } from "../../types";
 
-import { Card, Divider, Input, Segmented, Switch } from "@vef-framework-react/components";
+import { Card, Divider, Input, Segmented, Select, Switch } from "@vef-framework-react/components";
 
 import { InitiatorsEditor } from "../initiators-editor";
 import { StepHeader } from "../step-header";
@@ -12,6 +12,22 @@ const BINDING_OPTIONS: Array<{ label: string; value: BindingMode }> = [
   { label: "独立存储", value: "standalone" },
   { label: "绑定业务表", value: "business" }
 ];
+
+const STATUS_MAPPING_OPTIONS: Array<{ status: ProjectableInstanceStatus; label: string }> = [
+  { status: "running", label: "审批中" },
+  { status: "approved", label: "已通过" },
+  { status: "rejected", label: "已拒绝" },
+  { status: "withdrawn", label: "已撤回" },
+  { status: "returned", label: "已退回" },
+  { status: "terminated", label: "已终止" }
+];
+
+const EMPTY_BINDING: BusinessBindingConfig = {
+  tableName: "",
+  keyColumns: [],
+  statusColumn: "",
+  instanceIdColumn: ""
+};
 
 function isBindingMode(value: unknown): value is BindingMode {
   return value === "standalone" || value === "business";
@@ -99,6 +115,23 @@ export const BasicInfoStep: FC<BasicInfoStepProps> = ({
 }) => {
   const AdminPicker = pickers?.user;
   const isBusiness = basic.bindingMode === "business";
+  const binding = basic.businessBinding ?? EMPTY_BINDING;
+
+  const patchBinding = (patch: Partial<BusinessBindingConfig>) => {
+    onBasicChange({ businessBinding: { ...binding, ...patch } });
+  };
+
+  const patchStatusMapping = (status: ProjectableInstanceStatus, value: string) => {
+    const mapping = { ...binding.statusMapping };
+
+    if (value.trim() === "") {
+      delete mapping[status];
+    } else {
+      mapping[status] = value;
+    }
+
+    patchBinding({ statusMapping: Object.keys(mapping).length > 0 ? mapping : undefined });
+  };
 
   return (
     <div style={containerStyle}>
@@ -171,61 +204,114 @@ export const BasicInfoStep: FC<BasicInfoStepProps> = ({
             {isBusiness && (
               <Field required label="业务表名">
                 <Input
-                  placeholder="business_table"
-                  value={basic.businessTable ?? ""}
-                  onChange={event => onBasicChange({ businessTable: event.target.value || undefined })}
+                  placeholder="table_name"
+                  value={binding.tableName}
+                  onChange={event => patchBinding({ tableName: event.target.value })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field required label="主键字段">
-                <Input
-                  placeholder="business_pk_field"
-                  value={basic.businessPkField ?? ""}
-                  onChange={event => onBasicChange({ businessPkField: event.target.value || undefined })}
+              <Field required label="主键列">
+                <Select
+                  mode="tags"
+                  open={false}
+                  placeholder="key_columns(回车添加,须与表上的非空主键/唯一键完全一致)"
+                  style={{ width: "100%" }}
+                  suffixIcon={null}
+                  tokenSeparators={[",", " "]}
+                  value={binding.keyColumns}
+                  onChange={(columns: string[]) => patchBinding({ keyColumns: columns })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field required label="状态字段">
+              <Field required label="状态列">
                 <Input
-                  placeholder="business_status_field"
-                  value={basic.businessStatusField ?? ""}
-                  onChange={event => onBasicChange({ businessStatusField: event.target.value || undefined })}
+                  placeholder="status_column"
+                  value={binding.statusColumn}
+                  onChange={event => patchBinding({ statusColumn: event.target.value })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field label="实例 ID 字段">
+              <Field required label="实例 ID 列">
                 <Input
-                  placeholder="business_instance_id_field(可选,配置后引擎回写实例 ID)"
-                  value={basic.businessInstanceIdField ?? ""}
-                  onChange={event => onBasicChange({ businessInstanceIdField: event.target.value || undefined })}
+                  placeholder="instance_id_column(引擎以此做防覆盖栅栏)"
+                  value={binding.instanceIdColumn}
+                  onChange={event => patchBinding({ instanceIdColumn: event.target.value })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field label="开始时间字段">
+              <Field label="开始时间列">
                 <Input
-                  placeholder="business_started_at_field(可选)"
-                  value={basic.businessStartedAtField ?? ""}
-                  onChange={event => onBasicChange({ businessStartedAtField: event.target.value || undefined })}
+                  placeholder="started_at_column(可选)"
+                  value={binding.startedAtColumn ?? ""}
+                  onChange={event => patchBinding({ startedAtColumn: event.target.value || undefined })}
                 />
               </Field>
             )}
 
             {isBusiness && (
-              <Field label="结束时间字段">
+              <Field label="结束时间列">
                 <Input
-                  placeholder="business_finished_at_field(可选)"
-                  value={basic.businessFinishedAtField ?? ""}
-                  onChange={event => onBasicChange({ businessFinishedAtField: event.target.value || undefined })}
+                  placeholder="finished_at_column(可选)"
+                  value={binding.finishedAtColumn ?? ""}
+                  onChange={event => patchBinding({ finishedAtColumn: event.target.value || undefined })}
                 />
               </Field>
+            )}
+
+            {isBusiness && (
+              <div style={fullSpan}>
+                <Field label="状态映射">
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 8
+                  }}
+                  >
+                    {STATUS_MAPPING_OPTIONS.map(({ status, label }) => (
+                      <div
+                        key={status}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6
+                        }}
+                      >
+                        <span style={{
+                          flexShrink: 0,
+                          fontSize: 12,
+                          color: "var(--vef-color-text-secondary)"
+                        }}
+                        >
+                          {label}
+                        </span>
+
+                        <Input
+                          placeholder={status}
+                          value={binding.statusMapping?.[status] ?? ""}
+                          onChange={event => patchStatusMapping(status, event.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color: "var(--vef-color-text-tertiary)"
+                  }}
+                  >
+                    审批状态写回状态列时的取值,留空则回写状态原值
+                  </div>
+                </Field>
+              </div>
             )}
           </div>
         </Card>
