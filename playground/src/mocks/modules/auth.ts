@@ -84,7 +84,24 @@ function buildUserInfo(): UserInfo {
   };
 }
 
+// Backend error code for password-policy violations (`security.ErrCodePasswordPolicyViolation`).
+const PASSWORD_POLICY_VIOLATION_CODE = 1050;
+
 defineMock<LoginParams, LoginResult>("security/auth", "login", ({ params }) => {
+  // Demo account for the forced password-change challenge
+  // (`security.PasswordChangeChallengeProvider`): first login must set a new
+  // password before tokens are issued.
+  if (params.principal === "rookie" && params.credentials === "rookie") {
+    return {
+      challengeToken: `mock-challenge-${faker.string.alphanumeric(24)}`,
+      challenge: {
+        type: "password_change",
+        data: { reason: "first_login" },
+        required: true
+      }
+    };
+  }
+
   if (params.principal !== "admin" || params.credentials !== "admin") {
     throw new MockBusinessError(1001, "用户名或密码错误");
   }
@@ -92,7 +109,15 @@ defineMock<LoginParams, LoginResult>("security/auth", "login", ({ params }) => {
   return { message: "登录成功", tokens: buildTokens() };
 });
 
-defineMock<ResolveChallengeParams, LoginResult>("security/auth", "resolve_challenge", () => {
+defineMock<ResolveChallengeParams, LoginResult>("security/auth", "resolve_challenge", ({ params }) => {
+  if (params.type === "password_change") {
+    const newPassword = typeof params.response === "string" ? params.response : "";
+
+    if (newPassword.length < 8) {
+      throw new MockBusinessError(PASSWORD_POLICY_VIOLATION_CODE, "密码长度不能少于 8 位");
+    }
+  }
+
   return {
     message: "登录成功",
     tokens: buildTokens()

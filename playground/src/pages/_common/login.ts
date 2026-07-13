@@ -1,7 +1,7 @@
 import type { LoginChallengeRenderers, LoginParams, ResolveChallengeParams } from "@vef-framework-react/starter";
 
 import { createFileRoute } from "@tanstack/react-router";
-import { createLoginRouteOptions } from "@vef-framework-react/starter";
+import { createLoginRouteOptions, PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge } from "@vef-framework-react/starter";
 import { apiClient } from "~api";
 import { login, resolveChallenge } from "~apis";
 import { DEPARTMENT_SELECTION_CHALLENGE_TYPE, DepartmentSelectionChallenge } from "~components";
@@ -19,7 +19,8 @@ function handleResolveChallenge(params: ResolveChallengeParams) {
 // challenge type there forces a corresponding renderer entry here at compile
 // time.
 const challengeRenderers: LoginChallengeRenderers = {
-  [DEPARTMENT_SELECTION_CHALLENGE_TYPE]: DepartmentSelectionChallenge
+  [DEPARTMENT_SELECTION_CHALLENGE_TYPE]: DepartmentSelectionChallenge,
+  [PASSWORD_CHANGE_CHALLENGE_TYPE]: PasswordChangeChallenge
 };
 
 export const Route = createFileRoute("/_common/login")(

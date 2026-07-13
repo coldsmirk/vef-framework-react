@@ -3,7 +3,7 @@ export { App, type AppProps } from "./app";
 export { BaseLayout, type BaseLayoutProps } from "./base-layout";
 export { Error } from "./error";
 export { Layout, type AppItem, type LayoutProps, type UserMenuItem } from "./layout";
-export { Login, type LoginChallenge, type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginParams, type LoginProps, type LoginResult, type PasswordLoginParams, type ResolveChallengeParams } from "./login";
+export { Login, PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge, type LoginChallenge, type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginParams, type LoginProps, type LoginResult, type PasswordChangeChallengeData, type PasswordChangeChallengeProps, type PasswordChangeChallengeSpec, type PasswordChangeReason, type PasswordLoginParams, type ResolveChallengeParams } from "./login";
 export { NProgress, nProgressEventEmitter } from "./n-progress";
 export { NotFound } from "./not-found";
 export { RouterContextHookProvider, RouterProvider, type RouterProviderProps, type UseRouterContext } from "./router-provider";

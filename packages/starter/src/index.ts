@@ -1,4 +1,6 @@
 export {
+  PASSWORD_CHANGE_CHALLENGE_TYPE,
+  PasswordChangeChallenge,
   type AppItem,
   type LoginChallenge,
   type LoginChallengeRenderer,
@@ -7,6 +9,10 @@ export {
   type LoginParams,
   type LoginProps,
   type LoginResult,
+  type PasswordChangeChallengeData,
+  type PasswordChangeChallengeProps,
+  type PasswordChangeChallengeSpec,
+  type PasswordChangeReason,
   type PasswordLoginParams,
   type ResolveChallengeParams,
   type UserMenuItem

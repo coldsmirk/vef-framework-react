@@ -1,3 +1,4 @@
+import type { PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallengeSpec } from "@vef-framework-react/starter";
 import type { DEPARTMENT_SELECTION_CHALLENGE_TYPE, DepartmentOption } from "~components";
 
 // Augment the starter framework's `Register` interface so custom app state
@@ -13,6 +14,7 @@ declare module "@vef-framework-react/starter" {
         // The user's chosen department id.
         response: string;
       };
+      [PASSWORD_CHANGE_CHALLENGE_TYPE]: PasswordChangeChallengeSpec;
     };
   }
 }
