@@ -8,6 +8,7 @@ import { GaugeIcon, InfoIcon } from "lucide-react";
 import { getSystemOverview } from "~apis";
 
 import { BuildInfoSection } from "./components/build-info-section";
+import { EventStreamsSection } from "./components/event-streams-section";
 import { NetworkTrafficCard } from "./components/network-traffic-card";
 import { ProcessInfoCard } from "./components/process-info-card";
 import { SystemInfoSection } from "./components/system-info-section";
@@ -170,6 +171,8 @@ function RouteComponent(): ReactElement {
             />
           </Grid.Item>
         </Grid>
+
+        <EventStreamsSection />
       </div>
     </Page>
   );

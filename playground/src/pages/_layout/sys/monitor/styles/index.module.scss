@@ -88,15 +88,15 @@
 }
 
 .justified-descriptions {
-  :global(.vef-descriptions-item-container) {
+  & :global(.vef-descriptions-item-container) {
     justify-content: space-between;
   }
 
-  :global(.vef-descriptions-item-content) {
+  & :global(.vef-descriptions-item-content) {
     flex: none;
   }
 
-  :global(.vef-tag) {
+  & :global(.vef-tag) {
     margin-inline-end: 0;
   }
 }
@@ -107,10 +107,8 @@
   gap: var(--vef-spacing-sm);
 }
 
-.load-item {
-  :global(.vef-progress-text) {
-    font-family: var(--vef-font-family-code);
-  }
+.load-item :global(.vef-progress-text) {
+  font-family: var(--vef-font-family-code);
 }
 
 .load-header {

@@ -2,6 +2,19 @@ import { faker } from "@faker-js/faker";
 
 import { defineMock } from "../define-mock";
 
+interface StreamGroupInfo {
+  name: string;
+  consumers: number;
+  pending: number;
+  lag: number;
+  lastDeliveredId: string;
+}
+
+interface EventStreamsInfo {
+  enabled: boolean;
+  streams: Array<{ stream: string; length: number; groups: StreamGroupInfo[] }>;
+}
+
 interface SystemOverview {
   host: {
     hostname: string;
@@ -103,5 +116,38 @@ defineMock<void, SystemOverview>("sys/monitor", "get_overview", () => {
       buildTime: new Date().toISOString(),
       gitCommit: faker.git.commitSha().slice(0, 10)
     }
+  };
+});
+
+function buildStreamGroup(name: string, lag: number): StreamGroupInfo {
+  return {
+    name,
+    consumers: faker.number.int({ min: 1, max: 4 }),
+    pending: faker.number.int({ min: 0, max: 20 }),
+    lag,
+    lastDeliveredId: `${Date.now() - lag * 1000}-0`
+  };
+}
+
+defineMock<void, EventStreamsInfo>("sys/monitor", "get_event_streams", () => {
+  return {
+    enabled: true,
+    streams: [
+      {
+        stream: "vef:events:approval.instance",
+        length: faker.number.int({ min: 200, max: 5000 }),
+        groups: [
+          buildStreamGroup("approval-projection", 0),
+          buildStreamGroup("business-write-back", faker.number.int({ min: 0, max: 5 })),
+          // An orphan candidate: large and growing lag with idle consumers.
+          buildStreamGroup("legacy-notifier", faker.number.int({ min: 800, max: 2000 }))
+        ]
+      },
+      {
+        stream: "vef:events:audit.log",
+        length: faker.number.int({ min: 50, max: 800 }),
+        groups: [buildStreamGroup("audit-archiver", 0)]
+      }
+    ]
   };
 });

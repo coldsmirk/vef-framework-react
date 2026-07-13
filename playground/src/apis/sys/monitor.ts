@@ -73,12 +73,57 @@ export interface BuildInfo {
   gitCommit: string;
 }
 
+/**
+ * One consumer group attached to a cross-process event stream, aligned with
+ * the backend `event.StreamGroupInfo`. A group whose lag keeps growing while
+ * its consumers stay idle is an orphan candidate — a subscriber that was
+ * removed or renamed without decommissioning its consumer group.
+ */
+export interface StreamGroupInfo {
+  name: string;
+  consumers: number;
+  pending: number;
+  lag: number;
+  lastDeliveredId: string;
+}
+
+/**
+ * One transport-level event stream and its consumer groups, aligned with the
+ * backend `event.StreamInfo`.
+ */
+export interface StreamInfo {
+  stream: string;
+  length: number;
+  groups: StreamGroupInfo[];
+}
+
+/**
+ * Payload of `sys/monitor.get_event_streams`, aligned with the backend
+ * `monitor.EventStreamsInfo`. `enabled` is false when no stream inspector is
+ * available (the redis_stream transport is off).
+ */
+export interface EventStreamsInfo {
+  enabled: boolean;
+  streams: StreamInfo[];
+}
+
 export const getSystemOverview = apiClient.createQueryFn(
   "get_system_overview",
   ({ post }) => async () => {
     const result = await post<SystemOverview>(
       API_PATH,
       { data: createApiRequest("sys/monitor", "get_overview") }
+    );
+    return result.data;
+  }
+);
+
+export const getEventStreams = apiClient.createQueryFn(
+  "get_event_streams",
+  ({ post }) => async () => {
+    const result = await post<EventStreamsInfo>(
+      API_PATH,
+      { data: createApiRequest("sys/monitor", "get_event_streams") }
     );
     return result.data;
   }
