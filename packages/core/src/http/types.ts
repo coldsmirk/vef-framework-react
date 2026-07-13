@@ -30,9 +30,11 @@ export interface AuthTokens {
    */
   accessToken: string;
   /**
-   * The refresh token
+   * The refresh token. Absent when the backend issues stateful opaque-token
+   * sessions (server-side sliding expiration, no refresh round-trip) — only
+   * JWT-mode backends return one.
    */
-  refreshToken: string;
+  refreshToken?: string;
 }
 
 /**
