@@ -1,11 +1,15 @@
 import type {
+  AxiosAdapter,
   AxiosError,
+  AxiosRequestConfig,
   AxiosResponse,
   InternalAxiosRequestConfig
 } from "axios";
+import type * as AxiosModule from "axios";
 
 import type { ApiResult, AuthTokens, HttpClientOptions } from "./types";
 
+import { AxiosHeaders, CanceledError } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HttpClient } from "./client";
@@ -23,6 +27,7 @@ import { BusinessError } from "./errors";
 
 const mocks = vi.hoisted(() => {
   return {
+    adapter: undefined as AxiosAdapter | undefined,
     instance: {
       get: vi.fn(),
       post: vi.fn(),
@@ -39,16 +44,16 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("axios", () => {
-  class CanceledError extends Error {
-    constructor(message?: string) {
-      super(message);
-      this.name = "CanceledError";
-    }
-  }
+vi.mock("axios", async importOriginal => {
+  const original = await importOriginal<typeof AxiosModule>();
+  const { CanceledError } = original;
 
   // axios.create() must return a callable that also exposes get/post/.../interceptors.
-  const create = vi.fn(() => {
+  const create = vi.fn((config?: AxiosRequestConfig) => {
+    if (mocks.adapter) {
+      return original.default.create({ ...config, adapter: mocks.adapter });
+    }
+
     const fn = mocks.instance.call as unknown as Record<string, unknown>;
     Object.assign(fn, {
       get: mocks.instance.get,
@@ -62,6 +67,7 @@ vi.mock("axios", () => {
   });
 
   return {
+    ...original,
     default: { create, CanceledError },
     CanceledError
   };
@@ -117,9 +123,11 @@ function silenceConsole(method: "warn" | "info" | "error"): void {
 
 type RequestHandler = (config: InternalAxiosRequestConfig) => Promise<InternalAxiosRequestConfig>;
 
-type ResponseHandler = (response: AxiosResponse<ApiResult>) => AxiosResponse<ApiResult>;
+type ResponseHandler = (response: AxiosResponse<unknown>) => AxiosResponse<unknown>;
 
-type ResponseErrorHandler = (error: AxiosError<ApiResult>) => Promise<unknown>;
+type ResponseErrorHandler = (error: AxiosError<unknown>) => Promise<unknown>;
+
+type Transport = (config: InternalAxiosRequestConfig) => Promise<AxiosResponse<unknown>>;
 
 interface Handlers {
   request: RequestHandler;
@@ -173,15 +181,29 @@ function makeOkResponse<T>(data: T, code = 0, message = "ok"): AxiosResponse<Api
   } as AxiosResponse<ApiResult<T>>;
 }
 
+function makeResponse<T>(
+  data: T,
+  config = makeConfig(),
+  headers: AxiosResponse<T>["headers"] = {}
+): AxiosResponse<T> {
+  return {
+    data,
+    status: 200,
+    statusText: "OK",
+    headers,
+    config
+  };
+}
+
 function emptyJson(): Record<string, unknown> {
   return {};
 }
 
 function makeAxiosError(
   status: number,
-  body: ApiResult,
+  body: unknown,
   config?: Partial<InternalAxiosRequestConfig>
-): AxiosError<ApiResult> {
+): AxiosError<unknown> {
   const fullConfig = makeConfig(config);
   return {
     name: "AxiosError",
@@ -196,7 +218,73 @@ function makeAxiosError(
       config: fullConfig
     },
     config: fullConfig
-  } as AxiosError<ApiResult>;
+  } as AxiosError<unknown>;
+}
+
+function normalizeRequestHeaders(headers: AxiosRequestConfig["headers"]): AxiosHeaders {
+  if (!headers) {
+    return new AxiosHeaders();
+  }
+
+  if (headers instanceof AxiosHeaders) {
+    return AxiosHeaders.from(headers);
+  }
+
+  const normalized = new AxiosHeaders();
+
+  for (const [name, value] of Object.entries(headers)) {
+    if (!(value instanceof AxiosHeaders)) {
+      normalized.set(name, value);
+    }
+  }
+
+  return normalized;
+}
+
+function installAxiosDriver(handlers: Handlers, transport: Transport): void {
+  async function dispatch(config: InternalAxiosRequestConfig): Promise<AxiosResponse<unknown> | unknown> {
+    const requestConfig = await handlers.request(config);
+    let response: AxiosResponse<unknown>;
+
+    try {
+      response = await transport(requestConfig);
+    } catch (error) {
+      return handlers.responseError(error as AxiosError<unknown>);
+    }
+
+    return handlers.responseSuccess(response);
+  }
+
+  mocks.instance.get.mockImplementation((url: string, config?: AxiosRequestConfig) => dispatch(makeConfig({
+    ...config,
+    headers: normalizeRequestHeaders(config?.headers),
+    method: "get",
+    url
+  })));
+  mocks.instance.post.mockImplementation((url: string, data?: unknown, config?: AxiosRequestConfig) => dispatch(makeConfig({
+    ...config,
+    data,
+    headers: normalizeRequestHeaders(config?.headers),
+    method: "post",
+    url
+  })));
+  mocks.instance.call.mockImplementation((config: InternalAxiosRequestConfig) => dispatch(config));
+}
+
+function mockBrowserDownload(): {
+  click: ReturnType<typeof vi.spyOn>;
+  createObjectURL: ReturnType<typeof vi.spyOn>;
+  revokeObjectURL: ReturnType<typeof vi.spyOn>;
+} {
+  const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+  const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(silence);
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(silence);
+
+  return {
+    click,
+    createObjectURL,
+    revokeObjectURL
+  };
 }
 
 const EXPIRED_CODE = 10_086;
@@ -214,10 +302,23 @@ const EXPIRED_BODY: ApiResult = {
 
 describe("http/HttpClient", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mocks.adapter = undefined;
+    mocks.instance.get.mockReset();
+    mocks.instance.post.mockReset();
+    mocks.instance.postForm.mockReset();
+    mocks.instance.put.mockReset();
+    mocks.instance.delete.mockReset();
+    mocks.instance.call.mockReset();
+    mocks.instance.interceptors.request.use.mockClear();
+    mocks.instance.interceptors.response.use.mockClear();
   });
 
   afterEach(() => {
+    if (vi.isFakeTimers()) {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+
     vi.restoreAllMocks();
   });
 
@@ -342,6 +443,15 @@ describe("http/HttpClient", () => {
 
       expect(handlers.responseSuccess(responseA)).toBe(responseA);
       expect(handlers.responseSuccess(responseB)).toBe(responseB);
+    });
+
+    it("returns raw blob responses without applying business-code handling", () => {
+      const { handlers } = buildHttpClient();
+      const config = makeConfig({ responseType: "blob" });
+      Reflect.set(config, "__vefResponseMode", "raw");
+      const response = makeResponse(new Blob(["file"]), config);
+
+      expect(handlers.responseSuccess(response)).toBe(response);
     });
   });
 
@@ -619,6 +729,302 @@ describe("http/HttpClient", () => {
         { name: "alice" },
         expect.objectContaining({ headers: { "X-Trace": "t1" } })
       );
+    });
+  });
+
+  describe("download", () => {
+    it("preserves raw response handling through the real Axios interceptor pipeline", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const blob = new Blob(["file"]);
+      let responseMode: unknown;
+
+      const adapter: AxiosAdapter = config => {
+        responseMode = Reflect.get(config, "__vefResponseMode");
+        return Promise.resolve(makeResponse(blob, config, AxiosHeaders.from({
+          "content-disposition": "attachment; filename=report.pdf"
+        })));
+      };
+
+      mocks.adapter = adapter;
+      const client = new HttpClient({ baseUrl: "http://test" });
+
+      await client.download("/reports/1");
+
+      expect(responseMode).toBe("raw");
+      expect(browser.click).toHaveBeenCalledTimes(1);
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "report.pdf" });
+    });
+
+    it("downloads an oversized binary response without reading its body as text", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const blob = new Blob([new Uint8Array(1024 * 1024 + 1)], { type: "application/octet-stream" });
+      const textSpy = vi.spyOn(blob, "text");
+      const { client, handlers } = buildHttpClient();
+      const transport = vi.fn((config: InternalAxiosRequestConfig) => Promise.resolve(makeResponse(blob, config, {
+        "content-disposition": "attachment; filename=report.pdf"
+      })));
+      installAxiosDriver(handlers, transport);
+
+      await client.download("/reports/1");
+
+      expect(transport).toHaveBeenCalledTimes(1);
+      expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+        method: "get",
+        responseEncoding: "binary",
+        responseType: "blob",
+        url: "/reports/1"
+      }));
+      expect(textSpy).not.toHaveBeenCalled();
+      expect(browser.createObjectURL).toHaveBeenCalledWith(blob);
+      expect(browser.click).toHaveBeenCalledTimes(1);
+      expect(browser.click.mock.instances[0]).toMatchObject({
+        download: "report.pdf",
+        href: "blob:test"
+      });
+      expect(browser.revokeObjectURL).not.toHaveBeenCalled();
+
+      vi.runAllTimers();
+
+      expect(browser.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+    });
+
+    it("passes the request body to POST downloads", async () => {
+      vi.useFakeTimers();
+      mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      const transport = vi.fn((config: InternalAxiosRequestConfig) => Promise.resolve(makeResponse(
+        new Blob(["file"]),
+        config,
+        { "content-disposition": "attachment; filename=report.pdf" }
+      )));
+      installAxiosDriver(handlers, transport);
+
+      await client.download("/reports", { data: { id: 1 }, method: "post" });
+
+      expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+        data: { id: 1 },
+        method: "post",
+        url: "/reports"
+      }));
+    });
+
+    it("revokes the object URL when triggering the download throws", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const clickError = new Error("click failed");
+      browser.click.mockImplementation(() => {
+        throw clickError;
+      });
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; filename=report.pdf"
+      })));
+
+      await expect(client.download("/reports/1")).rejects.toBe(clickError);
+      expect(browser.revokeObjectURL).not.toHaveBeenCalled();
+
+      vi.runAllTimers();
+
+      expect(browser.revokeObjectURL).toHaveBeenCalledWith("blob:test");
+    });
+
+    it("throws BusinessError for an error envelope returned as a successful blob", async () => {
+      silenceConsole("warn");
+      const browser = mockBrowserDownload();
+      const blob = new Blob([
+        JSON.stringify({
+          code: 1001,
+          message: "export failed",
+          data: { reason: "empty" }
+        })
+      ], { type: "application/json" });
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(blob, config, {
+        "content-disposition": "attachment; filename=error.json",
+        "content-type": "application/json"
+      })));
+
+      const promise = client.download("/reports/1");
+
+      await expect(promise).rejects.toMatchObject({
+        name: "BusinessError",
+        code: 1001,
+        message: "export failed",
+        data: { reason: "empty" }
+      });
+      expect(browser.createObjectURL).not.toHaveBeenCalled();
+      expect(browser.click).not.toHaveBeenCalled();
+    });
+
+    it("downloads JSON files that are not API response envelopes", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const blob = new Blob([JSON.stringify({ rows: [1, 2] })], { type: "application/json" });
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(blob, config, {
+        "content-type": "application/json"
+      })));
+
+      await client.download("/reports/1", { filename: "report.json" });
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "report.json" });
+    });
+
+    it("refreshes an expired token from a blob 401 response and downloads the retry", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      let currentTokens: Readonly<AuthTokens> = oldTokens;
+      let requestCount = 0;
+      const setAuthTokens = vi.fn((tokens: Readonly<AuthTokens>) => {
+        currentTokens = tokens;
+      });
+      const refreshToken = vi.fn(getRenewedTokens);
+      const onUnauthenticated = vi.fn();
+      const { client, handlers } = buildHttpClient({
+        tokenExpiredCode: EXPIRED_CODE,
+        getAuthTokens: () => currentTokens,
+        setAuthTokens,
+        refreshToken,
+        onUnauthenticated
+      });
+      const transport = vi.fn((config: InternalAxiosRequestConfig) => {
+        requestCount += 1;
+
+        if (requestCount === 1) {
+          const errorBlob = new Blob([JSON.stringify(EXPIRED_BODY)], { type: "application/json" });
+          return Promise.reject(makeAxiosError(401, errorBlob, config));
+        }
+
+        return Promise.resolve(makeResponse(new Blob(["file"]), config, {
+          "content-disposition": "attachment; filename=report.pdf"
+        }));
+      });
+      installAxiosDriver(handlers, transport);
+
+      await client.download("/reports/1");
+
+      expect(refreshToken).toHaveBeenCalledTimes(1);
+      expect(setAuthTokens).toHaveBeenCalledWith(renewedTokens);
+      expect(onUnauthenticated).not.toHaveBeenCalled();
+      expect(transport).toHaveBeenCalledTimes(2);
+      const retriedConfig = transport.mock.calls[1]?.[0];
+
+      if (!retriedConfig) {
+        throw new Error("The download request was not retried");
+      }
+
+      expect(retriedConfig.headers.Authorization).toBe("Bearer NEW");
+      expect(Reflect.get(retriedConfig, "__vefResponseMode")).toBe("raw");
+      expect(browser.click).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not read oversized blob error bodies", async () => {
+      silenceConsole("error");
+      const { handlers } = buildHttpClient();
+      const blob = new Blob([new Uint8Array(1024 * 1024 + 1)]);
+      const textSpy = vi.spyOn(blob, "text");
+      const error = makeAxiosError(500, blob);
+
+      await expect(handlers.responseError(error)).rejects.toBe(error);
+      expect(textSpy).not.toHaveBeenCalled();
+    });
+
+    it("preserves cancellation errors", async () => {
+      const { handlers } = buildHttpClient();
+      const error = new CanceledError("cancelled");
+
+      await expect(handlers.responseError(error)).rejects.toBe(error);
+    });
+
+    it("removes quotes from a Content-Disposition filename", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; filename=\"report.pdf\""
+      })));
+
+      await client.download("/reports/1");
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "report.pdf" });
+    });
+
+    it("decodes and prefers an RFC 5987 filename", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; filename=report.pdf; filename*=UTF-8''%E6%B5%8B%E8%AF%95.pdf"
+      })));
+
+      await client.download("/reports/1");
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "测试.pdf" });
+    });
+
+    it("keeps literal percent characters in regular filenames", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; filename=\"100%.pdf\""
+      })));
+
+      await client.download("/reports/1");
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "100%.pdf" });
+    });
+
+    it("matches the filename parameter by its exact name", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; x-filename=wrong.txt; filename=right.pdf"
+      })));
+
+      await client.download("/reports/1");
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "right.pdf" });
+    });
+
+    it("uses an explicit filename when Content-Disposition is missing", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config)));
+
+      await client.download("/reports/1", { filename: "report.pdf" });
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "report.pdf" });
+    });
+
+    it("uses a deterministic fallback when no filename is available", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config)));
+
+      await client.download("/reports/1");
+
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "download" });
+    });
+
+    it("passes the decoded server filename to a filename callback", async () => {
+      vi.useFakeTimers();
+      const browser = mockBrowserDownload();
+      const filename = vi.fn((originalFilename: string) => `copy-${originalFilename}`);
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        "content-disposition": "attachment; filename*=UTF-8''report%20final.pdf"
+      })));
+
+      await client.download("/reports/1", { filename });
+
+      expect(filename).toHaveBeenCalledWith("report final.pdf");
+      expect(browser.click.mock.instances[0]).toMatchObject({ download: "copy-report final.pdf" });
     });
   });
 });

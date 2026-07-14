@@ -3,7 +3,7 @@ import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig,
 
 import type { ApiResult, HttpClientOptions, RequestOptions } from "./types";
 
-import { encodeQueryString, isArray, isFunction, isNullish, isString } from "@vef-framework-react/shared";
+import { encodeQueryString, isArray, isFunction, isNullish, isNumber, isString } from "@vef-framework-react/shared";
 import axios, { CanceledError } from "axios";
 
 import {
@@ -14,6 +14,16 @@ import {
   SKIP_AUTH_VALUE
 } from "./constants";
 import { BusinessError } from "./errors";
+
+const RESPONSE_MODE_KEY = "__vefResponseMode";
+const MAX_ERROR_BODY_BYTES = 1024 * 1024;
+const DEFAULT_DOWNLOAD_FILENAME = "download";
+
+type ResponseMode = "envelope" | "raw";
+
+type HttpAxiosRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
+  [RESPONSE_MODE_KEY]?: ResponseMode;
+};
 
 /**
  * The HTTP client.
@@ -127,38 +137,30 @@ export class HttpClient {
   /**
    * Handle the response interceptor.
    */
-  private handleResponse(response: AxiosResponse<ApiResult>): AxiosResponse<ApiResult> {
-    const { showWarningMessage, okCode = 0 } = this.#options;
-    const {
-      code,
-      message,
-      data
-    } = response.data;
-
-    if (this.matchesCode(code, okCode)) {
+  private handleResponse(response: AxiosResponse<unknown>): AxiosResponse<unknown> {
+    if (this.getResponseMode(response.config) === "raw") {
       return response;
     }
 
-    if (showWarningMessage) {
-      showWarningMessage(message);
-    } else {
-      console.warn(`[HttpClient] [${response.config.method}: ${response.config.url}] 返回错误: ${message}`);
+    if (!this.isApiResult(response.data)) {
+      throw new TypeError("Invalid API response envelope");
     }
 
-    throw new BusinessError(code, message, data);
+    this.assertBusinessSuccess(response.data, response.config);
+    return response;
   }
 
   /**
    * Handle the response error interceptor.
    */
-  private async handleResponseError(error: AxiosError<ApiResult>): Promise<AxiosResponse<ApiResult> | void> {
+  private async handleResponseError(error: AxiosError<unknown>): Promise<AxiosResponse<unknown>> {
     if (error instanceof CanceledError) {
       if (error.response) {
         const { method, url } = error.response.config;
         console.warn(`[HttpClient] [${method}: ${url}] 被取消`);
       }
 
-      return;
+      throw error;
     }
 
     const { response } = error;
@@ -173,7 +175,9 @@ export class HttpClient {
       config,
       data
     } = response;
-    const { code, message } = data;
+    const result = await this.readApiResult(data);
+    const code = result?.code;
+    const message = result?.message ?? error.message ?? "未知错误";
     const requestInfo = `[${config.method}: ${config.url}]`;
 
     switch (status) {
@@ -186,7 +190,7 @@ export class HttpClient {
         // A successful silent refresh returns the retried response — resolve the
         // original request with it instead of falling through to `throw error`,
         // which would surface the stale 401 even though the retry succeeded.
-        const retriedResponse = await this.handleUnauthorized(error, code, requestInfo);
+        const retriedResponse = await this.handleUnauthorized(error, code);
 
         if (retriedResponse) {
           return retriedResponse;
@@ -214,13 +218,12 @@ export class HttpClient {
    * Handle 401 unauthorized response.
    */
   private async handleUnauthorized(
-    error: AxiosError<ApiResult>,
-    code: number,
-    _requestInfo: string
-  ): Promise<AxiosResponse<ApiResult> | void> {
+    error: AxiosError<unknown>,
+    code: number | undefined
+  ): Promise<AxiosResponse<unknown> | void> {
     const { tokenExpiredCode = [] } = this.#options;
 
-    if (!this.matchesCode(code, tokenExpiredCode)) {
+    if (code === undefined || !this.matchesCode(code, tokenExpiredCode)) {
       await this.#options.onUnauthenticated?.();
       return;
     }
@@ -367,10 +370,110 @@ export class HttpClient {
   /**
    * Retry the request with refreshed token.
    */
-  private async retryRequest(config: InternalAxiosRequestConfig): Promise<AxiosResponse<ApiResult>> {
-    const newConfig = { ...config };
+  private async retryRequest(config: InternalAxiosRequestConfig): Promise<AxiosResponse<unknown>> {
+    const newConfig = {
+      ...config,
+      [RESPONSE_MODE_KEY]: this.getResponseMode(config)
+    };
     await this.injectAccessToken(newConfig);
     return this.#axiosInstance(newConfig);
+  }
+
+  /**
+   * Get the response handling mode from an Axios request config.
+   */
+  private getResponseMode(config: InternalAxiosRequestConfig): ResponseMode {
+    return Reflect.get(config, RESPONSE_MODE_KEY) === "raw" ? "raw" : "envelope";
+  }
+
+  /**
+   * Check whether a value is an API response envelope.
+   */
+  private isApiResult(value: unknown): value is ApiResult {
+    return typeof value === "object"
+      && value !== null
+      && isNumber(Reflect.get(value, "code"))
+      && isString(Reflect.get(value, "message"))
+      && Object.hasOwn(value, "data");
+  }
+
+  /**
+   * Apply the configured business-code handling to an API response envelope.
+   */
+  private assertBusinessSuccess(result: ApiResult, config: AxiosRequestConfig): void {
+    const { showWarningMessage, okCode = 0 } = this.#options;
+    const {
+      code,
+      message,
+      data
+    } = result;
+
+    if (this.matchesCode(code, okCode)) {
+      return;
+    }
+
+    if (showWarningMessage) {
+      showWarningMessage(message);
+    } else {
+      console.warn(`[HttpClient] [${config.method}: ${config.url}] 返回错误: ${message}`);
+    }
+
+    throw new BusinessError(code, message, data);
+  }
+
+  /**
+   * Read a small API response envelope from an error payload.
+   */
+  private async readApiResult(data: unknown): Promise<ApiResult | undefined> {
+    if (this.isApiResult(data)) {
+      return data;
+    }
+
+    if (!(data instanceof Blob) || data.size > MAX_ERROR_BODY_BYTES) {
+      return;
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(await data.text());
+      return this.isApiResult(parsed) ? parsed : undefined;
+    } catch {}
+  }
+
+  /**
+   * Extract a filename from Content-Disposition.
+   */
+  private getResponseFilename(contentDisposition: unknown): string | undefined {
+    if (!isString(contentDisposition)) {
+      return;
+    }
+
+    const extendedParameter = contentDisposition.split(";").find(parameter => {
+      const separatorIndex = parameter.indexOf("=");
+      return separatorIndex !== -1 && parameter.slice(0, separatorIndex).trim().toLowerCase() === "filename*";
+    });
+    const extendedRawValue = extendedParameter?.slice(extendedParameter.indexOf("=") + 1).trim();
+    const firstQuoteIndex = extendedRawValue?.indexOf("'") ?? -1;
+    const secondQuoteIndex = firstQuoteIndex >= 0 ? extendedRawValue?.indexOf("'", firstQuoteIndex + 1) ?? -1 : -1;
+    const extendedValue = secondQuoteIndex >= 0 ? extendedRawValue?.slice(secondQuoteIndex + 1) : undefined;
+    const charset = firstQuoteIndex >= 0 ? extendedRawValue?.slice(0, firstQuoteIndex).trim().toLowerCase() : undefined;
+
+    if (extendedValue && (!charset || charset === "utf-8")) {
+      try {
+        return decodeURIComponent(extendedValue);
+      } catch {
+        // Fall back to the regular filename parameter.
+      }
+    }
+
+    const match = CONTENT_DISPOSITION_FILENAME_REGEX.exec(contentDisposition);
+    const value = match?.groups?.name?.trim();
+
+    if (!value) {
+      return;
+    }
+
+    const quote = match?.groups?.quote;
+    return quote ? value.slice(1, -1) : value;
   }
 
   /**
@@ -485,37 +588,29 @@ export class HttpClient {
       filename,
       ...restOptions
     } = options ?? {};
-    const requestConfig: AxiosRequestConfig<D> = {
+    const requestConfig: HttpAxiosRequestConfig<D> = {
       ...restOptions,
+      [RESPONSE_MODE_KEY]: "raw",
       responseType: "blob",
       responseEncoding: "binary",
       onDownloadProgress: isFunction(onProgress) ? onProgress : undefined
     };
-    const { data, headers } = method === "post"
+    const {
+      config,
+      data,
+      headers
+    } = method === "post"
       ? await this.#axiosInstance.post<Blob>(url, requestData, requestConfig)
       : await this.#axiosInstance.get<Blob>(url, requestConfig);
 
-    // Check if response is actually an error JSON
-    try {
-      const result: ApiResult = JSON.parse(await data.text());
-      throw new Error(result.message);
-    } catch {
-      // Expected: blob is not JSON, continue with download
+    const errorResult = await this.readApiResult(data);
+
+    if (errorResult) {
+      this.assertBusinessSuccess(errorResult, config);
     }
 
     const contentDisposition = headers["content-disposition"];
-
-    if (!isString(contentDisposition)) {
-      return;
-    }
-
-    const matches = CONTENT_DISPOSITION_FILENAME_REGEX.exec(contentDisposition);
-
-    if (!matches?.groups?.name) {
-      return;
-    }
-
-    const originalFilename = decodeURIComponent(matches.groups.name);
+    const originalFilename = this.getResponseFilename(contentDisposition) ?? DEFAULT_DOWNLOAD_FILENAME;
     const objectUrl = URL.createObjectURL(data);
 
     try {
@@ -524,7 +619,7 @@ export class HttpClient {
       anchor.download = isFunction(filename) ? filename(originalFilename) : filename ?? originalFilename;
       anchor.click();
     } finally {
-      URL.revokeObjectURL(objectUrl);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     }
   }
 }

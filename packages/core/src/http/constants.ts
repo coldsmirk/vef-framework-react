@@ -11,7 +11,7 @@ export const PATH_PARAM_REGEX = /:(?<key>\w+)/g;
 /**
  * The regex for extracting filename from Content-Disposition header.
  */
-export const CONTENT_DISPOSITION_FILENAME_REGEX = /filename[^;=\n]*=(?<name>(?<quote>['"]).*?\2|[^;\n]*)/;
+export const CONTENT_DISPOSITION_FILENAME_REGEX = /(?:^|;)\s*filename\s*=(?<name>(?<quote>['"]).*?\2|[^;\n]*)/i;
 
 /**
  * The header name for skipping authentication.
