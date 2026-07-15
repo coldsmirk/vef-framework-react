@@ -106,6 +106,7 @@ export type {
   AuthTokens,
   HttpClient,
   HttpClientOptions,
+  HttpFileResponse,
   ProgressEvent,
   RequestOptions
 } from "./http";

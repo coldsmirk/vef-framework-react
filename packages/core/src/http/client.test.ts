@@ -732,6 +732,51 @@ describe("http/HttpClient", () => {
     });
   });
 
+  describe("requestFile", () => {
+    it("returns the blob and the filename parsed from Content-Disposition", async () => {
+      const blob = new Blob(["binary"], { type: "application/pdf" });
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(blob, config, {
+        "content-disposition": "attachment; filename=report.pdf"
+      })));
+
+      const result = await client.requestFile("/files/1");
+
+      expect(result.blob).toBe(blob);
+      expect(result.filename).toBe("report.pdf");
+    });
+
+    it("returns an undefined filename when the header is missing", async () => {
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(new Blob(["file"]), config)));
+
+      const result = await client.requestFile("/files/1");
+
+      expect(result.filename).toBeUndefined();
+    });
+
+    it("throws BusinessError for an error envelope returned as a successful blob", async () => {
+      silenceConsole("warn");
+      const blob = new Blob([
+        JSON.stringify({
+          code: 1001,
+          message: "export failed",
+          data: null
+        })
+      ], { type: "application/json" });
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(blob, config, {
+        "content-type": "application/json"
+      })));
+
+      await expect(client.requestFile("/files/1")).rejects.toMatchObject({
+        name: "BusinessError",
+        code: 1001,
+        message: "export failed"
+      });
+    });
+  });
+
   describe("download", () => {
     it("preserves raw response handling through the real Axios interceptor pipeline", async () => {
       vi.useFakeTimers();

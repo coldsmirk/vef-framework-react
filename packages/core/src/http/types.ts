@@ -94,6 +94,21 @@ export interface HttpClientOptions {
 }
 
 /**
+ * A file fetched through the HTTP client.
+ */
+export interface HttpFileResponse {
+  /**
+   * The file content.
+   */
+  blob: Blob;
+  /**
+   * The filename parsed from the `Content-Disposition` response header,
+   * absent when the server does not send one.
+   */
+  filename?: string;
+}
+
+/**
  * The options for the request.
  */
 export interface RequestOptions {

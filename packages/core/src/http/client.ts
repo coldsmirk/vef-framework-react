@@ -1,7 +1,7 @@
 import type { MaybeArray } from "@vef-framework-react/shared";
 import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 
-import type { ApiResult, HttpClientOptions, RequestOptions } from "./types";
+import type { ApiResult, HttpClientOptions, HttpFileResponse, RequestOptions } from "./types";
 
 import { encodeQueryString, isArray, isFunction, isNullish, isNumber, isString } from "@vef-framework-react/shared";
 import axios, { CanceledError } from "axios";
@@ -569,23 +569,24 @@ export class HttpClient {
   }
 
   /**
-   * Download file as blob and trigger browser download.
+   * Fetch a file as a blob, with the full request semantics of the client
+   * (Bearer injection, 401 refresh, path parameters, abort signal). A
+   * response carrying the backend's JSON business envelope is surfaced as a
+   * BusinessError instead of being returned as file content.
    */
-  public async download<D = unknown, P = unknown>(
+  public async requestFile<D = unknown, P = unknown>(
     url: string,
     options?: RequestOptions & {
       method?: "get" | "post";
       data?: D;
       params?: P;
       onProgress?: (progress: AxiosProgressEvent) => void;
-      filename?: string | ((filename: string) => string);
     }
-  ): Promise<void> {
+  ): Promise<HttpFileResponse> {
     const {
       method = "get",
       data: requestData,
       onProgress,
-      filename,
       ...restOptions
     } = options ?? {};
     const requestConfig: HttpAxiosRequestConfig<D> = {
@@ -609,9 +610,30 @@ export class HttpClient {
       this.assertBusinessSuccess(errorResult, config);
     }
 
-    const contentDisposition = headers["content-disposition"];
-    const originalFilename = this.getResponseFilename(contentDisposition) ?? DEFAULT_DOWNLOAD_FILENAME;
-    const objectUrl = URL.createObjectURL(data);
+    return {
+      blob: data,
+      filename: this.getResponseFilename(headers["content-disposition"])
+    };
+  }
+
+  /**
+   * Download file as blob and trigger browser download.
+   */
+  public async download<D = unknown, P = unknown>(
+    url: string,
+    options?: RequestOptions & {
+      method?: "get" | "post";
+      data?: D;
+      params?: P;
+      onProgress?: (progress: AxiosProgressEvent) => void;
+      filename?: string | ((filename: string) => string);
+    }
+  ): Promise<void> {
+    const { filename, ...requestOptions } = options ?? {};
+    const { blob, filename: responseFilename } = await this.requestFile<D, P>(url, requestOptions);
+
+    const originalFilename = responseFilename ?? DEFAULT_DOWNLOAD_FILENAME;
+    const objectUrl = URL.createObjectURL(blob);
 
     try {
       const anchor = document.createElement("a");

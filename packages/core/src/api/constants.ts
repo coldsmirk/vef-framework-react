@@ -4,7 +4,7 @@ import { QUERY_CLIENT_KEY } from "../query";
 /**
  * HTTP methods that should have the abort signal injected.
  */
-export const PROXIED_METHODS = new Set(["get", "post", "put", "delete", "upload", "download"]);
+export const PROXIED_METHODS = new Set(["get", "post", "put", "delete", "upload", "download", "requestFile"]);
 
 /**
  * Symbol for accessing the query client.
