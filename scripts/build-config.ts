@@ -136,7 +136,7 @@ export function defineBuildConfig(options: BuildConfigOptions) {
         compilerOptions: { rootDir: sourceRoot },
         staticImport: true,
         outDirs: "dist/types",
-        exclude: ["**/*.spec.{ts,tsx}", "test-utils.{ts,tsx}", "vite.config.ts"],
+        exclude: ["**/*.spec.{ts,tsx}", "**/*.test.{ts,tsx}", "test-utils.{ts,tsx}", "vite.config.ts"],
         beforeWriteFile: (filePath: string, content: string) => {
           // Inject type-only imports for zustand middleware module
           // augmentations so that Mutate-based types (UseBoundStore,
