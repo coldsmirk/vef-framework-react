@@ -681,13 +681,54 @@ describe("http/HttpClient", () => {
       expect(onUnauthenticated).toHaveBeenCalledTimes(1);
     });
 
-    it("returns false without triggering onUnauthenticated when refresh callbacks are missing", async () => {
+    it("triggers onUnauthenticated once when concurrent callers share a failed refresh", async () => {
+      const refreshDeferred = defer<Readonly<AuthTokens>>();
+      const onUnauthenticated = vi.fn();
+      silenceConsole("error");
+      const { client } = buildHttpClient({
+        getAuthTokens: getOldTokens,
+        setAuthTokens: silence,
+        refreshToken: () => refreshDeferred.promise,
+        onUnauthenticated
+      });
+
+      const firstRefresh = client.ensureTokenRefreshed();
+      const secondRefresh = client.ensureTokenRefreshed();
+
+      refreshDeferred.reject(new Error("refresh failed"));
+
+      await expect(firstRefresh).resolves.toBe(false);
+      await expect(secondRefresh).resolves.toBe(false);
+      expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not trigger onUnauthenticated when a false caller owns the failed refresh", async () => {
+      const refreshDeferred = defer<Readonly<AuthTokens>>();
+      const onUnauthenticated = vi.fn();
+      silenceConsole("error");
+      const { client } = buildHttpClient({
+        getAuthTokens: getOldTokens,
+        setAuthTokens: silence,
+        refreshToken: () => refreshDeferred.promise,
+        onUnauthenticated
+      });
+
+      const refresh = client.ensureTokenRefreshed(false);
+
+      refreshDeferred.reject(new Error("refresh failed"));
+
+      await expect(refresh).resolves.toBe(false);
+      expect(onUnauthenticated).not.toHaveBeenCalled();
+    });
+
+    it("returns false when refresh callbacks are missing", async () => {
       const onUnauthenticated = vi.fn();
       const { client } = buildHttpClient({ onUnauthenticated });
 
       const success = await client.ensureTokenRefreshed();
 
       expect(success).toBe(false);
+      expect(onUnauthenticated).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -755,6 +796,46 @@ describe("http/HttpClient", () => {
       expect(result.filename).toBeUndefined();
     });
 
+    it("normalizes an ArrayBuffer response to a blob with the response content type", async () => {
+      const data = new TextEncoder().encode("binary").buffer;
+      const { client, handlers } = buildHttpClient();
+      const controller = new AbortController();
+      const onProgress = vi.fn();
+      const transport = vi.fn((config: InternalAxiosRequestConfig) => Promise.resolve(makeResponse(data, config, {
+        "content-type": "application/pdf"
+      })));
+      installAxiosDriver(handlers, transport);
+
+      const result = await client.requestFile("/files/1", {
+        signal: controller.signal,
+        onProgress
+      });
+
+      expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+        onDownloadProgress: onProgress,
+        responseEncoding: "binary",
+        responseType: "arraybuffer",
+        signal: controller.signal
+      }));
+      expect(result.blob).toBeInstanceOf(Blob);
+      expect(result.blob.type).toBe("application/pdf");
+      expect(await result.blob.text()).toBe("binary");
+    });
+
+    it("normalizes the typed array returned by the Node adapter to a blob", async () => {
+      const data = new TextEncoder().encode("node-binary");
+      const { client, handlers } = buildHttpClient();
+      installAxiosDriver(handlers, config => Promise.resolve(makeResponse(data, config, {
+        "content-type": "application/octet-stream"
+      })));
+
+      const result = await client.requestFile("/files/1");
+
+      expect(result.blob).toBeInstanceOf(Blob);
+      expect(result.blob.type).toBe("application/octet-stream");
+      expect(await result.blob.text()).toBe("node-binary");
+    });
+
     it("throws BusinessError for an error envelope returned as a successful blob", async () => {
       silenceConsole("warn");
       const blob = new Blob([
@@ -818,7 +899,7 @@ describe("http/HttpClient", () => {
       expect(transport).toHaveBeenCalledWith(expect.objectContaining({
         method: "get",
         responseEncoding: "binary",
-        responseType: "blob",
+        responseType: "arraybuffer",
         url: "/reports/1"
       }));
       expect(textSpy).not.toHaveBeenCalled();
@@ -917,7 +998,7 @@ describe("http/HttpClient", () => {
       expect(browser.click.mock.instances[0]).toMatchObject({ download: "report.json" });
     });
 
-    it("refreshes an expired token from a blob 401 response and downloads the retry", async () => {
+    it("refreshes an expired token from a binary 401 response and downloads the retry", async () => {
       vi.useFakeTimers();
       const browser = mockBrowserDownload();
       let currentTokens: Readonly<AuthTokens> = oldTokens;
@@ -938,11 +1019,11 @@ describe("http/HttpClient", () => {
         requestCount += 1;
 
         if (requestCount === 1) {
-          const errorBlob = new Blob([JSON.stringify(EXPIRED_BODY)], { type: "application/json" });
-          return Promise.reject(makeAxiosError(401, errorBlob, config));
+          const errorBytes = new TextEncoder().encode(JSON.stringify(EXPIRED_BODY));
+          return Promise.reject(makeAxiosError(401, errorBytes, config));
         }
 
-        return Promise.resolve(makeResponse(new Blob(["file"]), config, {
+        return Promise.resolve(makeResponse(new TextEncoder().encode("file"), config, {
           "content-disposition": "attachment; filename=report.pdf"
         }));
       });

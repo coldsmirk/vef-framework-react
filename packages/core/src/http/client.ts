@@ -1,5 +1,5 @@
-import type { MaybeArray } from "@vef-framework-react/shared";
-import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
+import type { Awaitable, MaybeArray } from "@vef-framework-react/shared";
+import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosResponse, GenericAbortSignal, InternalAxiosRequestConfig } from "axios";
 
 import type { ApiResult, HttpClientOptions, HttpFileResponse, RequestOptions } from "./types";
 
@@ -25,6 +25,33 @@ type HttpAxiosRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   [RESPONSE_MODE_KEY]?: ResponseMode;
 };
 
+interface ObservableAbortSignal extends GenericAbortSignal {
+  addEventListener: NonNullable<GenericAbortSignal["addEventListener"]>;
+  removeEventListener: NonNullable<GenericAbortSignal["removeEventListener"]>;
+}
+
+interface RefreshCycle {
+  failureHandled: Promise<void>;
+  promise: Promise<boolean>;
+}
+
+interface RefreshCycleStart {
+  cycle: RefreshCycle;
+  owner: boolean;
+}
+
+type RefreshFailureHandler = () => Awaitable<void>;
+
+type RefreshWaiter = (success: boolean) => void;
+
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
+function isObservableAbortSignal(signal: GenericAbortSignal): signal is ObservableAbortSignal {
+  return typeof signal.addEventListener === "function" && typeof signal.removeEventListener === "function";
+}
+
 /**
  * The HTTP client.
  */
@@ -39,13 +66,13 @@ export class HttpClient {
   readonly #options: HttpClientOptions;
 
   /**
-   * Indicates whether a token refresh is in progress.
+   * The shared token refresh operation, when one is in progress.
    */
-  #isRefreshing = false;
+  #refreshCycle?: RefreshCycle;
   /**
-   * Queue of pending requests waiting for token refresh to complete.
+   * Request-scoped waiters for the active refresh operation.
    */
-  #waitingQueue: Array<(success: boolean) => void> = [];
+  #refreshWaiters = new Set<RefreshWaiter>();
 
   constructor(options: HttpClientOptions) {
     this.#options = options;
@@ -97,10 +124,10 @@ export class HttpClient {
   private async handleRequest(config: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> {
     const skipAuth = config.headers[SKIP_AUTH_HEADER] === SKIP_AUTH_VALUE;
 
-    if (this.#isRefreshing && !skipAuth) {
-      const success = await new Promise<boolean>(resolve => {
-        this.#waitingQueue.push(resolve);
-      });
+    const refreshPromise = this.#refreshCycle?.promise;
+
+    if (refreshPromise && !skipAuth) {
+      const success = await this.waitForTokenRefresh(refreshPromise, config);
 
       if (!success) {
         throw new Error("登录已过期, 请重新登录");
@@ -230,19 +257,22 @@ export class HttpClient {
 
     // If already refreshing token and received 401, the refresh request itself failed.
     // Throw immediately to avoid deadlock.
-    if (this.#isRefreshing) {
+    if (this.#refreshCycle) {
       throw error;
     }
 
-    const success = await this.tryRefreshToken();
+    const { cycle } = this.tryRefreshToken(async () => {
+      const expiredMessage = "登录已过期, 请重新登录";
+      this.logInfo(expiredMessage);
+      await this.#options.onUnauthenticated?.();
+    });
+    const success = await this.waitForTokenRefresh(cycle.promise, error.response!.config);
 
     if (success) {
       return this.retryRequest(error.response!.config);
     }
 
-    const expiredMessage = "登录已过期, 请重新登录";
-    this.logInfo(expiredMessage);
-    await this.#options.onUnauthenticated?.();
+    await cycle.failureHandled;
   }
 
   /**
@@ -326,9 +356,16 @@ export class HttpClient {
   }
 
   /**
-   * Try to refresh the token using the provided refresh callback.
+   * Get the active token refresh or start a shared refresh operation.
    */
-  private async tryRefreshToken(): Promise<boolean> {
+  private tryRefreshToken(onFailure?: RefreshFailureHandler): RefreshCycleStart {
+    if (this.#refreshCycle) {
+      return {
+        cycle: this.#refreshCycle,
+        owner: false
+      };
+    }
+
     const {
       getAuthTokens,
       refreshToken,
@@ -336,12 +373,86 @@ export class HttpClient {
     } = this.#options;
 
     if (!getAuthTokens || !refreshToken || !setAuthTokens) {
-      return false;
+      return {
+        cycle: this.createRefreshCycle(Promise.resolve(false), onFailure, false),
+        owner: true
+      };
     }
 
-    this.#isRefreshing = true;
-    let success = false;
+    // Publish the shared promise before invoking user callbacks so a
+    // synchronous callback cannot re-enter and start a second refresh.
+    const refresh = Promise.withResolvers<boolean>();
+    const refreshPromise = refresh.promise;
+    const cycle = this.createRefreshCycle(refreshPromise, onFailure, true);
 
+    void this.performTokenRefresh(getAuthTokens, refreshToken, setAuthTokens).then(refresh.resolve, refresh.reject);
+
+    return {
+      cycle,
+      owner: true
+    };
+  }
+
+  /**
+   * Create a refresh cycle and bind its owner-selected failure policy.
+   */
+  private createRefreshCycle(
+    refreshPromise: Promise<boolean>,
+    onFailure: RefreshFailureHandler | undefined,
+    active: boolean
+  ): RefreshCycle {
+    const failure = Promise.withResolvers<void>();
+    const cycle: RefreshCycle = {
+      failureHandled: failure.promise,
+      promise: refreshPromise
+    };
+
+    if (active) {
+      this.#refreshCycle = cycle;
+    }
+
+    void refreshPromise.then(
+      success => {
+        if (active) {
+          this.finishTokenRefresh(cycle, success);
+        }
+
+        const failureHandling = success ? Promise.resolve() : this.handleRefreshFailure(onFailure);
+        void failureHandling.then(failure.resolve, failure.reject);
+      },
+      error => {
+        if (active) {
+          this.finishTokenRefresh(cycle, false);
+        }
+
+        void this.handleRefreshFailure(onFailure).then(
+          () => failure.reject(error),
+          failure.reject
+        );
+      }
+    );
+    // A canceled owner no longer awaits this promise, so retain a rejection
+    // observer without changing what a live owner receives.
+    void failure.promise.catch(() => undefined);
+
+    return cycle;
+  }
+
+  /**
+   * Run the failure policy selected by the refresh cycle owner.
+   */
+  private async handleRefreshFailure(onFailure?: RefreshFailureHandler): Promise<void> {
+    await onFailure?.();
+  }
+
+  /**
+   * Refresh the token using the configured callbacks.
+   */
+  private async performTokenRefresh(
+    getAuthTokens: NonNullable<HttpClientOptions["getAuthTokens"]>,
+    refreshToken: NonNullable<HttpClientOptions["refreshToken"]>,
+    setAuthTokens: NonNullable<HttpClientOptions["setAuthTokens"]>
+  ): Promise<boolean> {
     try {
       const currentTokens = await getAuthTokens();
 
@@ -351,20 +462,84 @@ export class HttpClient {
 
       const newTokens = await refreshToken(currentTokens);
       await setAuthTokens(Object.freeze(newTokens));
-      success = true;
       return true;
     } catch (error) {
       console.error(`[HttpClient] 刷新令牌失败: ${error}`);
       return false;
-    } finally {
-      this.#isRefreshing = false;
-
-      for (const resolve of this.#waitingQueue) {
-        resolve(success);
-      }
-
-      this.#waitingQueue = [];
     }
+  }
+
+  /**
+   * Finish the active refresh and release its remaining request waiters.
+   */
+  private finishTokenRefresh(cycle: RefreshCycle, success: boolean): void {
+    if (this.#refreshCycle !== cycle) {
+      return;
+    }
+
+    for (const waiter of this.#refreshWaiters) {
+      waiter(success);
+    }
+
+    this.#refreshWaiters.clear();
+    this.#refreshCycle = undefined;
+  }
+
+  /**
+   * Wait for a shared refresh while retaining this request's cancellation.
+   */
+  private waitForTokenRefresh(
+    refreshPromise: Promise<boolean>,
+    config: InternalAxiosRequestConfig
+  ): Promise<boolean> {
+    if (this.#refreshCycle?.promise !== refreshPromise) {
+      return refreshPromise;
+    }
+
+    const { signal } = config;
+
+    if (signal?.aborted) {
+      return Promise.reject(new CanceledError(undefined, config));
+    }
+
+    return new Promise<boolean>((resolve, reject) => {
+      const observableSignal = signal && isObservableAbortSignal(signal) ? signal : undefined;
+      let settle: RefreshWaiter | undefined;
+
+      const abort = () => {
+        const waiter = settle;
+
+        if (!waiter) {
+          return;
+        }
+
+        settle = undefined;
+        this.#refreshWaiters.delete(waiter);
+        observableSignal?.removeEventListener("abort", abort);
+        reject(new CanceledError(undefined, config));
+      };
+
+      settle = success => {
+        const waiter = settle;
+
+        if (!waiter) {
+          return;
+        }
+
+        settle = undefined;
+        this.#refreshWaiters.delete(waiter);
+        observableSignal?.removeEventListener("abort", abort);
+        resolve(success);
+      };
+
+      this.#refreshWaiters.add(settle);
+      observableSignal?.addEventListener("abort", abort, { once: true });
+
+      // Close the gap between the initial check and listener registration.
+      if (signal?.aborted) {
+        abort();
+      }
+    });
   }
 
   /**
@@ -429,14 +604,66 @@ export class HttpClient {
       return data;
     }
 
-    if (!(data instanceof Blob) || data.size > MAX_ERROR_BODY_BYTES) {
+    if (isString(data)) {
+      if (data.length > MAX_ERROR_BODY_BYTES || new Blob([data]).size > MAX_ERROR_BODY_BYTES) {
+        return;
+      }
+
+      try {
+        const parsed: unknown = JSON.parse(data);
+        return this.isApiResult(parsed) ? parsed : undefined;
+      } catch {
+        return;
+      }
+    }
+
+    if ((isArrayBuffer(data) || ArrayBuffer.isView(data)) && data.byteLength > MAX_ERROR_BODY_BYTES) {
+      return;
+    }
+
+    let blob: Blob;
+
+    try {
+      blob = this.toBlob(data);
+    } catch {
+      return;
+    }
+
+    if (blob.size > MAX_ERROR_BODY_BYTES) {
       return;
     }
 
     try {
-      const parsed: unknown = JSON.parse(await data.text());
+      const parsed: unknown = JSON.parse(await blob.text());
       return this.isApiResult(parsed) ? parsed : undefined;
     } catch {}
+  }
+
+  /**
+   * Normalize Axios browser and Node binary response bodies to a Blob.
+   */
+  private toBlob(data: unknown, contentType?: unknown): Blob {
+    if (data instanceof Blob) {
+      return data;
+    }
+
+    const options = isString(contentType) ? { type: contentType } : undefined;
+
+    if (isArrayBuffer(data)) {
+      return new Blob([data], options);
+    }
+
+    if (ArrayBuffer.isView(data)) {
+      if (isArrayBuffer(data.buffer)) {
+        return new Blob([new Uint8Array(data.buffer, data.byteOffset, data.byteLength)], options);
+      }
+
+      const copy = new Uint8Array(data.byteLength);
+      copy.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+      return new Blob([copy], options);
+    }
+
+    throw new TypeError("Invalid file response body");
   }
 
   /**
@@ -484,16 +711,14 @@ export class HttpClient {
    * @returns True if token refresh succeeded, false otherwise.
    */
   public async ensureTokenRefreshed(triggerCallback = true): Promise<boolean> {
-    if (this.#isRefreshing) {
-      return new Promise<boolean>(resolve => {
-        this.#waitingQueue.push(resolve);
-      });
-    }
+    const onFailure = triggerCallback
+      ? () => this.#options.onUnauthenticated?.()
+      : undefined;
+    const { cycle, owner } = this.tryRefreshToken(onFailure);
+    const success = await cycle.promise;
 
-    const success = await this.tryRefreshToken();
-
-    if (!success && triggerCallback) {
-      await this.#options.onUnauthenticated?.();
+    if (owner) {
+      await cycle.failureHandled;
     }
 
     return success;
@@ -592,7 +817,7 @@ export class HttpClient {
     const requestConfig: HttpAxiosRequestConfig<D> = {
       ...restOptions,
       [RESPONSE_MODE_KEY]: "raw",
-      responseType: "blob",
+      responseType: "arraybuffer",
       responseEncoding: "binary",
       onDownloadProgress: isFunction(onProgress) ? onProgress : undefined
     };
@@ -601,17 +826,18 @@ export class HttpClient {
       data,
       headers
     } = method === "post"
-      ? await this.#axiosInstance.post<Blob>(url, requestData, requestConfig)
-      : await this.#axiosInstance.get<Blob>(url, requestConfig);
+      ? await this.#axiosInstance.post<unknown>(url, requestData, requestConfig)
+      : await this.#axiosInstance.get<unknown>(url, requestConfig);
+    const blob = this.toBlob(data, headers["content-type"]);
 
-    const errorResult = await this.readApiResult(data);
+    const errorResult = await this.readApiResult(blob);
 
     if (errorResult) {
       this.assertBusinessSuccess(errorResult, config);
     }
 
     return {
-      blob: data,
+      blob,
       filename: this.getResponseFilename(headers["content-disposition"])
     };
   }

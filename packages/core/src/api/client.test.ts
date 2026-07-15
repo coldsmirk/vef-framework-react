@@ -1,6 +1,6 @@
 import type { QueryClient, QueryFunctionContext } from "@tanstack/react-query";
 
-import type { HttpClient as IHttpClient } from "../http";
+import type { HttpClient as IHttpClient, RequestOptions } from "../http";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -80,10 +80,53 @@ function getDataQueryFactory(http: Readonly<IHttpClient>) {
   };
 }
 
-function getInsideQueryFactory(http: Readonly<IHttpClient>) {
-  return async function getInsideQuery() {
-    await http.get("/inside", {});
+function getAfterAwaitQueryFactory(http: Readonly<IHttpClient>) {
+  return async function getAfterAwaitQuery() {
+    await Promise.resolve();
+    return http.get("/after-await", {});
   };
+}
+
+interface DeferredQueryParams {
+  path: string;
+  ready: Promise<void>;
+}
+
+function deferredGetQueryFactory(http: Readonly<IHttpClient>) {
+  return async function deferredGetQuery(params: DeferredQueryParams) {
+    await params.ready;
+    return http.get(params.path, {});
+  };
+}
+
+interface ExplicitSignalQueryParams {
+  signal: AbortSignal;
+}
+
+function explicitSignalQueryFactory(http: Readonly<IHttpClient>) {
+  return function explicitSignalQuery(params: ExplicitSignalQueryParams) {
+    return http.get("/explicit-signal", { signal: params.signal });
+  };
+}
+
+function rejectGetWhenAborted(_url: string, options?: RequestOptions): Promise<never> {
+  const signal = options?.signal;
+
+  if (!signal?.addEventListener) {
+    return Promise.reject(new Error("The request did not receive an observable abort signal"));
+  }
+
+  return new Promise((_, reject) => {
+    function rejectRequest() {
+      reject(new Error("request cancelled"));
+    }
+
+    if (signal.aborted) {
+      rejectRequest();
+    } else {
+      signal.addEventListener?.("abort", rejectRequest, { once: true });
+    }
+  });
 }
 
 function throwingQuery(): never {
@@ -151,6 +194,23 @@ describe("api/ApiClient", () => {
       );
 
       expect(result).toEqual({ doubled: 42 });
+    });
+
+    it("invokes the factory once per query execution with an isolated HttpClient", async () => {
+      const httpClients: Array<Readonly<IHttpClient>> = [];
+      const factory = vi.fn((http: Readonly<IHttpClient>) => {
+        httpClients.push(http);
+        return emptyListQuery;
+      });
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn("test/factory", factory);
+
+      await queryFn(buildContext(["test/factory"], new AbortController().signal, client[QUERY_CLIENT]));
+      await queryFn(buildContext(["test/factory"], new AbortController().signal, client[QUERY_CLIENT]));
+
+      expect(factory).toHaveBeenCalledTimes(2);
+      expect(httpClients).toHaveLength(2);
+      expect(httpClients[0]).not.toBe(httpClients[1]);
     });
   });
 
@@ -223,26 +283,142 @@ describe("api/ApiClient", () => {
       }));
     });
 
-    it("clears the active signal after the queryFn returns", async () => {
+    it("keeps the query signal after the queryFn awaits", async () => {
       const getSpy = vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
         code: 0,
         message: "ok",
         data: null
       });
       const client = new ApiClient({ http: { baseUrl: "http://test" } });
-      const queryFn = client.createQueryFn("test/cleanup", getInsideQueryFactory);
+      const queryFn = client.createQueryFn("test/after-await", getAfterAwaitQueryFactory);
 
       const controller = new AbortController();
-      await queryFn(buildContext(["test/cleanup"], controller.signal, client[QUERY_CLIENT]));
+      await queryFn(buildContext(["test/after-await"], controller.signal, client[QUERY_CLIENT]));
 
-      await client[HTTP_CLIENT].get("/outside", {});
-
-      expect(getSpy).toHaveBeenLastCalledWith("/outside", expect.objectContaining({
-        signal: undefined
+      expect(getSpy).toHaveBeenCalledWith("/after-await", expect.objectContaining({
+        signal: controller.signal
       }));
     });
 
-    it("clears the signal even if the queryFn throws synchronously", async () => {
+    it("isolates signals between concurrent query invocations", async () => {
+      const getSpy = vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
+        code: 0,
+        message: "ok",
+        data: null
+      });
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn<unknown, DeferredQueryParams>("test/concurrent", deferredGetQueryFactory);
+      const firstReady = Promise.withResolvers<void>();
+      const secondReady = Promise.withResolvers<void>();
+      const firstController = new AbortController();
+      const secondController = new AbortController();
+
+      const firstRequest = queryFn(buildContext([
+        "test/concurrent",
+        { path: "/first", ready: firstReady.promise }
+      ], firstController.signal, client[QUERY_CLIENT]));
+      const secondRequest = queryFn(buildContext([
+        "test/concurrent",
+        { path: "/second", ready: secondReady.promise }
+      ], secondController.signal, client[QUERY_CLIENT]));
+
+      secondReady.resolve();
+      await secondRequest;
+      firstReady.resolve();
+      await firstRequest;
+
+      expect(getSpy).toHaveBeenCalledWith("/first", expect.objectContaining({
+        signal: firstController.signal
+      }));
+      expect(getSpy).toHaveBeenCalledWith("/second", expect.objectContaining({
+        signal: secondController.signal
+      }));
+    });
+
+    it("cancels the request when its explicit signal aborts", async () => {
+      vi.spyOn(HttpClient.prototype, "get").mockImplementation(rejectGetWhenAborted);
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn<unknown, ExplicitSignalQueryParams>(
+        "test/explicit-abort",
+        explicitSignalQueryFactory
+      );
+      const queryController = new AbortController();
+      const requestController = new AbortController();
+
+      const request = queryFn(buildContext([
+        "test/explicit-abort",
+        { signal: requestController.signal }
+      ], queryController.signal, client[QUERY_CLIENT]));
+
+      requestController.abort();
+
+      await expect(request).rejects.toThrow("request cancelled");
+      expect(queryController.signal.aborted).toBe(false);
+    });
+
+    it("cancels the request when the query signal aborts", async () => {
+      vi.spyOn(HttpClient.prototype, "get").mockImplementation(rejectGetWhenAborted);
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn<unknown, ExplicitSignalQueryParams>(
+        "test/query-abort",
+        explicitSignalQueryFactory
+      );
+      const queryController = new AbortController();
+      const requestController = new AbortController();
+
+      const request = queryFn(buildContext([
+        "test/query-abort",
+        { signal: requestController.signal }
+      ], queryController.signal, client[QUERY_CLIENT]));
+
+      queryController.abort();
+
+      await expect(request).rejects.toThrow("request cancelled");
+      expect(requestController.signal.aborted).toBe(false);
+    });
+
+    it("removes both source listeners after the request completes", async () => {
+      vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
+        code: 0,
+        message: "ok",
+        data: null
+      });
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn<unknown, ExplicitSignalQueryParams>(
+        "test/signal-cleanup",
+        explicitSignalQueryFactory
+      );
+      const queryController = new AbortController();
+      const requestController = new AbortController();
+      const queryRemoveListener = vi.spyOn(queryController.signal, "removeEventListener");
+      const requestRemoveListener = vi.spyOn(requestController.signal, "removeEventListener");
+
+      await queryFn(buildContext([
+        "test/signal-cleanup",
+        { signal: requestController.signal }
+      ], queryController.signal, client[QUERY_CLIENT]));
+
+      expect(queryRemoveListener).toHaveBeenCalledWith("abort", expect.any(Function));
+      expect(requestRemoveListener).toHaveBeenCalledWith("abort", expect.any(Function));
+    });
+
+    it("preserves an explicit signal outside a query", async () => {
+      const getSpy = vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
+        code: 0,
+        message: "ok",
+        data: null
+      });
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const controller = new AbortController();
+
+      await client[HTTP_CLIENT].get("/outside", { signal: controller.signal });
+
+      expect(getSpy).toHaveBeenLastCalledWith("/outside", expect.objectContaining({
+        signal: controller.signal
+      }));
+    });
+
+    it("preserves an explicit signal after the queryFn throws synchronously", async () => {
       const getSpy = vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
         code: 0,
         message: "ok",
@@ -258,14 +434,15 @@ describe("api/ApiClient", () => {
 
       expect(invokeQueryFn).toThrow("boom");
 
-      await client[HTTP_CLIENT].get("/after-throw", {});
+      const controller = new AbortController();
+      await client[HTTP_CLIENT].get("/after-throw", { signal: controller.signal });
 
       expect(getSpy).toHaveBeenLastCalledWith("/after-throw", expect.objectContaining({
-        signal: undefined
+        signal: controller.signal
       }));
     });
 
-    it("clears the signal when the queryFn returns a rejected promise", async () => {
+    it("preserves an explicit signal after the queryFn returns a rejected promise", async () => {
       const getSpy = vi.spyOn(HttpClient.prototype, "get").mockResolvedValue({
         code: 0,
         message: "ok",
@@ -277,10 +454,11 @@ describe("api/ApiClient", () => {
 
       await expect(queryFn(context)).rejects.toThrow("async-boom");
 
-      await client[HTTP_CLIENT].get("/after-reject", {});
+      const controller = new AbortController();
+      await client[HTTP_CLIENT].get("/after-reject", { signal: controller.signal });
 
       expect(getSpy).toHaveBeenLastCalledWith("/after-reject", expect.objectContaining({
-        signal: undefined
+        signal: controller.signal
       }));
     });
   });
