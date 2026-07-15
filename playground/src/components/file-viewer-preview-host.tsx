@@ -1,5 +1,5 @@
 import type { FilePreviewHandler, FilePreviewTarget } from "@vef-framework-react/components";
-import type { PropsWithChildren, ReactElement } from "react";
+import type { CSSProperties, PropsWithChildren, ReactElement } from "react";
 
 import spreadsheetWorkerUrl from "@file-viewer/renderer-spreadsheet/worker/sheetjs/sheet.worker?worker&url";
 import {
@@ -7,19 +7,27 @@ import {
   Button,
   Center,
   FilePreviewProvider,
+  globalCssVars,
   Icon,
   Modal,
   Result,
   showErrorMessage,
-  Spin
+  Spin,
+  useIsDarkMode
 } from "@vef-framework-react/components";
 import { HTTP_CLIENT, useApiClient } from "@vef-framework-react/core";
 import { DownloadIcon, RefreshCwIcon } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+// The viewer follows the app's light/dark mode rather than the OS preference, so a
+// preview never renders light inside a dark shell (or vice versa). `system` is
+// intentionally omitted — the host always resolves a concrete theme.
+type PreviewViewerTheme = "dark" | "light";
+
 interface OfficeFileViewerProps {
   file: Blob;
   filename: string;
+  theme: PreviewViewerTheme;
 }
 
 interface FileViewerPreviewHostProps {
@@ -58,13 +66,32 @@ function loadFileViewerModule() {
     import("@file-viewer/react"),
     import("@file-viewer/preset-office")
   ]).then(([{ FileViewer: FileViewerInternal }, { default: officePreset }]) => {
-    const viewerOptions = {
+    const baseOptions = {
       ...viewerAssetOptions,
       preset: officePreset
     };
+    // One frozen options object per resolved theme. The viewer keeps a stable
+    // reference across unrelated re-renders (so it never re-initializes its workers),
+    // yet swaps cleanly when the app toggles light/dark.
+    const optionsByTheme = new Map<PreviewViewerTheme, typeof baseOptions & { theme: PreviewViewerTheme }>();
 
-    function OfficeFileViewer({ file, filename }: OfficeFileViewerProps): ReactElement {
-      return <FileViewerInternal file={file} filename={filename} options={viewerOptions} />;
+    function getViewerOptions(theme: PreviewViewerTheme) {
+      let options = optionsByTheme.get(theme);
+
+      if (!options) {
+        options = { ...baseOptions, theme };
+        optionsByTheme.set(theme, options);
+      }
+
+      return options;
+    }
+
+    function OfficeFileViewer({
+      file,
+      filename,
+      theme
+    }: OfficeFileViewerProps): ReactElement {
+      return <FileViewerInternal file={file} filename={filename} options={getViewerOptions(theme)} />;
     }
 
     return { default: OfficeFileViewer };
@@ -125,6 +152,29 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
+// The preview modal is sized to read a document comfortably: ~80vw wide (capped
+// so it never sprawls on ultra-wide displays) over a fixed-height viewport, so the
+// frame holds still across the loading, error, and ready states. Content and body
+// padding are stripped so the viewer sits flush; content clips to the modal radius
+// so the viewer's canvas keeps its rounded corners instead of poking square edges
+// past the shell. The header keeps a hairline divider so it reads as one piece with
+// the viewer's own toolbar below it.
+const PREVIEW_MODAL_WIDTH = "min(80vw, 1680px)";
+const PREVIEW_VIEWPORT_HEIGHT = "min(78vh, 880px)";
+
+const previewModalStyles = {
+  body: { padding: 0 },
+  content: { overflow: "hidden", padding: 0 },
+  header: {
+    borderBottom: `1px solid ${globalCssVars.colorSplit}`,
+    margin: 0,
+    padding: "14px 20px"
+  }
+} satisfies Record<"body" | "content" | "header", CSSProperties>;
+
+const previewViewportStyle: CSSProperties = { height: PREVIEW_VIEWPORT_HEIGHT };
+const previewFillStyle: CSSProperties = { height: "100%" };
+
 /**
  * Application-side file-preview host backed by `@file-viewer/react`.
  * Mounted once around the authenticated layout; every `<Upload>` /
@@ -142,6 +192,7 @@ export function FileViewerPreviewHost({
 }: PropsWithChildren<FileViewerPreviewHostProps>): ReactElement {
   const apiClient = useApiClient();
   const http = apiClient[HTTP_CLIENT];
+  const viewerTheme: PreviewViewerTheme = useIsDarkMode() ? "dark" : "light";
   const [state, setState] = useState<HostState>({ status: "closed" });
   // Aborting the in-flight fetch doubles as the stale-response guard.
   const abortRef = useRef<AbortController>(null);
@@ -298,77 +349,83 @@ export function FileViewerPreviewHost({
       {children}
 
       <Modal
+        centered
         destroyOnHidden
         footer={null}
         open={state.status !== "closed"}
+        styles={previewModalStyles}
         title={state.status === "closed" ? "" : state.target.filename}
-        width={960}
+        width={PREVIEW_MODAL_WIDTH}
         onCancel={close}
       >
-        {state.status === "loading" && (
-          <Center style={{ minHeight: 480 }}>
-            <Spin />
-          </Center>
-        )}
+        <div style={previewViewportStyle}>
+          {state.status === "loading" && (
+            <Center style={previewFillStyle}>
+              <Spin />
+            </Center>
+          )}
 
-        {state.status === "error" && (
-          <Result
-            status="error"
-            subTitle={state.message}
-            title="预览失败"
-            extra={[
-              state.recovery === "retry"
-                ? (
-                    <Button
-                      key="retry"
-                      icon={<Icon component={RefreshCwIcon} />}
-                      onClick={() => openPreview(state.target)}
-                    >
-                      重新预览
-                    </Button>
-                  )
-                : null,
-              state.recovery === "reload"
-                ? (
-                    <Button
-                      key="reload"
-                      icon={<Icon component={RefreshCwIcon} />}
-                      onClick={onReload}
-                    >
-                      刷新页面
-                    </Button>
-                  )
-                : null,
-              state.target.file || state.target.url
-                ? (
-                    <ActionButton
-                      key="download"
-                      icon={<Icon component={DownloadIcon} />}
-                      type="primary"
-                      onClick={() => download(state.target)}
-                    >
-                      下载文件
-                    </ActionButton>
-                  )
-                : null
-            ]}
-          />
-        )}
+          {state.status === "error" && (
+            <Center style={previewFillStyle}>
+              <Result
+                status="error"
+                subTitle={state.message}
+                title="预览失败"
+                extra={[
+                  state.recovery === "retry"
+                    ? (
+                        <Button
+                          key="retry"
+                          icon={<Icon component={RefreshCwIcon} />}
+                          onClick={() => openPreview(state.target)}
+                        >
+                          重新预览
+                        </Button>
+                      )
+                    : null,
+                  state.recovery === "reload"
+                    ? (
+                        <Button
+                          key="reload"
+                          icon={<Icon component={RefreshCwIcon} />}
+                          onClick={onReload}
+                        >
+                          刷新页面
+                        </Button>
+                      )
+                    : null,
+                  state.target.file || state.target.url
+                    ? (
+                        <ActionButton
+                          key="download"
+                          icon={<Icon component={DownloadIcon} />}
+                          type="primary"
+                          onClick={() => download(state.target)}
+                        >
+                          下载文件
+                        </ActionButton>
+                      )
+                    : null
+                ]}
+              />
+            </Center>
+          )}
 
-        {state.status === "ready" && (
-          <Suspense
-            fallback={(
-              <Center style={{ minHeight: 480 }}>
-                <Spin />
-              </Center>
-            )}
-          >
-            {/* FileViewer fills its container — give it an explicit height. */}
-            <div style={{ height: "70vh" }}>
-              <FileViewer file={state.file} filename={state.target.filename} />
-            </div>
-          </Suspense>
-        )}
+          {state.status === "ready" && (
+            <Suspense
+              fallback={(
+                <Center style={previewFillStyle}>
+                  <Spin />
+                </Center>
+              )}
+            >
+              {/* FileViewer fills its container — give it an explicit height. */}
+              <div style={previewFillStyle}>
+                <FileViewer file={state.file} filename={state.target.filename} theme={viewerTheme} />
+              </div>
+            </Suspense>
+          )}
+        </div>
       </Modal>
     </FilePreviewProvider>
   );

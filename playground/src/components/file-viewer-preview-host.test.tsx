@@ -36,6 +36,7 @@ interface ViewerOptions {
     worker: boolean | "auto";
     workerUrl: string;
   };
+  theme: "dark" | "light";
 }
 
 interface ViewerProps {
@@ -45,6 +46,7 @@ interface ViewerProps {
 const runtime = vi.hoisted(() => {
   return {
     handler: null as FilePreviewHandler | null,
+    isDarkMode: false,
     http: {
       download: vi.fn(),
       requestFile: vi.fn()
@@ -109,6 +111,7 @@ vi.mock("@vef-framework-react/components", async () => {
     Button: MockButton,
     Center: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
     FilePreviewProvider: MockFilePreviewProvider,
+    globalCssVars: new Proxy({}, { get: (_target, key) => `var(--vef-${String(key)})` }),
     Icon: () => null,
     Modal: ({
       children,
@@ -138,7 +141,8 @@ vi.mock("@vef-framework-react/components", async () => {
       title?: ReactNode;
     }) => createElement("div", null, title, subTitle, extra),
     showErrorMessage: runtime.showErrorMessage,
-    Spin: () => createElement("span", null, "加载中")
+    Spin: () => createElement("span", null, "加载中"),
+    useIsDarkMode: () => runtime.isDarkMode
   };
 });
 
@@ -189,6 +193,7 @@ function pendingFileResponse(): Promise<{ blob: Blob }> {
 describe("FileViewerPreviewHost", () => {
   beforeEach(() => {
     runtime.handler = null;
+    runtime.isDarkMode = false;
     runtime.http.download.mockReset();
     runtime.http.requestFile.mockReset();
     runtime.showErrorMessage.mockReset();
@@ -419,5 +424,26 @@ describe("FileViewerPreviewHost", () => {
     expect(firstOptions?.presentation.workerUrl).toBe("/static/vendor/pptx/pptx.worker.js");
     expect(firstOptions?.spreadsheet.worker).toBe(true);
     expect(firstOptions?.spreadsheet.workerUrl).toContain("sheet.worker");
+  });
+
+  describe("when following the app theme", () => {
+    it("previews in the app's light theme by default", async () => {
+      const { user } = renderHost(target({ file: new File(["one"], "one.pdf") }));
+
+      await user.click(screen.getByRole("button", { name: "打开预览" }));
+      await screen.findByText("viewer-ready");
+
+      expect(runtime.viewerProps.at(-1)?.options.theme).toBe("light");
+    });
+
+    it("mirrors the app's dark theme into the viewer", async () => {
+      runtime.isDarkMode = true;
+      const { user } = renderHost(target({ file: new File(["one"], "one.pdf") }));
+
+      await user.click(screen.getByRole("button", { name: "打开预览" }));
+      await screen.findByText("viewer-ready");
+
+      expect(runtime.viewerProps.at(-1)?.options.theme).toBe("dark");
+    });
   });
 });

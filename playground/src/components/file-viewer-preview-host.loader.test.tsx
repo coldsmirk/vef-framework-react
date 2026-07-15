@@ -73,6 +73,7 @@ vi.mock("@vef-framework-react/components", async () => {
     Button: MockButton,
     Center: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
     FilePreviewProvider: MockFilePreviewProvider,
+    globalCssVars: new Proxy({}, { get: (_target, key) => `var(--vef-${String(key)})` }),
     Icon: () => null,
     Modal: ({
       children,
@@ -91,7 +92,8 @@ vi.mock("@vef-framework-react/components", async () => {
       title?: ReactNode;
     }) => createElement("div", null, title, subTitle, extra),
     showErrorMessage: runtime.showErrorMessage,
-    Spin: () => createElement("span", null, "加载中")
+    Spin: () => createElement("span", null, "加载中"),
+    useIsDarkMode: () => false
   };
 });
 
