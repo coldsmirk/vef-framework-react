@@ -23,6 +23,7 @@ import { Route as LayoutSysMonitorRouteRouteImport } from "./../pages/_layout/sy
 import { Route as LayoutSysLoginLogRouteRouteImport } from "./../pages/_layout/sys/login-log/route";
 import { Route as LayoutSysFormEditorRouteRouteImport } from "./../pages/_layout/sys/form-editor/route";
 import { Route as LayoutSysFlowDesignerWizardRouteRouteImport } from "./../pages/_layout/sys/flow-designer-wizard/route";
+import { Route as LayoutSysFilePreviewDemoRouteRouteImport } from "./../pages/_layout/sys/file-preview-demo/route";
 import { Route as LayoutSysEditableTableDemoRouteRouteImport } from "./../pages/_layout/sys/editable-table-demo/route";
 import { Route as LayoutSysDictionaryItemRouteRouteImport } from "./../pages/_layout/sys/dictionary-item/route";
 import { Route as LayoutSysDictionaryDemoRouteRouteImport } from "./../pages/_layout/sys/dictionary-demo/route";
@@ -92,6 +93,12 @@ const LayoutSysFlowDesignerWizardRouteRoute =
   LayoutSysFlowDesignerWizardRouteRouteImport.update({
     id: "/sys/flow-designer-wizard",
     path: "/sys/flow-designer-wizard",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
+const LayoutSysFilePreviewDemoRouteRoute =
+  LayoutSysFilePreviewDemoRouteRouteImport.update({
+    id: "/sys/file-preview-demo",
+    path: "/sys/file-preview-demo",
     getParentRoute: () => LayoutRouteRoute,
   } as any);
 const LayoutSysEditableTableDemoRouteRoute =
@@ -216,6 +223,7 @@ export interface FileRoutesByFullPath {
   "/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
+  "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
@@ -245,6 +253,7 @@ export interface FileRoutesByTo {
   "/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
+  "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
@@ -276,6 +285,7 @@ export interface FileRoutesById {
   "/_layout/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/_layout/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/_layout/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
+  "/_layout/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/_layout/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/_layout/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/_layout/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
@@ -307,6 +317,7 @@ export interface FileRouteTypes {
     | "/sys/dictionary-demo"
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
+    | "/sys/file-preview-demo"
     | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
     | "/sys/login-log"
@@ -336,6 +347,7 @@ export interface FileRouteTypes {
     | "/sys/dictionary-demo"
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
+    | "/sys/file-preview-demo"
     | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
     | "/sys/login-log"
@@ -366,6 +378,7 @@ export interface FileRouteTypes {
     | "/_layout/sys/dictionary-demo"
     | "/_layout/sys/dictionary-item"
     | "/_layout/sys/editable-table-demo"
+    | "/_layout/sys/file-preview-demo"
     | "/_layout/sys/flow-designer-wizard"
     | "/_layout/sys/form-editor"
     | "/_layout/sys/login-log"
@@ -450,6 +463,13 @@ declare module "@tanstack/react-router" {
       path: "/sys/flow-designer-wizard";
       fullPath: "/sys/flow-designer-wizard";
       preLoaderRoute: typeof LayoutSysFlowDesignerWizardRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/file-preview-demo": {
+      id: "/_layout/sys/file-preview-demo";
+      path: "/sys/file-preview-demo";
+      fullPath: "/sys/file-preview-demo";
+      preLoaderRoute: typeof LayoutSysFilePreviewDemoRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
     "/_layout/sys/editable-table-demo": {
@@ -601,6 +621,7 @@ interface LayoutRouteRouteChildren {
   LayoutSysDictionaryDemoRouteRoute: typeof LayoutSysDictionaryDemoRouteRoute;
   LayoutSysDictionaryItemRouteRoute: typeof LayoutSysDictionaryItemRouteRoute;
   LayoutSysEditableTableDemoRouteRoute: typeof LayoutSysEditableTableDemoRouteRoute;
+  LayoutSysFilePreviewDemoRouteRoute: typeof LayoutSysFilePreviewDemoRouteRoute;
   LayoutSysFlowDesignerWizardRouteRoute: typeof LayoutSysFlowDesignerWizardRouteRoute;
   LayoutSysFormEditorRouteRoute: typeof LayoutSysFormEditorRouteRoute;
   LayoutSysLoginLogRouteRoute: typeof LayoutSysLoginLogRouteRoute;
@@ -628,6 +649,7 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutSysDictionaryDemoRouteRoute: LayoutSysDictionaryDemoRouteRoute,
   LayoutSysDictionaryItemRouteRoute: LayoutSysDictionaryItemRouteRoute,
   LayoutSysEditableTableDemoRouteRoute: LayoutSysEditableTableDemoRouteRoute,
+  LayoutSysFilePreviewDemoRouteRoute: LayoutSysFilePreviewDemoRouteRoute,
   LayoutSysFlowDesignerWizardRouteRoute: LayoutSysFlowDesignerWizardRouteRoute,
   LayoutSysFormEditorRouteRoute: LayoutSysFormEditorRouteRoute,
   LayoutSysLoginLogRouteRoute: LayoutSysLoginLogRouteRoute,

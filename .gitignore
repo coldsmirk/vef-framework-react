@@ -20,6 +20,10 @@ coverage
 # TanStack Router working directory (generated route tree + temp files)
 .tanstack
 
+# file-viewer renderer assets (re-copied by @file-viewer/vite-plugin on dev/build)
+playground/public/vendor/
+playground/public/flyfish-viewer-assets.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

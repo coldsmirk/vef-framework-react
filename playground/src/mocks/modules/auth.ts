@@ -69,7 +69,8 @@ const MENUS: UserMenu[] = [
     leaf("审批流设计器", "/sys/approval-flow-editor", "git-branch"),
     leaf("流程设计器", "/sys/flow-designer-wizard", "workflow"),
     leaf("可编辑表格", "/sys/editable-table-demo", "table"),
-    leaf("审批任务处理", "/sys/approval-task-demo", "clipboard-check")
+    leaf("审批任务处理", "/sys/approval-task-demo", "clipboard-check"),
+    leaf("文件预览", "/sys/file-preview-demo", "eye")
   ])
 ];
 

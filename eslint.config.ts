@@ -11,7 +11,7 @@ export default defineConfig(
   ...defineEslintConfig({
     type: "app",
     react: true,
-    ignores: ["**/*.gen.ts", "**/mockServiceWorker.js"]
+    ignores: ["**/*.gen.ts", "**/mockServiceWorker.js", "playground/public/vendor/**"]
   }),
   {
     files: ["playground/src/mocks/**/*"],

@@ -14,6 +14,8 @@
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@emotion/react": "^11.14.0",
+    "@file-viewer/preset-office": "2.1.28",
+    "@file-viewer/react": "2.1.28",
     "@tanstack/react-router": "^1.170.17",
     "@vef-framework-react/approval-flow-editor": "workspace:*",
     "@vef-framework-react/approval-form-bridge": "workspace:*",
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.0",
     "@faker-js/faker": "^10.5.0",
+    "@file-viewer/vite-plugin": "2.1.28",
     "@stylistic/stylelint-config": "^5.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

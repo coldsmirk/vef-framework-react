@@ -1,4 +1,5 @@
 import type { UserInfo, UserMenuItem } from "@vef-framework-react/starter";
+import type { ReactElement } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Icon, showInfoMessage } from "@vef-framework-react/components";
@@ -6,6 +7,7 @@ import { createLayoutRouteOptions, useAppStore } from "@vef-framework-react/star
 import { LockKeyholeIcon } from "lucide-react";
 import { apiClient } from "~api";
 import { getUserInfo, logout } from "~apis";
+import { FileViewerPreviewHost } from "~components";
 import { APPS, getAppConfig } from "~helpers";
 
 const SELECT_APP_ROUTE_PATH = "/select-app";
@@ -50,15 +52,31 @@ function handleAppChange(appId: string): void {
   location.assign("/");
 }
 
-export const Route = createFileRoute("/_layout")(
-  createLayoutRouteOptions({
-    title: getAppConfig("title"),
-    apps: APPS,
-    currentAppId: useAppStore.getState().custom.appId,
-    userMenuItems,
-    onLogout: handleLogout,
-    onUserMenuClick: handleUserMenuClick,
-    onAppChange: handleAppChange,
-    fetchUserInfo
-  })
-);
+const layoutRouteOptions = createLayoutRouteOptions({
+  title: getAppConfig("title"),
+  apps: APPS,
+  currentAppId: useAppStore.getState().custom.appId,
+  userMenuItems,
+  onLogout: handleLogout,
+  onUserMenuClick: handleUserMenuClick,
+  onAppChange: handleAppChange,
+  fetchUserInfo
+});
+
+const LayoutComponent = layoutRouteOptions.component;
+
+// Wrap the starter layout with the file-preview host so every Upload /
+// FileUpload / UploadField under the authenticated layout dispatches
+// non-image previews to <FileViewer>.
+function LayoutWithFilePreview(): ReactElement {
+  return (
+    <FileViewerPreviewHost>
+      <LayoutComponent />
+    </FileViewerPreviewHost>
+  );
+}
+
+export const Route = createFileRoute("/_layout")({
+  ...layoutRouteOptions,
+  component: LayoutWithFilePreview
+});
