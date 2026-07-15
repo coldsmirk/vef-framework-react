@@ -8,10 +8,12 @@ import ImageCropper from "antd-img-crop";
 import { PlusIcon, UploadIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { mergeProps } from "../_base";
+import { mergeProps, showWarningMessage } from "../_base";
 import { Button } from "../button";
+import { useFilePreview } from "../file-preview";
 import { Icon } from "../icon";
 import { Image } from "../image";
+import { isImageFile, toFilePreviewTarget } from "./helpers";
 
 type UploadFileType = Parameters<GetProp<UploadProps, "beforeUpload">>[0];
 
@@ -33,6 +35,7 @@ async function getFileBase64(file: UploadFileType) {
 export function Upload({
   enableCrop = false,
   cropperProps,
+  isImageUrl,
   listType,
   fileList,
   defaultFileList,
@@ -68,16 +71,39 @@ export function Upload({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
 
-  const handlePreview = useCallback(async (file: UploadFile) => {
-    let preview = file.url;
+  const filePreview = useFilePreview();
 
-    if (!preview && file.originFileObj) {
-      preview = await getFileBase64(file.originFileObj as UploadFileType);
+  // Default preview chain (an explicit `onPreview` prop bypasses it):
+  // images use the built-in <Image> modal; everything else goes to the
+  // nearest FilePreviewProvider, then falls back to handing the URL to the
+  // browser, then to a warning.
+  const handlePreview = useCallback(async (file: UploadFile) => {
+    if ((isImageUrl ?? isImageFile)(file)) {
+      let preview = file.url;
+
+      if (!preview && file.originFileObj) {
+        preview = await getFileBase64(file.originFileObj as UploadFileType);
+      }
+
+      setPreviewImage(preview as string);
+      setIsPreviewOpen(true);
+      return;
     }
 
-    setPreviewImage(preview as string);
-    setIsPreviewOpen(true);
-  }, []);
+    const target = toFilePreviewTarget(file);
+
+    if (filePreview && (filePreview.canPreview?.(target) ?? true)) {
+      filePreview.openPreview(target);
+      return;
+    }
+
+    if (target.url) {
+      window.open(target.url, "_blank", "noopener");
+      return;
+    }
+
+    showWarningMessage("该文件暂不支持预览");
+  }, [filePreview, isImageUrl]);
 
   const shouldShowUploadButton = !isPictureCardOrCircle || !hasReachedMaxCount;
 
@@ -86,6 +112,7 @@ export function Upload({
       {...props}
       defaultFileList={defaultFileList}
       fileList={fileList}
+      isImageUrl={isImageUrl}
       listType={listType}
       maxCount={maxCount}
       pastable={pastable}
@@ -131,5 +158,6 @@ export function Upload({
   );
 }
 
-export { type UploadProps } from "./props";
+export { toFilePreviewTarget } from "./helpers";
+export { type UploadedFileMeta, type UploadProps } from "./props";
 export { type UploadFile } from "antd";

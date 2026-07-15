@@ -1,6 +1,6 @@
 import type { MaybeArray, MaybeNullish } from "@vef-framework-react/shared";
 
-import type { UploadFile } from "../../../upload";
+import type { UploadedFileMeta, UploadFile } from "../../../upload";
 import type { UploadFieldProps } from "./props";
 
 import { useAppContext, useDisabled } from "@vef-framework-react/core";
@@ -41,15 +41,20 @@ function UploadComponent({
 
   // Hydrate the field's current keys into AntD's UploadFile shape so the
   // list renders previously-uploaded objects on mount and after external
-  // value changes.
-  const normalizedFileList = useMemo(() => {
+  // value changes. Stamp UploadedFileMeta so hydrated files carry their
+  // storage key exactly like freshly uploaded ones (preview targeting and
+  // key extraction read it back).
+  const normalizedFileList = useMemo<UploadFile[]>(() => {
     const filePaths = isArray(value) ? value : value ? [value] : [];
 
     return filePaths.map(filePath => {
-      const file: UploadFile = {
+      const name = getBaseName(filePath);
+      const file: UploadFile & UploadedFileMeta = {
         uid: filePath,
+        key: filePath,
         url: composeFileUrl(fileBaseUrl, filePath),
-        name: getBaseName(filePath),
+        name,
+        fileName: name,
         status: "done"
       };
 
@@ -74,13 +79,12 @@ function UploadComponent({
       onChange={({ fileList: nextFileList }) => {
         setFileList(nextFileList);
 
-        // <FileUpload> patches `.key` onto the underlying File once the
-        // chunked upload finalizes; fall back to `uid` for files that
-        // were pre-populated from the field value.
+        // Both hydrated and freshly uploaded files carry UploadedFileMeta;
+        // fall back to `uid` for done entries injected by external code.
         const uploadedKeys = nextFileList
           .filter(file => file.status === "done")
           .map(file => {
-            const candidate = file as UploadFile & { key?: string };
+            const candidate = file as UploadFile & Partial<UploadedFileMeta>;
             return candidate.key ?? candidate.uid;
           });
 

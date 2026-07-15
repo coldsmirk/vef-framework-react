@@ -8,24 +8,6 @@ import type {
 import type { UploadProps } from "../upload";
 
 /**
- * Per-file metadata attached to AntD `UploadFile`s after a successful upload.
- */
-export interface UploadedFileMeta {
-  /**
-   * Object key (e.g. `priv/2026/05/12/abc.png`).
-   */
-  key: string;
-  /**
-   * Resolved fetch URL — composed from `fileBaseUrl` unless `resolveFileUrl` is supplied.
-   */
-  url: string;
-  /**
-   * Original client-supplied filename echoed back by the backend.
-   */
-  fileName: string;
-}
-
-/**
  * `<FileUpload>` props. Inherits the AntD `<Upload>` shell's props (drag-drop,
  * picture-card, paste, image crop, etc.) and overrides `customRequest` so the
  * upload runs through the framework's chunked storage protocol.

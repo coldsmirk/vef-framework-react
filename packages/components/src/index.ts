@@ -120,10 +120,13 @@ export {
 } from "./editable-table";
 export { Empty, type EmptyProps } from "./empty";
 export {
-  FileUpload,
-  type FileUploadProps,
-  type UploadedFileMeta
-} from "./file-upload";
+  FilePreviewProvider,
+  useFilePreview,
+  type FilePreviewHandler,
+  type FilePreviewProviderProps,
+  type FilePreviewTarget
+} from "./file-preview";
+export { FileUpload, type FileUploadProps } from "./file-upload";
 export { Flex, type FlexProps } from "./flex";
 export { FlexCard, type FlexCardProps } from "./flex-card";
 export { FlipText, type FlipTextProps } from "./flip-text";
@@ -228,5 +231,5 @@ export { Tree, useDataOptionsTree, type TreeNode, type TreeProps, type UseDataOp
 export { TreeSelect, useDataOptionsTreeSelect, type TreeSelectProps, type UseDataOptionsTreeSelectOptions } from "./tree-select";
 export { TypingAnimation, type TypingAnimationProps } from "./typing-animation";
 export { Link, Paragraph, Text, Title, type LinkProps, type ParagraphProps, type TextProps, type TitleProps } from "./typography";
-export { Upload, type UploadFile, type UploadProps } from "./upload";
+export { toFilePreviewTarget, Upload, type UploadedFileMeta, type UploadFile, type UploadProps } from "./upload";
 export { Watermark, type WatermarkProps } from "./watermark";

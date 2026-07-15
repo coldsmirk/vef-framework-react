@@ -2,8 +2,8 @@ import type { UploadError, UploadResult } from "@vef-framework-react/core";
 import type { ReactElement } from "react";
 
 import type { GetProp } from "../_base";
-import type { UploadProps } from "../upload";
-import type { FileUploadProps, UploadedFileMeta } from "./props";
+import type { UploadedFileMeta, UploadProps } from "../upload";
+import type { FileUploadProps } from "./props";
 
 import { HTTP_CLIENT, Uploader, useApiClient, useAppContext } from "@vef-framework-react/core";
 import { useCallback, useMemo } from "react";
@@ -125,4 +125,4 @@ export function FileUpload({
   return <Upload {...uploadProps} customRequest={customRequest} />;
 }
 
-export type { FileUploadProps, UploadedFileMeta } from "./props";
+export type { FileUploadProps } from "./props";
