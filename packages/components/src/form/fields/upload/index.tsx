@@ -8,27 +8,48 @@ import { getBaseName, isArray } from "@vef-framework-react/shared";
 import { useEffect, useMemo, useState } from "react";
 
 import { FileUpload } from "../../../file-upload";
+import { resolveStoredFileUrl } from "../../../file-upload/helpers";
 import { useFieldContext } from "../../contexts";
 import { withFormItem } from "../../helpers";
 
-const DOUBLE_SLASH_REGEX = /(?<!https?:)\/\//g;
+function getStoredFileKey(file: UploadFile): string {
+  const candidate = file as UploadFile & Partial<UploadedFileMeta>;
 
-/**
- * Compose the fetch URL for a stored object key against the app's
- * `fileBaseUrl`. Collapses accidental `//` so trailing slashes on either
- * side stay safe.
- */
-function composeFileUrl(fileBaseUrl: string | undefined, key: string): string {
-  if (!fileBaseUrl) {
-    return key;
+  return candidate.key ?? candidate.uid;
+}
+
+function reconcileDoneFile(normalized: UploadFile, current: UploadFile | undefined): UploadFile {
+  if (!current) {
+    return normalized;
   }
 
-  return `${fileBaseUrl}/${key}`.replaceAll(DOUBLE_SLASH_REGEX, "/");
+  const normalizedMeta = normalized as UploadFile & Partial<UploadedFileMeta>;
+  const reconciled: UploadFile & Partial<UploadedFileMeta> = {
+    ...current,
+    key: normalizedMeta.key,
+    sourceUrl: normalizedMeta.sourceUrl
+  };
+
+  return reconciled;
+}
+
+function reconcileFileList(current: UploadFile[], normalized: UploadFile[]): UploadFile[] {
+  const currentDoneFiles = new Map(
+    current
+      .filter(file => file.status === "done")
+      .map(file => [getStoredFileKey(file), file])
+  );
+
+  return [
+    ...normalized.map(file => reconcileDoneFile(file, currentDoneFiles.get(getStoredFileKey(file)))),
+    ...current.filter(file => file.status !== "done")
+  ];
 }
 
 function UploadComponent({
   disabled,
   maxCount,
+  resolveFileUrl,
   ...props
 }: UploadFieldProps) {
   const {
@@ -52,7 +73,7 @@ function UploadComponent({
       const file: UploadFile & UploadedFileMeta = {
         uid: filePath,
         key: filePath,
-        url: composeFileUrl(fileBaseUrl, filePath),
+        sourceUrl: resolveStoredFileUrl(filePath, fileBaseUrl, resolveFileUrl),
         name,
         fileName: name,
         status: "done"
@@ -60,14 +81,11 @@ function UploadComponent({
 
       return file;
     });
-  }, [value, fileBaseUrl]);
+  }, [value, fileBaseUrl, resolveFileUrl]);
 
   const [fileList, setFileList] = useState(normalizedFileList);
   useEffect(() => {
-    setFileList(current => [
-      ...normalizedFileList,
-      ...current.filter(file => file.status !== "done")
-    ]);
+    setFileList(current => reconcileFileList(current, normalizedFileList));
   }, [normalizedFileList]);
 
   return (
@@ -76,6 +94,7 @@ function UploadComponent({
       disabled={isDisabled}
       fileList={fileList}
       maxCount={maxCount}
+      resolveFileUrl={resolveFileUrl}
       onChange={({ fileList: nextFileList }) => {
         setFileList(nextFileList);
 
@@ -83,10 +102,7 @@ function UploadComponent({
         // fall back to `uid` for done entries injected by external code.
         const uploadedKeys = nextFileList
           .filter(file => file.status === "done")
-          .map(file => {
-            const candidate = file as UploadFile & Partial<UploadedFileMeta>;
-            return candidate.key ?? candidate.uid;
-          });
+          .map(file => getStoredFileKey(file));
 
         handleChange(
           (maxCount ?? Infinity) > 1

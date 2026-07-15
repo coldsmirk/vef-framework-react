@@ -1,10 +1,9 @@
 /**
  * Framework-normalized description of a file the user asked to preview.
  *
- * Exactly how the bytes are obtained is up to the preview host; the sources
- * are listed in priority order — `file` (already local, no request needed),
- * then `key` (fetch through an authenticated channel), then `url` (plain
- * fetch; may require auth the browser cannot attach).
+ * Exactly how the bytes are obtained is up to the preview host; prefer `file`
+ * when bytes are already local, then resolve `key` or `url` through a channel
+ * that satisfies the application's authentication requirements.
  */
 export interface FilePreviewTarget {
   /**

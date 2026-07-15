@@ -15,9 +15,12 @@ export interface UploadedFileMeta {
    */
   key: string;
   /**
-   * Resolved fetch URL for the stored object.
+   * Resolved source URL for fetching the stored object. Kept separate from
+   * AntD's navigable `UploadFile.url` so authenticated files are never exposed
+   * as native list links. Use `UploadFile.thumbUrl` only for an application-
+   * approved presentation thumbnail.
    */
-  url: string;
+  sourceUrl: string;
   /**
    * Original client-supplied filename echoed back by the backend.
    */

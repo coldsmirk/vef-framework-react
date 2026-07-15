@@ -12,9 +12,8 @@ import type { UploadProps } from "../upload";
  * picture-card, paste, image crop, etc.) and overrides `customRequest` so the
  * upload runs through the framework's chunked storage protocol.
  *
- * Pass `value` / `onChange` for controlled use as a form field over file keys;
- * pass nothing and rely on `fileList` if you want fully-controlled AntD-style
- * use.
+ * Use `fileList` / `onChange` for controlled AntD-style use. Form values made
+ * of storage keys are owned by `UploadField`, not this component.
  */
 export interface FileUploadProps
   extends Omit<UploadProps, "customRequest" | "action" | "method" | "data" | "headers"> {
@@ -44,7 +43,7 @@ export interface FileUploadProps
    */
   maxPartRetries?: UploaderOptions["maxPartRetries"];
   /**
-   * Resolve an object key into a fetch URL. Defaults to
+   * Resolve an object key into a source URL. Defaults to
    * `${fileBaseUrl}/${key}` from `useAppContext` with double-slash collapsing.
    */
   resolveFileUrl?: (key: string) => string;

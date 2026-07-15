@@ -193,6 +193,7 @@ describe("file-upload/FileUpload", () => {
       expect(returnedResult).toBe(SAMPLE_RESULT);
       expect(patchedFile.key).toBe("priv/2026/05/12/abc.png");
       expect(patchedFile.fileName).toBe("selfie.png");
+      expect(screen.queryByRole("link", { name: "selfie.png" })).not.toBeInTheDocument();
     });
 
     it("invokes onUploadError when start rejects", async () => {
@@ -231,8 +232,9 @@ describe("file-upload/FileUpload", () => {
       await waitFor(() => {
         expect(onUploadSuccess).toHaveBeenCalledTimes(1);
       });
-      const [patchedFile] = onUploadSuccess.mock.calls[0] as unknown as [File & { url: string }];
-      expect(patchedFile.url).toBe("https://cdn.example.com/priv/2026/05/12/abc.png");
+      const [patchedFile] = onUploadSuccess.mock.calls[0] as unknown as [File & { sourceUrl: string }];
+      expect(patchedFile.sourceUrl).toBe("https://cdn.example.com/priv/2026/05/12/abc.png");
+      expect(patchedFile).not.toHaveProperty("url");
     });
   });
 });

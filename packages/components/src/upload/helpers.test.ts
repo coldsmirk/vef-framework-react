@@ -22,8 +22,24 @@ describe("upload/helpers", () => {
       expect(isImageFile(makeFile({ type: "application/pdf", name: "doc.pdf" }))).toBe(false);
     });
 
+    it("uses a non-image MIME type even when an image thumbnail is present", () => {
+      expect(isImageFile(makeFile({
+        type: "application/pdf",
+        name: "report.pdf",
+        thumbUrl: "data:image/png;base64,AAAA"
+      }))).toBe(false);
+    });
+
+    it("uses an image MIME type even when a non-image thumbnail URL is present", () => {
+      expect(isImageFile(makeFile({
+        type: "image/png",
+        name: "photo",
+        thumbUrl: "https://files.test/thumbnail.pdf"
+      }))).toBe(true);
+    });
+
     it("detects an image by URL extension ignoring case and query string", () => {
-      expect(isImageFile(makeFile({ url: "https://files.test/pic.PNG?v=1" }))).toBe(true);
+      expect(isImageFile(makeFile({ name: "opaque", url: "https://files.test/pic.PNG?v=1" }))).toBe(true);
     });
 
     it("detects an image by filename extension when no URL is present", () => {
@@ -34,16 +50,27 @@ describe("upload/helpers", () => {
       expect(isImageFile(makeFile({ name: "report.docx" }))).toBe(false);
     });
 
+    it("uses the filename extension before the URL extension", () => {
+      expect(isImageFile(makeFile({ name: "report.pdf", url: "https://files.test/photo.png" }))).toBe(false);
+    });
+
+    it("uses the stored original filename before the URL extension", () => {
+      const file = makeFile({ name: "opaque", url: "https://files.test/photo.png" }) as UploadFile & Partial<UploadedFileMeta>;
+      file.fileName = "report.pdf";
+
+      expect(isImageFile(file)).toBe(false);
+    });
+
     it("detects an image data URL", () => {
-      expect(isImageFile(makeFile({ url: "data:image/png;base64,AAAA" }))).toBe(true);
+      expect(isImageFile(makeFile({ name: "opaque", url: "data:image/png;base64,AAAA" }))).toBe(true);
     });
 
     it("rejects a non-image data URL", () => {
-      expect(isImageFile(makeFile({ url: "data:application/pdf;base64,AAAA" }))).toBe(false);
+      expect(isImageFile(makeFile({ name: "opaque", url: "data:application/pdf;base64,AAAA" }))).toBe(false);
     });
 
-    it("treats an extension-less entry as an image, matching AntD's heuristic", () => {
-      expect(isImageFile(makeFile({ name: "unknown" }))).toBe(true);
+    it("rejects an extension-less entry with an opaque URL", () => {
+      expect(isImageFile(makeFile({ name: "unknown", url: "https://files.test/object/42" }))).toBe(false);
     });
   });
 
@@ -54,11 +81,11 @@ describe("upload/helpers", () => {
         name: "report.docx",
         size: 7,
         type: "application/msword",
-        url: "https://files.test/priv/report.docx",
         originFileObj: origin as UploadFile["originFileObj"]
       }) as UploadFile & Partial<UploadedFileMeta>;
       file.key = "priv/2026/07/report.docx";
       file.fileName = "original-report.docx";
+      file.sourceUrl = "https://files.test/priv/report.docx";
 
       expect(toFilePreviewTarget(file)).toEqual({
         filename: "original-report.docx",
