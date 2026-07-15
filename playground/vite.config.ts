@@ -1,12 +1,15 @@
 import { fileViewerRenderers } from "@file-viewer/vite-plugin";
 import { defineViteConfig } from "@vef-framework-react/dev";
 
+import { fileViewerOfficeCapabilities } from "./file-viewer-config";
+
 export default defineViteConfig({
   resolve: {
     // conditions: ["source", "module", "import", "browser", "development"]
     conditions: ["module", "vef"]
   },
   plugins: [
+    fileViewerOfficeCapabilities(),
     // Registers the office renderer line (PDF / Word / Excel / PowerPoint /
     // OFD) for <FileViewer> and copies its worker/WASM assets into the build.
     fileViewerRenderers({

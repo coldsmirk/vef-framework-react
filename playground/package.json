@@ -9,13 +9,15 @@
     "clean": "rimraf dist",
     "dev": "vite",
     "gen:dictionary-keys": "vef gen:dictionary-keys",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@emotion/react": "^11.14.0",
     "@file-viewer/preset-office": "2.1.28",
     "@file-viewer/react": "2.1.28",
+    "@file-viewer/renderer-spreadsheet": "2.1.28",
     "@tanstack/react-router": "^1.170.17",
     "@vef-framework-react/approval-flow-editor": "workspace:*",
     "@vef-framework-react/approval-form-bridge": "workspace:*",

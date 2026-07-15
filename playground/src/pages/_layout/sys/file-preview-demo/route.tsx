@@ -23,7 +23,7 @@ function FilePreviewDemoPage(): ReactNode {
 
         <Text type="secondary">
           选择本地 PDF / Word / Excel / PPT / OFD 文件(不会真正上传),点击列表中的文件名即可预览。
-          图片仍走内置 Image 预览;office preset 之外的格式回落为浏览器打开或提示。
+          图片仍走内置 Image 预览;office preset 之外的格式由预览宿主明确提示,远程文件下载继续走认证客户端。
         </Text>
 
         <Upload multiple beforeUpload={alwaysFalse} />
