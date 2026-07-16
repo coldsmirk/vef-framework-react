@@ -1,9 +1,11 @@
-import type { AddAssigneeType, RollbackTarget } from "../../types";
+import type { AddAssigneeType, RemovableAssignee, RollbackTarget } from "../../types";
 
 import { Input, Modal, Radio, Select, Stack, Text } from "@vef-framework-react/components";
 import { useEffect, useState } from "react";
 
 import { PrincipalSelect } from "../principal";
+import { isTaskStatus } from "../status";
+import { TASK_STATUS_LABELS } from "../status/labels";
 
 /**
  * Positions for dynamically added assignees, in display order.
@@ -239,6 +241,71 @@ export function AddAssigneeModal({
               }
             }}
           />
+        </Stack>
+      </Stack>
+    </Modal>
+  );
+}
+
+export interface RemoveAssigneeModalProps extends ActionModalProps {
+  /**
+   * The removable peers, resolved server-side — exactly the set the
+   * remove-assignee command authorizes.
+   */
+  targets: RemovableAssignee[];
+  onConfirm: (taskId: string) => Promise<void>;
+}
+
+/**
+ * Remove a peer assignee from the current node by canceling their task.
+ */
+export function RemoveAssigneeModal({
+  open,
+  onClose,
+  targets,
+  onConfirm
+}: RemoveAssigneeModalProps) {
+  const [taskId, setTaskId] = useState<string>();
+  const { submitting, run } = useConfirm(onClose);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setTaskId(targets.length === 1 ? targets[0]?.taskId : undefined);
+  }, [open, targets]);
+
+  return (
+    <Modal
+      confirmLoading={submitting}
+      okButtonProps={{ danger: true, disabled: taskId === undefined }}
+      okText="减签"
+      open={open}
+      title="减签"
+      onCancel={onClose}
+      onOk={() => taskId !== undefined && run(() => onConfirm(taskId))}
+    >
+      <Stack gap={12} style={{ paddingBlock: 8 }}>
+        <Stack gap={4}>
+          <Text>移除审批人</Text>
+
+          <Select
+            placeholder="选择要移除的审批人"
+            style={{ width: "100%" }}
+            value={taskId}
+            options={targets.map(target => {
+              const statusLabel = isTaskStatus(target.status) ? TASK_STATUS_LABELS[target.status] : target.status;
+
+              return {
+                label: `${target.assignee.name || target.assignee.id}（${statusLabel}）`,
+                value: target.taskId
+              };
+            })}
+            onChange={setTaskId}
+          />
+
+          <Text type="secondary">移除后该审批人不再参与本节点审批。</Text>
         </Stack>
       </Stack>
     </Modal>

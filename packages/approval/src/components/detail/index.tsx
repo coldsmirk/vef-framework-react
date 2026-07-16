@@ -31,6 +31,7 @@ import {
   RotateCcwIcon,
   SendIcon,
   Undo2Icon,
+  UserMinusIcon,
   UserPlusIcon,
   XIcon
 } from "lucide-react";
@@ -45,7 +46,7 @@ import { LabelsDisplay } from "../labels";
 import { InstanceStatusTag } from "../status";
 import { InstanceTimeline } from "../timeline";
 import { UserLabel } from "../user";
-import { AddAssigneeModal, CCModal, ReasonModal, RollbackModal, TransferModal, UrgeModal } from "./action-modals";
+import { AddAssigneeModal, CCModal, ReasonModal, RemoveAssigneeModal, RollbackModal, TransferModal, UrgeModal } from "./action-modals";
 
 export type { UrgeTarget } from "./action-modals";
 
@@ -156,7 +157,7 @@ export function InstanceHeader({
   );
 }
 
-type DetailModal = "transfer" | "rollback" | "addAssignee" | "cc" | "urge" | "withdraw";
+type DetailModal = "transfer" | "rollback" | "addAssignee" | "removeAssignee" | "cc" | "urge" | "withdraw";
 
 /**
  * The form-tab submission modes routed through the form renderer's validate +
@@ -200,6 +201,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const resubmit = useMutation({ mutationFn: instanceApi.resubmit, ...suppressFeedback });
   const withdraw = useMutation({ mutationFn: instanceApi.withdraw, ...suppressFeedback });
   const addAssignee = useMutation({ mutationFn: instanceApi.addAssignee, ...suppressFeedback });
+  const removeAssignee = useMutation({ mutationFn: instanceApi.removeAssignee, ...suppressFeedback });
   const addCC = useMutation({ mutationFn: instanceApi.addCC, ...suppressFeedback });
   const urgeTask = useMutation({ mutationFn: instanceApi.urgeTask, ...suppressFeedback });
 
@@ -396,6 +398,14 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     );
   }
 
+  if (actions.has("remove_assignee") && (myTask?.removableAssignees?.length ?? 0) > 0) {
+    secondaryButtons.push(
+      <Button key="removeAssignee" icon={<Icon component={UserMinusIcon} />} onClick={() => setModal("removeAssignee")}>
+        减签
+      </Button>
+    );
+  }
+
   if (actions.has("add_cc")) {
     secondaryButtons.push(
       <Button key="cc" icon={<Icon component={MailPlusIcon} />} onClick={() => setModal("cc")}>
@@ -585,6 +595,16 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
             addType
           });
           await completeAction("已加签");
+        }}
+      />
+
+      <RemoveAssigneeModal
+        open={modal === "removeAssignee"}
+        targets={myTask?.removableAssignees ?? []}
+        onClose={() => setModal(null)}
+        onConfirm={async taskId => {
+          await removeAssignee.mutateAsync({ taskId });
+          await completeAction("已减签");
         }}
       />
 

@@ -145,6 +145,16 @@ export interface RollbackTarget {
 }
 
 /**
+ * One peer task eligible for removal, mirroring `my.RemovableAssignee`.
+ * `status` is the peer task's status verbatim (`pending` / `waiting`).
+ */
+export interface RemovableAssignee {
+  taskId: string;
+  assignee: UserInfo;
+  status: string;
+}
+
+/**
  * The viewer's pending task within a detail view, mirroring `my.ViewerTask`:
  * what `process_task` should target plus the node-level action configuration
  * — the client never re-derives engine semantics.
@@ -155,6 +165,7 @@ export interface ViewerTask {
   isOpinionRequired: boolean;
   addAssigneeTypes?: AddAssigneeType[];
   rollbackTargets?: RollbackTarget[];
+  removableAssignees?: RemovableAssignee[];
 }
 
 /**

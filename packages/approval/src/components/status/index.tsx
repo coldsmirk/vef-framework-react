@@ -24,7 +24,11 @@ export function InstanceStatusTag({ status }: { status: InstanceStatus }) {
   return <Tag color={INSTANCE_STATUS_COLORS[status]}>{INSTANCE_STATUS_LABELS[status]}</Tag>;
 }
 
-function isTaskStatus(value: string): value is TaskStatus {
+/**
+ * Narrows a plain status string (participant statuses arrive untyped) to the
+ * task status vocabulary.
+ */
+export function isTaskStatus(value: string): value is TaskStatus {
   return Object.hasOwn(TASK_STATUS_LABELS, value);
 }
 

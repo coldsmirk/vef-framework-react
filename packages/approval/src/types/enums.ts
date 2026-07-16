@@ -131,5 +131,6 @@ export type InstanceAction
     | "withdraw"
     | "resubmit"
     | "add_assignee"
+    | "remove_assignee"
     | "add_cc"
     | "urge";
