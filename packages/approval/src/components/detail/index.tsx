@@ -41,6 +41,7 @@ import { useApprovalPlugins } from "../../plugins";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
+import { LabelsDisplay } from "../labels";
 import { InstanceStatusTag } from "../status";
 import { InstanceTimeline } from "../timeline";
 import { UserLabel } from "../user";
@@ -50,7 +51,9 @@ export type { UrgeTarget } from "./action-modals";
 
 /**
  * The shared instance header: title + status, then the identity fields as
- * one descriptions block.
+ * one descriptions block. `labels` renders the flow's host-owned selection
+ * metadata — pass it on operator-facing views (the admin detail) and omit it
+ * on applicant-facing ones, where the tags would read as noise.
  */
 export function InstanceHeader({
   title,
@@ -61,7 +64,8 @@ export function InstanceHeader({
   createdAt,
   finishedAt,
   currentNodeName,
-  businessRef
+  businessRef,
+  labels
 }: {
   title: string;
   status: MyInstanceDetail["instance"]["status"];
@@ -72,6 +76,7 @@ export function InstanceHeader({
   finishedAt?: string;
   currentNodeName?: string;
   businessRef?: string;
+  labels?: Record<string, string>;
 }) {
   const { renderBusinessRef } = useApprovalPlugins();
 
@@ -119,6 +124,14 @@ export function InstanceHeader({
       key: "businessRef",
       label: "业务单据",
       children: renderBusinessRef ? renderBusinessRef(businessRef) : <Text code>{businessRef}</Text>
+    });
+  }
+
+  if (labels !== undefined && Object.keys(labels).length > 0) {
+    items.push({
+      key: "labels",
+      label: "流程标签",
+      children: <LabelsDisplay labels={labels} />
     });
   }
 
