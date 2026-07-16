@@ -25,6 +25,7 @@
     "@vef-framework-react/core": "workspace:*",
     "@vef-framework-react/form-editor": "workspace:*",
     "@vef-framework-react/hooks": "workspace:*",
+    "@vef-framework-react/integration": "workspace:*",
     "@vef-framework-react/shared": "workspace:*",
     "@vef-framework-react/starter": "workspace:*",
     "lucide-react": "^1.23.0",
