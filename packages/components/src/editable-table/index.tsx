@@ -46,7 +46,8 @@ function EditableTableInner<TRow extends AnyObject>({
   renderRowActions,
   operationColumn,
   size,
-  pagination
+  pagination,
+  locale
 }: EditableTableProps<TRow>): ReactNode {
   const form = useForm({ defaultValues: {} as TRow });
 
@@ -88,6 +89,7 @@ function EditableTableInner<TRow extends AnyObject>({
         <Table<TRow>
           columns={tableColumns}
           dataSource={value}
+          locale={locale}
           pagination={pagination ?? false}
           rowKey={getKey}
           size={size}

@@ -73,4 +73,8 @@ export interface EditableTableProps<TRow extends AnyObject> {
    * Client-side pagination config, forwarded to the underlying table. Off by default.
    */
   pagination?: TableProps<NoInfer<TRow>>["pagination"];
+  /**
+   * Table locale overrides (e.g. a compact `emptyText`), forwarded to the underlying table.
+   */
+  locale?: TableProps<NoInfer<TRow>>["locale"];
 }
