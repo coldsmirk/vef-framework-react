@@ -366,6 +366,35 @@ describe("http/HttpClient", () => {
         expect(result.url).toBe("/users/unknown");
       });
 
+      it("replaces :params in an absolute URL while leaving the port untouched", async () => {
+        const { handlers } = buildHttpClient();
+
+        const config = makeConfig({ url: "http://192.168.10.198:8100/api/files/:id", params: { id: 5 } });
+        const result = await handlers.request(config);
+
+        expect(result.url).toBe("http://192.168.10.198:8100/api/files/5");
+      });
+
+      it("leaves an absolute URL with a port untouched when it has no :params", async () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(silence);
+        const { handlers } = buildHttpClient();
+
+        const config = makeConfig({ url: "https://minio.local:9000/bucket/report.pdf", params: {} });
+        const result = await handlers.request(config);
+
+        expect(result.url).toBe("https://minio.local:9000/bucket/report.pdf");
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it("ignores a colon inside a path segment", async () => {
+        const { handlers } = buildHttpClient();
+
+        const config = makeConfig({ url: "/schedule/12:30", params: {} });
+        const result = await handlers.request(config);
+
+        expect(result.url).toBe("/schedule/12:30");
+      });
+
       it("leaves the URL untouched when there are no :params", async () => {
         const { handlers } = buildHttpClient();
 
