@@ -40,6 +40,7 @@ export const FormModal = memo(<TValues extends object, TData = unknown>({
   defaultValues,
   disabled = false,
   formComponent,
+  formLayout,
   renderActions,
   mutationFn,
   mutationMeta,
@@ -165,7 +166,7 @@ export const FormModal = memo(<TValues extends object, TData = unknown>({
       onCancel={handleCancel}
     >
       <AppForm>
-        <Form component={formComponent} disabled={disabled || isPending}>
+        <Form {...formLayout} component={formComponent} disabled={disabled || isPending}>
           {renderFormContent(children, formApi)}
         </Form>
       </AppForm>

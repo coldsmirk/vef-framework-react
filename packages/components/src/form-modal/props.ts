@@ -2,7 +2,7 @@ import type { ApiResult, MutationFunction, MutationMeta } from "@vef-framework-r
 import type { Awaitable } from "@vef-framework-react/shared";
 import type { ElementType, ReactNode } from "react";
 
-import type { FormActionsProps, FormApi } from "../form";
+import type { FormActionsProps, FormApi, FormLayout } from "../form";
 import type { ModalProps } from "../modal";
 
 /**
@@ -40,6 +40,11 @@ export interface FormModalProps<TValues extends object, TData = unknown> extends
    * @default "form"
    */
   formComponent?: ElementType;
+  /**
+   * Layout of the form items inside the modal (label position, alignment and
+   * width). Defaults to the horizontal, right-aligned label layout.
+   */
+  formLayout?: FormLayout;
   /**
    * Custom render function for footer actions.
    * Receives the form API and default action buttons (submit and reset) as arguments.

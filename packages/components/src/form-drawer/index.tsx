@@ -46,6 +46,7 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
   defaultValues,
   disabled = false,
   formComponent,
+  formLayout,
   renderActions,
   submitButtonProps,
   resetButtonProps,
@@ -178,7 +179,7 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
       onClose={handleCancel}
     >
       <AppForm>
-        <Form component={formComponent} css={formStyle} disabled={disabled || isPending}>
+        <Form {...formLayout} component={formComponent} css={formStyle} disabled={disabled || isPending}>
           {renderFormContent(children, formApi)}
         </Form>
       </AppForm>

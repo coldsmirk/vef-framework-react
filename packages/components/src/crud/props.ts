@@ -2,6 +2,7 @@ import type { ApiResult, MutationFunction, MutationMeta, PaginationResult, Query
 import type { AnyObject, Awaitable, DeepKeys, EmptyObject, If, IsNever, Key, MaybeUndefined, PartialDeep } from "@vef-framework-react/shared";
 import type { ElementType, MouseEvent, ReactNode } from "react";
 
+import type { FormLayout } from "../form";
 import type { ColumnSettingsProp, OperationColumnConfig, ProTableProps, RowSelectionConfig } from "../pro-table";
 import type { TableColumn } from "../table";
 import type { CrudFormActionsRenderers, CrudFormMutationFns, CrudFormScene, PaginatedQueryParams, QueryParams } from "./types";
@@ -110,6 +111,11 @@ export interface BaseCrudProps<
    * @default "div"
    */
   formComponent?: ElementType;
+  /**
+   * Layout of the form items inside the scene form modal/drawer (label
+   * position, alignment and width). Defaults to the horizontal layout.
+   */
+  formLayout?: FormLayout;
   /**
    * Render function to provide a form for the specified scene
    */

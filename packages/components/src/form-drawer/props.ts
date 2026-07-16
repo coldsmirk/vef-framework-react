@@ -4,7 +4,7 @@ import type { ElementType, ReactNode } from "react";
 
 import type { Length } from "../_base";
 import type { DrawerProps } from "../drawer";
-import type { FormActionsProps, FormApi } from "../form";
+import type { FormActionsProps, FormApi, FormLayout } from "../form";
 
 /**
  * Props for the FormDrawer component
@@ -39,6 +39,11 @@ export interface FormDrawerProps<TValues extends object, TData = unknown> extend
    * @default "form"
    */
   formComponent?: ElementType;
+  /**
+   * Layout of the form items inside the drawer (label position, alignment and
+   * width). Defaults to the horizontal, right-aligned label layout.
+   */
+  formLayout?: FormLayout;
   /**
    * Custom render function for footer actions.
    * Receives the form API and default action buttons (submit and reset) as arguments.

@@ -1,4 +1,5 @@
 export type * from "./components";
+export type { FormLayout } from "./contexts";
 export type * from "./fields";
 export { createFormOptions, useFormContext, useFormStore, withFieldGroup, withForm } from "./form";
 export { DefaultResetButton, DefaultSubmitButton, FormActions, type FormActionsProps } from "./form-actions";

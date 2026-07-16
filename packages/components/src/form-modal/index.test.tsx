@@ -35,6 +35,21 @@ function buildOkMutationFn(apiClient: ApiClient) {
   );
 }
 
+function renderTitleField(apiClient: ApiClient, formLayout?: { layout: "horizontal" | "vertical" }) {
+  render(
+    <FormModal<PostValues> open defaultValues={{ title: "" }} formLayout={formLayout} title="新建">
+      {formApi => (
+        <formApi.AppField name="title">
+          {field => <field.Input label="标题" />}
+        </formApi.AppField>
+      )}
+    </FormModal>,
+    { apiClient }
+  );
+
+  return screen.getByText("标题").closest(".vef-form-item");
+}
+
 describe("form-modal/FormModal", () => {
   let apiClient: ApiClient;
 
@@ -58,6 +73,20 @@ describe("form-modal/FormModal", () => {
       render(<FormModal<PostValues> title="新建文章" />, { apiClient });
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("formLayout", () => {
+    it("renders form items with the horizontal layout by default", () => {
+      const item = renderTitleField(apiClient);
+
+      expect(item).toHaveClass("vef-form-item-horizontal");
+    });
+
+    it("renders form items with top labels when formLayout requests the vertical layout", () => {
+      const item = renderTitleField(apiClient, { layout: "vertical" });
+
+      expect(item).toHaveClass("vef-form-item-vertical");
     });
   });
 

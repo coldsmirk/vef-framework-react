@@ -18,12 +18,13 @@ import { useCrudStore } from "../store";
 interface SceneFormProps<TSceneFormValues extends AnyObject>
   extends Pick<
     BaseCrudProps<AnyObject, AnyObject, TSceneFormValues, AnyObject>,
-    "renderForm" | "formComponent" | "formMutationFns" | "formActionsRenderers" | "beforeFormSubmit" | "afterFormSubmit" | "mutationMeta"
+    "renderForm" | "formComponent" | "formLayout" | "formMutationFns" | "formActionsRenderers" | "beforeFormSubmit" | "afterFormSubmit" | "mutationMeta"
   > {}
 
 export const SceneForm = memo(<TSceneFormValues extends AnyObject>({
   renderForm,
   formComponent = "div",
+  formLayout,
   formMutationFns,
   formActionsRenderers,
   beforeFormSubmit,
@@ -69,6 +70,7 @@ export const SceneForm = memo(<TSceneFormValues extends AnyObject>({
     open: formVisible,
     title: formTitle,
     defaultValues: defaultFormValues,
+    formLayout,
     mutationFn,
     mutationMeta: isFunction(mutationMeta) && mutationFn
       ? mutationMeta(mutationFn.key)

@@ -19,6 +19,7 @@ export function Crud<
   sceneDefaultFormValues,
   renderForm,
   formComponent,
+  formLayout,
   formMutationFns,
   formActionsRenderers,
   beforeFormSubmit,
@@ -56,6 +57,7 @@ export function Crud<
         beforeFormSubmit={beforeFormSubmit}
         formActionsRenderers={formActionsRenderers}
         formComponent={formComponent}
+        formLayout={formLayout}
         formMutationFns={formMutationFns}
         mutationMeta={mutationMeta}
         renderForm={renderForm}
