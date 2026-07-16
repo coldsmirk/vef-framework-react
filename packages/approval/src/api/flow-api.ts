@@ -9,6 +9,7 @@ import type {
   FlowInitiator,
   FlowSearch,
   FlowVersion,
+  FlowVersionSummary,
   PublishVersionParams,
   ToggleFlowActiveParams,
   UpdateFlowParams
@@ -34,8 +35,8 @@ export interface FlowApi {
   deploy: MutationFunction<FlowVersion, DeployFlowParams>;
   publishVersion: MutationFunction<unknown, PublishVersionParams>;
   toggleActive: MutationFunction<unknown, ToggleFlowActiveParams>;
-  getGraph: QueryFunction<FlowGraphBundle, { flowId: string; tenantId?: string }>;
-  findVersions: QueryFunction<FlowVersion[], { flowId: string; tenantId?: string }>;
+  getGraph: QueryFunction<FlowGraphBundle, { flowId: string; tenantId?: string; versionId?: string }>;
+  findVersions: QueryFunction<FlowVersionSummary[], { flowId: string; tenantId?: string }>;
   findInitiators: QueryFunction<FlowInitiator[], { flowId: string; tenantId?: string }>;
 }
 
@@ -90,7 +91,7 @@ export function useFlowApi(): FlowApi {
           "approval_flow_toggle_active",
           ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, "toggle_active", params) })
         ),
-        getGraph: apiClient.createQueryFn<FlowGraphBundle, { flowId: string; tenantId?: string }>(
+        getGraph: apiClient.createQueryFn<FlowGraphBundle, { flowId: string; tenantId?: string; versionId?: string }>(
           "approval_flow_get_graph",
           ({ post }) => async params => {
             const result = await post<FlowGraphBundle>(API_PATH, { data: createApiRequest(RESOURCE, "get_graph", params) });
@@ -98,10 +99,10 @@ export function useFlowApi(): FlowApi {
             return result.data;
           }
         ),
-        findVersions: apiClient.createQueryFn<FlowVersion[], { flowId: string; tenantId?: string }>(
+        findVersions: apiClient.createQueryFn<FlowVersionSummary[], { flowId: string; tenantId?: string }>(
           "approval_flow_find_versions",
           ({ post }) => async params => {
-            const result = await post<FlowVersion[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_versions", params) });
+            const result = await post<FlowVersionSummary[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_versions", params) });
 
             return result.data;
           }

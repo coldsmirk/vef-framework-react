@@ -64,11 +64,20 @@ function DesignerBody({
   const { data: categories } = useQuery({ queryFn: categoryApi.findTree, queryKey: [categoryApi.findTree.key, {}] });
   const categoryOptions = useMemo(() => buildCategoryTreeOptions(categories ?? []), [categories]);
 
-  // Editing seeds: the flow's published definition and its initiator rules.
+  // Editing seeds from the newest deployment, published or not — deploying
+  // without publishing must not hide that work from the next editing session.
+  // The slim version list resolves the latest version id, then get_graph
+  // fetches that version's full definition.
+  const { data: versions } = useQuery({
+    queryFn: flowApi.findVersions,
+    queryKey: [flowApi.findVersions.key, { flowId: flow?.id ?? "" }],
+    enabled: isEditing
+  });
+  const latestVersionId = versions?.[0]?.id;
   const { data: graph } = useQuery({
     queryFn: flowApi.getGraph,
-    queryKey: [flowApi.getGraph.key, { flowId: flow?.id ?? "" }],
-    enabled: isEditing
+    queryKey: [flowApi.getGraph.key, { flowId: flow?.id ?? "", versionId: latestVersionId ?? "" }],
+    enabled: isEditing && latestVersionId !== undefined
   });
   const { data: initiatorRows } = useQuery({
     queryFn: flowApi.findInitiators,
@@ -77,11 +86,17 @@ function DesignerBody({
   });
 
   useEffect(() => {
-    if (!isEditing || draft !== null || graph === undefined || initiatorRows === undefined) {
+    if (!isEditing || draft !== null || versions === undefined || initiatorRows === undefined) {
       return;
     }
 
-    const { version } = graph;
+    // With at least one deployed version the definition fetch must land
+    // first; a flow with no version yet seeds an empty definition.
+    if (versions.length > 0 && graph === undefined) {
+      return;
+    }
+
+    const version = graph?.version ?? null;
 
     setDraft({
       flowId: flow.id,
@@ -106,7 +121,7 @@ function DesignerBody({
       formSchema: version?.formSchema ?? null,
       flowDefinition: version?.flowSchema ?? EMPTY_FLOW_DEFINITION
     });
-  }, [isEditing, draft, graph, initiatorRows, flow]);
+  }, [isEditing, draft, versions, graph, initiatorRows, flow]);
 
   // Every chain step invalidates the flow list, so the table behind the
   // drawer refreshes on its own once the chain lands.

@@ -1,6 +1,6 @@
 import type { TableColumn } from "@vef-framework-react/components";
 
-import type { Flow, FlowVersion } from "../../types";
+import type { Flow, FlowVersionSummary } from "../../types";
 
 import { Drawer, OperationButton, showSuccessMessage, Table, Text } from "@vef-framework-react/components";
 import { useMutation, useQuery } from "@vef-framework-react/core";
@@ -48,7 +48,7 @@ export function FlowVersionsDrawer({
     meta: { shouldShowSuccessFeedback: false, invalidates: [[api.findFlows.key] as const] }
   });
 
-  const columns: Array<TableColumn<FlowVersion>> = [
+  const columns: Array<TableColumn<FlowVersionSummary>> = [
     {
       title: "版本",
       dataIndex: "version",
@@ -59,7 +59,7 @@ export function FlowVersionsDrawer({
       title: "状态",
       dataIndex: "status",
       width: 100,
-      render: (value: FlowVersion["status"]) => <VersionStatusTag status={value} />
+      render: (value: FlowVersionSummary["status"]) => <VersionStatusTag status={value} />
     },
     {
       title: "说明",
@@ -71,7 +71,7 @@ export function FlowVersionsDrawer({
       title: "存储模式",
       dataIndex: "storageMode",
       width: 110,
-      render: (value: FlowVersion["storageMode"]) => value === "table" ? "独立表" : "JSON"
+      render: (value: FlowVersionSummary["storageMode"]) => value === "table" ? "独立表" : "JSON"
     },
     {
       title: "部署时间",
@@ -120,7 +120,7 @@ export function FlowVersionsDrawer({
       title={flow ? `版本历史 · ${flow.name}` : "版本历史"}
       onClose={onClose}
     >
-      <Table<FlowVersion>
+      <Table<FlowVersionSummary>
         columns={columns}
         dataSource={versions ?? []}
         loading={isLoading}

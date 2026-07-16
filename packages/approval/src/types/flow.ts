@@ -81,6 +81,25 @@ export interface FlowVersion extends FullAudited {
 }
 
 /**
+ * The version-list projection of a flow version, mirroring
+ * `shared.FlowVersionSummary`: identity and lifecycle metadata without the
+ * definition payloads. A single version's full definition is fetched through
+ * `get_graph` with an explicit `versionId`.
+ */
+export interface FlowVersionSummary {
+  id: string;
+  flowId: string;
+  version: number;
+  status: VersionStatus;
+  description?: string | null;
+  storageMode: StorageMode;
+  publishedAt?: string | null;
+  publishedBy?: string | null;
+  createdAt: string;
+  createdBy: string;
+}
+
+/**
  * A flow initiator rule, mirroring `approval.FlowInitiator`.
  */
 export interface FlowInitiator {
@@ -176,9 +195,10 @@ export interface FlowSearch {
 }
 
 /**
- * The published-definition bundle returned by `approval/flow.get_graph`:
- * the flow record, the published version (carrying `flowSchema` /
- * `formSchema`), and the persisted node/edge rows.
+ * The definition bundle returned by `approval/flow.get_graph`: the flow
+ * record and the resolved version (carrying `flowSchema` / `formSchema`) —
+ * the latest published version by default, or the version named by
+ * `versionId` (the designer's edit seed).
  */
 export interface FlowGraphBundle {
   flow: Flow | null;
