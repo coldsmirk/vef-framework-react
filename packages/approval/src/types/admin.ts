@@ -39,7 +39,8 @@ export interface AdminTask {
 
 /**
  * The instance's runtime state within an admin detail view, mirroring
- * `admin.InstanceDetailInfo`.
+ * `admin.InstanceDetailInfo`. `labels` are the flow's host-owned selection
+ * metadata, read from the mutable flow at query time.
  */
 export interface AdminInstanceInfo {
   instanceId: string;
@@ -49,6 +50,7 @@ export interface AdminInstanceInfo {
   flowId: string;
   flowName: string;
   flowVersionId: string;
+  labels?: Record<string, string>;
   applicant: UserInfo;
   status: InstanceStatus;
   currentNodeId?: string;

@@ -114,7 +114,9 @@ export interface PendingCounts {
 /**
  * The instance's runtime state within a self-service detail view, mirroring
  * `my.InstanceInfo`. `formData` is already stripped of the fields this
- * viewer may not see.
+ * viewer may not see. `labels` are the flow's host-owned selection metadata,
+ * read from the mutable flow at query time (display identity, not a
+ * version-pinned snapshot).
  */
 export interface MyInstanceInfo {
   instanceId: string;
@@ -122,6 +124,7 @@ export interface MyInstanceInfo {
   title: string;
   flowName: string;
   flowIcon?: string;
+  labels?: Record<string, string>;
   applicant: UserInfo;
   status: InstanceStatus;
   currentNodeId?: string;
