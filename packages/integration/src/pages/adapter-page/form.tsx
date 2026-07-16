@@ -1,8 +1,8 @@
 import type { CrudBasicFormScene } from "@vef-framework-react/components";
 
-import type { AdapterParams, Direction } from "../../types";
+import type { AdapterParams } from "../../types";
 
-import { Grid, Segmented, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { Grid, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 import { DIRECTION_OPTIONS, ScriptBindingHints, useContractDirectory, useSystemDirectory } from "../../components";
@@ -43,23 +43,20 @@ export function AdapterForm({ scene }: AdapterFormProps) {
       <Grid.Item span={12}>
         <form.AppField name="direction">
           {field => (
-            <Stack gap={4}>
-              <Text type="secondary">方向</Text>
-
-              <Segmented<Direction>
-                disabled={!isCreate}
-                options={DIRECTION_OPTIONS}
-                value={field.state.value ?? "outbound"}
-                onChange={field.handleChange}
-              />
-            </Stack>
+            <field.Radio
+              buttonStyle="solid"
+              disabled={!isCreate}
+              label="方向"
+              options={DIRECTION_OPTIONS}
+              optionType="button"
+            />
           )}
         </form.AppField>
       </Grid.Item>
 
       <Grid.Item span={12}>
         <form.AppField name="timeoutMs">
-          {field => <field.InputNumber label="超时覆盖（ms）" min={0} placeholder="0 用框架默认" style={{ width: "100%" }} />}
+          {field => <field.InputNumber extra="0 表示使用框架默认的运行超时" label="超时覆盖（ms）" min={0} style={{ width: "100%" }} />}
         </form.AppField>
       </Grid.Item>
 
@@ -76,7 +73,7 @@ export function AdapterForm({ scene }: AdapterFormProps) {
               required
               showFoldGutter
               showLineNumbers
-              height={360}
+              height={420}
               label="脚本"
               language="javascript"
             />

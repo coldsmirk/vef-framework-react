@@ -13,6 +13,12 @@ import { ContractActionButtonGroup, ContractOperationButtonGroup, useContractFor
 import { CONTRACT_FORM_DEFAULTS, contractToFormValues } from "./model";
 import { ContractSearchFields } from "./search";
 
+const FORM_DRAWER_WIDTH = {
+  xxs: "100vw",
+  md: "90vw",
+  xl: 920
+};
+
 /**
  * Full-page contract management: list, search, create/update with JSON Schema editors, and delete.
  */
@@ -32,6 +38,7 @@ export function IntegrationContractPage({
       columnSettings={{ storageKey: columnStorageKey }}
       deleteManyMutationFn={api.removeMany}
       deleteMutationFn={api.remove}
+      formLayout={{ layout: "vertical" }}
       formMutationFns={formMutations}
       queryFn={api.findPage}
       renderForm={scene => <ContractForm scene={scene} />}
@@ -49,7 +56,13 @@ export function IntegrationContractPage({
                     color="primary"
                     icon={<Icon component={EditIcon} />}
                     requiredPermissions={perms.update}
-                    onClick={() => openForm({ scene: "update", values: contractToFormValues(row) })}
+                    onClick={() => openForm({
+                      scene: "update",
+                      values: contractToFormValues(row),
+                      title: "编辑契约",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
                   >
                     编辑
                   </OperationButton>
@@ -82,7 +95,16 @@ export function IntegrationContractPage({
           {([openForm, isFetching, selectedRows, deleteMany, refetchQuery]) => (
             <>
               <PermissionGate requiredPermissions={perms.create}>
-                <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+                <ActionButton
+                  icon={<Icon component={PlusIcon} />}
+                  type="primary"
+                  onClick={() => openForm({
+                    scene: "create",
+                    title: "新增契约",
+                    mode: "drawer",
+                    width: FORM_DRAWER_WIDTH
+                  })}
+                >
                   新增契约
                 </ActionButton>
               </PermissionGate>

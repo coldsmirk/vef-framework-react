@@ -78,6 +78,7 @@ export function ParamsEditor({ value, onChange }: ParamsEditorProps) {
       canDelete
       creatable
       columns={columns}
+      locale={{ emptyText: "暂无参数" }}
       rowKey="id"
       size="small"
       value={rows}

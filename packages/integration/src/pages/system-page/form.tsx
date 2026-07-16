@@ -1,11 +1,11 @@
-import type { CollapseItem, CrudBasicFormScene } from "@vef-framework-react/components";
+import type { CrudBasicFormScene } from "@vef-framework-react/components";
 
 import type { SystemFormValues } from "./model";
 
-import { Collapse, Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { globalCssVars, Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
-import { ParamsEditor } from "../../components";
+import { FormSection, Labeled, ParamsEditor } from "../../components";
 import {
   DATA_SOURCE_MODE_OPTIONS,
   DB_KIND_OPTIONS,
@@ -14,7 +14,6 @@ import {
   OUTBOUND_AUTH_HINTS,
   OUTBOUND_AUTH_SCHEME_OPTIONS,
   SSL_MODE_OPTIONS
-
 } from "./model";
 
 const codeSchema = z.string("请输入系统编码").min(2, "至少 2 个字符").max(64, "最多 64 个字符");
@@ -25,46 +24,47 @@ function BasicSection({ scene }: { scene: CrudBasicFormScene }) {
   const isCreate = scene === "create";
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={12}>
-        <AppField name="code" validators={{ onBlur: codeSchema }}>
-          {field => <field.Input required disabled={!isCreate} label="系统编码" placeholder="如 his-east" />}
-        </AppField>
-      </Grid.Item>
+    <FormSection description="系统的标识、访问入口与公共参数" title="基础信息">
+      <Grid columnGap="small">
+        <Grid.Item span={12}>
+          <AppField name="code" validators={{ onBlur: codeSchema }}>
+            {field => <field.Input required disabled={!isCreate} label="系统编码" placeholder="如 his-east" />}
+          </AppField>
+        </Grid.Item>
 
-      <Grid.Item span={12}>
-        <AppField name="name" validators={{ onBlur: nameSchema }}>
-          {field => <field.Input required label="系统名称" />}
-        </AppField>
-      </Grid.Item>
+        <Grid.Item span={12}>
+          <AppField name="name" validators={{ onBlur: nameSchema }}>
+            {field => <field.Input required label="系统名称" />}
+          </AppField>
+        </Grid.Item>
 
-      <Grid.Item span={16}>
-        <AppField name="baseUrl">
-          {field => <field.Input label="Base URL" placeholder="https://his.example.com" />}
-        </AppField>
-      </Grid.Item>
+        <Grid.Item span={16}>
+          <AppField name="baseUrl">
+            {field => <field.Input label="Base URL" placeholder="https://his.example.com" />}
+          </AppField>
+        </Grid.Item>
 
-      <Grid.Item span={8}>
-        <AppField name="timeoutMs">
-          {field => <field.InputNumber label="调用超时（ms）" min={0} placeholder="0 用框架默认" style={{ width: "100%" }} />}
-        </AppField>
-      </Grid.Item>
+        <Grid.Item span={8}>
+          <AppField name="timeoutMs">
+            {field => <field.InputNumber extra="0 表示使用框架默认" label="调用超时（ms）" min={0} style={{ width: "100%" }} />}
+          </AppField>
+        </Grid.Item>
 
-      <Grid.Item span={24}>
-        <AppField name="params">
-          {field => (
-            <Stack gap={4}>
-              <Text type="secondary">系统参数（非敏感，暴露给脚本 system.params）</Text>
-              <ParamsEditor value={field.state.value} onChange={field.handleChange} />
-            </Stack>
-          )}
-        </AppField>
-      </Grid.Item>
+        <Grid.Item span={24}>
+          <AppField name="params">
+            {field => (
+              <Labeled hint="非敏感，脚本可通过 system.params 读取" label="系统参数">
+                <ParamsEditor value={field.state.value} onChange={field.handleChange} />
+              </Labeled>
+            )}
+          </AppField>
+        </Grid.Item>
 
-      <Grid.Item span={24}>
-        <AppField name="isEnabled">{field => <field.Bool label="启用" variant="switch" />}</AppField>
-      </Grid.Item>
-    </Grid>
+        <Grid.Item span={24}>
+          <AppField name="isEnabled">{field => <field.Bool label="启用" variant="switch" />}</AppField>
+        </Grid.Item>
+      </Grid>
+    </FormSection>
   );
 }
 
@@ -72,43 +72,59 @@ function OutboundAuthSection() {
   const form = useFormContext<SystemFormValues>();
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={12}>
-        <form.AppField name="outboundAuth.scheme">
-          {field => <field.Select label="认证方式" options={OUTBOUND_AUTH_SCHEME_OPTIONS} />}
-        </form.AppField>
-      </Grid.Item>
+    <FormSection description="调用该系统时如何携带凭证" title="出站认证">
+      <Grid columnGap="small">
+        <Grid.Item span={12}>
+          <form.AppField name="outboundAuth.scheme">
+            {field => (
+              <field.Select
+                extra={OUTBOUND_AUTH_HINTS[field.state.value] ?? "自定义方案，按需填写参数"}
+                label="认证方式"
+                options={OUTBOUND_AUTH_SCHEME_OPTIONS}
+              />
+            )}
+          </form.AppField>
+        </Grid.Item>
 
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
-          {scheme => <Text type="secondary">{OUTBOUND_AUTH_HINTS[scheme] ?? "自定义方案，按需填写参数"}</Text>}
-        </form.Subscribe>
-      </Grid.Item>
+        <Grid.Item span={24}>
+          <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
+            {scheme => scheme === "none"
+              ? null
+              : (
+                  <form.AppField name="outboundAuth.params">
+                    {field => (
+                      <Labeled label="认证参数">
+                        <ParamsEditor value={field.state.value} onChange={field.handleChange} />
+                      </Labeled>
+                    )}
+                  </form.AppField>
+                )}
+          </form.Subscribe>
+        </Grid.Item>
 
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
-          {scheme => scheme === "none"
-            ? null
-            : (
-                <form.AppField name="outboundAuth.params">
-                  {field => <ParamsEditor value={field.state.value} onChange={field.handleChange} />}
-                </form.AppField>
-              )}
-        </form.Subscribe>
-      </Grid.Item>
+        <Grid.Item span={24}>
+          <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
+            {scheme => scheme === "script"
+              ? (
+                  <form.AppField name="outboundAuth.script">
+                    {field => <field.CodeEditor showLineNumbers height={200} label="签名脚本" language="javascript" />}
+                  </form.AppField>
+                )
+              : null}
+          </form.Subscribe>
+        </Grid.Item>
+      </Grid>
+    </FormSection>
+  );
+}
 
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
-          {scheme => scheme === "script"
-            ? (
-                <form.AppField name="outboundAuth.script">
-                  {field => <field.CodeEditor showLineNumbers height={200} label="签名脚本" language="javascript" />}
-                </form.AppField>
-              )
-            : null}
-        </form.Subscribe>
-      </Grid.Item>
-    </Grid>
+function EnabledSwitch({ name }: { name: "envelopeEnabled" | "inboundEnabled" | "dataSourceEnabled" | "retryEnabled" }) {
+  const form = useFormContext<SystemFormValues>();
+
+  return (
+    <form.AppField name={name}>
+      {field => <field.Bool noWrapper variant="switch" />}
+    </form.AppField>
   );
 }
 
@@ -116,66 +132,76 @@ function OutboundEnvelopeSection() {
   const form = useFormContext<SystemFormValues>();
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={24}>
-        <form.AppField name="envelopeEnabled">{field => <field.Bool label="启用出站信封" variant="switch" />}</form.AppField>
-      </Grid.Item>
-
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.envelopeEnabled}>
-          {enabled => enabled
+    <form.Subscribe selector={state => state.values.envelopeEnabled}>
+      {enabled => (
+        <FormSection
+          description="在系统层统一包裹每次出站调用的通用报文结构，适配器只处理业务数据；需先配置 Base URL"
+          extra={<EnabledSwitch name="envelopeEnabled" />}
+          title="出站信封"
+        >
+          {enabled
             ? (
                 <Grid columnGap="small">
                   <Grid.Item span={24}>
-                    <Text type="secondary">
-                      在系统层统一包裹出站调用的通用结构，适配器只需处理业务数据；需先配置 Base URL，任一侧留空则该侧保持原样。
-                    </Text>
-                  </Grid.Item>
-
-                  <Grid.Item span={24}>
                     <form.AppField name="envelope.request">
-                      {field => <field.CodeEditor showLineNumbers height={180} label="请求包裹脚本（request）" language="javascript" />}
+                      {field => (
+                        <field.CodeEditor
+                          showLineNumbers
+                          extra="留空则请求原样发送"
+                          height={180}
+                          label="请求包裹脚本（request）"
+                          language="javascript"
+                        />
+                      )}
                     </form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={24}>
                     <form.AppField name="envelope.response">
-                      {field => <field.CodeEditor showLineNumbers height={180} label="响应解包脚本（response）" language="javascript" />}
+                      {field => (
+                        <field.CodeEditor
+                          showLineNumbers
+                          extra="留空则响应原样返回"
+                          height={180}
+                          label="响应解包脚本（response）"
+                          language="javascript"
+                        />
+                      )}
                     </form.AppField>
                   </Grid.Item>
                 </Grid>
               )
-            : <Text type="secondary">未启用：适配器请求原样发送、响应原样返回。</Text>}
-        </form.Subscribe>
-      </Grid.Item>
-    </Grid>
+            : null}
+        </FormSection>
+      )}
+    </form.Subscribe>
   );
 }
 
-function InboundAuthSection() {
+function InboundSection() {
   const form = useFormContext<SystemFormValues>();
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={24}>
-        <form.AppField name="inboundEnabled">{field => <field.Bool label="开放入站" variant="switch" />}</form.AppField>
-      </Grid.Item>
-
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.inboundEnabled}>
-          {enabled => enabled
+    <form.Subscribe selector={state => state.values.inboundEnabled}>
+      {enabled => (
+        <FormSection
+          description="开放后该系统可通过入站网关投递请求；关闭时一切回调都会被拒绝"
+          extra={<EnabledSwitch name="inboundEnabled" />}
+          title="入站回调"
+        >
+          {enabled
             ? (
                 <Grid columnGap="small">
                   <Grid.Item span={12}>
                     <form.AppField name="inboundAuth.scheme">
-                      {field => <field.Select label="入站认证方式" options={INBOUND_AUTH_SCHEME_OPTIONS} />}
+                      {field => (
+                        <field.Select
+                          extra={INBOUND_AUTH_HINTS[field.state.value] ?? "自定义方案，按需填写参数"}
+                          label="验证方式"
+                          options={INBOUND_AUTH_SCHEME_OPTIONS}
+                        />
+                      )}
                     </form.AppField>
-                  </Grid.Item>
-
-                  <Grid.Item span={24}>
-                    <form.Subscribe selector={state => state.values.inboundAuth.scheme}>
-                      {scheme => <Text type="secondary">{INBOUND_AUTH_HINTS[scheme] ?? "自定义方案，按需填写参数"}</Text>}
-                    </form.Subscribe>
                   </Grid.Item>
 
                   <Grid.Item span={24}>
@@ -184,7 +210,11 @@ function InboundAuthSection() {
                         ? null
                         : (
                             <form.AppField name="inboundAuth.params">
-                              {field => <ParamsEditor value={field.state.value} onChange={field.handleChange} />}
+                              {field => (
+                                <Labeled label="验证参数">
+                                  <ParamsEditor value={field.state.value} onChange={field.handleChange} />
+                                </Labeled>
+                              )}
                             </form.AppField>
                           )}
                     </form.Subscribe>
@@ -203,10 +233,10 @@ function InboundAuthSection() {
                   </Grid.Item>
                 </Grid>
               )
-            : <Text type="secondary">未开放入站：任何外部系统的回调都会被拒绝。</Text>}
-        </form.Subscribe>
-      </Grid.Item>
-    </Grid>
+            : null}
+        </FormSection>
+      )}
+    </form.Subscribe>
   );
 }
 
@@ -214,14 +244,14 @@ function DataSourceSection() {
   const form = useFormContext<SystemFormValues>();
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={24}>
-        <form.AppField name="dataSourceEnabled">{field => <field.Bool label="启用直连数据源" variant="switch" />}</form.AppField>
-      </Grid.Item>
-
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.dataSourceEnabled}>
-          {enabled => enabled
+    <form.Subscribe selector={state => state.values.dataSourceEnabled}>
+      {enabled => (
+        <FormSection
+          description="为该系统的适配器脚本提供 sql 能力的直连数据库"
+          extra={<EnabledSwitch name="dataSourceEnabled" />}
+          title="直连数据源"
+        >
+          {enabled
             ? (
                 <Grid columnGap="small">
                   <Grid.Item span={8}>
@@ -232,7 +262,19 @@ function DataSourceSection() {
 
                   <Grid.Item span={8}>
                     <form.AppField name="dataSource.mode">
-                      {field => <field.Select label="脚本访问模式" options={DATA_SOURCE_MODE_OPTIONS} />}
+                      {field => (
+                        <field.Select
+                          label="脚本访问模式"
+                          options={DATA_SOURCE_MODE_OPTIONS}
+                          extra={field.state.value === "read_write"
+                            ? (
+                                <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="warning">
+                                  脚本可用 sql.exec 写入该库，仅对可信的交换库开启
+                                </Text>
+                              )
+                            : undefined}
+                        />
+                      )}
                     </form.AppField>
                   </Grid.Item>
 
@@ -240,18 +282,6 @@ function DataSourceSection() {
                     <form.AppField name="dataSource.sslMode">
                       {field => <field.Select label="SSL 模式" options={SSL_MODE_OPTIONS} />}
                     </form.AppField>
-                  </Grid.Item>
-
-                  <Grid.Item span={24}>
-                    <form.Subscribe selector={state => state.values.dataSource.mode}>
-                      {mode => (
-                        <Text type={mode === "read_write" ? "warning" : "secondary"}>
-                          {mode === "read_write"
-                            ? "读写模式：脚本可用 sql.exec 写入该库，请仅对可信的交换库开启。"
-                            : "只读模式：脚本仅能用 sql.query 读取该库。"}
-                        </Text>
-                      )}
-                    </form.Subscribe>
                   </Grid.Item>
 
                   <Grid.Item span={16}>
@@ -276,11 +306,11 @@ function DataSourceSection() {
                     <form.AppField name="dataSource.database">{field => <field.Input label="数据库" />}</form.AppField>
                   </Grid.Item>
 
-                  <Grid.Item span={8}>
+                  <Grid.Item span={12}>
                     <form.AppField name="dataSource.schema">{field => <field.Input label="Schema" />}</form.AppField>
                   </Grid.Item>
 
-                  <Grid.Item span={8}>
+                  <Grid.Item span={12}>
                     <form.AppField name="dataSource.path">{field => <field.Input label="Path（SQLite）" />}</form.AppField>
                   </Grid.Item>
 
@@ -290,9 +320,9 @@ function DataSourceSection() {
                 </Grid>
               )
             : null}
-        </form.Subscribe>
-      </Grid.Item>
-    </Grid>
+        </FormSection>
+      )}
+    </form.Subscribe>
   );
 }
 
@@ -300,14 +330,14 @@ function RetrySection() {
   const form = useFormContext<SystemFormValues>();
 
   return (
-    <Grid columnGap="small">
-      <Grid.Item span={24}>
-        <form.AppField name="retryEnabled">{field => <field.Bool label="启用重试" variant="switch" />}</form.AppField>
-      </Grid.Item>
-
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.retryEnabled}>
-          {enabled => enabled
+    <form.Subscribe selector={state => state.values.retryEnabled}>
+      {enabled => (
+        <FormSection
+          description="出站调用失败后的自动重试"
+          extra={<EnabledSwitch name="retryEnabled" />}
+          title="重试策略"
+        >
+          {enabled
             ? (
                 <Grid columnGap="small">
                   <Grid.Item span={8}>
@@ -330,9 +360,9 @@ function RetrySection() {
                 </Grid>
               )
             : null}
-        </form.Subscribe>
-      </Grid.Item>
-    </Grid>
+        </FormSection>
+      )}
+    </form.Subscribe>
   );
 }
 
@@ -341,41 +371,18 @@ export interface SystemFormProps {
 }
 
 /**
- * The create/update form body for a system, organized into collapsible sections.
+ * The create/update form body for a system: always-on basics and outbound
+ * auth, then the optional capabilities, each toggled from its section header.
  */
 export function SystemForm({ scene }: SystemFormProps) {
-  const items: CollapseItem[] = [
-    {
-      key: "basic",
-      label: "基础信息",
-      children: <BasicSection scene={scene} />
-    },
-    {
-      key: "auth",
-      label: "出站认证",
-      children: <OutboundAuthSection />
-    },
-    {
-      key: "envelope",
-      label: "出站信封",
-      children: <OutboundEnvelopeSection />
-    },
-    {
-      key: "inbound",
-      label: "入站认证",
-      children: <InboundAuthSection />
-    },
-    {
-      key: "dataSource",
-      label: "直连数据源",
-      children: <DataSourceSection />
-    },
-    {
-      key: "retry",
-      label: "重试策略",
-      children: <RetrySection />
-    }
-  ];
-
-  return <Collapse defaultActiveKey={["basic", "auth"]} items={items} />;
+  return (
+    <Stack gap="middle">
+      <BasicSection scene={scene} />
+      <OutboundAuthSection />
+      <OutboundEnvelopeSection />
+      <InboundSection />
+      <DataSourceSection />
+      <RetrySection />
+    </Stack>
+  );
 }

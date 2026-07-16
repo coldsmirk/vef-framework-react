@@ -2,8 +2,9 @@ import type { TableColumn } from "@vef-framework-react/components";
 
 import type { Direction, FailureKind, InvocationStats } from "../../types";
 
-import { Button, Flex, Stack, Table, Tag, Text } from "@vef-framework-react/components";
+import { Button, Card, Flex, globalCssVars, Icon, Stack, Table, Tag, Text } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
+import { RotateCwIcon } from "lucide-react";
 
 import { useStatsApi } from "../../api";
 import { DirectionTag, FAILURE_KIND_COLORS, FAILURE_KIND_LABELS } from "../../components";
@@ -104,22 +105,27 @@ export function StatsPanel() {
   const stats = data?.stats ?? [];
 
   return (
-    <Stack gap="middle">
-      <Flex align="center" justify="space-between">
-        <Text type="secondary">本节点自进程启动以来的运行时快照</Text>
+    <Card size="small">
+      <Stack gap="middle">
+        <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
+          <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
+            本节点自进程启动以来的运行时快照，按系统 × 契约 × 方向汇总。
+          </Text>
 
-        <Button loading={isLoading} size="small" onClick={() => void refetch()}>
-          刷新
-        </Button>
-      </Flex>
+          <Button icon={<Icon component={RotateCwIcon} />} loading={isLoading} onClick={() => void refetch()}>
+            刷新
+          </Button>
+        </Flex>
 
-      <Table<InvocationStats>
-        columns={statsColumns}
-        dataSource={stats}
-        pagination={false}
-        rowKey={record => `${record.system}|${record.contract}|${record.direction}`}
-        size="small"
-      />
-    </Stack>
+        <Table<InvocationStats>
+          columns={statsColumns}
+          dataSource={stats}
+          locale={{ emptyText: "暂无调用记录" }}
+          pagination={false}
+          rowKey={record => `${record.system}|${record.contract}|${record.direction}`}
+          size="small"
+        />
+      </Stack>
+    </Card>
   );
 }

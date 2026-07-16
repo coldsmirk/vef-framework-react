@@ -2,11 +2,13 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 
 import type { ConnectionCheck, DatabaseProbe, HttpProbe } from "../../types";
 
-import { Button, Descriptions, Empty, Flex, Input, Modal, Stack, Tag, Text } from "@vef-framework-react/components";
+import { Button, Descriptions, Drawer, Empty, Flex, Icon, Input, Stack, Tag, Text } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
+import { ActivityIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useOpsApi } from "../../api";
+import { Labeled } from "../labeled";
 
 function reachableTag(reachable: boolean) {
   return <Tag color={reachable ? "success" : "error"}>{reachable ? "可达" : "不可达"}</Tag>;
@@ -87,39 +89,38 @@ function ProbeResult({ check }: { check: ConnectionCheck }) {
     <Stack gap="middle">
       {check.http
         ? (
-            <Stack gap="small">
-              <Text strong>HTTP 探测</Text>
+            <Labeled label="HTTP 探测">
               <Descriptions bordered column={1} items={httpItems(check.http)} size="small" />
-            </Stack>
+            </Labeled>
           )
         : null}
 
       {check.database
         ? (
-            <Stack gap="small">
-              <Text strong>数据库探测</Text>
+            <Labeled label="数据库探测">
               <Descriptions bordered column={1} items={databaseItems(check.database)} size="small" />
-            </Stack>
+            </Labeled>
           )
         : null}
     </Stack>
   );
 }
 
-export interface TestConnectionDialogProps {
+export interface TestConnectionDrawerProps {
   open: boolean;
   systemCode: string;
   onClose: () => void;
 }
 
 /**
- * A modal that probes a saved system's configured transports and shows the result.
+ * A drawer that probes a saved system's configured transports (HTTP and
+ * database) and shows what each probe found.
  */
-export function TestConnectionDialog({
+export function TestConnectionDrawer({
   open,
   systemCode,
   onClose
-}: TestConnectionDialogProps) {
+}: TestConnectionDrawerProps) {
   const { testConnection } = useOpsApi();
   const {
     mutate,
@@ -130,8 +131,8 @@ export function TestConnectionDialog({
   const [method, setMethod] = useState("GET");
   const [path, setPath] = useState("/");
 
-  // Reset the probe and inputs when the dialog targets a different system, so a
-  // previous system's result never lingers under a new system's title.
+  // Reset the probe and inputs when the drawer targets a different system, so
+  // a previous system's result never lingers under a new system's title.
   useEffect(() => {
     reset();
     setMethod("GET");
@@ -139,13 +140,21 @@ export function TestConnectionDialog({
   }, [systemCode, reset]);
 
   return (
-    <Modal footer={null} open={open} title={`测试连接 · ${systemCode}`} width={540} onCancel={onClose}>
+    <Drawer open={open} size={520} title={`测试连接 · ${systemCode}`} onClose={onClose}>
       <Stack gap="middle">
-        <Flex gap="small">
-          <Input aria-label="探测方法" placeholder="方法" style={{ width: 110 }} value={method} onChange={event => setMethod(event.target.value)} />
-          <Input aria-label="探测路径" placeholder="探测路径，如 /health" style={{ flex: 1 }} value={path} onChange={event => setPath(event.target.value)} />
+        <Flex align="flex-end" gap="small">
+          <Labeled label="探测方法">
+            <Input aria-label="探测方法" placeholder="GET" style={{ width: 100 }} value={method} onChange={event => setMethod(event.target.value)} />
+          </Labeled>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Labeled label="探测路径">
+              <Input aria-label="探测路径" placeholder="如 /health" value={path} onChange={event => setPath(event.target.value)} />
+            </Labeled>
+          </div>
 
           <Button
+            icon={<Icon component={ActivityIcon} />}
             loading={isPending}
             type="primary"
             onClick={() => mutate({
@@ -158,8 +167,10 @@ export function TestConnectionDialog({
           </Button>
         </Flex>
 
-        {data ? <ProbeResult check={data} /> : null}
+        {data
+          ? <ProbeResult check={data} />
+          : <Empty description="开始探测后在此查看结果" style={{ padding: "32px 0" }} />}
       </Stack>
-    </Modal>
+    </Drawer>
   );
 }

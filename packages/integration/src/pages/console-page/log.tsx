@@ -2,7 +2,7 @@ import type { CrudBasicSceneFormValues, DescriptionsItem, TableColumn } from "@v
 
 import type { Direction, FailureKind, InvocationLog, LogSearch } from "../../types";
 
-import { Alert, Button, CrudPage, Descriptions, Drawer, globalCssVars, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { Alert, Button, Crud, Descriptions, Drawer, globalCssVars, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { useLogApi } from "../../api";
@@ -13,6 +13,7 @@ import {
   FailureKindTag,
   formatTimestamp,
   JsonView,
+  Labeled,
   useContractDirectory,
   useSystemDirectory,
   WireTraceTimeline
@@ -150,7 +151,7 @@ function detailItems(log: InvocationLog): DescriptionsItem[] {
     {
       key: "requestId",
       label: "Request ID",
-      children: log.requestId
+      children: <Text code copyable style={{ fontSize: globalCssVars.fontSizeSm }}>{log.requestId}</Text>
     },
     {
       key: "time",
@@ -164,18 +165,21 @@ function LogDetail({ log }: { log: InvocationLog }) {
   return (
     <Stack gap="middle">
       <Descriptions bordered column={2} items={detailItems(log)} size="small" />
-      {log.error ? <Alert showIcon message={log.error} type="error" /> : null}
-      <Text type="secondary">输入</Text>
-      <JsonView value={log.input ?? null} />
-      <Text type="secondary">输出</Text>
-      <JsonView value={log.output ?? null} />
+      {log.error ? <Alert showIcon title={log.error} type="error" /> : null}
+
+      <Labeled label="输入">
+        <JsonView value={log.input ?? null} />
+      </Labeled>
+
+      <Labeled label="输出">
+        <JsonView value={log.output ?? null} />
+      </Labeled>
 
       {log.httpTrace && log.httpTrace.length > 0
         ? (
-            <>
-              <Text type="secondary">Wire Trace</Text>
+            <Labeled label="Wire Trace">
               <WireTraceTimeline trace={log.httpTrace} />
-            </>
+            </Labeled>
           )
         : null}
     </Stack>
@@ -191,7 +195,7 @@ export function LogPanel() {
 
   return (
     <>
-      <CrudPage<InvocationLog, LogSearch, LogSceneValues>
+      <Crud<InvocationLog, LogSearch, LogSceneValues>
         basicSearch={<LogSearchFields />}
         operationColumn={{ render: row => <Button size="small" type="link" onClick={() => setDetail(row)}>详情</Button> }}
         queryFn={api.findPage}
@@ -199,7 +203,7 @@ export function LogPanel() {
         tableColumns={logColumns}
       />
 
-      <Drawer open={detail !== null} title="调用详情" width={680} onClose={() => setDetail(null)}>
+      <Drawer open={detail !== null} size={760} title="调用详情" onClose={() => setDetail(null)}>
         {detail ? <LogDetail log={detail} /> : null}
       </Drawer>
     </>

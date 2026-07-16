@@ -14,6 +14,8 @@ import { RouteForm } from "./form";
 import { ROUTE_FORM_DEFAULTS, RouteActionButtonGroup, RouteOperationButtonGroup, routeToParams } from "./helpers";
 import { RouteSearchFields } from "./search";
 
+const FORM_DRAWER_WIDTH = { xxs: "100vw", sm: 480 };
+
 /**
  * Full-page route management: map route keys to the system serving a contract.
  */
@@ -35,6 +37,7 @@ export function IntegrationRoutePage({
       columnSettings={{ storageKey: columnStorageKey }}
       deleteManyMutationFn={api.removeMany}
       deleteMutationFn={api.remove}
+      formLayout={{ layout: "vertical" }}
       formMutationFns={{ create: api.create, update: api.update }}
       queryFn={api.findPage}
       renderForm={() => <RouteForm />}
@@ -52,7 +55,13 @@ export function IntegrationRoutePage({
                     color="primary"
                     icon={<Icon component={EditIcon} />}
                     requiredPermissions={perms.update}
-                    onClick={() => openForm({ scene: "update", values: routeToParams(row) })}
+                    onClick={() => openForm({
+                      scene: "update",
+                      values: routeToParams(row),
+                      title: "编辑路由",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
                   >
                     编辑
                   </OperationButton>
@@ -85,7 +94,16 @@ export function IntegrationRoutePage({
           {([openForm, isFetching, selectedRows, deleteMany, refetchQuery]) => (
             <>
               <PermissionGate requiredPermissions={perms.create}>
-                <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+                <ActionButton
+                  icon={<Icon component={PlusIcon} />}
+                  type="primary"
+                  onClick={() => openForm({
+                    scene: "create",
+                    title: "新增路由",
+                    mode: "drawer",
+                    width: FORM_DRAWER_WIDTH
+                  })}
+                >
                   新增路由
                 </ActionButton>
               </PermissionGate>

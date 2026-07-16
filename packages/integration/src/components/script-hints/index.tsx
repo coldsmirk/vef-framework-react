@@ -1,5 +1,6 @@
 import type { Direction } from "../../types";
 
+import { css } from "@emotion/react";
 import { globalCssVars, Stack, Text } from "@vef-framework-react/components";
 
 interface Binding {
@@ -21,6 +22,12 @@ const INBOUND_BINDINGS: Binding[] = [
   { name: "dispatch", desc: "dispatch(input)：校验并交给业务处理器，返回标准输出" }
 ];
 
+const panelCss = css({
+  padding: "10px 12px",
+  borderRadius: globalCssVars.borderRadiusLg,
+  background: globalCssVars.colorFillQuaternary
+});
+
 /**
  * The available script bindings for a flow direction, shown beside the editor.
  */
@@ -28,13 +35,13 @@ export function ScriptBindingHints({ direction }: { direction: Direction }) {
   const bindings = direction === "inbound" ? INBOUND_BINDINGS : OUTBOUND_BINDINGS;
 
   return (
-    <Stack gap={4}>
-      <Text type="secondary">
+    <Stack css={panelCss} gap={6}>
+      <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
         {direction === "inbound" ? "入站" : "出站"}
         脚本可用绑定
       </Text>
 
-      <Stack gap={2}>
+      <Stack gap={4}>
         {bindings.map(binding => (
           <Text key={binding.name} style={{ fontSize: globalCssVars.fontSizeSm }}>
             <Text code>{binding.name}</Text>

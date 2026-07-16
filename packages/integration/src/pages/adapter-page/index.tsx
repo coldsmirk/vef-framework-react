@@ -14,6 +14,12 @@ import { AdapterForm } from "./form";
 import { ADAPTER_FORM_DEFAULTS, AdapterActionButtonGroup, AdapterOperationButtonGroup, adapterToParams } from "./helpers";
 import { AdapterSearchFields } from "./search";
 
+const FORM_DRAWER_WIDTH = {
+  xxs: "100vw",
+  md: "90vw",
+  xl: 960
+};
+
 /**
  * Full-page adapter management: the per-system-per-contract translation scripts, one per direction.
  */
@@ -35,6 +41,7 @@ export function IntegrationAdapterPage({
       columnSettings={{ storageKey: columnStorageKey }}
       deleteManyMutationFn={api.removeMany}
       deleteMutationFn={api.remove}
+      formLayout={{ layout: "vertical" }}
       formMutationFns={{ create: api.create, update: api.update }}
       queryFn={api.findPage}
       renderForm={scene => <AdapterForm scene={scene} />}
@@ -52,7 +59,13 @@ export function IntegrationAdapterPage({
                     color="primary"
                     icon={<Icon component={EditIcon} />}
                     requiredPermissions={perms.update}
-                    onClick={() => openForm({ scene: "update", values: adapterToParams(row) })}
+                    onClick={() => openForm({
+                      scene: "update",
+                      values: adapterToParams(row),
+                      title: "编辑适配器",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
                   >
                     编辑
                   </OperationButton>
@@ -85,7 +98,16 @@ export function IntegrationAdapterPage({
           {([openForm, isFetching, selectedRows, deleteMany, refetchQuery]) => (
             <>
               <PermissionGate requiredPermissions={perms.create}>
-                <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+                <ActionButton
+                  icon={<Icon component={PlusIcon} />}
+                  type="primary"
+                  onClick={() => openForm({
+                    scene: "create",
+                    title: "新增适配器",
+                    mode: "drawer",
+                    width: FORM_DRAWER_WIDTH
+                  })}
+                >
                   新增适配器
                 </ActionButton>
               </PermissionGate>

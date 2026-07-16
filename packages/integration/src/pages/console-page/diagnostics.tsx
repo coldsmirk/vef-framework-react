@@ -2,8 +2,9 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 
 import type { RouteFinding, RouteFindingKind } from "../../types";
 
-import { Button, Card, Descriptions, Flex, PermissionGate, Result, Stack, Text } from "@vef-framework-react/components";
+import { Button, Card, Descriptions, Empty, Flex, globalCssVars, Icon, PermissionGate, Result, Stack, Text } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
+import { SearchCheckIcon } from "lucide-react";
 
 import { useOpsApi } from "../../api";
 import { FindingKindTag } from "../../components";
@@ -86,18 +87,26 @@ export function DiagnosticsPanel({ permission }: DiagnosticsPanelProps) {
   const report = mutation.data;
 
   return (
-    <Stack gap="middle">
-      <PermissionGate requiredPermissions={permission}>
-        <Button loading={mutation.isPending} type="primary" onClick={() => mutation.mutate()}>
-          开始诊断
-        </Button>
-      </PermissionGate>
+    <Card size="small">
+      <Stack gap="middle">
+        <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
+          <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
+            检查悬空适配器、通配缺口、停用的目标与未覆盖的契约。
+          </Text>
 
-      {report
-        ? report.findings.length === 0
-          ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
-          : <Stack gap="middle">{groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}</Stack>
-        : null}
-    </Stack>
+          <PermissionGate requiredPermissions={permission}>
+            <Button icon={<Icon component={SearchCheckIcon} />} loading={mutation.isPending} type="primary" onClick={() => mutation.mutate()}>
+              开始诊断
+            </Button>
+          </PermissionGate>
+        </Flex>
+
+        {report
+          ? report.findings.length === 0
+            ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
+            : <Stack gap="middle">{groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}</Stack>
+          : <Empty description="尚未运行诊断" style={{ padding: "48px 0" }} />}
+      </Stack>
+    </Card>
   );
 }

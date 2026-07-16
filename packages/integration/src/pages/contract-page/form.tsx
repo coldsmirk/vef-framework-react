@@ -59,13 +59,13 @@ export function ContractForm({ scene }: ContractFormProps) {
         </AppField>
       </Grid.Item>
 
-      <Grid.Item span={24}>
+      <Grid.Item span={{ xxs: 24, md: 12 }}>
         <AppField name="inputSchema" validators={{ onChange: validateJsonSchema }}>
           {field => (
             <field.CodeEditor
               showFoldGutter
               showLineNumbers
-              height={200}
+              height={260}
               label="输入 Schema（JSON Schema）"
               language="json"
               placeholder="留空则不校验输入"
@@ -74,13 +74,13 @@ export function ContractForm({ scene }: ContractFormProps) {
         </AppField>
       </Grid.Item>
 
-      <Grid.Item span={24}>
+      <Grid.Item span={{ xxs: 24, md: 12 }}>
         <AppField name="outputSchema" validators={{ onChange: validateJsonSchema }}>
           {field => (
             <field.CodeEditor
               showFoldGutter
               showLineNumbers
-              height={200}
+              height={260}
               label="输出 Schema（JSON Schema）"
               language="json"
               placeholder="留空则不校验输出"

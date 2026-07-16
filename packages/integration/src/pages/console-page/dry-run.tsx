@@ -1,24 +1,39 @@
 import type { Direction, DryRunResult, InboundDryRunResult, JsonValue } from "../../types";
 
+import { css } from "@emotion/react";
 import {
   Alert,
   Button,
+  Card,
   CodeEditor,
+  Empty,
   Flex,
+  Grid,
+  Icon,
   Input,
   PermissionGate,
   Segmented,
   Select,
   showErrorMessage,
   showWarningMessage,
-  Stack,
-  Text
+  Spin,
+  Stack
 } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
+import { PlayIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useOpsApi } from "../../api";
-import { DIRECTION_OPTIONS, FailureKindTag, JsonView, ParamsEditor, useContractDirectory, useSystemDirectory, WireTraceTimeline } from "../../components";
+import {
+  DIRECTION_OPTIONS,
+  FailureKindTag,
+  JsonView,
+  Labeled,
+  ParamsEditor,
+  useContractDirectory,
+  useSystemDirectory,
+  WireTraceTimeline
+} from "../../components";
 
 type ParseResult = { ok: true; value: JsonValue } | { ok: false };
 
@@ -36,36 +51,50 @@ function parseJson(text: string): ParseResult {
   }
 }
 
+const workbenchCss = css({
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))",
+  gap: 16,
+  alignItems: "start"
+});
+
+const modeBarItemCss = css({
+  flexShrink: 0
+});
+
+const modeBannerCss = css({
+  flex: 1,
+  minWidth: 280
+});
+
 function OutboundResult({ result }: { result: DryRunResult }) {
   return (
-    <Stack gap="small">
-      <Flex align="center" gap="small">
-        <Text strong>结果</Text>
-        <FailureKindTag failureKind={result.failureKind} />
-      </Flex>
+    <Stack gap="middle">
+      {result.error ? <Alert showIcon title={result.error} type="error" /> : null}
 
-      {result.error ? <Alert showIcon message={result.error} type="error" /> : null}
-      <Text type="secondary">输出</Text>
-      <JsonView value={result.output} />
-      <Text type="secondary">Wire Trace</Text>
-      <WireTraceTimeline trace={result.trace} />
+      <Labeled label="输出">
+        <JsonView value={result.output} />
+      </Labeled>
+
+      <Labeled label="Wire Trace">
+        <WireTraceTimeline trace={result.trace} />
+      </Labeled>
     </Stack>
   );
 }
 
 function InboundResult({ result }: { result: InboundDryRunResult }) {
   return (
-    <Stack gap="small">
-      <Flex align="center" gap="small">
-        <Text strong>结果</Text>
-        <FailureKindTag failureKind={result.failureKind} />
-      </Flex>
+    <Stack gap="middle">
+      {result.error ? <Alert showIcon title={result.error} type="error" /> : null}
 
-      {result.error ? <Alert showIcon message={result.error} type="error" /> : null}
-      <Text type="secondary">回给外部系统的响应</Text>
-      <JsonView value={result.reply} />
-      <Text type="secondary">dispatch 出去的标准入参</Text>
-      <JsonView value={result.dispatchedInput} />
+      <Labeled label="外部系统收到的响应">
+        <JsonView value={result.reply} />
+      </Labeled>
+
+      <Labeled label="业务处理器收到的入参（dispatch）">
+        <JsonView value={result.dispatchedInput} />
+      </Labeled>
     </Stack>
   );
 }
@@ -76,8 +105,9 @@ export interface DryRunPanelProps {
 }
 
 /**
- * The script test console. An outbound dry run calls the real external system;
- * an inbound dry run stubs the business handler and records nothing.
+ * The script test console, laid out as a request → result workbench. An
+ * outbound dry run calls the real external system; an inbound dry run stubs
+ * the business handler and records nothing.
  */
 export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPanelProps) {
   const { dryRun, dryRunInbound } = useOpsApi();
@@ -162,7 +192,7 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
     const parsed = parseJson(handlerOutput);
 
     if (!parsed.ok) {
-      showErrorMessage("业务处理器样例输出不是合法 JSON");
+      showErrorMessage("处理器样例输出不是合法 JSON");
 
       return;
     }
@@ -182,105 +212,153 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
     });
   };
 
+  const isOutbound = direction === "outbound";
+  const pending = isOutbound ? outboundPending : inboundPending;
+  const activeResult = isOutbound ? outboundResult : inboundResult;
+
+  const renderResultBody = () => {
+    if (pending) {
+      return (
+        <Flex align="center" justify="center" style={{ minHeight: 180 }}>
+          <Spin />
+        </Flex>
+      );
+    }
+
+    if (isOutbound && outboundResult) {
+      return <OutboundResult result={outboundResult} />;
+    }
+
+    if (!isOutbound && inboundResult) {
+      return <InboundResult result={inboundResult} />;
+    }
+
+    return <Empty description="运行后在此查看结果" style={{ padding: "32px 0" }} />;
+  };
+
   return (
     <Stack gap="middle">
-      {direction === "outbound"
-        ? <Alert showIcon message="出站调试会真实调用外部系统，且不写入统计与调用日志。" type="warning" />
-        : <Alert showIcon message="入站调试使用桩业务处理器，不触发真实业务，也不写入统计与调用日志。" type="info" />}
-
-      <Segmented<Direction>
-        options={DIRECTION_OPTIONS}
-        value={direction}
-        onChange={next => {
-          setDirection(next);
-          clearResults();
-        }}
-      />
-
-      <Flex gap="small">
-        <Select
-          loading={systemDir.loading}
-          options={systemOptions}
-          placeholder="选择系统"
-          style={{ flex: 1 }}
-          value={systemCode}
-          onChange={code => {
-            setSystemCode(code);
+      <Flex align="center" gap="middle" wrap="wrap">
+        <Segmented<Direction>
+          css={modeBarItemCss}
+          options={DIRECTION_OPTIONS}
+          value={direction}
+          onChange={next => {
+            setDirection(next);
             clearResults();
           }}
         />
 
-        <Select
-          loading={contractDir.loading}
-          options={contractOptions}
-          placeholder="选择契约"
-          style={{ flex: 1 }}
-          value={contractCode}
-          onChange={code => {
-            setContractCode(code);
-            clearResults();
-          }}
-        />
+        {isOutbound
+          ? <Alert showIcon css={modeBannerCss} title="出站调试会真实调用外部系统，但不写入统计与调用日志。" type="warning" />
+          : <Alert showIcon css={modeBannerCss} title="入站调试使用桩业务处理器，不触发真实业务，也不写入统计与调用日志。" type="info" />}
       </Flex>
 
-      <Stack gap={4}>
-        <Text type="secondary">脚本（留空则使用已保存的适配器脚本）</Text>
-        <CodeEditor showLineNumbers height={200} language="javascript" value={script} onChange={setScript} />
-      </Stack>
+      <div css={workbenchCss}>
+        <Card size="small" title="请求">
+          <Stack gap="middle">
+            <Grid columnGap="small">
+              <Grid.Item span={12}>
+                <Labeled label="系统">
+                  <Select
+                    aria-label="系统"
+                    loading={systemDir.loading}
+                    options={systemOptions}
+                    placeholder="选择系统"
+                    style={{ width: "100%" }}
+                    value={systemCode}
+                    onChange={code => {
+                      setSystemCode(code);
+                      clearResults();
+                    }}
+                  />
+                </Labeled>
+              </Grid.Item>
 
-      {direction === "outbound"
-        ? (
-            <Stack gap="small">
-              <Stack gap={4}>
-                <Text type="secondary">输入（JSON）</Text>
-                <CodeEditor showLineNumbers height={160} language="json" value={input} onChange={setInput} />
-              </Stack>
+              <Grid.Item span={12}>
+                <Labeled label="契约">
+                  <Select
+                    aria-label="契约"
+                    loading={contractDir.loading}
+                    options={contractOptions}
+                    placeholder="选择契约"
+                    style={{ width: "100%" }}
+                    value={contractCode}
+                    onChange={code => {
+                      setContractCode(code);
+                      clearResults();
+                    }}
+                  />
+                </Labeled>
+              </Grid.Item>
+            </Grid>
 
-              <PermissionGate requiredPermissions={outboundPermission}>
-                <Button loading={outboundPending} type="primary" onClick={runOutbound}>
-                  运行出站调试
-                </Button>
-              </PermissionGate>
+            <Labeled hint="留空则使用已保存的适配器脚本" label="脚本">
+              <CodeEditor showLineNumbers height={240} language="javascript" value={script} onChange={setScript} />
+            </Labeled>
 
-              {outboundResult ? <OutboundResult result={outboundResult} /> : null}
-            </Stack>
-          )
-        : (
-            <Stack gap="small">
-              <Flex gap="small">
-                <Input aria-label="请求方法" placeholder="方法" style={{ width: 110 }} value={method} onChange={event => setMethod(event.target.value)} />
-                <Input aria-label="请求路径" placeholder="路径，如 /callback" style={{ flex: 1 }} value={path} onChange={event => setPath(event.target.value)} />
-              </Flex>
+            {isOutbound
+              ? (
+                  <>
+                    <Labeled label="输入（JSON）">
+                      <CodeEditor showLineNumbers height={160} language="json" value={input} onChange={setInput} />
+                    </Labeled>
 
-              <Stack gap={4}>
-                <Text type="secondary">请求头</Text>
-                <ParamsEditor value={headers} onChange={setHeaders} />
-              </Stack>
+                    <PermissionGate requiredPermissions={outboundPermission}>
+                      <Button block icon={<Icon component={PlayIcon} />} loading={outboundPending} type="primary" onClick={runOutbound}>
+                        运行出站调试
+                      </Button>
+                    </PermissionGate>
+                  </>
+                )
+              : (
+                  <>
+                    <Flex gap="small">
+                      <Labeled label="请求方法">
+                        <Input aria-label="请求方法" placeholder="POST" style={{ width: 110 }} value={method} onChange={event => setMethod(event.target.value)} />
+                      </Labeled>
 
-              <Stack gap={4}>
-                <Text type="secondary">查询参数</Text>
-                <ParamsEditor value={query} onChange={setQuery} />
-              </Stack>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Labeled label="请求路径">
+                          <Input aria-label="请求路径" placeholder="如 /callback" value={path} onChange={event => setPath(event.target.value)} />
+                        </Labeled>
+                      </div>
+                    </Flex>
 
-              <Stack gap={4}>
-                <Text type="secondary">请求体</Text>
-                <CodeEditor showLineNumbers height={140} language="json" value={requestBody} onChange={setRequestBody} />
-              </Stack>
+                    <Labeled label="请求头">
+                      <ParamsEditor value={headers} onChange={setHeaders} />
+                    </Labeled>
 
-              <Stack gap={4}>
-                <Text type="secondary">业务处理器样例输出（JSON）</Text>
-                <CodeEditor showLineNumbers height={140} language="json" value={handlerOutput} onChange={setHandlerOutput} />
-              </Stack>
+                    <Labeled label="查询参数">
+                      <ParamsEditor value={query} onChange={setQuery} />
+                    </Labeled>
 
-              <PermissionGate requiredPermissions={inboundPermission}>
-                <Button loading={inboundPending} type="primary" onClick={runInbound}>
-                  运行入站调试
-                </Button>
-              </PermissionGate>
+                    <Labeled label="请求体">
+                      <CodeEditor showLineNumbers height={140} language="json" value={requestBody} onChange={setRequestBody} />
+                    </Labeled>
 
-              {inboundResult ? <InboundResult result={inboundResult} /> : null}
-            </Stack>
-          )}
+                    <Labeled hint="入站调试不执行真实业务，dispatch 将原样返回这份样例" label="处理器样例输出（JSON）">
+                      <CodeEditor showLineNumbers height={140} language="json" value={handlerOutput} onChange={setHandlerOutput} />
+                    </Labeled>
+
+                    <PermissionGate requiredPermissions={inboundPermission}>
+                      <Button block icon={<Icon component={PlayIcon} />} loading={inboundPending} type="primary" onClick={runInbound}>
+                        运行入站调试
+                      </Button>
+                    </PermissionGate>
+                  </>
+                )}
+          </Stack>
+        </Card>
+
+        <Card
+          extra={activeResult ? <FailureKindTag failureKind={activeResult.failureKind} /> : null}
+          size="small"
+          title="结果"
+        >
+          {renderResultBody()}
+        </Card>
+      </div>
     </Stack>
   );
 }

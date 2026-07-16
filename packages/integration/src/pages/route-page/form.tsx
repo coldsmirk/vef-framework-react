@@ -21,7 +21,13 @@ export function RouteForm() {
     <Grid columnGap="small">
       <Grid.Item span={24}>
         <AppField name="routeKey">
-          {field => <field.Input label="路由键" placeholder="留空表示默认路由，例如 hospital-east" />}
+          {field => (
+            <field.Input
+              extra="业务调用时携带的分流标识；留空即默认路由，未指定路由键的调用都会命中它"
+              label="路由键"
+              placeholder="如 hospital-east"
+            />
+          )}
         </AppField>
       </Grid.Item>
 
@@ -29,6 +35,7 @@ export function RouteForm() {
         <AppField name="contractId">
           {field => (
             <field.Select
+              extra="同一路由键下，精确契约优先于「全部契约（通配）」"
               label="契约范围"
               loading={contractDir.loading}
               options={contractOptions}

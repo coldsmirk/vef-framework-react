@@ -81,7 +81,7 @@ export function IntegrationConsolePage({ permissions, title }: IntegrationConsol
   }
 
   return (
-    <Page>
+    <Page margin>
       <Stack gap="middle">
         {title ? <Title level={4}>{title}</Title> : null}
 

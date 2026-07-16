@@ -7,13 +7,19 @@ import { ActivityIcon, EditIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useSystemApi } from "../../api";
-import { TestConnectionDialog } from "../../components";
+import { TestConnectionDrawer } from "../../components";
 import { INTEGRATION_PERMISSIONS } from "../../permissions";
 import { systemColumns } from "./columns";
 import { SystemForm } from "./form";
 import { SystemActionButtonGroup, SystemOperationButtonGroup, useSystemFormMutations } from "./helpers";
 import { SYSTEM_FORM_DEFAULTS, systemToFormValues } from "./model";
 import { SystemSearchFields } from "./search";
+
+const FORM_DRAWER_WIDTH = {
+  xxs: "100vw",
+  md: "85vw",
+  lg: 760
+};
 
 // Full-page system management: connection settings, outbound/inbound auth,
 // optional direct data source, plus a connection probe.
@@ -36,6 +42,7 @@ export function IntegrationSystemPage({
         columnSettings={{ storageKey: columnStorageKey }}
         deleteManyMutationFn={api.removeMany}
         deleteMutationFn={api.remove}
+        formLayout={{ layout: "vertical" }}
         formMutationFns={formMutations}
         queryFn={api.findPage}
         renderForm={scene => <SystemForm scene={scene} />}
@@ -54,7 +61,13 @@ export function IntegrationSystemPage({
                       color="primary"
                       icon={<Icon component={EditIcon} />}
                       requiredPermissions={perms.update}
-                      onClick={() => openForm({ scene: "update", values: systemToFormValues(row) })}
+                      onClick={() => openForm({
+                        scene: "update",
+                        values: systemToFormValues(row),
+                        title: "编辑系统",
+                        mode: "drawer",
+                        width: FORM_DRAWER_WIDTH
+                      })}
                     >
                       编辑
                     </OperationButton>
@@ -95,7 +108,16 @@ export function IntegrationSystemPage({
             {([openForm, isFetching, selectedRows, deleteMany, refetchQuery]) => (
               <>
                 <PermissionGate requiredPermissions={perms.create}>
-                  <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+                  <ActionButton
+                    icon={<Icon component={PlusIcon} />}
+                    type="primary"
+                    onClick={() => openForm({
+                      scene: "create",
+                      title: "新增系统",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
+                  >
                     新增系统
                   </ActionButton>
                 </PermissionGate>
@@ -126,7 +148,7 @@ export function IntegrationSystemPage({
         )}
       />
 
-      <TestConnectionDialog open={testTarget !== null} systemCode={testTarget ?? ""} onClose={() => setTestTarget(null)} />
+      <TestConnectionDrawer open={testTarget !== null} systemCode={testTarget ?? ""} onClose={() => setTestTarget(null)} />
     </>
   );
 }
