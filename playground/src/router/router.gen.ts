@@ -21,6 +21,11 @@ import { Route as LayoutIndexRouteRouteImport } from "./../pages/_layout/index/r
 import { Route as LayoutSysSerialNoRuleRouteRouteImport } from "./../pages/_layout/sys/serial-no-rule/route";
 import { Route as LayoutSysMonitorRouteRouteImport } from "./../pages/_layout/sys/monitor/route";
 import { Route as LayoutSysLoginLogRouteRouteImport } from "./../pages/_layout/sys/login-log/route";
+import { Route as LayoutSysIntegrationSystemRouteRouteImport } from "./../pages/_layout/sys/integration-system/route";
+import { Route as LayoutSysIntegrationRouteRouteRouteImport } from "./../pages/_layout/sys/integration-route/route";
+import { Route as LayoutSysIntegrationContractRouteRouteImport } from "./../pages/_layout/sys/integration-contract/route";
+import { Route as LayoutSysIntegrationConsoleRouteRouteImport } from "./../pages/_layout/sys/integration-console/route";
+import { Route as LayoutSysIntegrationAdapterRouteRouteImport } from "./../pages/_layout/sys/integration-adapter/route";
 import { Route as LayoutSysFormEditorRouteRouteImport } from "./../pages/_layout/sys/form-editor/route";
 import { Route as LayoutSysFlowDesignerWizardRouteRouteImport } from "./../pages/_layout/sys/flow-designer-wizard/route";
 import { Route as LayoutSysFilePreviewDemoRouteRouteImport } from "./../pages/_layout/sys/file-preview-demo/route";
@@ -83,6 +88,36 @@ const LayoutSysLoginLogRouteRoute = LayoutSysLoginLogRouteRouteImport.update({
   path: "/sys/login-log",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
+const LayoutSysIntegrationSystemRouteRoute =
+  LayoutSysIntegrationSystemRouteRouteImport.update({
+    id: "/sys/integration-system",
+    path: "/sys/integration-system",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
+const LayoutSysIntegrationRouteRouteRoute =
+  LayoutSysIntegrationRouteRouteRouteImport.update({
+    id: "/sys/integration-route",
+    path: "/sys/integration-route",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
+const LayoutSysIntegrationContractRouteRoute =
+  LayoutSysIntegrationContractRouteRouteImport.update({
+    id: "/sys/integration-contract",
+    path: "/sys/integration-contract",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
+const LayoutSysIntegrationConsoleRouteRoute =
+  LayoutSysIntegrationConsoleRouteRouteImport.update({
+    id: "/sys/integration-console",
+    path: "/sys/integration-console",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
+const LayoutSysIntegrationAdapterRouteRoute =
+  LayoutSysIntegrationAdapterRouteRouteImport.update({
+    id: "/sys/integration-adapter",
+    path: "/sys/integration-adapter",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
 const LayoutSysFormEditorRouteRoute =
   LayoutSysFormEditorRouteRouteImport.update({
     id: "/sys/form-editor",
@@ -226,6 +261,11 @@ export interface FileRoutesByFullPath {
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
+  "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
+  "/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
+  "/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
+  "/sys/integration-system": typeof LayoutSysIntegrationSystemRouteRoute;
   "/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
   "/sys/monitor": typeof LayoutSysMonitorRouteRoute;
   "/sys/serial-no-rule": typeof LayoutSysSerialNoRuleRouteRoute;
@@ -256,6 +296,11 @@ export interface FileRoutesByTo {
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
+  "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
+  "/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
+  "/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
+  "/sys/integration-system": typeof LayoutSysIntegrationSystemRouteRoute;
   "/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
   "/sys/monitor": typeof LayoutSysMonitorRouteRoute;
   "/sys/serial-no-rule": typeof LayoutSysSerialNoRuleRouteRoute;
@@ -288,6 +333,11 @@ export interface FileRoutesById {
   "/_layout/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/_layout/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/_layout/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
+  "/_layout/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/_layout/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
+  "/_layout/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
+  "/_layout/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
+  "/_layout/sys/integration-system": typeof LayoutSysIntegrationSystemRouteRoute;
   "/_layout/sys/login-log": typeof LayoutSysLoginLogRouteRoute;
   "/_layout/sys/monitor": typeof LayoutSysMonitorRouteRoute;
   "/_layout/sys/serial-no-rule": typeof LayoutSysSerialNoRuleRouteRoute;
@@ -320,6 +370,11 @@ export interface FileRouteTypes {
     | "/sys/file-preview-demo"
     | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
+    | "/sys/integration-adapter"
+    | "/sys/integration-console"
+    | "/sys/integration-contract"
+    | "/sys/integration-route"
+    | "/sys/integration-system"
     | "/sys/login-log"
     | "/sys/monitor"
     | "/sys/serial-no-rule";
@@ -350,6 +405,11 @@ export interface FileRouteTypes {
     | "/sys/file-preview-demo"
     | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
+    | "/sys/integration-adapter"
+    | "/sys/integration-console"
+    | "/sys/integration-contract"
+    | "/sys/integration-route"
+    | "/sys/integration-system"
     | "/sys/login-log"
     | "/sys/monitor"
     | "/sys/serial-no-rule";
@@ -381,6 +441,11 @@ export interface FileRouteTypes {
     | "/_layout/sys/file-preview-demo"
     | "/_layout/sys/flow-designer-wizard"
     | "/_layout/sys/form-editor"
+    | "/_layout/sys/integration-adapter"
+    | "/_layout/sys/integration-console"
+    | "/_layout/sys/integration-contract"
+    | "/_layout/sys/integration-route"
+    | "/_layout/sys/integration-system"
     | "/_layout/sys/login-log"
     | "/_layout/sys/monitor"
     | "/_layout/sys/serial-no-rule";
@@ -449,6 +514,41 @@ declare module "@tanstack/react-router" {
       path: "/sys/login-log";
       fullPath: "/sys/login-log";
       preLoaderRoute: typeof LayoutSysLoginLogRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/integration-system": {
+      id: "/_layout/sys/integration-system";
+      path: "/sys/integration-system";
+      fullPath: "/sys/integration-system";
+      preLoaderRoute: typeof LayoutSysIntegrationSystemRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/integration-route": {
+      id: "/_layout/sys/integration-route";
+      path: "/sys/integration-route";
+      fullPath: "/sys/integration-route";
+      preLoaderRoute: typeof LayoutSysIntegrationRouteRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/integration-contract": {
+      id: "/_layout/sys/integration-contract";
+      path: "/sys/integration-contract";
+      fullPath: "/sys/integration-contract";
+      preLoaderRoute: typeof LayoutSysIntegrationContractRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/integration-console": {
+      id: "/_layout/sys/integration-console";
+      path: "/sys/integration-console";
+      fullPath: "/sys/integration-console";
+      preLoaderRoute: typeof LayoutSysIntegrationConsoleRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/integration-adapter": {
+      id: "/_layout/sys/integration-adapter";
+      path: "/sys/integration-adapter";
+      fullPath: "/sys/integration-adapter";
+      preLoaderRoute: typeof LayoutSysIntegrationAdapterRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
     "/_layout/sys/form-editor": {
@@ -624,6 +724,11 @@ interface LayoutRouteRouteChildren {
   LayoutSysFilePreviewDemoRouteRoute: typeof LayoutSysFilePreviewDemoRouteRoute;
   LayoutSysFlowDesignerWizardRouteRoute: typeof LayoutSysFlowDesignerWizardRouteRoute;
   LayoutSysFormEditorRouteRoute: typeof LayoutSysFormEditorRouteRoute;
+  LayoutSysIntegrationAdapterRouteRoute: typeof LayoutSysIntegrationAdapterRouteRoute;
+  LayoutSysIntegrationConsoleRouteRoute: typeof LayoutSysIntegrationConsoleRouteRoute;
+  LayoutSysIntegrationContractRouteRoute: typeof LayoutSysIntegrationContractRouteRoute;
+  LayoutSysIntegrationRouteRouteRoute: typeof LayoutSysIntegrationRouteRouteRoute;
+  LayoutSysIntegrationSystemRouteRoute: typeof LayoutSysIntegrationSystemRouteRoute;
   LayoutSysLoginLogRouteRoute: typeof LayoutSysLoginLogRouteRoute;
   LayoutSysMonitorRouteRoute: typeof LayoutSysMonitorRouteRoute;
   LayoutSysSerialNoRuleRouteRoute: typeof LayoutSysSerialNoRuleRouteRoute;
@@ -652,6 +757,12 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutSysFilePreviewDemoRouteRoute: LayoutSysFilePreviewDemoRouteRoute,
   LayoutSysFlowDesignerWizardRouteRoute: LayoutSysFlowDesignerWizardRouteRoute,
   LayoutSysFormEditorRouteRoute: LayoutSysFormEditorRouteRoute,
+  LayoutSysIntegrationAdapterRouteRoute: LayoutSysIntegrationAdapterRouteRoute,
+  LayoutSysIntegrationConsoleRouteRoute: LayoutSysIntegrationConsoleRouteRoute,
+  LayoutSysIntegrationContractRouteRoute:
+    LayoutSysIntegrationContractRouteRoute,
+  LayoutSysIntegrationRouteRouteRoute: LayoutSysIntegrationRouteRouteRoute,
+  LayoutSysIntegrationSystemRouteRoute: LayoutSysIntegrationSystemRouteRoute,
   LayoutSysLoginLogRouteRoute: LayoutSysLoginLogRouteRoute,
   LayoutSysMonitorRouteRoute: LayoutSysMonitorRouteRoute,
   LayoutSysSerialNoRuleRouteRoute: LayoutSysSerialNoRuleRouteRoute,

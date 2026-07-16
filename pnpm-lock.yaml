@@ -544,6 +544,31 @@ importers:
         specifier: ^19.2.7
         version: 19.2.7
 
+  packages/integration:
+    dependencies:
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
+      '@vef-framework-react/components':
+        specifier: workspace:*
+        version: link:../components
+      '@vef-framework-react/core':
+        specifier: workspace:*
+        version: link:../core
+      '@vef-framework-react/shared':
+        specifier: workspace:*
+        version: link:../shared
+      dayjs:
+        specifier: ^1.11.0
+        version: 1.11.21
+      lucide-react:
+        specifier: ^1.23.0
+        version: 1.23.0(react@19.2.7)
+    devDependencies:
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+
   packages/shared:
     dependencies:
       '@fingerprintjs/fingerprintjs':
@@ -680,6 +705,9 @@ importers:
       '@vef-framework-react/hooks':
         specifier: workspace:*
         version: link:../packages/hooks
+      '@vef-framework-react/integration':
+        specifier: workspace:*
+        version: link:../packages/integration
       '@vef-framework-react/shared':
         specifier: workspace:*
         version: link:../packages/shared
