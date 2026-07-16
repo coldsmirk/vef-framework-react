@@ -17,6 +17,7 @@ import { Route as LayoutRouteRouteImport } from "./../pages/_layout/route";
 import { Route as CommonSelectAppRouteImport } from "./../pages/_common/select-app";
 import { Route as CommonLoginRouteImport } from "./../pages/_common/login";
 import { Route as CommonAccessDeniedRouteImport } from "./../pages/_common/access-denied";
+import { Route as LayoutApprovalRouteRouteImport } from "./../pages/_layout/approval/route";
 import { Route as LayoutIndexRouteRouteImport } from "./../pages/_layout/index/route";
 import { Route as LayoutSysSerialNoRuleRouteRouteImport } from "./../pages/_layout/sys/serial-no-rule/route";
 import { Route as LayoutSysMonitorRouteRouteImport } from "./../pages/_layout/sys/monitor/route";
@@ -27,7 +28,6 @@ import { Route as LayoutSysIntegrationContractRouteRouteImport } from "./../page
 import { Route as LayoutSysIntegrationConsoleRouteRouteImport } from "./../pages/_layout/sys/integration-console/route";
 import { Route as LayoutSysIntegrationAdapterRouteRouteImport } from "./../pages/_layout/sys/integration-adapter/route";
 import { Route as LayoutSysFormEditorRouteRouteImport } from "./../pages/_layout/sys/form-editor/route";
-import { Route as LayoutSysFlowDesignerWizardRouteRouteImport } from "./../pages/_layout/sys/flow-designer-wizard/route";
 import { Route as LayoutSysFilePreviewDemoRouteRouteImport } from "./../pages/_layout/sys/file-preview-demo/route";
 import { Route as LayoutSysEditableTableDemoRouteRouteImport } from "./../pages/_layout/sys/editable-table-demo/route";
 import { Route as LayoutSysDictionaryItemRouteRouteImport } from "./../pages/_layout/sys/dictionary-item/route";
@@ -36,7 +36,6 @@ import { Route as LayoutSysDictionaryRouteRouteImport } from "./../pages/_layout
 import { Route as LayoutSysConfigDefinitionRouteRouteImport } from "./../pages/_layout/sys/config-definition/route";
 import { Route as LayoutSysConfigRouteRouteImport } from "./../pages/_layout/sys/config/route";
 import { Route as LayoutSysAuditLogRouteRouteImport } from "./../pages/_layout/sys/audit-log/route";
-import { Route as LayoutSysApprovalTaskDemoRouteRouteImport } from "./../pages/_layout/sys/approval-task-demo/route";
 import { Route as LayoutSysApprovalFlowEditorRouteRouteImport } from "./../pages/_layout/sys/approval-flow-editor/route";
 import { Route as LayoutSysAppRouteRouteImport } from "./../pages/_layout/sys/app/route";
 import { Route as LayoutMdStaffRouteRouteImport } from "./../pages/_layout/md/staff/route";
@@ -47,6 +46,13 @@ import { Route as LayoutMdDepartmentRouteRouteImport } from "./../pages/_layout/
 import { Route as LayoutAuthUserRouteRouteImport } from "./../pages/_layout/auth/user/route";
 import { Route as LayoutAuthRoleRouteRouteImport } from "./../pages/_layout/auth/role/route";
 import { Route as LayoutAuthMenuRouteRouteImport } from "./../pages/_layout/auth/menu/route";
+import { Route as LayoutApprovalTaskCenterRouteRouteImport } from "./../pages/_layout/approval/task-center/route";
+import { Route as LayoutApprovalMyInstancesRouteRouteImport } from "./../pages/_layout/approval/my-instances/route";
+import { Route as LayoutApprovalInitiateRouteRouteImport } from "./../pages/_layout/approval/initiate/route";
+import { Route as LayoutApprovalFlowRouteRouteImport } from "./../pages/_layout/approval/flow/route";
+import { Route as LayoutApprovalDelegationRouteRouteImport } from "./../pages/_layout/approval/delegation/route";
+import { Route as LayoutApprovalCategoryRouteRouteImport } from "./../pages/_layout/approval/category/route";
+import { Route as LayoutApprovalAdminRouteRouteImport } from "./../pages/_layout/approval/admin/route";
 
 const LayoutRouteRoute = LayoutRouteRouteImport.update({
   id: "/_layout",
@@ -66,6 +72,11 @@ const CommonAccessDeniedRoute = CommonAccessDeniedRouteImport.update({
   id: "/_common/access-denied",
   path: "/access-denied",
   getParentRoute: () => rootRouteImport,
+} as any);
+const LayoutApprovalRouteRoute = LayoutApprovalRouteRouteImport.update({
+  id: "/approval",
+  path: "/approval",
+  getParentRoute: () => LayoutRouteRoute,
 } as any);
 const LayoutIndexRouteRoute = LayoutIndexRouteRouteImport.update({
   id: "/",
@@ -124,12 +135,6 @@ const LayoutSysFormEditorRouteRoute =
     path: "/sys/form-editor",
     getParentRoute: () => LayoutRouteRoute,
   } as any);
-const LayoutSysFlowDesignerWizardRouteRoute =
-  LayoutSysFlowDesignerWizardRouteRouteImport.update({
-    id: "/sys/flow-designer-wizard",
-    path: "/sys/flow-designer-wizard",
-    getParentRoute: () => LayoutRouteRoute,
-  } as any);
 const LayoutSysFilePreviewDemoRouteRoute =
   LayoutSysFilePreviewDemoRouteRouteImport.update({
     id: "/sys/file-preview-demo",
@@ -176,12 +181,6 @@ const LayoutSysAuditLogRouteRoute = LayoutSysAuditLogRouteRouteImport.update({
   path: "/sys/audit-log",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
-const LayoutSysApprovalTaskDemoRouteRoute =
-  LayoutSysApprovalTaskDemoRouteRouteImport.update({
-    id: "/sys/approval-task-demo",
-    path: "/sys/approval-task-demo",
-    getParentRoute: () => LayoutRouteRoute,
-  } as any);
 const LayoutSysApprovalFlowEditorRouteRoute =
   LayoutSysApprovalFlowEditorRouteRouteImport.update({
     id: "/sys/approval-flow-editor",
@@ -234,12 +233,61 @@ const LayoutAuthMenuRouteRoute = LayoutAuthMenuRouteRouteImport.update({
   path: "/auth/menu",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
+const LayoutApprovalTaskCenterRouteRoute =
+  LayoutApprovalTaskCenterRouteRouteImport.update({
+    id: "/task-center",
+    path: "/task-center",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
+const LayoutApprovalMyInstancesRouteRoute =
+  LayoutApprovalMyInstancesRouteRouteImport.update({
+    id: "/my-instances",
+    path: "/my-instances",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
+const LayoutApprovalInitiateRouteRoute =
+  LayoutApprovalInitiateRouteRouteImport.update({
+    id: "/initiate",
+    path: "/initiate",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
+const LayoutApprovalFlowRouteRoute = LayoutApprovalFlowRouteRouteImport.update({
+  id: "/flow",
+  path: "/flow",
+  getParentRoute: () => LayoutApprovalRouteRoute,
+} as any);
+const LayoutApprovalDelegationRouteRoute =
+  LayoutApprovalDelegationRouteRouteImport.update({
+    id: "/delegation",
+    path: "/delegation",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
+const LayoutApprovalCategoryRouteRoute =
+  LayoutApprovalCategoryRouteRouteImport.update({
+    id: "/category",
+    path: "/category",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
+const LayoutApprovalAdminRouteRoute =
+  LayoutApprovalAdminRouteRouteImport.update({
+    id: "/admin",
+    path: "/admin",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof LayoutIndexRouteRoute;
+  "/approval": typeof LayoutApprovalRouteRouteWithChildren;
   "/access-denied": typeof CommonAccessDeniedRoute;
   "/login": typeof CommonLoginRoute;
   "/select-app": typeof CommonSelectAppRoute;
+  "/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/approval/category": typeof LayoutApprovalCategoryRouteRoute;
+  "/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
+  "/approval/flow": typeof LayoutApprovalFlowRouteRoute;
+  "/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
+  "/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
+  "/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
   "/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -250,7 +298,6 @@ export interface FileRoutesByFullPath {
   "/md/staff": typeof LayoutMdStaffRouteRoute;
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
-  "/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -259,7 +306,6 @@ export interface FileRoutesByFullPath {
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
-  "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
   "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
@@ -272,9 +318,17 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof LayoutIndexRouteRoute;
+  "/approval": typeof LayoutApprovalRouteRouteWithChildren;
   "/access-denied": typeof CommonAccessDeniedRoute;
   "/login": typeof CommonLoginRoute;
   "/select-app": typeof CommonSelectAppRoute;
+  "/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/approval/category": typeof LayoutApprovalCategoryRouteRoute;
+  "/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
+  "/approval/flow": typeof LayoutApprovalFlowRouteRoute;
+  "/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
+  "/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
+  "/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
   "/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -285,7 +339,6 @@ export interface FileRoutesByTo {
   "/md/staff": typeof LayoutMdStaffRouteRoute;
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
-  "/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -294,7 +347,6 @@ export interface FileRoutesByTo {
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
-  "/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
   "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
@@ -309,9 +361,17 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_layout": typeof LayoutRouteRouteWithChildren;
   "/_layout/": typeof LayoutIndexRouteRoute;
+  "/_layout/approval": typeof LayoutApprovalRouteRouteWithChildren;
   "/_common/access-denied": typeof CommonAccessDeniedRoute;
   "/_common/login": typeof CommonLoginRoute;
   "/_common/select-app": typeof CommonSelectAppRoute;
+  "/_layout/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/_layout/approval/category": typeof LayoutApprovalCategoryRouteRoute;
+  "/_layout/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
+  "/_layout/approval/flow": typeof LayoutApprovalFlowRouteRoute;
+  "/_layout/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
+  "/_layout/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
+  "/_layout/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
   "/_layout/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/_layout/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/_layout/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -322,7 +382,6 @@ export interface FileRoutesById {
   "/_layout/md/staff": typeof LayoutMdStaffRouteRoute;
   "/_layout/sys/app": typeof LayoutSysAppRouteRoute;
   "/_layout/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
-  "/_layout/sys/approval-task-demo": typeof LayoutSysApprovalTaskDemoRouteRoute;
   "/_layout/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
   "/_layout/sys/config": typeof LayoutSysConfigRouteRoute;
   "/_layout/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
@@ -331,7 +390,6 @@ export interface FileRoutesById {
   "/_layout/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/_layout/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/_layout/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
-  "/_layout/sys/flow-designer-wizard": typeof LayoutSysFlowDesignerWizardRouteRoute;
   "/_layout/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/_layout/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
   "/_layout/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
@@ -346,9 +404,17 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | "/"
+    | "/approval"
     | "/access-denied"
     | "/login"
     | "/select-app"
+    | "/approval/admin"
+    | "/approval/category"
+    | "/approval/delegation"
+    | "/approval/flow"
+    | "/approval/initiate"
+    | "/approval/my-instances"
+    | "/approval/task-center"
     | "/auth/menu"
     | "/auth/role"
     | "/auth/user"
@@ -359,7 +425,6 @@ export interface FileRouteTypes {
     | "/md/staff"
     | "/sys/app"
     | "/sys/approval-flow-editor"
-    | "/sys/approval-task-demo"
     | "/sys/audit-log"
     | "/sys/config"
     | "/sys/config-definition"
@@ -368,7 +433,6 @@ export interface FileRouteTypes {
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
     | "/sys/file-preview-demo"
-    | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
     | "/sys/integration-adapter"
     | "/sys/integration-console"
@@ -381,9 +445,17 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
+    | "/approval"
     | "/access-denied"
     | "/login"
     | "/select-app"
+    | "/approval/admin"
+    | "/approval/category"
+    | "/approval/delegation"
+    | "/approval/flow"
+    | "/approval/initiate"
+    | "/approval/my-instances"
+    | "/approval/task-center"
     | "/auth/menu"
     | "/auth/role"
     | "/auth/user"
@@ -394,7 +466,6 @@ export interface FileRouteTypes {
     | "/md/staff"
     | "/sys/app"
     | "/sys/approval-flow-editor"
-    | "/sys/approval-task-demo"
     | "/sys/audit-log"
     | "/sys/config"
     | "/sys/config-definition"
@@ -403,7 +474,6 @@ export interface FileRouteTypes {
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
     | "/sys/file-preview-demo"
-    | "/sys/flow-designer-wizard"
     | "/sys/form-editor"
     | "/sys/integration-adapter"
     | "/sys/integration-console"
@@ -417,9 +487,17 @@ export interface FileRouteTypes {
     | "__root__"
     | "/_layout"
     | "/_layout/"
+    | "/_layout/approval"
     | "/_common/access-denied"
     | "/_common/login"
     | "/_common/select-app"
+    | "/_layout/approval/admin"
+    | "/_layout/approval/category"
+    | "/_layout/approval/delegation"
+    | "/_layout/approval/flow"
+    | "/_layout/approval/initiate"
+    | "/_layout/approval/my-instances"
+    | "/_layout/approval/task-center"
     | "/_layout/auth/menu"
     | "/_layout/auth/role"
     | "/_layout/auth/user"
@@ -430,7 +508,6 @@ export interface FileRouteTypes {
     | "/_layout/md/staff"
     | "/_layout/sys/app"
     | "/_layout/sys/approval-flow-editor"
-    | "/_layout/sys/approval-task-demo"
     | "/_layout/sys/audit-log"
     | "/_layout/sys/config"
     | "/_layout/sys/config-definition"
@@ -439,7 +516,6 @@ export interface FileRouteTypes {
     | "/_layout/sys/dictionary-item"
     | "/_layout/sys/editable-table-demo"
     | "/_layout/sys/file-preview-demo"
-    | "/_layout/sys/flow-designer-wizard"
     | "/_layout/sys/form-editor"
     | "/_layout/sys/integration-adapter"
     | "/_layout/sys/integration-console"
@@ -487,6 +563,13 @@ declare module "@tanstack/react-router" {
       fullPath: "/access-denied";
       preLoaderRoute: typeof CommonAccessDeniedRouteImport;
       parentRoute: typeof rootRouteImport;
+    };
+    "/_layout/approval": {
+      id: "/_layout/approval";
+      path: "/approval";
+      fullPath: "/approval";
+      preLoaderRoute: typeof LayoutApprovalRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
     };
     "/_layout/": {
       id: "/_layout/";
@@ -558,13 +641,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutSysFormEditorRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
-    "/_layout/sys/flow-designer-wizard": {
-      id: "/_layout/sys/flow-designer-wizard";
-      path: "/sys/flow-designer-wizard";
-      fullPath: "/sys/flow-designer-wizard";
-      preLoaderRoute: typeof LayoutSysFlowDesignerWizardRouteRouteImport;
-      parentRoute: typeof LayoutRouteRoute;
-    };
     "/_layout/sys/file-preview-demo": {
       id: "/_layout/sys/file-preview-demo";
       path: "/sys/file-preview-demo";
@@ -619,13 +695,6 @@ declare module "@tanstack/react-router" {
       path: "/sys/audit-log";
       fullPath: "/sys/audit-log";
       preLoaderRoute: typeof LayoutSysAuditLogRouteRouteImport;
-      parentRoute: typeof LayoutRouteRoute;
-    };
-    "/_layout/sys/approval-task-demo": {
-      id: "/_layout/sys/approval-task-demo";
-      path: "/sys/approval-task-demo";
-      fullPath: "/sys/approval-task-demo";
-      preLoaderRoute: typeof LayoutSysApprovalTaskDemoRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
     "/_layout/sys/approval-flow-editor": {
@@ -698,11 +767,84 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutAuthMenuRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
+    "/_layout/approval/task-center": {
+      id: "/_layout/approval/task-center";
+      path: "/task-center";
+      fullPath: "/approval/task-center";
+      preLoaderRoute: typeof LayoutApprovalTaskCenterRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/my-instances": {
+      id: "/_layout/approval/my-instances";
+      path: "/my-instances";
+      fullPath: "/approval/my-instances";
+      preLoaderRoute: typeof LayoutApprovalMyInstancesRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/initiate": {
+      id: "/_layout/approval/initiate";
+      path: "/initiate";
+      fullPath: "/approval/initiate";
+      preLoaderRoute: typeof LayoutApprovalInitiateRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/flow": {
+      id: "/_layout/approval/flow";
+      path: "/flow";
+      fullPath: "/approval/flow";
+      preLoaderRoute: typeof LayoutApprovalFlowRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/delegation": {
+      id: "/_layout/approval/delegation";
+      path: "/delegation";
+      fullPath: "/approval/delegation";
+      preLoaderRoute: typeof LayoutApprovalDelegationRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/category": {
+      id: "/_layout/approval/category";
+      path: "/category";
+      fullPath: "/approval/category";
+      preLoaderRoute: typeof LayoutApprovalCategoryRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
+    "/_layout/approval/admin": {
+      id: "/_layout/approval/admin";
+      path: "/admin";
+      fullPath: "/approval/admin";
+      preLoaderRoute: typeof LayoutApprovalAdminRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
   }
 }
 
+interface LayoutApprovalRouteRouteChildren {
+  LayoutApprovalAdminRouteRoute: typeof LayoutApprovalAdminRouteRoute;
+  LayoutApprovalCategoryRouteRoute: typeof LayoutApprovalCategoryRouteRoute;
+  LayoutApprovalDelegationRouteRoute: typeof LayoutApprovalDelegationRouteRoute;
+  LayoutApprovalFlowRouteRoute: typeof LayoutApprovalFlowRouteRoute;
+  LayoutApprovalInitiateRouteRoute: typeof LayoutApprovalInitiateRouteRoute;
+  LayoutApprovalMyInstancesRouteRoute: typeof LayoutApprovalMyInstancesRouteRoute;
+  LayoutApprovalTaskCenterRouteRoute: typeof LayoutApprovalTaskCenterRouteRoute;
+}
+
+const LayoutApprovalRouteRouteChildren: LayoutApprovalRouteRouteChildren = {
+  LayoutApprovalAdminRouteRoute: LayoutApprovalAdminRouteRoute,
+  LayoutApprovalCategoryRouteRoute: LayoutApprovalCategoryRouteRoute,
+  LayoutApprovalDelegationRouteRoute: LayoutApprovalDelegationRouteRoute,
+  LayoutApprovalFlowRouteRoute: LayoutApprovalFlowRouteRoute,
+  LayoutApprovalInitiateRouteRoute: LayoutApprovalInitiateRouteRoute,
+  LayoutApprovalMyInstancesRouteRoute: LayoutApprovalMyInstancesRouteRoute,
+  LayoutApprovalTaskCenterRouteRoute: LayoutApprovalTaskCenterRouteRoute,
+};
+
+const LayoutApprovalRouteRouteWithChildren =
+  LayoutApprovalRouteRoute._addFileChildren(LayoutApprovalRouteRouteChildren);
+
 interface LayoutRouteRouteChildren {
   LayoutIndexRouteRoute: typeof LayoutIndexRouteRoute;
+  LayoutApprovalRouteRoute: typeof LayoutApprovalRouteRouteWithChildren;
   LayoutAuthMenuRouteRoute: typeof LayoutAuthMenuRouteRoute;
   LayoutAuthRoleRouteRoute: typeof LayoutAuthRoleRouteRoute;
   LayoutAuthUserRouteRoute: typeof LayoutAuthUserRouteRoute;
@@ -713,7 +855,6 @@ interface LayoutRouteRouteChildren {
   LayoutMdStaffRouteRoute: typeof LayoutMdStaffRouteRoute;
   LayoutSysAppRouteRoute: typeof LayoutSysAppRouteRoute;
   LayoutSysApprovalFlowEditorRouteRoute: typeof LayoutSysApprovalFlowEditorRouteRoute;
-  LayoutSysApprovalTaskDemoRouteRoute: typeof LayoutSysApprovalTaskDemoRouteRoute;
   LayoutSysAuditLogRouteRoute: typeof LayoutSysAuditLogRouteRoute;
   LayoutSysConfigRouteRoute: typeof LayoutSysConfigRouteRoute;
   LayoutSysConfigDefinitionRouteRoute: typeof LayoutSysConfigDefinitionRouteRoute;
@@ -722,7 +863,6 @@ interface LayoutRouteRouteChildren {
   LayoutSysDictionaryItemRouteRoute: typeof LayoutSysDictionaryItemRouteRoute;
   LayoutSysEditableTableDemoRouteRoute: typeof LayoutSysEditableTableDemoRouteRoute;
   LayoutSysFilePreviewDemoRouteRoute: typeof LayoutSysFilePreviewDemoRouteRoute;
-  LayoutSysFlowDesignerWizardRouteRoute: typeof LayoutSysFlowDesignerWizardRouteRoute;
   LayoutSysFormEditorRouteRoute: typeof LayoutSysFormEditorRouteRoute;
   LayoutSysIntegrationAdapterRouteRoute: typeof LayoutSysIntegrationAdapterRouteRoute;
   LayoutSysIntegrationConsoleRouteRoute: typeof LayoutSysIntegrationConsoleRouteRoute;
@@ -736,6 +876,7 @@ interface LayoutRouteRouteChildren {
 
 const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutIndexRouteRoute: LayoutIndexRouteRoute,
+  LayoutApprovalRouteRoute: LayoutApprovalRouteRouteWithChildren,
   LayoutAuthMenuRouteRoute: LayoutAuthMenuRouteRoute,
   LayoutAuthRoleRouteRoute: LayoutAuthRoleRouteRoute,
   LayoutAuthUserRouteRoute: LayoutAuthUserRouteRoute,
@@ -746,7 +887,6 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutMdStaffRouteRoute: LayoutMdStaffRouteRoute,
   LayoutSysAppRouteRoute: LayoutSysAppRouteRoute,
   LayoutSysApprovalFlowEditorRouteRoute: LayoutSysApprovalFlowEditorRouteRoute,
-  LayoutSysApprovalTaskDemoRouteRoute: LayoutSysApprovalTaskDemoRouteRoute,
   LayoutSysAuditLogRouteRoute: LayoutSysAuditLogRouteRoute,
   LayoutSysConfigRouteRoute: LayoutSysConfigRouteRoute,
   LayoutSysConfigDefinitionRouteRoute: LayoutSysConfigDefinitionRouteRoute,
@@ -755,7 +895,6 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutSysDictionaryItemRouteRoute: LayoutSysDictionaryItemRouteRoute,
   LayoutSysEditableTableDemoRouteRoute: LayoutSysEditableTableDemoRouteRoute,
   LayoutSysFilePreviewDemoRouteRoute: LayoutSysFilePreviewDemoRouteRoute,
-  LayoutSysFlowDesignerWizardRouteRoute: LayoutSysFlowDesignerWizardRouteRoute,
   LayoutSysFormEditorRouteRoute: LayoutSysFormEditorRouteRoute,
   LayoutSysIntegrationAdapterRouteRoute: LayoutSysIntegrationAdapterRouteRoute,
   LayoutSysIntegrationConsoleRouteRoute: LayoutSysIntegrationConsoleRouteRoute,

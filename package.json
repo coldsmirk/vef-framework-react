@@ -19,6 +19,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm --filter=./packages/* run build",
+    "build:approval": "pnpm --filter=./packages/approval run build",
     "build:components": "pnpm --filter=./packages/components run build",
     "build:core": "pnpm --filter=./packages/core run build",
     "build:dev": "pnpm --filter=./packages/dev run build",
@@ -47,6 +48,7 @@
     "test:coverage": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run --coverage",
     "test:watch": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest",
     "typecheck": "pnpm --filter=./packages/* run typecheck",
+    "typecheck:approval": "pnpm --filter=./packages/approval run typecheck",
     "typecheck:approval-flow-editor": "pnpm --filter=./packages/approval-flow-editor run typecheck",
     "typecheck:approval-form-bridge": "pnpm --filter=./packages/approval-form-bridge run typecheck",
     "typecheck:components": "pnpm --filter=./packages/components run typecheck",

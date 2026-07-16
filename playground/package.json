@@ -19,6 +19,7 @@
     "@file-viewer/react": "2.1.28",
     "@file-viewer/renderer-spreadsheet": "2.1.28",
     "@tanstack/react-router": "^1.170.17",
+    "@vef-framework-react/approval": "workspace:*",
     "@vef-framework-react/approval-flow-editor": "workspace:*",
     "@vef-framework-react/approval-form-bridge": "workspace:*",
     "@vef-framework-react/components": "workspace:*",

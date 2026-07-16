@@ -132,6 +132,43 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@24.12.4)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.12.4)(typescript@6.0.3))(vite@8.1.3(@types/node@24.12.4)(esbuild@0.28.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
 
+  packages/approval:
+    dependencies:
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
+      '@vef-framework-react/approval-flow-editor':
+        specifier: workspace:*
+        version: link:../approval-flow-editor
+      '@vef-framework-react/approval-form-bridge':
+        specifier: workspace:*
+        version: link:../approval-form-bridge
+      '@vef-framework-react/components':
+        specifier: workspace:*
+        version: link:../components
+      '@vef-framework-react/core':
+        specifier: workspace:*
+        version: link:../core
+      '@vef-framework-react/form-editor':
+        specifier: workspace:*
+        version: link:../form-editor
+      '@vef-framework-react/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@xyflow/react':
+        specifier: ^12.11.1
+        version: 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(immer@11.1.9)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      dayjs:
+        specifier: ^1.11.0
+        version: 1.11.21
+      lucide-react:
+        specifier: ^1.23.0
+        version: 1.23.0(react@19.2.7)
+    devDependencies:
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+
   packages/approval-flow-editor:
     dependencies:
       '@coldsmirk/nodeloom-core':
@@ -687,6 +724,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.17
         version: 1.170.17(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@vef-framework-react/approval':
+        specifier: workspace:*
+        version: link:../packages/approval
       '@vef-framework-react/approval-flow-editor':
         specifier: workspace:*
         version: link:../packages/approval-flow-editor

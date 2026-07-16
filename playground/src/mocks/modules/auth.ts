@@ -74,10 +74,17 @@ const MENUS: UserMenu[] = [
     leaf("系统监控", "/sys/monitor", "activity"),
     leaf("表单设计器", "/sys/form-editor", "file-pen"),
     leaf("审批流设计器", "/sys/approval-flow-editor", "git-branch"),
-    leaf("流程设计器", "/sys/flow-designer-wizard", "workflow"),
     leaf("可编辑表格", "/sys/editable-table-demo", "table"),
-    leaf("审批任务处理", "/sys/approval-task-demo", "clipboard-check"),
     leaf("文件预览", "/sys/file-preview-demo", "eye")
+  ]),
+  dir("审批中心", "/approval", "workflow", [
+    leaf("发起审批", "/approval/initiate", "send"),
+    leaf("任务中心", "/approval/task-center", "clipboard-check"),
+    leaf("我的申请", "/approval/my-instances", "file-text"),
+    leaf("流程管理", "/approval/flow", "git-branch"),
+    leaf("流程分类", "/approval/category", "folder-tree"),
+    leaf("审批委托", "/approval/delegation", "user-check"),
+    leaf("审批管理台", "/approval/admin", "gauge")
   ])
 ];
 

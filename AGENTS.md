@@ -19,7 +19,7 @@ VEF Framework is a React 19 application framework published to npm under `@vef-f
 ### Quality (CI gates)
 
 - `pnpm typecheck` — Typecheck all packages
-- `pnpm typecheck:<pkg>` — Typecheck one package (`core` / `components` / `hooks` / `shared` / `dev` / `starter` / `form-editor` / `approval-flow-editor`)
+- `pnpm typecheck:<pkg>` — Typecheck one package (`core` / `components` / `hooks` / `shared` / `dev` / `starter` / `form-editor` / `approval` / `approval-flow-editor`)
 - `pnpm lint` — ESLint `--fix` across the repo
 - `eslint --fix <file>` — Lint a single file
 
@@ -74,6 +74,7 @@ Packages publish under `@vef-framework-react/*` as dual ESM/CJS with TypeScript 
 | **form-editor**          | Visual form schema editor; linkage expressions are plain JavaScript via `new Function`. Published under `@vef-framework-react/form-editor`; treat exported APIs and schema shapes as external surface. Targets forms with 100s of fields. |
 | **approval-flow-editor** | Visual approval flow editor on @xyflow/react v12 (ReactFlow) + elkjs auto-layout (excluded from test scope — visual canvas)                                                                                                 |
 | **approval-form-bridge** | Projection bridge from form-editor schemas to the Go approval form contract: `projectFormSchema` (one walk → backend `FormDefinition` + flow-editor `formFields`, conservation errors for unprojectable keyed fields), `createApprovalRegistries` (approval profile — no switch / daterange / button), `validateApprovalSchema` save gate |
+| **approval**             | Ready-to-use approval engine pages on the Go approval module: runtime pages (initiate / task center / my instances with the action-complete instance detail), management pages (flow list + full-screen designer wizard absorbing form-editor + approval-flow-editor, categories, delegations, admin console), `ApprovalProvider` host plugins (org pickers), typed API layer mirroring the Go DTOs, and the progress-annotated flow-graph viewer |
 | **dev**                  | Shared ESLint / Stylelint / Commitlint configs, Vite plugins, TypeScript configs                                                                                                                                            |
 
 ### Key Patterns
