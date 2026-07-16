@@ -54,6 +54,13 @@ const MENUS: UserMenu[] = [
     leaf("行政区划", "/md/district", "map"),
     leaf("ID 映射", "/md/id-mapping", "link")
   ]),
+  dir("集成引擎", "/sys/integration", "cable", [
+    leaf("集成契约", "/sys/integration-contract", "file-code"),
+    leaf("外部系统", "/sys/integration-system", "server"),
+    leaf("集成适配器", "/sys/integration-adapter", "plug"),
+    leaf("集成路由", "/sys/integration-route", "route"),
+    leaf("集成控制台", "/sys/integration-console", "terminal")
+  ]),
   dir("系统", "/sys", "settings", [
     leaf("应用管理", "/sys/app", "app-window"),
     leaf("字典管理", "/sys/dictionary", "book"),
