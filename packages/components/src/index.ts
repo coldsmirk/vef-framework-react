@@ -75,7 +75,7 @@ export { Cascader, type CascaderOption, type CascaderProps } from "./cascader";
 export { Center, type CenterProps } from "./center";
 export { Chart, connectCharts, disconnectCharts, useChart, type ChartInstance, type ChartOption, type ChartProps, type UseChartOptions } from "./charts";
 export { Checkbox, type CheckboxGroupProps, type CheckboxOption, type CheckboxProps } from "./checkbox";
-export { CodeEditor, type CodeEditorLanguage, type CodeEditorProps, type CodeEditorRef, type CodeEditorTheme } from "./code-editor";
+export { apiCompletionSource, CodeEditor, type ApiCompletion, type CodeEditorLanguage, type CodeEditorProps, type CodeEditorRef, type CodeEditorTheme } from "./code-editor";
 export { CodeHighlighter, type CodeHighlighterProps } from "./code-highlighter";
 export { Col, type ColProps } from "./col";
 export { Collapse, type CollapseItem, type CollapseProps } from "./collapse";

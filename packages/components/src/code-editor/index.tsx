@@ -2,6 +2,7 @@ import type { Extension } from "@codemirror/state";
 import type { BasicSetupOptions, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 
 import type { Length, PropsWithRef, Size } from "../_base";
+import type { ApiCompletion } from "./completions";
 import type { CodeEditorLanguage, CodeEditorProps, CodeEditorRef, CodeEditorTheme } from "./props";
 
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState 
 
 import { getSpacingValue, globalCssVars } from "../_base";
 import { useIsDarkMode } from "../config-provider";
+import { apiCompletionSource } from "./completions";
 
 const BUILT_IN_LANGUAGES = new Set<CodeEditorLanguage>([
   "json",
@@ -122,6 +124,51 @@ function useLanguageExtensions(language: CodeEditorProps["language"]): Extension
       cancelled = true;
     };
   }, [language]);
+
+  return extensions;
+}
+
+/**
+ * Turn a declarative API catalog into a language-data autocomplete extension.
+ * Registered on every JS-family language object so it applies to both the
+ * "javascript" and "typescript" built-ins; loading rides the same lazy chunk
+ * as the language pack, and the source merges with the language's own
+ * keyword / snippet / local-variable completions instead of replacing them.
+ * Only the built-in JS languages are supported — for a custom language
+ * extension, register a completion source through `extensions` instead.
+ */
+function useApiCompletionExtensions(
+  apiCompletions: ApiCompletion[] | undefined,
+  language: CodeEditorProps["language"]
+): Extension[] {
+  const [extensions, setExtensions] = useState<Extension[]>([]);
+  const isJsLanguage = language === "javascript" || language === "typescript";
+
+  useEffect(() => {
+    if (!apiCompletions?.length || !isJsLanguage) {
+      setExtensions([]);
+      return;
+    }
+
+    let cancelled = false;
+    void import("@codemirror/lang-javascript").then(mod => {
+      if (cancelled) {
+        return;
+      }
+
+      const source = apiCompletionSource(apiCompletions);
+      setExtensions([
+        mod.javascriptLanguage,
+        mod.jsxLanguage,
+        mod.typescriptLanguage,
+        mod.tsxLanguage
+      ].map(lang => lang.data.of({ autocomplete: source })));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiCompletions, isJsLanguage]);
 
   return extensions;
 }
@@ -332,6 +379,7 @@ export function CodeEditor({
   bordered = true,
   className,
   style,
+  apiCompletions,
   extensions,
   basicSetupOptions
 }: PropsWithRef<CodeEditorRef, CodeEditorProps>) {
@@ -396,6 +444,7 @@ export function CodeEditor({
   );
 
   const languageExtensions = useLanguageExtensions(language);
+  const apiCompletionExtensions = useApiCompletionExtensions(apiCompletions, language);
 
   const mergedExtensions = useMemo<Extension[]>(
     () => [
@@ -406,9 +455,10 @@ export function CodeEditor({
       // instead of being cut off at its edge. Skipped when there's no DOM (SSR).
       ...typeof document === "undefined" ? [] : [tooltips({ parent: document.body })],
       ...languageExtensions,
+      ...apiCompletionExtensions,
       ...extensions ?? []
     ],
-    [size, languageExtensions, extensions]
+    [size, languageExtensions, apiCompletionExtensions, extensions]
   );
 
   const containerStyle = useMemo(
@@ -461,4 +511,5 @@ export function CodeEditor({
   );
 }
 
+export { apiCompletionSource, type ApiCompletion } from "./completions";
 export type { CodeEditorLanguage, CodeEditorProps, CodeEditorRef, CodeEditorTheme } from "./props";

@@ -4,6 +4,7 @@ import type { BasicSetupOptions } from "@uiw/react-codemirror";
 import type { CSSProperties } from "react";
 
 import type { Length, Size } from "../_base";
+import type { ApiCompletion } from "./completions";
 
 /**
  * Built-in language identifiers shipped with the CodeEditor. To use a
@@ -200,6 +201,15 @@ export interface CodeEditorProps {
    */
   style?: CSSProperties;
 
+  /**
+   * Declarative completion catalog for host-injected APIs (script bindings,
+   * capability libraries, globals). Entries complete as identifiers and
+   * their `children` complete after `label.`, alongside the language's own
+   * keyword / local-variable completions. Only applies to the built-in
+   * "javascript" / "typescript" languages. Pass a stable reference — a fresh
+   * array each render reconfigures the live editor.
+   */
+  apiCompletions?: ApiCompletion[];
   /**
    * Extra CodeMirror extensions appended after the built-in basic setup
    * and the resolved language. Use this for linters, custom keymaps, or
