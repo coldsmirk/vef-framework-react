@@ -16,8 +16,13 @@ import { Drawer } from "../drawer";
 import { Empty } from "../empty";
 import { DefaultResetButton, DefaultSubmitButton, FormActions, useForm } from "../form";
 
+// min-height (not height): a fixed 100% box would make taller content
+// overflow the form element, parking the drawer body's bottom padding at the
+// unscrolled content edge — scrolled to the end, the last field would sit
+// flush against the footer. With min-height the form still fills short
+// drawers but grows with its content, keeping the body padding after it.
 const formStyle = css({
-  height: "100%"
+  minHeight: "100%"
 });
 
 const emptyContent = (
