@@ -1,7 +1,8 @@
 import type { TabItem } from "@vef-framework-react/components";
 import type { ReactNode } from "react";
 
-import { Page, Result, Stack, Tabs, Title } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { FlexTabs, globalCssVars, Page, Result, Title } from "@vef-framework-react/components";
 import { checkPermission, useAppContext } from "@vef-framework-react/core";
 
 import { APPROVAL_PERMISSIONS } from "../../permissions";
@@ -9,6 +10,13 @@ import { InstancesPanel } from "./instances";
 import { MetricsPanel } from "./metrics";
 import { ProjectionsPanel } from "./projections";
 import { TasksPanel } from "./tasks";
+
+const rootCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: globalCssVars.spacingMd
+});
 
 export interface ApprovalAdminPageProps {
   /**
@@ -93,14 +101,14 @@ export function ApprovalAdminPage({
   }
 
   return (
-    <Page>
-      <Stack gap="middle">
+    <Page margin>
+      <div css={rootCss}>
         {title ? <Title level={4}>{title}</Title> : null}
 
         {items.length > 0
-          ? <Tabs defaultActiveKey={items[0]?.key} items={items} />
+          ? <FlexTabs defaultActiveKey={items[0]?.key} items={items} />
           : <Result status="403" subTitle="你没有审批管理台的任何操作权限。" title="无访问权限" />}
-      </Stack>
+      </div>
     </Page>
   );
 }

@@ -3,7 +3,7 @@ import type { EmptyObject } from "@vef-framework-react/shared";
 
 import type { AdminBusinessProjection, AdminBusinessProjectionSearch } from "../../types";
 
-import { CrudPage, Flex, OperationButton, showSuccessMessage, Text, Tooltip, useFormContext } from "@vef-framework-react/components";
+import { Crud, Flex, OperationButton, showSuccessMessage, Text, Tooltip, useFormContext } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
@@ -110,7 +110,7 @@ export function ProjectionsPanel({ retryPermission }: ProjectionsPanelProps) {
   });
 
   return (
-    <CrudPage<AdminBusinessProjection, AdminBusinessProjectionSearch, SceneValues>
+    <Crud<AdminBusinessProjection, AdminBusinessProjectionSearch, SceneValues>
       key={String(refreshToken)}
       basicSearch={<ProjectionSearchFields />}
       columnSettings={{ storageKey: "approval.admin.projections" }}

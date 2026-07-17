@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 
 import type { CompletedTask, MyTaskSearch, PendingTask } from "../../types";
 
-import { Badge, CrudPage, Flex, OperationButton, Tabs, Tag, Text } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Badge, Crud, Flex, FlexTabs, globalCssVars, OperationButton, Page, Tag, Text, Title } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
@@ -13,6 +14,13 @@ import { formatTimestamp, InstanceDetailDrawer, TaskStatusTag, UserLabel } from 
 import { FlowIcon } from "../../components/icon";
 
 type TaskSceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
+
+const rootCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: globalCssVars.spacingMd
+});
 
 function instanceTitleColumn<TRow extends { instanceTitle: string; instanceNo: string; flowIcon?: string }>(): TableColumn<TRow> {
   return {
@@ -133,14 +141,13 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
   }
 
   const pendingList = (
-    <CrudPage<PendingTask, MyTaskSearch, TaskSceneValues>
+    <Crud<PendingTask, MyTaskSearch, TaskSceneValues>
       key={`pending-${refreshToken}`}
       columnSettings={false}
       defaultSearchValues={{ tenantId }}
       queryFn={api.findPendingTasks}
       rowKey="taskId"
       tableColumns={PENDING_COLUMNS}
-      title={title}
       operationColumn={{
         width: 90,
         render(row) {
@@ -156,14 +163,13 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
   );
 
   const completedList = (
-    <CrudPage<CompletedTask, MyTaskSearch, TaskSceneValues>
+    <Crud<CompletedTask, MyTaskSearch, TaskSceneValues>
       key={`completed-${refreshToken}`}
       columnSettings={false}
       defaultSearchValues={{ tenantId }}
       queryFn={api.findCompletedTasks}
       rowKey="taskId"
       tableColumns={COMPLETED_COLUMNS}
-      title={title}
       operationColumn={{
         width: 90,
         render(row) {
@@ -180,25 +186,30 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
 
   return (
     <>
-      <Tabs
-        style={{ paddingInline: 16 }}
-        items={[
-          {
-            key: "pending",
-            label: (
-              <Badge count={counts?.pendingTaskCount ?? 0} offset={[10, 0]} size="small">
-                待办
-              </Badge>
-            ),
-            children: pendingList
-          },
-          {
-            key: "completed",
-            label: "已办",
-            children: completedList
-          }
-        ]}
-      />
+      <Page margin>
+        <div css={rootCss}>
+          {title ? <Title level={4}>{title}</Title> : null}
+
+          <FlexTabs
+            items={[
+              {
+                key: "pending",
+                label: (
+                  <Badge count={counts?.pendingTaskCount ?? 0} offset={[10, 0]} size="small">
+                    待办
+                  </Badge>
+                ),
+                children: pendingList
+              },
+              {
+                key: "completed",
+                label: "已办",
+                children: completedList
+              }
+            ]}
+          />
+        </div>
+      </Page>
 
       <InstanceDetailDrawer
         instanceId={detailTarget}

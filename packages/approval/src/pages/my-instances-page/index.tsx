@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 
 import type { InitiatedInstance, InitiatedInstanceSearch, MyCCRecord, MyCCRecordSearch } from "../../types";
 
-import { Badge, CrudPage, Flex, OperationButton, Tabs, Tag, Text, useFormContext } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Badge, Crud, Flex, FlexTabs, globalCssVars, OperationButton, Page, Tag, Text, Title, useFormContext } from "@vef-framework-react/components";
 import { useMutation, useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
@@ -14,6 +15,13 @@ import { FlowIcon } from "../../components/icon";
 import { INSTANCE_STATUS_OPTIONS } from "../../components/status/labels";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
+
+const rootCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: globalCssVars.spacingMd
+});
 
 const INITIATED_COLUMNS: Array<TableColumn<InitiatedInstance>> = [
   {
@@ -181,7 +189,7 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
   }
 
   const initiatedList = (
-    <CrudPage<InitiatedInstance, InitiatedInstanceSearch, SceneValues>
+    <Crud<InitiatedInstance, InitiatedInstanceSearch, SceneValues>
       key={`initiated-${refreshToken}`}
       basicSearch={<InitiatedSearchFields />}
       columnSettings={false}
@@ -189,7 +197,6 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
       queryFn={api.findInitiated}
       rowKey="instanceId"
       tableColumns={INITIATED_COLUMNS}
-      title={title}
       operationColumn={{
         width: 90,
         render(row) {
@@ -208,14 +215,13 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
   );
 
   const ccList = (
-    <CrudPage<MyCCRecord, MyCCRecordSearch, SceneValues>
+    <Crud<MyCCRecord, MyCCRecordSearch, SceneValues>
       key={`cc-${refreshToken}`}
       columnSettings={false}
       defaultSearchValues={{ tenantId }}
       queryFn={api.findCCRecords}
       rowKey="ccRecordId"
       tableColumns={CC_COLUMNS}
-      title={title}
       operationColumn={{
         width: 90,
         render(row) {
@@ -232,25 +238,30 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
 
   return (
     <>
-      <Tabs
-        style={{ paddingInline: 16 }}
-        items={[
-          {
-            key: "initiated",
-            label: "我发起的",
-            children: initiatedList
-          },
-          {
-            key: "cc",
-            label: (
-              <Badge count={counts?.unreadCcCount ?? 0} offset={[10, 0]} size="small">
-                抄送我的
-              </Badge>
-            ),
-            children: ccList
-          }
-        ]}
-      />
+      <Page margin>
+        <div css={rootCss}>
+          {title ? <Title level={4}>{title}</Title> : null}
+
+          <FlexTabs
+            items={[
+              {
+                key: "initiated",
+                label: "我发起的",
+                children: initiatedList
+              },
+              {
+                key: "cc",
+                label: (
+                  <Badge count={counts?.unreadCcCount ?? 0} offset={[10, 0]} size="small">
+                    抄送我的
+                  </Badge>
+                ),
+                children: ccList
+              }
+            ]}
+          />
+        </div>
+      </Page>
 
       <InstanceDetailDrawer
         instanceId={detailTarget}

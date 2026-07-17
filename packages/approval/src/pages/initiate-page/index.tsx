@@ -1,11 +1,13 @@
 import type { AvailableFlow } from "../../types";
 
+import { css } from "@emotion/react";
 import {
   Card,
   Empty,
   Flex,
   globalCssVars,
   Input,
+  Page,
   Pagination,
   Spin,
   Stack,
@@ -24,6 +26,24 @@ import { StartInstanceDrawer } from "./start-drawer";
 export { StartInstanceDrawer, type StartInstanceDrawerProps } from "./start-drawer";
 
 const PAGE_SIZE = 48;
+
+const iconTileCss = css({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 40,
+  height: 40,
+  borderRadius: 10,
+  flexShrink: 0,
+  background: `color-mix(in srgb, ${globalCssVars.colorPrimary} 10%, transparent)`,
+  color: globalCssVars.colorPrimary
+});
+
+const flowGridCss = css({
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+  gap: 12
+});
 
 export interface ApprovalInitiatePageProps {
   /**
@@ -59,19 +79,7 @@ function FlowCard({ flow, onClick }: { flow: AvailableFlow; onClick: () => void 
       onClick={onClick}
     >
       <Flex align="flex-start" gap="middle">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            flexShrink: 0,
-            background: `color-mix(in srgb, ${globalCssVars.colorPrimary} 10%, transparent)`,
-            color: globalCssVars.colorPrimary
-          }}
-        >
+        <div css={iconTileCss}>
           <FlowIcon name={flow.flowIcon ?? "file-check"} size={20} />
         </div>
 
@@ -148,73 +156,69 @@ export function ApprovalInitiatePage({
   }, [flows]);
 
   return (
-    <Stack gap={20} style={{ padding: 24 }}>
-      <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
-        <Title level={4} style={{ margin: 0 }}>{title}</Title>
+    <Page margin scrollable>
+      <Stack gap={20}>
+        <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
+          <Title level={4} style={{ margin: 0 }}>{title}</Title>
 
-        <Flex align="center" gap="small" wrap="wrap">
-          <Input.Search
-            allowClear
-            placeholder="搜索流程名称"
-            style={{ width: 240 }}
-            onSearch={value => {
-              setKeyword(value);
-              setPage(1);
-            }}
-          />
+          <Flex align="center" gap="small" wrap="wrap">
+            <Input.Search
+              allowClear
+              placeholder="搜索流程名称"
+              style={{ width: 240 }}
+              onSearch={value => {
+                setKeyword(value);
+                setPage(1);
+              }}
+            />
 
-          <LabelFilterSelect
-            value={labelFilter}
-            onChange={next => {
-              setLabelFilter(next);
-              setPage(1);
-            }}
-          />
+            <LabelFilterSelect
+              value={labelFilter}
+              onChange={next => {
+                setLabelFilter(next);
+                setPage(1);
+              }}
+            />
+          </Flex>
         </Flex>
-      </Flex>
 
-      {isLoading
-        ? (
-            <Flex align="center" justify="center" style={{ minHeight: 240 }}>
-              <Spin />
-            </Flex>
-          )
-        : groups.length === 0
-          ? <Empty description="没有可发起的流程" />
-          : groups.map(group => (
-              <Stack key={group.name} gap={12}>
-                <Text strong type="secondary">{group.name}</Text>
+        {isLoading
+          ? (
+              <Flex align="center" justify="center" style={{ minHeight: 240 }}>
+                <Spin />
+              </Flex>
+            )
+          : groups.length === 0
+            ? <Empty description="没有可发起的流程" />
+            : groups.map(group => (
+                <Stack key={group.name} gap={12}>
+                  <Text strong type="secondary">{group.name}</Text>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                    gap: 12
-                  }}
-                >
-                  {group.flows.map(flow => <FlowCard key={flow.flowId} flow={flow} onClick={() => setStartTarget(flow.flowCode)} />)}
-                </div>
-              </Stack>
-            ))}
+                  <div css={flowGridCss}>
+                    {group.flows.map(flow => <FlowCard key={flow.flowId} flow={flow} onClick={() => setStartTarget(flow.flowCode)} />)}
+                  </div>
+                </Stack>
+              ))}
 
-      {(data?.total ?? 0) > PAGE_SIZE && (
-        <Flex justify="flex-end">
-          <Pagination
-            current={page}
-            pageSize={PAGE_SIZE}
-            showSizeChanger={false}
-            total={data?.total ?? 0}
-            onChange={setPage}
-          />
-        </Flex>
-      )}
+        {(data?.total ?? 0) > PAGE_SIZE && (
+          <Flex justify="flex-end">
+            <Pagination
+              current={page}
+              pageSize={PAGE_SIZE}
+              showSizeChanger={false}
+              total={data?.total ?? 0}
+              onChange={setPage}
+            />
+          </Flex>
+        )}
 
-      <StartInstanceDrawer
-        flowCode={startTarget}
-        tenantId={tenantId}
-        onClose={() => setStartTarget(null)}
-        onStarted={onStarted}
-      />
-    </Stack>
+        <StartInstanceDrawer
+          flowCode={startTarget}
+          tenantId={tenantId}
+          onClose={() => setStartTarget(null)}
+          onStarted={onStarted}
+        />
+      </Stack>
+    </Page>
   );
 }

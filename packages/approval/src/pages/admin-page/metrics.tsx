@@ -1,6 +1,7 @@
 import type { BindingProjectionStatus, InstanceStatus, TaskStatus } from "../../types";
 
-import { Button, Card, Empty, Flex, globalCssVars, Icon, Spin, Stack, Statistic, Text } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Button, Card, Empty, Flex, globalCssVars, Icon, ScrollArea, Spin, Stack, Statistic, Text } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { RotateCwIcon } from "lucide-react";
 
@@ -14,6 +15,22 @@ import {
 
 const INSTANCE_ORDER: readonly InstanceStatus[] = ["running", "approved", "rejected", "returned", "withdrawn", "terminated"];
 const TASK_ORDER: readonly TaskStatus[] = ["pending", "waiting", "approved", "rejected", "handled", "transferred"];
+
+const scrollFillCss = css({
+  height: "100%"
+});
+
+const statGridCss = css({
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: 16
+});
+
+const statGridWideCss = css({
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 16
+});
 
 function isProjectionStatus(value: string): value is BindingProjectionStatus {
   return Object.hasOwn(BINDING_PROJECTION_STATUS_LABELS, value);
@@ -56,91 +73,78 @@ export function MetricsPanel({ tenantId }: MetricsPanelProps) {
   const projectionEntries = Object.entries(metrics.businessProjectionCounts);
 
   return (
-    <Stack gap={16} style={{ padding: 16 }}>
-      <Flex align="center" justify="space-between">
-        <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
-          {`采集时间 ${formatTimestamp(metrics.capturedAt)}`}
-        </Text>
+    <ScrollArea css={scrollFillCss} scrollbars="vertical">
+      <Stack gap={16}>
+        <Flex align="center" justify="space-between">
+          <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
+            {`采集时间 ${formatTimestamp(metrics.capturedAt)}`}
+          </Text>
 
-        <Button
-          icon={<Icon component={RotateCwIcon} />}
-          loading={isFetching}
-          size="small"
-          onClick={() => void refetch()}
-        >
-          刷新
-        </Button>
-      </Flex>
+          <Button
+            icon={<Icon component={RotateCwIcon} />}
+            loading={isFetching}
+            size="small"
+            onClick={() => void refetch()}
+          >
+            刷新
+          </Button>
+        </Flex>
 
-      <Card title="审批单">
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 16
-        }}
-        >
-          {INSTANCE_ORDER.map(status => (
+        <Card title="审批单">
+          <div css={statGridCss}>
+            {INSTANCE_ORDER.map(status => (
+              <Statistic
+                key={status}
+                title={INSTANCE_STATUS_LABELS[status]}
+                value={metrics.instanceCounts[status] ?? 0}
+              />
+            ))}
+          </div>
+        </Card>
+
+        <Card title="任务">
+          <div css={statGridCss}>
+            {TASK_ORDER.map(status => (
+              <Statistic
+                key={status}
+                title={TASK_STATUS_LABELS[status]}
+                value={metrics.taskCounts[status] ?? 0}
+              />
+            ))}
+
             <Statistic
-              key={status}
-              title={INSTANCE_STATUS_LABELS[status]}
-              value={metrics.instanceCounts[status] ?? 0}
+              styles={metrics.timeoutTaskCount > 0 ? { content: { color: globalCssVars.colorError } } : undefined}
+              title="超时未处理"
+              value={metrics.timeoutTaskCount}
             />
-          ))}
-        </div>
-      </Card>
+          </div>
+        </Card>
 
-      <Card title="任务">
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 16
-        }}
-        >
-          {TASK_ORDER.map(status => (
+        <Card title="效率与回写">
+          <div css={statGridWideCss}>
             <Statistic
-              key={status}
-              title={TASK_STATUS_LABELS[status]}
-              value={metrics.taskCounts[status] ?? 0}
+              title="平均办结时长"
+              value={metrics.avgCompletionSeconds < 0 ? "-" : formatDurationSeconds(metrics.avgCompletionSeconds)}
             />
-          ))}
 
-          <Statistic
-            styles={metrics.timeoutTaskCount > 0 ? { content: { color: globalCssVars.colorError } } : undefined}
-            title="超时未处理"
-            value={metrics.timeoutTaskCount}
-          />
-        </div>
-      </Card>
-
-      <Card title="效率与回写">
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 16
-        }}
-        >
-          <Statistic
-            title="平均办结时长"
-            value={metrics.avgCompletionSeconds < 0 ? "-" : formatDurationSeconds(metrics.avgCompletionSeconds)}
-          />
-
-          <Statistic
-            styles={metrics.pendingBindingFailures > 0 ? { content: { color: globalCssVars.colorWarning } } : undefined}
-            title="待重试回写"
-            value={metrics.pendingBindingFailures}
-          />
-
-          <Statistic title="未收敛投影" value={metrics.pendingBusinessProjections} />
-
-          {projectionEntries.map(([status, count]) => (
             <Statistic
-              key={status}
-              title={isProjectionStatus(status) ? BINDING_PROJECTION_STATUS_LABELS[status] : status}
-              value={count ?? 0}
+              styles={metrics.pendingBindingFailures > 0 ? { content: { color: globalCssVars.colorWarning } } : undefined}
+              title="待重试回写"
+              value={metrics.pendingBindingFailures}
             />
-          ))}
-        </div>
-      </Card>
-    </Stack>
+
+            <Statistic title="未收敛投影" value={metrics.pendingBusinessProjections} />
+
+            {projectionEntries.map(([status, count]) => (
+              <Statistic
+                key={status}
+                title={isProjectionStatus(status) ? BINDING_PROJECTION_STATUS_LABELS[status] : status}
+                value={count ?? 0}
+              />
+            ))}
+          </div>
+        </Card>
+      </Stack>
+    </ScrollArea>
   );
 }

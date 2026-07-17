@@ -3,7 +3,7 @@ import type { EmptyObject } from "@vef-framework-react/shared";
 
 import type { AdminInstance, AdminInstanceSearch } from "../../types";
 
-import { CrudPage, Drawer, Flex, OperationButton, showSuccessMessage, Text, useFormContext } from "@vef-framework-react/components";
+import { Crud, Drawer, Flex, OperationButton, showSuccessMessage, Text, useFormContext } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
@@ -106,7 +106,7 @@ export function InstancesPanel({ detailPermission, terminatePermission }: Instan
 
   return (
     <>
-      <CrudPage<AdminInstance, AdminInstanceSearch, SceneValues>
+      <Crud<AdminInstance, AdminInstanceSearch, SceneValues>
         key={String(refreshToken)}
         basicSearch={<InstanceSearchFields />}
         columnSettings={{ storageKey: "approval.admin.instances" }}

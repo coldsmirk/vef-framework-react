@@ -4,8 +4,9 @@ import type { EmptyObject } from "@vef-framework-react/shared";
 import type { AdminTask, AdminTaskSearch } from "../../types";
 
 import {
-  CrudPage,
+  Crud,
   Input,
+  Labeled,
   Modal,
   OperationButton,
   showSuccessMessage,
@@ -145,14 +146,11 @@ function ReassignModal({
       }}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>改派给</Text>
+        <Labeled label="改派给">
           <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
-        </Stack>
+        </Labeled>
 
-        <Stack gap={4}>
-          <Text>改派原因</Text>
-
+        <Labeled label="改派原因">
           <Input.TextArea
             maxLength={2000}
             placeholder="请输入改派原因（可选）"
@@ -160,7 +158,7 @@ function ReassignModal({
             value={reason}
             onChange={event => setReason(event.target.value)}
           />
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -185,7 +183,7 @@ export function TasksPanel({ reassignPermission }: TasksPanelProps) {
 
   return (
     <>
-      <CrudPage<AdminTask, AdminTaskSearch, SceneValues>
+      <Crud<AdminTask, AdminTaskSearch, SceneValues>
         key={String(refreshToken)}
         basicSearch={<TaskSearchFields />}
         columnSettings={{ storageKey: "approval.admin.tasks" }}
