@@ -31,11 +31,10 @@ export function adapterToParams(row: Adapter): AdapterParams {
 const DEFAULT_SCRIPT = "// 出站：把 input 译成对外部系统的调用并返回契约输出\n// 入站：用 dispatch(input) 交给业务处理器\nreturn input;\n";
 
 /**
- * Defaults for a newly created adapter.
+ * Defaults for a newly created adapter. The owning system and contract stay
+ * unset (not "") so their selects render placeholders until a choice is made.
  */
-export const ADAPTER_FORM_DEFAULTS: AdapterParams = {
-  systemId: "",
-  contractId: "",
+export const ADAPTER_FORM_DEFAULTS: Partial<AdapterParams> = {
   direction: "outbound",
   script: DEFAULT_SCRIPT,
   timeoutMs: 0,

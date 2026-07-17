@@ -27,11 +27,13 @@ export function routeToParams(row: Route): RouteParams {
 }
 
 /**
- * Defaults for a newly created route: the broadest catch-all (default key, all contracts).
+ * Defaults for a newly created route: the broadest catch-all (default key, all
+ * contracts). The target system stays unset (not "") so its select renders the
+ * placeholder until a choice is made; "" is meaningful only for contractId
+ * (the wildcard option).
  */
-export const ROUTE_FORM_DEFAULTS: RouteParams = {
+export const ROUTE_FORM_DEFAULTS: Partial<RouteParams> = {
   routeKey: "",
   contractId: "",
-  systemId: "",
   isEnabled: true
 };
