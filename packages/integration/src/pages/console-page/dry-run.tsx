@@ -4,14 +4,15 @@ import { css } from "@emotion/react";
 import {
   Alert,
   Button,
-  Card,
   CodeEditor,
   Empty,
   Flex,
+  FlexCard,
   Grid,
   Icon,
   Input,
   PermissionGate,
+  ScrollArea,
   Segmented,
   Select,
   showErrorMessage,
@@ -51,11 +52,26 @@ function parseJson(text: string): ParseResult {
   }
 }
 
+const rootCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: 16
+});
+
+// Both cards split the remaining height and scroll internally; single-column
+// (narrow) mode stacks them into two equal rows instead.
 const workbenchCss = css({
+  flex: 1,
+  minHeight: 0,
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))",
-  gap: 16,
-  alignItems: "start"
+  gridAutoRows: "minmax(0, 1fr)",
+  gap: 16
+});
+
+const scrollFillCss = css({
+  height: "100%"
 });
 
 const modeBarItemCss = css({
@@ -236,8 +252,21 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
     return <Empty description="运行后在此查看结果" style={{ padding: "32px 0" }} />;
   };
 
+  const runAction = (
+    <PermissionGate requiredPermissions={isOutbound ? outboundPermission : inboundPermission}>
+      <Button
+        icon={<Icon component={PlayIcon} />}
+        loading={pending}
+        type="primary"
+        onClick={isOutbound ? runOutbound : runInbound}
+      >
+        运行调试
+      </Button>
+    </PermissionGate>
+  );
+
   return (
-    <Stack gap="middle">
+    <div css={rootCss}>
       <Flex align="center" gap="middle" wrap="wrap">
         <Segmented<Direction>
           css={modeBarItemCss}
@@ -255,110 +284,113 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
       </Flex>
 
       <div css={workbenchCss}>
-        <Card size="small" title="请求">
-          <Stack gap="middle">
-            <Grid columnGap="small">
-              <Grid.Item span={12}>
-                <Labeled label="系统">
-                  <Select
-                    aria-label="系统"
-                    loading={systemDir.loading}
-                    options={systemOptions}
-                    placeholder="选择系统"
-                    style={{ width: "100%" }}
-                    value={systemCode}
-                    onChange={code => {
-                      setSystemCode(code);
-                      clearResults();
-                    }}
-                  />
-                </Labeled>
-              </Grid.Item>
+        <FlexCard extra={runAction} title="请求">
+          <ScrollArea css={scrollFillCss} scrollbars="vertical">
+            <Stack gap="middle">
+              <Grid columnGap="small">
+                <Grid.Item span={12}>
+                  <Labeled label="系统">
+                    <Select
+                      aria-label="系统"
+                      loading={systemDir.loading}
+                      options={systemOptions}
+                      placeholder="选择系统"
+                      style={{ width: "100%" }}
+                      value={systemCode}
+                      onChange={code => {
+                        setSystemCode(code);
+                        clearResults();
+                      }}
+                    />
+                  </Labeled>
+                </Grid.Item>
 
-              <Grid.Item span={12}>
-                <Labeled label="契约">
-                  <Select
-                    aria-label="契约"
-                    loading={contractDir.loading}
-                    options={contractOptions}
-                    placeholder="选择契约"
-                    style={{ width: "100%" }}
-                    value={contractCode}
-                    onChange={code => {
-                      setContractCode(code);
-                      clearResults();
-                    }}
-                  />
-                </Labeled>
-              </Grid.Item>
-            </Grid>
+                <Grid.Item span={12}>
+                  <Labeled label="契约">
+                    <Select
+                      aria-label="契约"
+                      loading={contractDir.loading}
+                      options={contractOptions}
+                      placeholder="选择契约"
+                      style={{ width: "100%" }}
+                      value={contractCode}
+                      onChange={code => {
+                        setContractCode(code);
+                        clearResults();
+                      }}
+                    />
+                  </Labeled>
+                </Grid.Item>
+              </Grid>
 
-            <Labeled hint="留空则使用已保存的适配器脚本" label="脚本">
-              <CodeEditor showLineNumbers height={240} language="javascript" value={script} onChange={setScript} />
-            </Labeled>
+              <Labeled label="脚本">
+                <CodeEditor
+                  showLineNumbers
+                  height={240}
+                  language="javascript"
+                  placeholder="// 留空则使用已保存的适配器脚本"
+                  value={script}
+                  onChange={setScript}
+                />
+              </Labeled>
 
-            {isOutbound
-              ? (
-                  <>
+              {isOutbound
+                ? (
                     <Labeled label="输入（JSON）">
                       <CodeEditor showLineNumbers height={160} language="json" value={input} onChange={setInput} />
                     </Labeled>
+                  )
+                : (
+                    <>
+                      <Flex gap="small">
+                        <Labeled label="请求方法">
+                          <Input aria-label="请求方法" placeholder="POST" style={{ width: 110 }} value={method} onChange={event => setMethod(event.target.value)} />
+                        </Labeled>
 
-                    <PermissionGate requiredPermissions={outboundPermission}>
-                      <Button block icon={<Icon component={PlayIcon} />} loading={outboundPending} type="primary" onClick={runOutbound}>
-                        运行出站调试
-                      </Button>
-                    </PermissionGate>
-                  </>
-                )
-              : (
-                  <>
-                    <Flex gap="small">
-                      <Labeled label="请求方法">
-                        <Input aria-label="请求方法" placeholder="POST" style={{ width: 110 }} value={method} onChange={event => setMethod(event.target.value)} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Labeled label="请求路径">
+                            <Input aria-label="请求路径" placeholder="如 /callback" value={path} onChange={event => setPath(event.target.value)} />
+                          </Labeled>
+                        </div>
+                      </Flex>
+
+                      <Labeled label="请求头">
+                        <ParamsEditor namePlaceholder="Header 名，如 X-Api-Key" value={headers} onChange={setHeaders} />
                       </Labeled>
 
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <Labeled label="请求路径">
-                          <Input aria-label="请求路径" placeholder="如 /callback" value={path} onChange={event => setPath(event.target.value)} />
-                        </Labeled>
-                      </div>
-                    </Flex>
+                      <Labeled label="查询参数">
+                        <ParamsEditor namePlaceholder="参数名，如 orderId" value={query} onChange={setQuery} />
+                      </Labeled>
 
-                    <Labeled label="请求头">
-                      <ParamsEditor value={headers} onChange={setHeaders} />
-                    </Labeled>
+                      <Labeled label="请求体">
+                        <CodeEditor
+                          showLineNumbers
+                          height={140}
+                          language="json"
+                          placeholder="原样投递的请求体文本"
+                          value={requestBody}
+                          onChange={setRequestBody}
+                        />
+                      </Labeled>
 
-                    <Labeled label="查询参数">
-                      <ParamsEditor value={query} onChange={setQuery} />
-                    </Labeled>
+                      <Labeled hint="入站调试不执行真实业务，dispatch 将原样返回这份样例" label="处理器样例输出（JSON）">
+                        <CodeEditor showLineNumbers height={140} language="json" value={handlerOutput} onChange={setHandlerOutput} />
+                      </Labeled>
+                    </>
+                  )}
+            </Stack>
+          </ScrollArea>
+        </FlexCard>
 
-                    <Labeled label="请求体">
-                      <CodeEditor showLineNumbers height={140} language="json" value={requestBody} onChange={setRequestBody} />
-                    </Labeled>
-
-                    <Labeled hint="入站调试不执行真实业务，dispatch 将原样返回这份样例" label="处理器样例输出（JSON）">
-                      <CodeEditor showLineNumbers height={140} language="json" value={handlerOutput} onChange={setHandlerOutput} />
-                    </Labeled>
-
-                    <PermissionGate requiredPermissions={inboundPermission}>
-                      <Button block icon={<Icon component={PlayIcon} />} loading={inboundPending} type="primary" onClick={runInbound}>
-                        运行入站调试
-                      </Button>
-                    </PermissionGate>
-                  </>
-                )}
-          </Stack>
-        </Card>
-
-        <Card
+        <FlexCard
           extra={activeResult ? <FailureKindTag failureKind={activeResult.failureKind} /> : null}
-          size="small"
           title="结果"
         >
-          {renderResultBody()}
-        </Card>
+          <ScrollArea css={scrollFillCss} scrollbars="vertical">
+            {renderResultBody()}
+          </ScrollArea>
+        </FlexCard>
       </div>
-    </Stack>
+    </div>
   );
 }

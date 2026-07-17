@@ -2,12 +2,38 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 
 import type { RouteFinding, RouteFindingKind } from "../../types";
 
-import { Button, Card, Descriptions, Empty, Flex, globalCssVars, Icon, PermissionGate, Result, Stack, Text } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import {
+  Button,
+  Card,
+  Descriptions,
+  Empty,
+  Flex,
+  FlexCard,
+  globalCssVars,
+  Icon,
+  PermissionGate,
+  Result,
+  ScrollArea,
+  Stack,
+  Text
+} from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { SearchCheckIcon } from "lucide-react";
 
 import { useOpsApi } from "../../api";
 import { FindingKindTag } from "../../components";
+
+const panelCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: globalCssVars.spacingMd
+});
+
+const resultAreaCss = css({
+  flex: 1
+});
 
 function findingItems(finding: RouteFinding): DescriptionsItem[] {
   const items: DescriptionsItem[] = [
@@ -87,8 +113,8 @@ export function DiagnosticsPanel({ permission }: DiagnosticsPanelProps) {
   const report = mutation.data;
 
   return (
-    <Card size="small">
-      <Stack gap="middle">
+    <FlexCard>
+      <div css={panelCss}>
         <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
           <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
             检查悬空适配器、通配缺口、停用的目标与未覆盖的契约。
@@ -101,12 +127,14 @@ export function DiagnosticsPanel({ permission }: DiagnosticsPanelProps) {
           </PermissionGate>
         </Flex>
 
-        {report
-          ? report.findings.length === 0
-            ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
-            : <Stack gap="middle">{groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}</Stack>
-          : <Empty description="尚未运行诊断" style={{ padding: "48px 0" }} />}
-      </Stack>
-    </Card>
+        <ScrollArea css={resultAreaCss} scrollbars="vertical">
+          {report
+            ? report.findings.length === 0
+              ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
+              : <Stack gap="middle">{groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}</Stack>
+            : <Empty description="尚未运行诊断" style={{ padding: "48px 0" }} />}
+        </ScrollArea>
+      </div>
+    </FlexCard>
   );
 }

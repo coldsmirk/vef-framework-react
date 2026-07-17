@@ -2,13 +2,28 @@ import type { TableColumn } from "@vef-framework-react/components";
 
 import type { Direction, FailureKind, InvocationStats } from "../../types";
 
-import { Button, Card, Flex, globalCssVars, Icon, Stack, Table, Tag, Text } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Button, Flex, FlexCard, globalCssVars, Icon, Table, Tag, Text } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { RotateCwIcon } from "lucide-react";
 
 import { useStatsApi } from "../../api";
 import { DirectionTag, FAILURE_KIND_COLORS, FAILURE_KIND_LABELS } from "../../components";
 import { FAILURE_KINDS } from "../../types";
+
+const panelCss = css({
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  gap: globalCssVars.spacingMd
+});
+
+// The framework Table scrolls its own body inside a height-bounded box, the
+// same way the CRUD list pages do.
+const tableAreaCss = css({
+  flex: 1,
+  minHeight: 0
+});
 
 function renderFailures(failures: Partial<Record<FailureKind, number>> | undefined) {
   if (!failures) {
@@ -105,8 +120,8 @@ export function StatsPanel() {
   const stats = data?.stats ?? [];
 
   return (
-    <Card size="small">
-      <Stack gap="middle">
+    <FlexCard>
+      <div css={panelCss}>
         <Flex align="center" gap="middle" justify="space-between" wrap="wrap">
           <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
             本节点自进程启动以来的运行时快照，按系统 × 契约 × 方向汇总。
@@ -117,15 +132,17 @@ export function StatsPanel() {
           </Button>
         </Flex>
 
-        <Table<InvocationStats>
-          columns={statsColumns}
-          dataSource={stats}
-          locale={{ emptyText: "暂无调用记录" }}
-          pagination={false}
-          rowKey={record => `${record.system}|${record.contract}|${record.direction}`}
-          size="small"
-        />
-      </Stack>
-    </Card>
+        <div css={tableAreaCss}>
+          <Table<InvocationStats>
+            columns={statsColumns}
+            dataSource={stats}
+            locale={{ emptyText: "暂无调用记录" }}
+            pagination={false}
+            rowKey={record => `${record.system}|${record.contract}|${record.direction}`}
+            size="small"
+          />
+        </div>
+      </div>
+    </FlexCard>
   );
 }
