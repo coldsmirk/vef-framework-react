@@ -2,10 +2,9 @@ import type { CrudBasicFormScene } from "@vef-framework-react/components";
 
 import type { ContractFormValues } from "./model";
 
-import { Grid, Labeled, useFormContext } from "@vef-framework-react/components";
+import { Grid, Labeled, LabelsEditor, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
-import { ParamsEditor } from "../../components";
 import { JSON_SCHEMA_COMPLETIONS } from "./json-schema-completions";
 
 const codeSchema = z.string("请输入契约编码").min(2, "至少 2 个字符").max(64, "最多 64 个字符");
@@ -65,12 +64,9 @@ export function ContractForm({ scene }: ContractFormProps) {
       <Grid.Item span={24}>
         <AppField name="labels">
           {field => (
-            <Labeled hint="供业务侧按标签圈选可动态绑定的契约；键限字母数字与 - _，值可留空" label="标签">
-              <ParamsEditor
-                namePlaceholder="如 scene"
-                nameTitle="标签键"
+            <Labeled hint="供业务侧按标签圈选可动态绑定的契约；值可留空" label="标签">
+              <LabelsEditor
                 value={field.state.value}
-                valueTitle="标签值"
                 onChange={field.handleChange}
               />
             </Labeled>
