@@ -249,7 +249,7 @@ export const OUTBOUND_AUTH_HINTS: Record<string, string> = {
   header: "把配置的每一组名值对作为请求头附加",
   query: "把配置的每一组名值对作为查询参数附加",
   signature: "按框架 HMAC 约定签名（x-timestamp / x-nonce / x-signature）",
-  script: "在下方脚本中编写签名逻辑，返回需追加的凭据请求头"
+  script: "在下方脚本中自定义凭据逻辑（签名、动态令牌等），返回需追加的凭据请求头"
 };
 
 export const INBOUND_AUTH_HINTS: Record<string, string> = {

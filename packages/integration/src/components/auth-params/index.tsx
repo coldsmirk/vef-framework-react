@@ -120,7 +120,7 @@ const OUTBOUND_PARAM_SPECS: Record<string, AuthParamsSpec> = {
   },
   script: {
     kind: "pairs",
-    label: "签名参数",
+    label: "认证参数",
     hint: "脚本内通过 params.<参数名> 读取；值加密存储",
     namePlaceholder: "参数名",
     valuePlaceholder: "参数值"
