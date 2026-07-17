@@ -27,5 +27,29 @@ describe("Labeled", () => {
     render(<Labeled required label="委托人" />);
 
     expect(screen.getByText("*", { exact: false }), "the required marker should render").toBeInTheDocument();
+    expect(screen.getByText("*", { exact: false }), "the marker must stay silent for assistive tech").toHaveAttribute("aria-hidden");
+  });
+
+  it("names the children through the labelled group", () => {
+    render(
+      <Labeled hint="仅字母数字" label="系统参数">
+        <input aria-label="control" />
+      </Labeled>
+    );
+
+    const group = screen.getByRole("group", { name: "系统参数" });
+
+    expect(group, "the group should carry the label as its accessible name").toBeInTheDocument();
+    expect(group, "the hint should describe the group").toHaveAccessibleDescription("仅字母数字");
+  });
+
+  it("associates the label natively when htmlFor is given", () => {
+    render(
+      <Labeled htmlFor="the-input" label="密钥">
+        <input id="the-input" />
+      </Labeled>
+    );
+
+    expect(screen.getByRole("textbox", { name: "密钥" }), "htmlFor should bind the label to the control").toHaveAttribute("id", "the-input");
   });
 });
