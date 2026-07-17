@@ -1,7 +1,7 @@
 import type { BindingProjectionStatus, InstanceStatus, TaskStatus } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, Card, Empty, Flex, globalCssVars, Icon, ScrollArea, Spin, Stack, Statistic, Text } from "@vef-framework-react/components";
+import { Button, Card, Center, Empty, Flex, globalCssVars, Icon, ScrollArea, Spin, Stack, Statistic, Text } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { RotateCwIcon } from "lucide-react";
 
@@ -60,14 +60,18 @@ export function MetricsPanel({ tenantId }: MetricsPanelProps) {
 
   if (isLoading) {
     return (
-      <Flex align="center" justify="center" style={{ minHeight: 240 }}>
+      <Center css={scrollFillCss}>
         <Spin />
-      </Flex>
+      </Center>
     );
   }
 
   if (!metrics) {
-    return <Empty description="暂无指标数据" />;
+    return (
+      <Center css={scrollFillCss}>
+        <Empty description="暂无指标数据" />
+      </Center>
+    );
   }
 
   const projectionEntries = Object.entries(metrics.businessProjectionCounts);
