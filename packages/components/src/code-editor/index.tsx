@@ -10,11 +10,16 @@ import { EditorView, tooltips } from "@codemirror/view";
 import { css } from "@emotion/react";
 import CodeMirror from "@uiw/react-codemirror";
 import { isArray, isString, isUndefined } from "@vef-framework-react/shared";
+import { Button } from "antd";
+import { WandSparklesIcon } from "lucide-react";
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 
-import { getSpacingValue, globalCssVars } from "../_base";
+import { getSpacingValue, globalCssVars, showErrorMessage } from "../_base";
 import { useIsDarkMode } from "../config-provider";
-import { completeFromEntries } from "./completions";
+import { Icon } from "../icon";
+import { Tooltip } from "../tooltip";
+import { completeFromEntries, completeJsonKeysFromEntries } from "./completions";
+import { getFormatter } from "./format";
 
 const BUILT_IN_LANGUAGES = new Set<CodeEditorLanguage>([
   "json",
@@ -22,7 +27,8 @@ const BUILT_IN_LANGUAGES = new Set<CodeEditorLanguage>([
   "typescript",
   "markdown",
   "sql",
-  "python"
+  "python",
+  "xml"
 ]);
 
 function isBuiltInLanguage(value: unknown): value is CodeEditorLanguage {
@@ -59,6 +65,10 @@ const BUILT_IN_LANGUAGE_LOADERS: Record<CodeEditorLanguage, () => Promise<Extens
   python: async () => {
     const mod = await import("@codemirror/lang-python");
     return mod.python();
+  },
+  xml: async () => {
+    const mod = await import("@codemirror/lang-xml");
+    return mod.xml();
   }
 };
 
@@ -130,12 +140,14 @@ function useLanguageExtensions(language: CodeEditorProps["language"]): Extension
 
 /**
  * Turn a declarative completion catalog into a language-data autocomplete
- * extension. Registered on every JS-family language object so it applies to
- * both the "javascript" and "typescript" built-ins; loading rides the same
- * lazy chunk as the language pack, and the source merges with the language's
- * own keyword / snippet / local-variable completions instead of replacing
- * them. Only the built-in JS languages are supported — for a custom language
- * extension, register a completion source through `extensions` instead.
+ * extension. On the JS-family built-ins the source is registered on every JS
+ * language object (entries complete as identifiers, members after `label.`);
+ * on the "json" built-in it is registered on the JSON language object
+ * (entries complete as object keys). Loading rides the same lazy chunk as
+ * the language pack, and the source merges with the language's own
+ * completions instead of replacing them. Other languages ignore the catalog
+ * — for a custom language extension, register a completion source through
+ * `extensions` instead.
  */
 function useCompletionExtensions(
   completions: CompletionEntry[] | undefined,
@@ -143,32 +155,42 @@ function useCompletionExtensions(
 ): Extension[] {
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const isJsLanguage = language === "javascript" || language === "typescript";
+  const isJsonLanguage = language === "json";
 
   useEffect(() => {
-    if (!completions?.length || !isJsLanguage) {
+    if (!completions?.length || (!isJsLanguage && !isJsonLanguage)) {
       setExtensions([]);
       return;
     }
 
     let cancelled = false;
-    void import("@codemirror/lang-javascript").then(mod => {
-      if (cancelled) {
-        return;
-      }
 
-      const source = completeFromEntries(completions);
-      setExtensions([
-        mod.javascriptLanguage,
-        mod.jsxLanguage,
-        mod.typescriptLanguage,
-        mod.tsxLanguage
-      ].map(lang => lang.data.of({ autocomplete: source })));
-    });
+    if (isJsonLanguage) {
+      void import("@codemirror/lang-json").then(mod => {
+        if (!cancelled) {
+          setExtensions([mod.jsonLanguage.data.of({ autocomplete: completeJsonKeysFromEntries(completions) })]);
+        }
+      });
+    } else {
+      void import("@codemirror/lang-javascript").then(mod => {
+        if (cancelled) {
+          return;
+        }
+
+        const source = completeFromEntries(completions);
+        setExtensions([
+          mod.javascriptLanguage,
+          mod.jsxLanguage,
+          mod.typescriptLanguage,
+          mod.tsxLanguage
+        ].map(lang => lang.data.of({ autocomplete: source })));
+      });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [completions, isJsLanguage]);
+  }, [completions, isJsLanguage, isJsonLanguage]);
 
   return extensions;
 }
@@ -191,6 +213,8 @@ function resolveCodeMirrorTheme(
 
   return theme;
 }
+
+const FORMAT_ACTION_CLASS = "vef-code-editor-format";
 
 const SIZE_FONT_SIZE: Record<Size, string> = {
   small: globalCssVars.fontSizeSm,
@@ -298,6 +322,19 @@ function createContainerStyle({
   return css({
     display: "flex",
     flexDirection: "column",
+    position: "relative",
+    [`.${FORMAT_ACTION_CLASS}`]: {
+      position: "absolute",
+      top: 4,
+      right: 8,
+      zIndex: 2,
+      opacity: 0,
+      backgroundColor: globalCssVars.colorBgContainer,
+      transition: `opacity ${globalCssVars.motionDurationMid}`
+    },
+    [`&:hover .${FORMAT_ACTION_CLASS}, &:focus-within .${FORMAT_ACTION_CLASS}`]: {
+      opacity: 1
+    },
     width: toCssLength(width),
     height: toCssLength(height),
     minHeight: toCssLength(minHeight),
@@ -367,6 +404,7 @@ export function CodeEditor({
   showLineNumbers = false,
   showFoldGutter = false,
   showSearch = true,
+  showFormat = true,
   showHighlightActiveLine = false,
   tabSize = 2,
   indentWithTab = true,
@@ -485,12 +523,59 @@ export function CodeEditor({
   const stableChange = useCallback((next: string) => onChangeRef.current?.(next), []);
   const handleChange = onChange ? stableChange : undefined;
 
+  const formatter = showFormat && !readOnly ? getFormatter(language) : undefined;
+
+  const handleFormat = async () => {
+    const view = codeMirrorRef.current?.view;
+
+    if (!view || !formatter) {
+      return;
+    }
+
+    const source = view.state.doc.toString();
+
+    if (!source.trim()) {
+      return;
+    }
+
+    try {
+      const formatted = await formatter(source, tabSize);
+
+      if (formatted !== source) {
+        view.dispatch({
+          changes: {
+            from: 0,
+            to: view.state.doc.length,
+            insert: formatted
+          }
+        });
+      }
+    } catch {
+      showErrorMessage("格式化失败，请先修正语法错误");
+    }
+  };
+
   return (
     <div
       className={className}
       css={containerStyle}
       style={style}
     >
+      {formatter
+        ? (
+            <Tooltip title="格式化">
+              <Button
+                aria-label="格式化"
+                className={FORMAT_ACTION_CLASS}
+                icon={<Icon component={WandSparklesIcon} />}
+                size="small"
+                type="text"
+                onClick={() => void handleFormat()}
+              />
+            </Tooltip>
+          )
+        : null}
+
       <CodeMirror
         ref={codeMirrorRef}
         autoFocus={autoFocus}

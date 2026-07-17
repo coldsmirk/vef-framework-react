@@ -4,10 +4,11 @@ import type { CodeEditorRef } from ".";
 
 import { language as languageFacet } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
+import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 
 import { CodeEditor } from ".";
-import { render, waitFor } from "../../test-utils";
+import { render, screen, waitFor } from "../../test-utils";
 
 function findEditorRoot(): HTMLElement {
   const node = document.querySelector(".cm-editor");
@@ -225,5 +226,62 @@ describe("CodeEditor", () => {
       });
       expect(view.state.doc.toString()).toBe("shared");
     });
+  });
+});
+
+describe("CodeEditor format action", () => {
+  it("shows the format button for a formattable language", async () => {
+    render(<CodeEditor language="json" value="{}" />);
+
+    expect(await screen.findByRole("button", { name: "格式化" }), "json editors should offer the format action").toBeInTheDocument();
+  });
+
+  it("hides the format button when showFormat is off", () => {
+    render(<CodeEditor language="json" showFormat={false} value="{}" />);
+
+    expect(screen.queryByRole("button", { name: "格式化" })).not.toBeInTheDocument();
+  });
+
+  it("hides the format button for read-only editors", () => {
+    render(<CodeEditor readOnly language="json" value="{}" />);
+
+    expect(screen.queryByRole("button", { name: "格式化" })).not.toBeInTheDocument();
+  });
+
+  it("hides the format button for languages without a formatter", () => {
+    render(<CodeEditor language="markdown" value="# hi" />);
+
+    expect(screen.queryByRole("button", { name: "格式化" })).not.toBeInTheDocument();
+  });
+
+  it("re-indents a JSON document and notifies onChange", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    const ref = createRef<CodeEditorRef>();
+
+    render(<CodeEditor ref={ref} language="json" onChange={handleChange} />);
+    await waitForView(ref);
+    ref.current!.setValue("{\"a\":1,\"b\":[2,3]}");
+
+    await user.click(await screen.findByRole("button", { name: "格式化" }));
+
+    const pretty = JSON.stringify({ a: 1, b: [2, 3] }, null, 2);
+    await waitFor(() => {
+      expect(ref.current?.getValue(), "the document should be re-indented").toBe(pretty);
+    });
+    expect(handleChange, "the change should flow through onChange").toHaveBeenCalledWith(pretty);
+  });
+
+  it("leaves the document intact when the source cannot be parsed", async () => {
+    const user = userEvent.setup();
+    const ref = createRef<CodeEditorRef>();
+
+    render(<CodeEditor ref={ref} language="json" />);
+    await waitForView(ref);
+    ref.current!.setValue("{oops");
+
+    await user.click(await screen.findByRole("button", { name: "格式化" }));
+
+    expect(ref.current?.getValue(), "an unparsable document must stay untouched").toBe("{oops");
   });
 });

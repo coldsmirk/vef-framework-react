@@ -2,9 +2,10 @@ import type { CompletionEntry } from "./completions";
 
 import { CompletionContext } from "@codemirror/autocomplete";
 import { javascript } from "@codemirror/lang-javascript";
+import { json } from "@codemirror/lang-json";
 import { EditorState } from "@codemirror/state";
 
-import { completeFromEntries, resolveEntryPath } from "./completions";
+import { completeFromEntries, completeJsonKeysFromEntries, resolveEntryPath } from "./completions";
 
 const CATALOG: CompletionEntry[] = [
   {
@@ -103,5 +104,69 @@ describe("completeFromEntries", () => {
 
     const http = result?.options.find(option => option.label === "http");
     expect(http?.type, "an explicit type wins").toBe("namespace");
+  });
+});
+
+function jsonContext(doc: string, pos = doc.length, explicit = false): CompletionContext {
+  const state = EditorState.create({
+    doc,
+    extensions: [json()]
+  });
+
+  return new CompletionContext(state, pos, explicit);
+}
+
+describe("completeJsonKeysFromEntries", () => {
+  const KEYS: CompletionEntry[] = [
+    {
+      label: "type",
+      type: "property",
+      info: "实例类型"
+    },
+    {
+      label: "properties",
+      type: "property"
+    }
+  ];
+  const source = completeJsonKeysFromEntries(KEYS);
+
+  it("completes while a key string is still being typed", async () => {
+    const result = await source(jsonContext("{\"ty"));
+
+    expect(result, "an open key string should produce a completion result").not.toBeNull();
+    expect(result?.from, "completion should replace the text after the opening quote").toBe(2);
+    expect(result?.options.map(option => option.label), "the catalog keys should be offered").toEqual(["type", "properties"]);
+  });
+
+  it("completes inside a closed property name", async () => {
+    const result = await source(jsonContext("{\"ty\": 1}", 4));
+
+    expect(result?.from, "completion should anchor after the opening quote").toBe(2);
+  });
+
+  it("completes a later key in a populated object", async () => {
+    const result = await source(jsonContext("{\"a\": 1, \"pr"));
+
+    expect(result?.from, "completion should anchor inside the second key").toBe(10);
+  });
+
+  it("stays silent inside a value string", async () => {
+    expect(await source(jsonContext("{\"type\": \"str")), "value strings must not get keyword noise").toBeNull();
+  });
+
+  it("offers quoted keys only on an explicit request at a bare position", async () => {
+    expect(await source(jsonContext("{", 1)), "plain typing at a bare position stays quiet").toBeNull();
+
+    const result = await source(jsonContext("{", 1, true));
+    expect(result, "an explicit request should offer the catalog").not.toBeNull();
+    expect(result?.options[0]?.apply, "bare-position insertions should be fully quoted").toBe("\"type\"");
+  });
+
+  it("carries entry metadata onto the options", async () => {
+    const result = await source(jsonContext("{\"ty"));
+    const type = result?.options.find(option => option.label === "type");
+
+    expect(type?.info, "the info doc should be carried over").toBe("实例类型");
+    expect(type?.type, "the icon kind should be carried over").toBe("property");
   });
 });

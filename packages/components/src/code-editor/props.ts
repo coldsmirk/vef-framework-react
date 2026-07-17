@@ -17,7 +17,8 @@ export type CodeEditorLanguage
     | "typescript"
     | "markdown"
     | "sql"
-    | "python";
+    | "python"
+    | "xml";
 
 /**
  * Color scheme for the editor.
@@ -202,14 +203,23 @@ export interface CodeEditorProps {
   style?: CSSProperties;
 
   /**
-   * Declarative completion catalog for host-injected APIs (script bindings,
-   * capability libraries, globals). Entries complete as identifiers and
-   * their `children` complete after `label.`, alongside the language's own
-   * keyword / local-variable completions. Only applies to the built-in
-   * "javascript" / "typescript" languages. Pass a stable reference — a fresh
-   * array each render reconfigures the live editor.
+   * Declarative completion catalog. On the built-in "javascript" /
+   * "typescript" languages entries complete as identifiers (with `children`
+   * completing after `label.`) alongside the language's own completions; on
+   * the built-in "json" language entries complete as object keys inside
+   * property-name strings (e.g. a JSON Schema keyword catalog). Other
+   * languages ignore it. Pass a stable reference — a fresh array each render
+   * reconfigures the live editor.
    */
   completions?: CompletionEntry[];
+  /**
+   * Show the floating format action when the language has a built-in
+   * formatter ("json" via JSON re-indent, "javascript" / "typescript" via
+   * prettier, loaded on first use). Never shown for read-only editors.
+   *
+   * @default true
+   */
+  showFormat?: boolean;
   /**
    * Extra CodeMirror extensions appended after the built-in basic setup
    * and the resolved language. Use this for linters, custom keymaps, or

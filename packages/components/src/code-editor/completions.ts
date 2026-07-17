@@ -70,6 +70,45 @@ function toOption(entry: CompletionEntry): Completion {
 }
 
 /**
+ * A completion source that offers catalog entries as JSON object keys.
+ * Inside a property-name string — closed (a `PropertyName` node) or still
+ * being typed (an error node directly under `Object` starting with a quote)
+ * — it completes the text after the opening quote. At a bare key position it
+ * inserts the fully quoted key, but only on an explicit request so plain
+ * typing stays quiet. Value positions never match (an unterminated value
+ * string parses as an error node under `Property`), so string values get no
+ * keyword noise.
+ */
+export function completeJsonKeysFromEntries(entries: readonly CompletionEntry[]): CompletionSource {
+  return async context => {
+    const { syntaxTree } = await import("@codemirror/language");
+    const node = syntaxTree(context.state).resolveInner(context.pos, -1);
+
+    const isOpenKeyString = node.name === "⚠"
+      && node.parent?.name === "Object"
+      && context.state.sliceDoc(node.from, node.from + 1) === "\"";
+
+    if (node.name === "PropertyName" || isOpenKeyString) {
+      return {
+        from: node.from + 1,
+        options: entries.map(entry => toOption(entry)),
+        validFor: /^[\w$-]*$/
+      };
+    }
+
+    if (context.explicit && (node.name === "Object" || node.name === "JsonText" || node.name === "{")) {
+      return {
+        from: context.pos,
+        options: entries.map(entry => { return { ...toOption(entry), apply: `"${entry.label}"` }; }),
+        validFor: /^"?[\w$-]*$/
+      };
+    }
+
+    return null;
+  };
+}
+
+/**
  * A completion source over an entry catalog, named after CodeMirror's own
  * `completeFromList`. It resolves the member path before the cursor via
  * `completionPath` (loaded lazily alongside the JavaScript language pack, so
