@@ -10,7 +10,6 @@ export { useContractDirectory, useSystemDirectory, type Directory } from "./dire
 export { FormSection, type FormSectionProps } from "./form-section";
 export { formatTimestamp } from "./format";
 export { JsonView, type JsonViewProps } from "./json-view";
-export { Labeled, type LabeledProps } from "./labeled";
 export { ParamsEditor, type ParamsEditorProps } from "./params-editor";
 export { ScriptBindingHints } from "./script-hints";
 export {

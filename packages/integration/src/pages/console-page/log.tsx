@@ -2,7 +2,7 @@ import type { CrudBasicSceneFormValues, DescriptionsItem, TableColumn } from "@v
 
 import type { Direction, FailureKind, InvocationLog, LogSearch } from "../../types";
 
-import { Alert, Button, Crud, Descriptions, Drawer, globalCssVars, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { Alert, Button, Crud, Descriptions, Drawer, globalCssVars, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { useLogApi } from "../../api";
@@ -13,7 +13,6 @@ import {
   FailureKindTag,
   formatTimestamp,
   JsonView,
-  Labeled,
   useContractDirectory,
   useSystemDirectory,
   WireTraceTimeline

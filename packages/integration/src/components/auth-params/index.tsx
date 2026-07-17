@@ -1,8 +1,7 @@
 import type { Direction } from "../../types";
 
-import { globalCssVars, Grid, Input, Stack, Text } from "@vef-framework-react/components";
+import { globalCssVars, Grid, Input, Labeled, Stack, Text } from "@vef-framework-react/components";
 
-import { Labeled } from "../labeled";
 import { ParamsEditor } from "../params-editor";
 
 /**

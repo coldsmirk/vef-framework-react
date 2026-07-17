@@ -2,13 +2,12 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 
 import type { ConnectionCheck, DatabaseProbe, HttpProbe } from "../../types";
 
-import { Button, Descriptions, Drawer, Empty, Flex, Icon, Input, Stack, Tag, Text } from "@vef-framework-react/components";
+import { Button, Descriptions, Drawer, Empty, Flex, Icon, Input, Labeled, Stack, Tag, Text } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { ActivityIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useOpsApi } from "../../api";
-import { Labeled } from "../labeled";
 
 function reachableTag(reachable: boolean) {
   return <Tag color={reachable ? "success" : "error"}>{reachable ? "可达" : "不可达"}</Tag>;

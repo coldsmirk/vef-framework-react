@@ -2,7 +2,7 @@ import type { CrudBasicFormScene } from "@vef-framework-react/components";
 
 import type { SystemFormValues } from "./model";
 
-import { globalCssVars, Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { globalCssVars, Grid, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 import {
@@ -11,7 +11,6 @@ import {
   ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS,
   FormSection,
   INBOUND_AUTH_SCRIPT_COMPLETIONS,
-  Labeled,
   OUTBOUND_AUTH_SCRIPT_COMPLETIONS,
   ParamsEditor
 } from "../../components";
