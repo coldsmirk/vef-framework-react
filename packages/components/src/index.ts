@@ -129,6 +129,7 @@ export {
 export { FileUpload, type FileUploadProps } from "./file-upload";
 export { Flex, type FlexProps } from "./flex";
 export { FlexCard, type FlexCardProps } from "./flex-card";
+export { FlexTabs, type FlexTabsProps } from "./flex-tabs";
 export { FlipText, type FlipTextProps } from "./flip-text";
 export { FloatButton, type FloatButtonProps } from "./float-button";
 export {
@@ -160,6 +161,7 @@ export { Image, type ImageProps } from "./image";
 export { Input, type InputProps, type InputRef, type OTPProps, type PasswordProps, type SearchProps, type TextAreaProps } from "./input";
 export { InputNumber, type InputNumberProps } from "./input-number";
 export { Keyboard, type KeyboardProps } from "./keyboard";
+export { Labeled, type LabeledProps } from "./labeled";
 export { List, type ListGridType, type ListItemMetaProps, type ListItemProps, type ListProps } from "./list";
 export { Loader, type LoaderProps } from "./loader";
 export { LogoIcon, type LogoIconProps } from "./logo-icon";
