@@ -541,6 +541,12 @@ export function CodeEditor({
     try {
       const formatted = await formatter(source, tabSize);
 
+      // The formatter is async; abandon the result if keystrokes landed since
+      // the snapshot rather than overwrite them.
+      if (view.state.doc.toString() !== source) {
+        return;
+      }
+
       if (formatted !== source) {
         view.dispatch({
           changes: {
