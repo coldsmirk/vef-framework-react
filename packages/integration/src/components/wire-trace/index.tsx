@@ -2,7 +2,66 @@ import type { TimelineItem } from "@vef-framework-react/components";
 
 import type { HttpExchange } from "../../types";
 
-import { Empty, Flex, globalCssVars, Stack, Tag, Text, Timeline } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { CodeEditor, Empty, Flex, globalCssVars, Stack, Tag, Text, Timeline } from "@vef-framework-react/components";
+import { useMemo } from "react";
+
+const bodyBlockStyle = css({
+  margin: 0,
+  padding: globalCssVars.spacingXs,
+  fontFamily: globalCssVars.fontFamilyCode,
+  fontSize: globalCssVars.fontSizeSm,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+  backgroundColor: globalCssVars.colorFillQuaternary,
+  border: `1px solid ${globalCssVars.colorBorderSecondary}`,
+  borderRadius: globalCssVars.borderRadiusSm,
+  maxHeight: 240,
+  overflow: "auto"
+});
+
+interface DetectedBody {
+  language: "json" | "xml" | null;
+  content: string;
+}
+
+// Bodies are captured as raw text; JSON ones are re-indented and highlighted,
+// XML ones highlighted verbatim, anything else falls back to a plain block.
+function detectBody(body: string): DetectedBody {
+  try {
+    return { language: "json", content: JSON.stringify(JSON.parse(body), null, 2) };
+  } catch {
+    // not JSON, fall through to the other shapes
+  }
+
+  if (body.trimStart().startsWith("<")) {
+    return { language: "xml", content: body };
+  }
+
+  return { language: null, content: body };
+}
+
+function ExchangeBody({ body, label }: { body: string; label: string }) {
+  const detected = useMemo(() => detectBody(body), [body]);
+
+  return (
+    <Stack gap={2}>
+      <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">{label}</Text>
+
+      {detected.language
+        ? (
+            <CodeEditor
+              readOnly
+              language={detected.language}
+              maxHeight={240}
+              size="small"
+              value={detected.content}
+            />
+          )
+        : <pre css={bodyBlockStyle}>{detected.content}</pre>}
+    </Stack>
+  );
+}
 
 function isExchangeFailed(exchange: HttpExchange): boolean {
   return Boolean(exchange.error) || (exchange.status !== undefined && exchange.status >= 400);
@@ -28,24 +87,8 @@ function ExchangeDetail({ exchange }: { exchange: HttpExchange }) {
   return (
     <Stack gap={4}>
       {exchange.error ? <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="danger">{exchange.error}</Text> : null}
-
-      {exchange.requestBody
-        ? (
-            <Stack gap={2}>
-              <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">请求体</Text>
-              <Text code style={{ fontSize: globalCssVars.fontSizeSm, whiteSpace: "pre-wrap" }}>{exchange.requestBody}</Text>
-            </Stack>
-          )
-        : null}
-
-      {exchange.responseBody
-        ? (
-            <Stack gap={2}>
-              <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">响应体</Text>
-              <Text code style={{ fontSize: globalCssVars.fontSizeSm, whiteSpace: "pre-wrap" }}>{exchange.responseBody}</Text>
-            </Stack>
-          )
-        : null}
+      {exchange.requestBody ? <ExchangeBody body={exchange.requestBody} label="请求体" /> : null}
+      {exchange.responseBody ? <ExchangeBody body={exchange.responseBody} label="响应体" /> : null}
     </Stack>
   );
 }

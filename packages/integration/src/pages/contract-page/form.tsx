@@ -5,6 +5,8 @@ import type { ContractFormValues } from "./model";
 import { Grid, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
+import { JSON_SCHEMA_COMPLETIONS } from "./json-schema-completions";
+
 const codeSchema = z.string("请输入契约编码").min(2, "至少 2 个字符").max(64, "最多 64 个字符");
 const nameSchema = z.string("请输入契约名称").max(128, "最多 128 个字符");
 
@@ -43,13 +45,13 @@ export function ContractForm({ scene }: ContractFormProps) {
     <Grid columnGap="small">
       <Grid.Item span={12}>
         <AppField name="code" validators={{ onBlur: codeSchema }}>
-          {field => <field.Input required disabled={!isCreate} label="契约编码" placeholder="如 patient.query" />}
+          {field => <field.Input required disabled={!isCreate} label="契约编码" placeholder="如 order.query" />}
         </AppField>
       </Grid.Item>
 
       <Grid.Item span={12}>
         <AppField name="name" validators={{ onBlur: nameSchema }}>
-          {field => <field.Input required label="契约名称" placeholder="如 患者信息查询" />}
+          {field => <field.Input required label="契约名称" placeholder="如 订单查询" />}
         </AppField>
       </Grid.Item>
 
@@ -64,11 +66,11 @@ export function ContractForm({ scene }: ContractFormProps) {
           {field => (
             <field.CodeEditor
               showLineNumbers
+              completions={JSON_SCHEMA_COMPLETIONS}
               height={260}
               label="输入 Schema（JSON Schema）"
               language="json"
               placeholder="留空则不校验输入"
-              size="large"
             />
           )}
         </AppField>
@@ -79,11 +81,11 @@ export function ContractForm({ scene }: ContractFormProps) {
           {field => (
             <field.CodeEditor
               showLineNumbers
+              completions={JSON_SCHEMA_COMPLETIONS}
               height={260}
               label="输出 Schema（JSON Schema）"
               language="json"
               placeholder="留空则不校验输出"
-              size="large"
             />
           )}
         </AppField>
