@@ -84,7 +84,15 @@ function OutboundAuthSection() {
     <FormSection description="调用该系统时如何携带凭证" title="出站认证">
       <Grid columnGap="small">
         <Grid.Item span={12}>
-          <form.AppField name="outboundAuth.scheme">
+          <form.AppField
+            name="outboundAuth.scheme"
+            listeners={{
+              // Params are scheme-specific; pairs schemes submit the record
+              // verbatim, so a leftover credential from the previous scheme
+              // would go on the wire under a user-defined name.
+              onChange: () => form.setFieldValue("outboundAuth.params", {})
+            }}
+          >
             {field => (
               <field.Select
                 extra={OUTBOUND_AUTH_HINTS[field.state.value] ?? "自定义方案，按需填写参数"}
@@ -216,7 +224,14 @@ function InboundSection() {
             ? (
                 <Grid columnGap="small">
                   <Grid.Item span={12}>
-                    <form.AppField name="inboundAuth.scheme">
+                    <form.AppField
+                      name="inboundAuth.scheme"
+                      listeners={{
+                        // Same reset as the outbound scheme: pairs schemes
+                        // must never inherit another scheme's leftovers.
+                        onChange: () => form.setFieldValue("inboundAuth.params", {})
+                      }}
+                    >
                       {field => (
                         <field.Select
                           extra={INBOUND_AUTH_HINTS[field.state.value] ?? "自定义方案，按需填写参数"}
