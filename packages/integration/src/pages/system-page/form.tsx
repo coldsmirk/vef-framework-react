@@ -124,6 +124,7 @@ function OutboundAuthSection() {
                         label="签名脚本"
                         language="javascript"
                         placeholder="// 读取 request 与 params，返回需追加的凭据请求头对象"
+                        size="large"
                       />
                     )}
                   </form.AppField>
@@ -171,6 +172,7 @@ function OutboundEnvelopeSection() {
                           label="请求包裹脚本（request）"
                           language="javascript"
                           placeholder="// 读取 request，返回改写后的 { method, path, headers, query, body }"
+                          size="large"
                         />
                       )}
                     </form.AppField>
@@ -187,6 +189,7 @@ function OutboundEnvelopeSection() {
                           label="响应解包脚本（response）"
                           language="javascript"
                           placeholder="// 读取 response，返回解包后的业务数据作为调用结果"
+                          size="large"
                         />
                       )}
                     </form.AppField>
@@ -256,6 +259,7 @@ function InboundSection() {
                                   label="验证脚本"
                                   language="javascript"
                                   placeholder="// 读取 request 与 params，返回真值即放行"
+                                  size="large"
                                 />
                               )}
                             </form.AppField>

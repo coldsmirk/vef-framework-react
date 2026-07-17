@@ -331,6 +331,7 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                   height={240}
                   language="javascript"
                   placeholder="// 留空则使用已保存的适配器脚本"
+                  size="large"
                   value={script}
                   onChange={setScript}
                 />
@@ -339,7 +340,14 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
               {isOutbound
                 ? (
                     <Labeled label="输入（JSON）">
-                      <CodeEditor showLineNumbers height={160} language="json" value={input} onChange={setInput} />
+                      <CodeEditor
+                        showLineNumbers
+                        height={160}
+                        language="json"
+                        size="large"
+                        value={input}
+                        onChange={setInput}
+                      />
                     </Labeled>
                   )
                 : (
@@ -370,13 +378,21 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                           height={140}
                           language="json"
                           placeholder="原样投递的请求体文本"
+                          size="large"
                           value={requestBody}
                           onChange={setRequestBody}
                         />
                       </Labeled>
 
                       <Labeled hint="入站调试不执行真实业务，dispatch 将原样返回这份样例" label="处理器样例输出（JSON）">
-                        <CodeEditor showLineNumbers height={140} language="json" value={handlerOutput} onChange={setHandlerOutput} />
+                        <CodeEditor
+                          showLineNumbers
+                          height={140}
+                          language="json"
+                          size="large"
+                          value={handlerOutput}
+                          onChange={setHandlerOutput}
+                        />
                       </Labeled>
                     </>
                   )}

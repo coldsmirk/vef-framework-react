@@ -91,13 +91,13 @@ export function AdapterForm({ scene }: AdapterFormProps) {
               {field => (
                 <field.CodeEditor
                   required
-                  showFoldGutter
                   showLineNumbers
                   completions={adapterScriptCompletions(direction)}
                   height={420}
                   label="脚本"
                   language="javascript"
                   placeholder="// 参照上方的绑定说明编写，return 即本次调用的返回值"
+                  size="large"
                 />
               )}
             </form.AppField>

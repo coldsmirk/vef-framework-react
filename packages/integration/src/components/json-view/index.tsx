@@ -11,5 +11,14 @@ export interface JsonViewProps {
  * A read-only, pretty-printed JSON view built on the code editor.
  */
 export function JsonView({ value, height = 160 }: JsonViewProps) {
-  return <CodeEditor readOnly showLineNumbers height={height} language="json" value={JSON.stringify(value, null, 2)} />;
+  return (
+    <CodeEditor
+      readOnly
+      showLineNumbers
+      height={height}
+      language="json"
+      size="large"
+      value={JSON.stringify(value, null, 2)}
+    />
+  );
 }
