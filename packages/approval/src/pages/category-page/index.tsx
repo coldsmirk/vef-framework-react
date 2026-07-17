@@ -25,6 +25,11 @@ export type { ApprovalCategoryPageProps } from "./props";
 
 type CategorySceneValues = CrudBasicSceneFormValues<CategoryParams, CategoryParams>;
 
+const FORM_DRAWER_WIDTH = {
+  xxs: "100vw",
+  sm: 520
+};
+
 const { OperationButtonGroup: CategoryOperationButtonGroup, ActionButtonGroup: CategoryActionButtonGroup }
   = createCrudKit<FlowCategory, CategorySearch, CategorySceneValues>();
 
@@ -72,6 +77,7 @@ export function ApprovalCategoryPage({
       basicSearch={<CategorySearchFields />}
       columnSettings={{ storageKey: columnStorageKey }}
       deleteMutationFn={api.remove}
+      formLayout={{ layout: "vertical" }}
       isPaginated={false}
       queryFn={api.findTree}
       renderForm={() => <CategoryFormWithTree />}
@@ -93,7 +99,13 @@ export function ApprovalCategoryPage({
                     color="primary"
                     icon={<Icon component={EditIcon} />}
                     requiredPermissions={perms.update}
-                    onClick={() => openForm({ scene: "update", values: categoryToFormValues(row) })}
+                    onClick={() => openForm({
+                      scene: "update",
+                      values: categoryToFormValues(row),
+                      title: "编辑分类",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
                   >
                     编辑
                   </OperationButton>
@@ -132,7 +144,16 @@ export function ApprovalCategoryPage({
         <CategoryActionButtonGroup selector={s => [s.openForm] as const}>
           {([openForm]) => (
             <PermissionGate requiredPermissions={perms.create}>
-              <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+              <ActionButton
+                icon={<Icon component={PlusIcon} />}
+                type="primary"
+                onClick={() => openForm({
+                  scene: "create",
+                  title: "新增分类",
+                  mode: "drawer",
+                  width: FORM_DRAWER_WIDTH
+                })}
+              >
                 新增分类
               </ActionButton>
             </PermissionGate>

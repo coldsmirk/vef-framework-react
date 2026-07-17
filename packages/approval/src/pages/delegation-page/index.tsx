@@ -23,6 +23,11 @@ export type { ApprovalDelegationPageProps } from "./props";
 
 type DelegationSceneValues = CrudBasicSceneFormValues<DelegationParams, DelegationParams>;
 
+const FORM_DRAWER_WIDTH = {
+  xxs: "100vw",
+  sm: 520
+};
+
 const { OperationButtonGroup: DelegationOperationButtonGroup, ActionButtonGroup: DelegationActionButtonGroup }
   = createCrudKit<Delegation, DelegationSearch, DelegationSceneValues>();
 
@@ -71,6 +76,7 @@ export function ApprovalDelegationPage({
       basicSearch={<DelegationSearchFields />}
       columnSettings={{ storageKey: columnStorageKey }}
       deleteMutationFn={api.remove}
+      formLayout={{ layout: "vertical" }}
       queryFn={api.findPage}
       renderForm={() => <DelegationForm />}
       rowKey="id"
@@ -91,7 +97,13 @@ export function ApprovalDelegationPage({
                     color="primary"
                     icon={<Icon component={EditIcon} />}
                     requiredPermissions={perms.update}
-                    onClick={() => openForm({ scene: "update", values: delegationToFormValues(row) })}
+                    onClick={() => openForm({
+                      scene: "update",
+                      values: delegationToFormValues(row),
+                      title: "编辑委托",
+                      mode: "drawer",
+                      width: FORM_DRAWER_WIDTH
+                    })}
                   >
                     编辑
                   </OperationButton>
@@ -126,7 +138,16 @@ export function ApprovalDelegationPage({
         <DelegationActionButtonGroup selector={s => [s.openForm] as const}>
           {([openForm]) => (
             <PermissionGate requiredPermissions={perms.create}>
-              <ActionButton icon={<Icon component={PlusIcon} />} type="primary" onClick={() => openForm({ scene: "create" })}>
+              <ActionButton
+                icon={<Icon component={PlusIcon} />}
+                type="primary"
+                onClick={() => openForm({
+                  scene: "create",
+                  title: "新增委托",
+                  mode: "drawer",
+                  width: FORM_DRAWER_WIDTH
+                })}
+              >
                 新增委托
               </ActionButton>
             </PermissionGate>

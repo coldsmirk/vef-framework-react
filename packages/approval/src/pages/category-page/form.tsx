@@ -86,13 +86,13 @@ export function CategoryForm({ treeOptions }: CategoryFormProps) {
 
       <Grid.Item span={12}>
         <AppField name="sortOrder">
-          {field => <field.InputNumber label="排序" min={0} placeholder="数字越小越靠前" style={{ width: "100%" }} />}
+          {field => <field.InputNumber extra="数字越小越靠前" label="排序" min={0} style={{ width: "100%" }} />}
         </AppField>
       </Grid.Item>
 
       <Grid.Item span={24}>
         <AppField name="remark">
-          {field => <field.TextArea label="备注" maxLength={500} placeholder="备注（可选）" rows={2} />}
+          {field => <field.TextArea label="备注" maxLength={500} placeholder="补充说明（可选）" rows={2} />}
         </AppField>
       </Grid.Item>
 
