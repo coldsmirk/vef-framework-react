@@ -1,7 +1,7 @@
 import type { EditableColumn } from "@vef-framework-react/components";
 
 import { createEditableColumn, EditableTable } from "@vef-framework-react/components";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 interface ParamRow {
   id: string;
@@ -39,28 +39,51 @@ function sameRecord(a: Record<string, string>, b: Record<string, string>): boole
   return keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
 }
 
-const columns: Array<EditableColumn<ParamRow>> = [
-  createEditableColumn<ParamRow>("key", {
-    title: "参数名",
-    renderEditor: field => <field.Input noWrapper placeholder="参数名" />
-  }),
-  createEditableColumn<ParamRow>("value", {
-    title: "参数值",
-    renderEditor: field => <field.Input noWrapper placeholder="参数值" />
-  })
-];
-
 export interface ParamsEditorProps {
   value?: Record<string, string> | null;
   onChange?: (value: Record<string, string>) => void;
+  /**
+   * Column header for the key column, defaults to 参数名.
+   */
+  nameTitle?: string;
+  /**
+   * Column header for the value column, defaults to 参数值.
+   */
+  valueTitle?: string;
+  /**
+   * Placeholder of the key editor, defaults to the key column header.
+   */
+  namePlaceholder?: string;
+  /**
+   * Placeholder of the value editor, defaults to the value column header.
+   */
+  valuePlaceholder?: string;
 }
 
 // A key-value editor over a `Record<string, string>`, bridging it to the
 // array-shaped EditableTable with synthetic row ids.
-export function ParamsEditor({ value, onChange }: ParamsEditorProps) {
+export function ParamsEditor({
+  value,
+  onChange,
+  nameTitle = "参数名",
+  valueTitle = "参数值",
+  namePlaceholder,
+  valuePlaceholder
+}: ParamsEditorProps) {
   const [rows, setRows] = useState<ParamRow[]>(() => toRows(value ?? {}));
   const seq = useRef(0);
   const synced = useRef<Record<string, string>>(value ?? EMPTY_RECORD);
+
+  const columns = useMemo<Array<EditableColumn<ParamRow>>>(() => [
+    createEditableColumn<ParamRow>("key", {
+      title: nameTitle,
+      renderEditor: field => <field.Input noWrapper placeholder={namePlaceholder ?? nameTitle} />
+    }),
+    createEditableColumn<ParamRow>("value", {
+      title: valueTitle,
+      renderEditor: field => <field.Input noWrapper placeholder={valuePlaceholder ?? valueTitle} />
+    })
+  ], [nameTitle, valueTitle, namePlaceholder, valuePlaceholder]);
 
   // Resync when the parent replaces `value` externally (form reset, loading a
   // record, a programmatic set). Edits made here round-trip through

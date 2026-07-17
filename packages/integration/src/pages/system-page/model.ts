@@ -1,6 +1,6 @@
 import type { System, SystemParams } from "../../types";
 
-import { INBOUND_AUTH_SCHEME_LABELS, OUTBOUND_AUTH_SCHEME_LABELS } from "../../components";
+import { INBOUND_AUTH_SCHEME_LABELS, OUTBOUND_AUTH_SCHEME_LABELS, pruneAuthParams } from "../../components";
 import { INBOUND_AUTH_SCHEMES, OUTBOUND_AUTH_SCHEMES } from "../../types";
 
 interface DataSourceFormValues {
@@ -137,7 +137,7 @@ export function systemFormToParams(values: SystemFormValues): SystemParams {
     isEnabled: values.isEnabled,
     outboundAuth: {
       scheme: values.outboundAuth.scheme,
-      params: values.outboundAuth.params,
+      params: pruneAuthParams("outbound", values.outboundAuth.scheme, values.outboundAuth.params),
       script: values.outboundAuth.scheme === "script" ? values.outboundAuth.script : undefined
     },
     outboundEnvelope: hasEnvelope
@@ -146,7 +146,7 @@ export function systemFormToParams(values: SystemFormValues): SystemParams {
     inboundAuth: values.inboundEnabled
       ? {
           scheme: values.inboundAuth.scheme,
-          params: values.inboundAuth.params,
+          params: pruneAuthParams("inbound", values.inboundAuth.scheme, values.inboundAuth.params),
           script: values.inboundAuth.scheme === "script" ? values.inboundAuth.script : undefined
         }
       : null,
@@ -243,22 +243,22 @@ export const INBOUND_AUTH_SCHEME_OPTIONS = INBOUND_AUTH_SCHEMES.map(scheme => {
 });
 
 export const OUTBOUND_AUTH_HINTS: Record<string, string> = {
-  none: "无需参数",
-  http_basic: "需要参数：username、password",
-  bearer: "需要参数：token",
-  header: "每个参数即一个凭据请求头（名称 → 值），可配多组",
-  query: "每个参数即一个凭据查询参数（名称 → 值），可配多组",
-  signature: "需要参数：appId、secret（hex）；按框架 HMAC 约定签名",
+  none: "不附加任何凭证",
+  http_basic: "以 Authorization: Basic 随请求发送",
+  bearer: "以 Authorization: Bearer 随请求发送",
+  header: "把配置的每一组名值对作为请求头附加",
+  query: "把配置的每一组名值对作为查询参数附加",
+  signature: "按框架 HMAC 约定签名（x-timestamp / x-nonce / x-signature）",
   script: "在下方脚本中编写签名逻辑，返回需追加的凭据请求头"
 };
 
 export const INBOUND_AUTH_HINTS: Record<string, string> = {
   none: "公开：任何来源都可投递，请谨慎使用",
-  ip: "需要参数：whitelist（逗号分隔的 IP / CIDR）",
-  http_basic: "需要参数：username、password",
-  bearer: "需要参数：token",
-  header: "每个参数即一对期望请求头（名称 → 值），需全部匹配",
-  query: "每个参数即一对期望查询参数（名称 → 值），需全部匹配",
-  signature: "需要参数：secret（hex）",
+  ip: "仅放行白名单中的来源地址",
+  http_basic: "校验 Authorization: Basic 凭证",
+  bearer: "校验 Authorization: Bearer 令牌",
+  header: "请求头须携带全部配置项且逐一匹配",
+  query: "查询参数须携带全部配置项且逐一匹配",
+  signature: "按框架 HMAC 约定验签，带时间戳与随机数防重放",
   script: "在下方脚本中编写验证逻辑，返回真值即放行"
 };

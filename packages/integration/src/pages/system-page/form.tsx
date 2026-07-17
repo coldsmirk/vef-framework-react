@@ -5,7 +5,7 @@ import type { SystemFormValues } from "./model";
 import { globalCssVars, Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
-import { FormSection, Labeled, ParamsEditor } from "../../components";
+import { AuthParamsFields, FormSection, Labeled, ParamsEditor } from "../../components";
 import {
   DATA_SOURCE_MODE_OPTIONS,
   DB_KIND_OPTIONS,
@@ -34,7 +34,7 @@ function BasicSection({ scene }: { scene: CrudBasicFormScene }) {
 
         <Grid.Item span={12}>
           <AppField name="name" validators={{ onBlur: nameSchema }}>
-            {field => <field.Input required label="系统名称" />}
+            {field => <field.Input required label="系统名称" placeholder="如 东区 HIS" />}
           </AppField>
         </Grid.Item>
 
@@ -54,7 +54,7 @@ function BasicSection({ scene }: { scene: CrudBasicFormScene }) {
           <AppField name="params">
             {field => (
               <Labeled hint="非敏感，脚本可通过 system.params 读取" label="系统参数">
-                <ParamsEditor value={field.state.value} onChange={field.handleChange} />
+                <ParamsEditor namePlaceholder="如 branchCode" value={field.state.value} onChange={field.handleChange} />
               </Labeled>
             )}
           </AppField>
@@ -88,17 +88,18 @@ function OutboundAuthSection() {
 
         <Grid.Item span={24}>
           <form.Subscribe selector={state => state.values.outboundAuth.scheme}>
-            {scheme => scheme === "none"
-              ? null
-              : (
-                  <form.AppField name="outboundAuth.params">
-                    {field => (
-                      <Labeled label="认证参数">
-                        <ParamsEditor value={field.state.value} onChange={field.handleChange} />
-                      </Labeled>
-                    )}
-                  </form.AppField>
+            {scheme => (
+              <form.AppField name="outboundAuth.params">
+                {field => (
+                  <AuthParamsFields
+                    direction="outbound"
+                    scheme={scheme}
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
                 )}
+              </form.AppField>
+            )}
           </form.Subscribe>
         </Grid.Item>
 
@@ -107,7 +108,15 @@ function OutboundAuthSection() {
             {scheme => scheme === "script"
               ? (
                   <form.AppField name="outboundAuth.script">
-                    {field => <field.CodeEditor showLineNumbers height={200} label="签名脚本" language="javascript" />}
+                    {field => (
+                      <field.CodeEditor
+                        showLineNumbers
+                        height={200}
+                        label="签名脚本"
+                        language="javascript"
+                        placeholder="// 读取 request 与 params，返回需追加的凭据请求头对象"
+                      />
+                    )}
                   </form.AppField>
                 )
               : null}
@@ -151,6 +160,7 @@ function OutboundEnvelopeSection() {
                           height={180}
                           label="请求包裹脚本（request）"
                           language="javascript"
+                          placeholder="// 读取 request，返回改写后的 { method, path, headers, query, body }"
                         />
                       )}
                     </form.AppField>
@@ -165,6 +175,7 @@ function OutboundEnvelopeSection() {
                           height={180}
                           label="响应解包脚本（response）"
                           language="javascript"
+                          placeholder="// 读取 response，返回解包后的业务数据作为调用结果"
                         />
                       )}
                     </form.AppField>
@@ -206,17 +217,18 @@ function InboundSection() {
 
                   <Grid.Item span={24}>
                     <form.Subscribe selector={state => state.values.inboundAuth.scheme}>
-                      {scheme => scheme === "none"
-                        ? null
-                        : (
-                            <form.AppField name="inboundAuth.params">
-                              {field => (
-                                <Labeled label="验证参数">
-                                  <ParamsEditor value={field.state.value} onChange={field.handleChange} />
-                                </Labeled>
-                              )}
-                            </form.AppField>
+                      {scheme => (
+                        <form.AppField name="inboundAuth.params">
+                          {field => (
+                            <AuthParamsFields
+                              direction="inbound"
+                              scheme={scheme}
+                              value={field.state.value}
+                              onChange={field.handleChange}
+                            />
                           )}
+                        </form.AppField>
+                      )}
                     </form.Subscribe>
                   </Grid.Item>
 
@@ -225,7 +237,15 @@ function InboundSection() {
                       {scheme => scheme === "script"
                         ? (
                             <form.AppField name="inboundAuth.script">
-                              {field => <field.CodeEditor showLineNumbers height={200} label="验证脚本" language="javascript" />}
+                              {field => (
+                                <field.CodeEditor
+                                  showLineNumbers
+                                  height={200}
+                                  label="验证脚本"
+                                  language="javascript"
+                                  placeholder="// 读取 request 与 params，返回真值即放行"
+                                />
+                              )}
                             </form.AppField>
                           )
                         : null}
@@ -285,7 +305,7 @@ function DataSourceSection() {
                   </Grid.Item>
 
                   <Grid.Item span={16}>
-                    <form.AppField name="dataSource.host">{field => <field.Input label="Host" />}</form.AppField>
+                    <form.AppField name="dataSource.host">{field => <field.Input label="Host" placeholder="如 192.168.1.10" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={8}>
@@ -295,7 +315,7 @@ function DataSourceSection() {
                   </Grid.Item>
 
                   <Grid.Item span={8}>
-                    <form.AppField name="dataSource.user">{field => <field.Input label="用户名" />}</form.AppField>
+                    <form.AppField name="dataSource.user">{field => <field.Input label="用户名" placeholder="如 exchange_ro" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={8}>
@@ -303,19 +323,19 @@ function DataSourceSection() {
                   </Grid.Item>
 
                   <Grid.Item span={8}>
-                    <form.AppField name="dataSource.database">{field => <field.Input label="数据库" />}</form.AppField>
+                    <form.AppField name="dataSource.database">{field => <field.Input label="数据库" placeholder="如 his_exchange" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={12}>
-                    <form.AppField name="dataSource.schema">{field => <field.Input label="Schema" />}</form.AppField>
+                    <form.AppField name="dataSource.schema">{field => <field.Input label="Schema" placeholder="如 public" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={12}>
-                    <form.AppField name="dataSource.path">{field => <field.Input label="Path（SQLite）" />}</form.AppField>
+                    <form.AppField name="dataSource.path">{field => <field.Input label="Path（SQLite）" placeholder="如 /data/exchange.db" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={24}>
-                    <form.AppField name="dataSource.sslRootCert">{field => <field.TextArea label="SSL 根证书" rows={2} />}</form.AppField>
+                    <form.AppField name="dataSource.sslRootCert">{field => <field.TextArea label="SSL 根证书" placeholder="PEM 格式证书内容" rows={2} />}</form.AppField>
                   </Grid.Item>
                 </Grid>
               )

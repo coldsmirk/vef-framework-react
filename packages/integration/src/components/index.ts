@@ -1,3 +1,11 @@
+export {
+  AuthParamsFields,
+  pruneAuthParams,
+  resolveAuthParamsSpec,
+  type AuthParamFieldSpec,
+  type AuthParamsFieldsProps,
+  type AuthParamsSpec
+} from "./auth-params";
 export { useContractDirectory, useSystemDirectory, type Directory } from "./directory";
 export { FormSection, type FormSectionProps } from "./form-section";
 export { formatTimestamp } from "./format";
