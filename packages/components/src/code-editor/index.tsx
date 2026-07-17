@@ -151,6 +151,16 @@ const SIZE_FONT_SIZE: Record<Size, string> = {
   large: globalCssVars.fontSizeLg
 };
 
+// CodeMirror's base theme puts tooltips (autocomplete, lint, hover) at
+// z-index 500, while antd drawers and modals start at 1000 — an editor
+// mounted inside one would open its completion popup invisibly behind the
+// overlay. 1200 clears the overlay plus the popups antd nests above it.
+const tooltipLayerTheme = EditorView.theme({
+  ".cm-tooltip": {
+    zIndex: "1200"
+  }
+});
+
 function createSizeTheme(size: Size): Extension {
   return EditorView.theme({
     "&": {
@@ -390,6 +400,7 @@ export function CodeEditor({
   const mergedExtensions = useMemo<Extension[]>(
     () => [
       createSizeTheme(size),
+      tooltipLayerTheme,
       // Render tooltips (autocomplete, hover, lint) under `document.body` so they
       // escape this editor container's `overflow: hidden` rounded-corner clip
       // instead of being cut off at its edge. Skipped when there's no DOM (SSR).
