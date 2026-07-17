@@ -1,6 +1,6 @@
 import type { AddAssigneeType, RemovableAssignee, RollbackTarget } from "../../types";
 
-import { Input, Modal, Radio, Select, Stack, Text } from "@vef-framework-react/components";
+import { Input, Labeled, Modal, Radio, Select, Stack } from "@vef-framework-react/components";
 import { useEffect, useState } from "react";
 
 import { PrincipalSelect } from "../principal";
@@ -83,14 +83,11 @@ export function TransferModal({
       onOk={() => transferToId !== undefined && run(() => onConfirm(transferToId, opinion))}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>转办给</Text>
+        <Labeled label="转办给">
           <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
-        </Stack>
+        </Labeled>
 
-        <Stack gap={4}>
-          <Text>转办说明</Text>
-
+        <Labeled label="转办说明">
           <Input.TextArea
             maxLength={2000}
             placeholder="请输入转办说明（可选）"
@@ -98,7 +95,7 @@ export function TransferModal({
             value={opinion}
             onChange={event => setOpinion(event.target.value)}
           />
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -143,9 +140,7 @@ export function RollbackModal({
       onOk={() => targetNodeId !== undefined && run(() => onConfirm(targetNodeId, opinion))}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>回退至</Text>
-
+        <Labeled label="回退至">
           <Select
             placeholder="选择回退节点"
             style={{ width: "100%" }}
@@ -155,11 +150,9 @@ export function RollbackModal({
             })}
             onChange={setTargetNodeId}
           />
-        </Stack>
+        </Labeled>
 
-        <Stack gap={4}>
-          <Text>回退说明</Text>
-
+        <Labeled label="回退说明">
           <Input.TextArea
             maxLength={2000}
             placeholder="请输入回退说明（可选）"
@@ -167,7 +160,7 @@ export function RollbackModal({
             value={opinion}
             onChange={event => setOpinion(event.target.value)}
           />
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -220,14 +213,11 @@ export function AddAssigneeModal({
       }}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>加签人员</Text>
+        <Labeled label="加签人员">
           <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
-        </Stack>
+        </Labeled>
 
-        <Stack gap={4}>
-          <Text>加签方式</Text>
-
+        <Labeled label="加签方式">
           <Radio.Group
             value={addType}
             options={allowedTypes.map(type => {
@@ -241,7 +231,7 @@ export function AddAssigneeModal({
               }
             }}
           />
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -287,9 +277,7 @@ export function RemoveAssigneeModal({
       onOk={() => taskId !== undefined && run(() => onConfirm(taskId))}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>移除审批人</Text>
-
+        <Labeled hint="移除后该审批人不再参与本节点审批。" label="移除审批人">
           <Select
             placeholder="选择要移除的审批人"
             style={{ width: "100%" }}
@@ -304,9 +292,7 @@ export function RemoveAssigneeModal({
             })}
             onChange={setTaskId}
           />
-
-          <Text type="secondary">移除后该审批人不再参与本节点审批。</Text>
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -344,8 +330,9 @@ export function CCModal({
       onOk={() => userIds.length > 0 && run(() => onConfirm(userIds))}
     >
       <Stack gap={4} style={{ paddingBlock: 8 }}>
-        <Text>抄送给</Text>
-        <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
+        <Labeled label="抄送给">
+          <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
+        </Labeled>
       </Stack>
     </Modal>
   );
@@ -398,9 +385,7 @@ export function UrgeModal({
       onOk={() => taskId !== undefined && run(() => onConfirm(taskId, message))}
     >
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Stack gap={4}>
-          <Text>催办对象</Text>
-
+        <Labeled label="催办对象">
           <Select
             placeholder="选择待处理任务"
             style={{ width: "100%" }}
@@ -410,11 +395,9 @@ export function UrgeModal({
             })}
             onChange={setTaskId}
           />
-        </Stack>
+        </Labeled>
 
-        <Stack gap={4}>
-          <Text>催办消息</Text>
-
+        <Labeled label="催办消息">
           <Input.TextArea
             maxLength={500}
             placeholder="请输入催办消息（可选）"
@@ -422,7 +405,7 @@ export function UrgeModal({
             value={message}
             onChange={event => setMessage(event.target.value)}
           />
-        </Stack>
+        </Labeled>
       </Stack>
     </Modal>
   );

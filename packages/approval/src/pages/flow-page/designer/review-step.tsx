@@ -8,6 +8,7 @@ import {
   Flex,
   globalCssVars,
   Input,
+  Labeled,
   Stack,
   Switch,
   Table,
@@ -129,9 +130,7 @@ export function ReviewStep({
             {`流程图共 ${nodeCount} 个节点。提交将保存流程设置并部署为新版本；发布后新发起的审批立即走新版本，进行中的实例仍沿用其原版本。`}
           </Text>
 
-          <Stack gap={4}>
-            <Text>版本说明</Text>
-
+          <Labeled label="版本说明">
             <Input.TextArea
               maxLength={500}
               placeholder="本次变更说明（可选）"
@@ -139,7 +138,7 @@ export function ReviewStep({
               value={versionDescription}
               onChange={event => onVersionDescriptionChange(event.target.value)}
             />
-          </Stack>
+          </Labeled>
 
           <Flex align="center" gap="small">
             <Switch checked={publishNow} onChange={onPublishNowChange} />

@@ -1,6 +1,6 @@
 import type { DelegationParams } from "../../types";
 
-import { Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { Grid, Labeled, useFormContext } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
@@ -26,14 +26,9 @@ function UserField({
   const ids = useMemo(() => value ? [value] : [], [value]);
 
   return (
-    <Stack gap={4}>
-      <Text>
-        {required ? <Text type="danger">* </Text> : null}
-        {label}
-      </Text>
-
+    <Labeled label={label} required={required}>
       <PrincipalSelect kind="user" maxCount={1} value={ids} onChange={next => onChange(next[0])} />
-    </Stack>
+    </Labeled>
   );
 }
 
@@ -105,7 +100,7 @@ export function DelegationForm() {
 
       <Grid.Item span={24}>
         <AppField name="reason">
-          {field => <field.TextArea label="委托原因" maxLength={500} placeholder="委托原因（可选）" rows={2} />}
+          {field => <field.TextArea label="委托原因" maxLength={500} placeholder="如 休假期间由同事代审（可选）" rows={2} />}
         </AppField>
       </Grid.Item>
 

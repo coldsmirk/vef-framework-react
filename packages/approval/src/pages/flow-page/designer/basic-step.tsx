@@ -1,5 +1,4 @@
 import type { PrincipalKind } from "@vef-framework-react/approval-flow-editor";
-import type { ReactNode } from "react";
 
 import type { BusinessBindingConfig, InitiatorParams, InstanceStatus } from "../../../types";
 import type { CategoryTreeOption } from "../../category-page/form";
@@ -15,6 +14,7 @@ import {
   Icon,
   IconPicker,
   Input,
+  Labeled,
   Radio,
   Select,
   Stack,
@@ -26,31 +26,6 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { LabelsEditor, PrincipalSelect } from "../../../components";
 import { INSTANCE_STATUS_LABELS } from "../../../components/status/labels";
-
-/**
- * A labeled form row for the wizard's controlled inputs, matching the visual
- * rhythm of the framework's form items.
- */
-function Field({
-  label,
-  required,
-  hint,
-  children
-}: { label: string; required?: boolean; hint?: string; children: ReactNode }) {
-  return (
-    <Stack gap={4}>
-      <Text>
-        {required ? <Text type="danger">* </Text> : null}
-        {label}
-      </Text>
-
-      {children}
-
-      {hint !== undefined
-        && <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">{hint}</Text>}
-    </Stack>
-  );
-}
 
 const INITIATOR_KIND_OPTIONS: Array<{ label: string; value: PrincipalKind }> = [
   { label: "用户", value: "user" },
@@ -126,17 +101,17 @@ function BusinessBindingEditor({
     <Stack gap={12}>
       <Grid columnGap="small" rowGap={12}>
         <Grid.Item span={12}>
-          <Field required label="业务表名">
+          <Labeled required label="业务表名">
             <Input
               placeholder="如 biz_purchase_order"
               value={binding.tableName}
               onChange={event => onChange({ ...binding, tableName: event.target.value })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
 
         <Grid.Item span={12}>
-          <Field required hint="必须与业务表上的主键或唯一键完全一致" label="记录键列">
+          <Labeled required hint="必须与业务表上的主键或唯一键完全一致" label="记录键列">
             <Select<string[]>
               mode="tags"
               open={false}
@@ -145,47 +120,47 @@ function BusinessBindingEditor({
               value={binding.keyColumns}
               onChange={keyColumns => onChange({ ...binding, keyColumns })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
 
         <Grid.Item span={12}>
-          <Field required label="状态列">
+          <Labeled required label="状态列">
             <Input
               placeholder="如 approval_status"
               value={binding.statusColumn}
               onChange={event => onChange({ ...binding, statusColumn: event.target.value })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
 
         <Grid.Item span={12}>
-          <Field required hint="防止过期实例覆盖新一轮审批的写入" label="实例 ID 列">
+          <Labeled required hint="防止过期实例覆盖新一轮审批的写入" label="实例 ID 列">
             <Input
               placeholder="如 approval_instance_id"
               value={binding.instanceIdColumn ?? ""}
               onChange={event => onChange({ ...binding, instanceIdColumn: event.target.value || undefined })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
 
         <Grid.Item span={12}>
-          <Field label="开始时间列">
+          <Labeled label="开始时间列">
             <Input
               placeholder="可选"
               value={binding.startedAtColumn ?? ""}
               onChange={event => onChange({ ...binding, startedAtColumn: event.target.value || undefined })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
 
         <Grid.Item span={12}>
-          <Field label="完成时间列">
+          <Labeled label="完成时间列">
             <Input
               placeholder="可选"
               value={binding.finishedAtColumn ?? ""}
               onChange={event => onChange({ ...binding, finishedAtColumn: event.target.value || undefined })}
             />
-          </Field>
+          </Labeled>
         </Grid.Item>
       </Grid>
 
@@ -199,7 +174,7 @@ function BusinessBindingEditor({
               <Grid columnGap="small" rowGap={12}>
                 {PROJECTABLE_STATUSES.map(status => (
                   <Grid.Item key={status} span={8}>
-                    <Field label={INSTANCE_STATUS_LABELS[status]}>
+                    <Labeled label={INSTANCE_STATUS_LABELS[status]}>
                       <Input
                         placeholder={status}
                         value={binding.statusMapping?.[status] ?? ""}
@@ -215,7 +190,7 @@ function BusinessBindingEditor({
                           onChange({ ...binding, statusMapping: next });
                         }}
                       />
-                    </Field>
+                    </Labeled>
                   </Grid.Item>
                 ))}
               </Grid>
@@ -271,28 +246,28 @@ export function BasicStep({
       <Card title="基本信息">
         <Grid columnGap="small" rowGap={12}>
           <Grid.Item span={12}>
-            <Field required hint={isEditing ? "流程编码创建后不可修改" : "唯一标识，创建后不可修改"} label="流程编码">
+            <Labeled required hint={isEditing ? "流程编码创建后不可修改" : "唯一标识，创建后不可修改"} label="流程编码">
               <Input
                 disabled={isEditing}
                 placeholder="如 leave-request"
                 value={basic.code}
                 onChange={event => onBasicChange({ code: event.target.value })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={12}>
-            <Field required label="流程名称">
+            <Labeled required label="流程名称">
               <Input
                 placeholder="如 请假审批"
                 value={basic.name}
                 onChange={event => onBasicChange({ name: event.target.value })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={12}>
-            <Field required label="所属分类">
+            <Labeled required label="所属分类">
               <TreeSelect
                 placeholder="选择流程分类"
                 style={{ width: "100%" }}
@@ -300,11 +275,11 @@ export function BasicStep({
                 value={basic.categoryId || undefined}
                 onChange={categoryId => onBasicChange({ categoryId })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={12}>
-            <Field label="图标">
+            <Labeled label="图标">
               <IconPicker
                 allowClear
                 placeholder="选择图标（可选）"
@@ -312,11 +287,11 @@ export function BasicStep({
                 value={basic.icon}
                 onChange={icon => onBasicChange({ icon: icon ?? undefined })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={24}>
-            <Field
+            <Labeled
               required
               hint="支持 {{.flowName}} / {{.instanceNo}} / {{.applicantName}} / {{.formData.字段}} 模板变量"
               label="单据标题模板"
@@ -326,11 +301,11 @@ export function BasicStep({
                 value={basic.instanceTitleTemplate}
                 onChange={event => onBasicChange({ instanceTitleTemplate: event.target.value })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={24}>
-            <Field label="流程描述">
+            <Labeled label="流程描述">
               <Input.TextArea
                 maxLength={500}
                 placeholder="描述该流程的用途（可选）"
@@ -338,17 +313,17 @@ export function BasicStep({
                 value={basic.description ?? ""}
                 onChange={event => onBasicChange({ description: event.target.value || undefined })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
 
           <Grid.Item span={24}>
-            <Field hint="管理员可作为空审批人/超时的兜底处理人" label="流程管理员">
+            <Labeled hint="管理员可作为空审批人/超时的兜底处理人" label="流程管理员">
               <PrincipalSelect
                 kind="user"
                 value={basic.adminUserIds}
                 onChange={adminUserIds => onBasicChange({ adminUserIds })}
               />
-            </Field>
+            </Labeled>
           </Grid.Item>
         </Grid>
       </Card>

@@ -13,6 +13,7 @@ import {
   globalCssVars,
   Icon,
   Input,
+  Labeled,
   showSuccessMessage,
   showWarningMessage,
   Space,
@@ -452,12 +453,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
           }}
         >
           {canDecide && (
-            <Stack gap={4}>
-              <Text strong>
-                审批意见
-                {myTask?.isOpinionRequired ? <Text type="danger">（必填）</Text> : null}
-              </Text>
-
+            <Labeled label="审批意见" required={myTask?.isOpinionRequired === true}>
               <Input.TextArea
                 maxLength={2000}
                 placeholder="请输入审批意见"
@@ -465,7 +461,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
                 value={opinion}
                 onChange={event => setOpinion(event.target.value)}
               />
-            </Stack>
+            </Labeled>
           )}
 
           <Flex align="center" gap="small" wrap="wrap">
