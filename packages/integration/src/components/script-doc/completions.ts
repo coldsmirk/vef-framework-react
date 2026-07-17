@@ -6,11 +6,10 @@ import type { Direction } from "../../types";
  * Completion catalogs for every integration script surface, mirroring the
  * bindings and capability libraries the Go runtime actually installs
  * (`internal/integration/exec` + `internal/integration/auth` + the js engine
- * baseline). Keep them in lockstep with the backend — and with the human
- * summaries in `ScriptBindingHints`.
+ * baseline). Keep them in lockstep with the backend.
  */
 
-const HTTP_RESPONSE_DOC = "返回响应对象：status / statusText / ok / url / redirected / headers / body / text() / json() / arrayBuffer()";
+const HTTP_RESPONSE_DOC = "返回响应对象：status / statusText / ok / url / headers / body / text() / json() / arrayBuffer()";
 
 const SYSTEM_BINDING: CompletionEntry = {
   label: "system",
@@ -46,7 +45,7 @@ const HTTP_LIB: CompletionEntry = {
       label: "fetch",
       type: "function",
       detail: "(path, options?)",
-      info: `发起请求。options：method / headers / query / body / redirect / timeout / envelope。${HTTP_RESPONSE_DOC}`
+      info: `发起请求。options：method / headers / query / body / timeout / envelope。${HTTP_RESPONSE_DOC}`
     },
     {
       label: "get",
@@ -458,10 +457,6 @@ const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: CompletionEntry[] = [
         type: "property"
       },
       {
-        label: "redirected",
-        type: "property"
-      },
-      {
         label: "headers",
         type: "property"
       },
@@ -582,7 +577,7 @@ export const OUTBOUND_ADAPTER_SCRIPT_DOC: ScriptDoc = {
  * Inbound adapter scripts.
  */
 export const INBOUND_ADAPTER_SCRIPT_DOC: ScriptDoc = {
-  summary: "把外部系统的原始请求译成契约调度：dispatch(input) 执行业务处理器；顶层 return 的值即回给外部系统的响应。",
+  summary: "把外部系统的原始请求译成契约调度：dispatch(input) 执行业务处理器；顶层 return 的值即回给外部系统的响应，return { $response: { status, headers, body } } 可直接控制原始 HTTP 回复。",
   entries: INBOUND_ADAPTER_SCRIPT_COMPLETIONS
 };
 
