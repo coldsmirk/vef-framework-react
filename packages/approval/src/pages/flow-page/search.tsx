@@ -1,9 +1,7 @@
 import type { FlowSearch } from "../../types";
 import type { CategoryTreeOption } from "../category-page/form";
 
-import { Select, useFormContext } from "@vef-framework-react/components";
-
-import { LabelFilterSelect } from "../../components";
+import { LabelFilterSelect, Select, useFormContext } from "@vef-framework-react/components";
 
 /**
  * The inline search fields for the flow list. Label filters are typed as

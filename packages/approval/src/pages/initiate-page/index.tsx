@@ -7,6 +7,7 @@ import {
   Flex,
   globalCssVars,
   Input,
+  LabelFilterSelect,
   Page,
   Pagination,
   Spin,
@@ -19,7 +20,6 @@ import { keepPreviousData, useQuery } from "@vef-framework-react/core";
 import { useMemo, useState } from "react";
 
 import { useMyApprovalApi } from "../../api";
-import { LabelFilterSelect } from "../../components";
 import { FlowIcon } from "../../components/icon";
 import { StartInstanceDrawer } from "./start-drawer";
 

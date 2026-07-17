@@ -9,14 +9,13 @@ import {
   globalCssVars,
   Input,
   Labeled,
+  LabelsDisplay,
   Stack,
   Switch,
   Table,
   Tag,
   Text
 } from "@vef-framework-react/components";
-
-import { LabelsDisplay } from "../../../components";
 
 export interface ReviewStepProps {
   draft: FlowDraft;

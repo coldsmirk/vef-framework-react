@@ -162,6 +162,18 @@ export { Input, type InputProps, type InputRef, type OTPProps, type PasswordProp
 export { InputNumber, type InputNumberProps } from "./input-number";
 export { Keyboard, type KeyboardProps } from "./keyboard";
 export { Labeled, type LabeledProps } from "./labeled";
+export {
+  formatLabelFilters,
+  isValidLabel,
+  LABEL_KEY_PATTERN,
+  LabelFilterSelect,
+  LabelsDisplay,
+  LabelsEditor,
+  parseLabelFilters,
+  type LabelFilterSelectProps,
+  type LabelsDisplayProps,
+  type LabelsEditorProps
+} from "./labels";
 export { List, type ListGridType, type ListItemMetaProps, type ListItemProps, type ListProps } from "./list";
 export { Loader, type LoaderProps } from "./loader";
 export { LogoIcon, type LogoIconProps } from "./logo-icon";

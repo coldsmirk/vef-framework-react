@@ -9,18 +9,6 @@ export { InstanceDetailDrawer, type InstanceDetailDrawerProps } from "./detail/d
 export { InstanceFlowGraphViewer, type InstanceFlowGraphViewerProps } from "./flow-graph";
 export { InstanceFormPanel, type InstanceFormPanelProps } from "./form-panel";
 export { formatDurationSeconds, formatTimestamp } from "./format";
-export {
-  FLOW_LABEL_KEY_PATTERN,
-  formatLabelFilters,
-  isValidFlowLabel,
-  LabelFilterSelect,
-  LabelsDisplay,
-  LabelsEditor,
-  parseLabelFilters,
-  type LabelFilterSelectProps,
-  type LabelsDisplayProps,
-  type LabelsEditorProps
-} from "./labels";
 export { PrincipalSelect, type PrincipalSelectProps } from "./principal";
 export { InstanceStatusTag, NodeProgressTag, ProjectionStatusTag, TaskStatusTag, VersionStatusTag } from "./status";
 export {

@@ -14,6 +14,7 @@ import {
   Icon,
   Input,
   Labeled,
+  LabelsDisplay,
   showSuccessMessage,
   showWarningMessage,
   Space,
@@ -43,7 +44,6 @@ import { useApprovalPlugins } from "../../plugins";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
-import { LabelsDisplay } from "../labels";
 import { InstanceStatusTag } from "../status";
 import { InstanceTimeline } from "../timeline";
 import { UserLabel } from "../user";

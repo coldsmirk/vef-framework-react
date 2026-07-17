@@ -1,27 +1,36 @@
 import type { CSSProperties } from "react";
 
-import { Button, Compact, Icon, Input, Select, Space, Stack, Tag, Text } from "@vef-framework-react/components";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "../button";
+import { Compact } from "../compact";
+import { Icon } from "../icon";
+import { Input } from "../input";
+import { Select } from "../select";
+import { Space } from "../space";
+import { Stack } from "../stack";
+import { Tag } from "../tag";
+import { Text } from "../typography";
+
 /**
- * The key charset the backend accepts for flow labels
- * (`validateFlowLabels`): a dotted or otherwise out-of-charset key would be
- * stored but silently never match the equality filter, so the editor
- * validates it client-side too.
+ * The key charset the backend accepts for labels (`orm.ValidateLabels`,
+ * shared by approval flow labels and integration contract labels): a dotted
+ * or otherwise out-of-charset key would be stored but silently never match
+ * the equality filter, so the editor validates it client-side too.
  */
-export const FLOW_LABEL_KEY_PATTERN = /^[A-Z0-9](?:[\w-]*[A-Z0-9])?$/i;
+export const LABEL_KEY_PATTERN = /^[A-Z0-9](?:[\w-]*[A-Z0-9])?$/i;
 
 const MAX_LABEL_KEY_LENGTH = 63;
 const MAX_LABEL_VALUE_LENGTH = 256;
 
 /**
- * Client-side mirror of the backend flow-label validation: key charset and
- * length, value length (in characters, matching the backend's rune count).
+ * Client-side mirror of the backend label validation: key charset and length,
+ * value length (in characters, matching the backend's rune count).
  */
-export function isValidFlowLabel(key: string, value: string): boolean {
+export function isValidLabel(key: string, value: string): boolean {
   return key.length <= MAX_LABEL_KEY_LENGTH
-    && FLOW_LABEL_KEY_PATTERN.test(key)
+    && LABEL_KEY_PATTERN.test(key)
     && [...value].length <= MAX_LABEL_VALUE_LENGTH;
 }
 
@@ -60,7 +69,7 @@ export interface LabelsEditorProps {
 }
 
 /**
- * A key-value editor for flow labels. Emits a plain `Record<string, string>`;
+ * A key-value editor for labels. Emits a plain `Record<string, string>`;
  * rows with an empty key are kept locally but excluded from the emitted map,
  * and out-of-charset keys are flagged inline (the backend rejects them at
  * save with the same rule).
@@ -100,7 +109,7 @@ export function LabelsEditor({
   return (
     <Stack gap={8} style={{ width: "100%" }}>
       {rows.map((row, index) => {
-        const invalid = row.key !== "" && !isValidFlowLabel(row.key, row.value);
+        const invalid = row.key !== "" && !isValidLabel(row.key, row.value);
 
         return (
           // Index keys keep focus stable while the key text is being edited.
@@ -133,7 +142,7 @@ export function LabelsEditor({
         );
       })}
 
-      {rows.some(row => row.key !== "" && !isValidFlowLabel(row.key, row.value))
+      {rows.some(row => row.key !== "" && !isValidLabel(row.key, row.value))
         && <Text type="danger">标签键只能包含字母、数字、中划线和下划线，且必须以字母或数字开头和结尾。</Text>}
 
       <Button
@@ -185,7 +194,8 @@ export interface LabelFilterSelectProps {
 
 /**
  * A compact label-filter input: pairs typed as `key=value` tags, emitted as
- * the equality-filter map the flow list queries accept (AND-combined).
+ * the equality-filter map the label-carrying list queries accept
+ * (AND-combined).
  */
 export function LabelFilterSelect({
   value,
@@ -213,7 +223,7 @@ export interface LabelsDisplayProps {
 }
 
 /**
- * Flow labels as compact `key: value` tags (`key` alone when the value is an
+ * Labels as compact `key: value` tags (`key` alone when the value is an
  * empty presence flag).
  */
 export function LabelsDisplay({ labels }: LabelsDisplayProps) {

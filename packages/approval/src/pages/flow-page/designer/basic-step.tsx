@@ -15,6 +15,7 @@ import {
   IconPicker,
   Input,
   Labeled,
+  LabelsEditor,
   Radio,
   Select,
   Stack,
@@ -24,7 +25,7 @@ import {
 } from "@vef-framework-react/components";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
-import { LabelsEditor, PrincipalSelect } from "../../../components";
+import { PrincipalSelect } from "../../../components";
 import { INSTANCE_STATUS_LABELS } from "../../../components/status/labels";
 
 const INITIATOR_KIND_OPTIONS: Array<{ label: string; value: PrincipalKind }> = [

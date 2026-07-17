@@ -3,9 +3,9 @@ import type { TableColumn } from "@vef-framework-react/components";
 import type { Flow } from "../../types";
 import type { CategoryTreeOption } from "../category-page/form";
 
-import { Flex, Tag, Text } from "@vef-framework-react/components";
+import { Flex, LabelsDisplay, Tag, Text } from "@vef-framework-react/components";
 
-import { formatTimestamp, LabelsDisplay } from "../../components";
+import { formatTimestamp } from "../../components";
 import { FlowIcon } from "../../components/icon";
 
 /**
