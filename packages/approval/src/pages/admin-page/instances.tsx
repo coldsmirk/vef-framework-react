@@ -114,7 +114,7 @@ export function InstancesPanel({ detailPermission, terminatePermission }: Instan
         rowKey="instanceId"
         tableColumns={COLUMNS}
         operationColumn={{
-          width: 150,
+          width: 160,
           render(row) {
             return (
               <>

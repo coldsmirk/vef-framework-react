@@ -50,6 +50,7 @@ export function IntegrationAdapterPage({
       tableColumns={columns}
       title={title}
       operationColumn={{
+        width: 160,
         render(row) {
           return (
             <AdapterOperationButtonGroup selector={s => [s.openForm, s.delete, s.refetchQuery] as const}>

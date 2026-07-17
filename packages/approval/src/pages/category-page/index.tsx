@@ -89,7 +89,7 @@ export function ApprovalCategoryPage({
         update: api.update
       }}
       operationColumn={{
-        width: 150,
+        width: 160,
         render(row) {
           return (
             <CategoryOperationButtonGroup selector={s => [s.openForm, s.delete, s.refetchQuery] as const}>

@@ -47,6 +47,7 @@ export function IntegrationContractPage({
       tableColumns={contractColumns}
       title={title}
       operationColumn={{
+        width: 160,
         render(row) {
           return (
             <ContractOperationButtonGroup selector={s => [s.openForm, s.delete, s.refetchQuery] as const}>

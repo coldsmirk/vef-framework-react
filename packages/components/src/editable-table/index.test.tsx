@@ -243,7 +243,7 @@ describe("EditableTable", () => {
     it("defaults to a fixed width so the actions never stretch", () => {
       const { container } = render(<Harness />);
 
-      expect(operationCol(container), "operation column should default to 150px").toHaveStyle({ width: "150px" });
+      expect(operationCol(container), "operation column should default to 160px").toHaveStyle({ width: "160px" });
     });
 
     it("honors an explicit operationColumn.width override", () => {

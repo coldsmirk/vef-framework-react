@@ -46,6 +46,7 @@ export function IntegrationRoutePage({
       tableColumns={columns}
       title={title}
       operationColumn={{
+        width: 160,
         render(row) {
           return (
             <RouteOperationButtonGroup selector={s => [s.openForm, s.delete, s.refetchQuery] as const}>

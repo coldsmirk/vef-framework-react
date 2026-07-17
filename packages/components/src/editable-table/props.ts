@@ -15,7 +15,7 @@ export interface EditableOperationColumnConfig {
    */
   title?: ReactNode;
   /**
-   * Column width. Defaults to a fixed 150px that comfortably fits the built-in
+   * Column width. Defaults to a fixed 160px that comfortably fits the built-in
    * action pair; widen it when `renderRowActions` adds extra actions.
    */
   width?: Length;

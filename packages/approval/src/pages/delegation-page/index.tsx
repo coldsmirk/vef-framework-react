@@ -87,7 +87,7 @@ export function ApprovalDelegationPage({
         update: api.update
       }}
       operationColumn={{
-        width: 150,
+        width: 160,
         render(row) {
           return (
             <DelegationOperationButtonGroup selector={s => [s.openForm, s.delete, s.refetchQuery] as const}>
