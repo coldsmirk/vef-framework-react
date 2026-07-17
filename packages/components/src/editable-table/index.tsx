@@ -34,6 +34,11 @@ function toPredicate<TRow extends AnyObject>(
   return () => resolved;
 }
 
+// Comfortably fits the widest built-in action pair (保存/取消 or 编辑/删除);
+// without a fixed width the flexing table hands the operation column any
+// leftover space. Callers stacking extra actions override it per table.
+const DEFAULT_OPERATION_COLUMN_WIDTH = 150;
+
 function EditableTableInner<TRow extends AnyObject>({
   value,
   onChange,
@@ -66,7 +71,7 @@ function EditableTableInner<TRow extends AnyObject>({
         extra: renderRowActions,
         texts: operationColumn?.texts,
         title: operationColumn?.title,
-        width: operationColumn?.width
+        width: operationColumn?.width ?? DEFAULT_OPERATION_COLUMN_WIDTH
       };
     },
     [deletablePredicate, editablePredicate, operationColumn, renderRowActions]

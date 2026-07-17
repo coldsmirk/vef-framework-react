@@ -10,8 +10,18 @@ import type { EditableColumn } from "./types";
  * Overrides for the appended operation column.
  */
 export interface EditableOperationColumnConfig {
+  /**
+   * Column header, defaults to "操作".
+   */
   title?: ReactNode;
+  /**
+   * Column width. Defaults to a fixed 150px that comfortably fits the built-in
+   * action pair; widen it when `renderRowActions` adds extra actions.
+   */
   width?: Length;
+  /**
+   * Custom labels for the built-in row action buttons.
+   */
   texts?: EditableRowActionsTexts;
 }
 

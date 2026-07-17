@@ -81,6 +81,13 @@ function rowOf(text: string): HTMLElement {
   return screen.getByText(text).closest("tr")!;
 }
 
+function operationCol(container: HTMLElement): HTMLTableColElement {
+  const cols = container.querySelectorAll<HTMLTableColElement>(":scope colgroup col");
+  expect(cols.length, "the table should render a colgroup entry per column").toBeGreaterThan(0);
+
+  return cols.item(cols.length - 1);
+}
+
 describe("EditableTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -229,6 +236,20 @@ describe("EditableTable", () => {
       await user.click(within(row1).getByRole("button", { name: label("编辑") }));
 
       expect(within(row1).getByRole("textbox")).toHaveValue("Edward");
+    });
+  });
+
+  describe("operation column width", () => {
+    it("defaults to a fixed width so the actions never stretch", () => {
+      const { container } = render(<Harness />);
+
+      expect(operationCol(container), "operation column should default to 150px").toHaveStyle({ width: "150px" });
+    });
+
+    it("honors an explicit operationColumn.width override", () => {
+      const { container } = render(<Harness operationColumn={{ width: 220 }} />);
+
+      expect(operationCol(container), "operation column should use the configured width").toHaveStyle({ width: "220px" });
     });
   });
 });
