@@ -36,6 +36,32 @@ describe("contract model", () => {
     expect(params.outputSchema).toBeNull();
   });
 
+  it("carries labels through the form round-trip", () => {
+    const row: Contract = {
+      id: "1",
+      code: "c",
+      name: "n",
+      isEnabled: true,
+      labels: { scene: "inspection", mobile: "" }
+    };
+
+    const values = contractToFormValues(row);
+
+    expect(values.labels).toEqual({ scene: "inspection", mobile: "" });
+    expect(formValuesToParams(values).labels).toEqual({ scene: "inspection", mobile: "" });
+  });
+
+  it("defaults missing labels to an empty map", () => {
+    const row: Contract = {
+      id: "1",
+      code: "c",
+      name: "n",
+      isEnabled: true
+    };
+
+    expect(contractToFormValues(row).labels).toEqual({});
+  });
+
   it("round-trips a contract without losing schema content", () => {
     const row: Contract = {
       id: "1",

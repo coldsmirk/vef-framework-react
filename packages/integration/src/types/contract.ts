@@ -14,6 +14,10 @@ export interface Contract extends FullAudited {
   code: string;
   name: string;
   description?: string | null;
+  /**
+   * Host-owned selection metadata; the engine stores and filters, never interprets.
+   */
+  labels?: Record<string, string> | null;
   inputSchema?: JsonSchema | null;
   outputSchema?: JsonSchema | null;
   isEnabled: boolean;
@@ -27,6 +31,7 @@ export interface ContractParams {
   code: string;
   name: string;
   description?: string | null;
+  labels?: Record<string, string>;
   inputSchema?: JsonSchema | null;
   outputSchema?: JsonSchema | null;
   isEnabled: boolean;
@@ -39,4 +44,8 @@ export interface ContractSearch {
   code?: string;
   name?: string;
   isEnabled?: boolean;
+  /**
+   * Equality filter: every pair must match (unlabeled contracts never match).
+   */
+  labels?: Record<string, string>;
 }

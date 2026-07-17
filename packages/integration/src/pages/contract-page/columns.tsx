@@ -2,7 +2,7 @@ import type { TableColumn } from "@vef-framework-react/components";
 
 import type { Contract, JsonObject } from "../../types";
 
-import { globalCssVars, Stack, Tag, Text } from "@vef-framework-react/components";
+import { Flex, globalCssVars, Stack, Tag, Text } from "@vef-framework-react/components";
 
 import { EnabledTag, formatTimestamp } from "../../components";
 
@@ -23,6 +23,20 @@ function renderSchemaState(value: JsonObject | null | undefined) {
   return value ? <Tag color="blue">已配置</Tag> : <Tag color="default">未配置</Tag>;
 }
 
+function renderLabels(value: Record<string, string> | null | undefined) {
+  const entries = Object.entries(value ?? {});
+
+  if (entries.length === 0) {
+    return <Text type="secondary">-</Text>;
+  }
+
+  return (
+    <Flex gap={4} wrap="wrap">
+      {entries.map(([key, val]) => <Tag key={key} style={{ marginInlineEnd: 0 }}>{val ? `${key}=${val}` : key}</Tag>)}
+    </Flex>
+  );
+}
+
 export const contractColumns: Array<TableColumn<Contract>> = [
   {
     title: "契约",
@@ -34,6 +48,12 @@ export const contractColumns: Array<TableColumn<Contract>> = [
     title: "描述",
     dataIndex: "description",
     render: renderDescription
+  },
+  {
+    title: "标签",
+    dataIndex: "labels",
+    width: 200,
+    render: renderLabels
   },
   {
     title: "输入 Schema",

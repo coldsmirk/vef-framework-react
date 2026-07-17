@@ -1,4 +1,4 @@
-import type { Contract, System } from "../../types";
+import type { Contract, ContractSearch, System } from "../../types";
 
 import { createApiRequest, useApiClient, useQuery } from "@vef-framework-react/core";
 import { useMemo } from "react";
@@ -21,19 +21,19 @@ export interface Directory<T extends DirectoryEntry> {
   loading: boolean;
 }
 
-function useDirectory<T extends DirectoryEntry>(resource: string, key: string): Directory<T> {
+function useDirectory<T extends DirectoryEntry>(resource: string, key: string, search?: object): Directory<T> {
   const apiClient = useApiClient();
 
   const queryFn = useMemo(
-    () => apiClient.createQueryFn<T[]>(key, ({ post }) => async () => {
-      const result = await post<T[]>(API_PATH, { data: createApiRequest(resource, "find_all", {}) });
+    () => apiClient.createQueryFn<T[], object>(key, ({ post }) => async queryParams => {
+      const result = await post<T[]>(API_PATH, { data: createApiRequest(resource, "find_all", queryParams ?? {}) });
 
       return result.data;
     }),
     [apiClient, resource, key]
   );
 
-  const { data, isLoading } = useQuery({ queryFn, queryKey: [queryFn.key] });
+  const { data, isLoading } = useQuery({ queryFn, queryKey: [queryFn.key, search ?? {}] });
 
   return useMemo(() => {
     const items = data ?? [];
@@ -55,8 +55,11 @@ export function useSystemDirectory(): Directory<System> {
 }
 
 /**
- * All contracts, for select options and id→contract lookups.
+ * Contracts for select options and id→contract lookups, optionally narrowed
+ * by search filters — a business-side picker passes `{ labels: {...} }` to
+ * offer only the contracts tagged for its scene. Pass a stable reference
+ * (module constant or memoized), not a fresh object literal each render.
  */
-export function useContractDirectory(): Directory<Contract> {
-  return useDirectory<Contract>("integration/contract", "integration_contract_find_all");
+export function useContractDirectory(search?: ContractSearch): Directory<Contract> {
+  return useDirectory<Contract>("integration/contract", "integration_contract_find_all", search);
 }

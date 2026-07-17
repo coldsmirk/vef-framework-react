@@ -10,6 +10,7 @@ export interface ContractFormValues {
   code: string;
   name: string;
   description?: string | null;
+  labels: Record<string, string>;
   inputSchema: string;
   outputSchema: string;
   isEnabled: boolean;
@@ -44,6 +45,7 @@ export function contractToFormValues(row: Contract): ContractFormValues {
     code: row.code,
     name: row.name,
     description: row.description,
+    labels: row.labels ?? {},
     inputSchema: stringifySchema(row.inputSchema),
     outputSchema: stringifySchema(row.outputSchema),
     isEnabled: row.isEnabled
@@ -59,6 +61,7 @@ export function formValuesToParams(values: ContractFormValues): ContractParams {
     code: values.code,
     name: values.name,
     description: values.description,
+    labels: values.labels,
     inputSchema: parseSchema(values.inputSchema),
     outputSchema: parseSchema(values.outputSchema),
     isEnabled: values.isEnabled
@@ -72,6 +75,7 @@ export const CONTRACT_FORM_DEFAULTS: ContractFormValues = {
   code: "",
   name: "",
   description: "",
+  labels: {},
   inputSchema: "",
   outputSchema: "",
   isEnabled: true
