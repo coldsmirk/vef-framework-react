@@ -30,13 +30,31 @@ export function AdapterForm({ scene }: AdapterFormProps) {
     <Grid columnGap="small">
       <Grid.Item span={12}>
         <form.AppField name="systemId" validators={{ onChange: requiredId("请选择所属系统") }}>
-          {field => <field.Select required disabled={!isCreate} label="所属系统" loading={systemDir.loading} options={systemDir.options} />}
+          {field => (
+            <field.Select
+              required
+              disabled={!isCreate}
+              label="所属系统"
+              loading={systemDir.loading}
+              options={systemDir.options}
+              placeholder="适配器对接的外部系统"
+            />
+          )}
         </form.AppField>
       </Grid.Item>
 
       <Grid.Item span={12}>
         <form.AppField name="contractId" validators={{ onChange: requiredId("请选择所属契约") }}>
-          {field => <field.Select required disabled={!isCreate} label="所属契约" loading={contractDir.loading} options={contractDir.options} />}
+          {field => (
+            <field.Select
+              required
+              disabled={!isCreate}
+              label="所属契约"
+              loading={contractDir.loading}
+              options={contractDir.options}
+              placeholder="适配器实现的标准契约"
+            />
+          )}
         </form.AppField>
       </Grid.Item>
 
@@ -76,6 +94,7 @@ export function AdapterForm({ scene }: AdapterFormProps) {
               height={420}
               label="脚本"
               language="javascript"
+              placeholder="// 参照上方的绑定说明编写，return 即本次调用的返回值"
             />
           )}
         </form.AppField>

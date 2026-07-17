@@ -55,7 +55,7 @@ export function ContractForm({ scene }: ContractFormProps) {
 
       <Grid.Item span={24}>
         <AppField name="description">
-          {field => <field.TextArea label="描述" placeholder="这个标准操作做什么" rows={2} />}
+          {field => <field.TextArea label="描述" placeholder="契约的业务含义与适用场景" rows={2} />}
         </AppField>
       </Grid.Item>
 
