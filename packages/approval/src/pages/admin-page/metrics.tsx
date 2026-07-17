@@ -51,6 +51,7 @@ export function MetricsPanel({ tenantId }: MetricsPanelProps) {
   const {
     data: metrics,
     isLoading,
+    isError,
     refetch,
     isFetching
   } = useQuery({
@@ -62,6 +63,18 @@ export function MetricsPanel({ tenantId }: MetricsPanelProps) {
     return (
       <Center css={scrollFillCss}>
         <Spin />
+      </Center>
+    );
+  }
+
+  // Queries have no global failure feedback (only mutations do), so a failed
+  // load must render as an error, not as an empty dashboard.
+  if (isError) {
+    return (
+      <Center css={scrollFillCss}>
+        <Empty description="指标加载失败">
+          <Button loading={isFetching} onClick={() => refetch()}>重试</Button>
+        </Empty>
       </Center>
     );
   }
