@@ -1,12 +1,12 @@
 import type { Completion, CompletionSource } from "@codemirror/autocomplete";
 
 /**
- * One entry of a declarative API completion catalog. Entries form a tree:
- * root entries complete as globals, and an entry's `children` complete after
+ * One entry of a declarative completion catalog. Entries form a tree: root
+ * entries complete as globals, and an entry's `children` complete after
  * `label.` — so a catalog can describe host-injected bindings and libraries
  * without the caller touching CodeMirror APIs.
  */
-export interface ApiCompletion {
+export interface CompletionEntry {
   /**
    * The identifier to insert.
    */
@@ -32,7 +32,7 @@ export interface ApiCompletion {
   /**
    * Members offered after `label.`.
    */
-  children?: ApiCompletion[];
+  children?: CompletionEntry[];
 }
 
 /**
@@ -40,11 +40,11 @@ export interface ApiCompletion {
  * member entries to offer at that level, or null when the path leaves the
  * catalog (letting other completion sources take over).
  */
-export function resolveApiPath(
-  entries: readonly ApiCompletion[],
+export function resolveEntryPath(
+  entries: readonly CompletionEntry[],
   path: readonly string[]
-): readonly ApiCompletion[] | null {
-  let level: readonly ApiCompletion[] = entries;
+): readonly CompletionEntry[] | null {
+  let level: readonly CompletionEntry[] = entries;
 
   for (const segment of path) {
     const next = level.find(entry => entry.label === segment)?.children;
@@ -59,7 +59,7 @@ export function resolveApiPath(
   return level;
 }
 
-function toOption(entry: ApiCompletion): Completion {
+function toOption(entry: CompletionEntry): Completion {
   return {
     label: entry.label,
     type: entry.type ?? (entry.children ? "namespace" : "variable"),
@@ -70,15 +70,15 @@ function toOption(entry: ApiCompletion): Completion {
 }
 
 /**
- * A completion source over a catalog, named after CodeMirror's own
- * `scopeCompletionSource`. It resolves the member path before the cursor via
+ * A completion source over an entry catalog, named after CodeMirror's own
+ * `completeFromList`. It resolves the member path before the cursor via
  * `completionPath` (loaded lazily alongside the JavaScript language pack, so
  * it never enters the initial bundle) and offers the matching level of the
  * catalog; outside the catalog it stays silent so other sources take over.
  * `completionPath` also does the gating: outside an identifier or property
  * it only yields a target on an explicit request.
  */
-export function apiCompletionSource(entries: readonly ApiCompletion[]): CompletionSource {
+export function completeFromEntries(entries: readonly CompletionEntry[]): CompletionSource {
   return async context => {
     const { completionPath } = await import("@codemirror/lang-javascript");
     const target = completionPath(context);
@@ -87,7 +87,7 @@ export function apiCompletionSource(entries: readonly ApiCompletion[]): Completi
       return null;
     }
 
-    const level = resolveApiPath(entries, target.path);
+    const level = resolveEntryPath(entries, target.path);
 
     if (!level) {
       return null;

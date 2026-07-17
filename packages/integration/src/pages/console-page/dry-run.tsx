@@ -327,7 +327,7 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
               <Labeled label="脚本">
                 <CodeEditor
                   showLineNumbers
-                  apiCompletions={adapterScriptCompletions(direction)}
+                  completions={adapterScriptCompletions(direction)}
                   height={240}
                   language="javascript"
                   placeholder="// 留空则使用已保存的适配器脚本"

@@ -1,4 +1,4 @@
-import type { ApiCompletion } from "@vef-framework-react/components";
+import type { CompletionEntry } from "@vef-framework-react/components";
 
 import type { Direction } from "../../types";
 
@@ -12,7 +12,7 @@ import type { Direction } from "../../types";
 
 const HTTP_RESPONSE_DOC = "返回响应对象：status / statusText / ok / url / redirected / headers / body / text() / json() / arrayBuffer()";
 
-const SYSTEM_BINDING: ApiCompletion = {
+const SYSTEM_BINDING: CompletionEntry = {
   label: "system",
   type: "namespace",
   info: "当前外部系统的信息快照",
@@ -36,7 +36,7 @@ const SYSTEM_BINDING: ApiCompletion = {
   ]
 };
 
-const HTTP_LIB: ApiCompletion = {
+const HTTP_LIB: CompletionEntry = {
   label: "http",
   type: "namespace",
   info: "该系统的 HTTP 客户端：Base URL 已锁定，只允许相对路径，凭证由框架注入",
@@ -81,7 +81,7 @@ const HTTP_LIB: ApiCompletion = {
   ]
 };
 
-const SQL_LIB: ApiCompletion = {
+const SQL_LIB: CompletionEntry = {
   label: "sql",
   type: "namespace",
   info: "绑定到该系统直连数据源的 SQL 能力（未配置数据源时不可用）",
@@ -108,7 +108,7 @@ const SQL_LIB: ApiCompletion = {
   ]
 };
 
-const ERRORS_LIB: ApiCompletion = {
+const ERRORS_LIB: CompletionEntry = {
   label: "errors",
   type: "namespace",
   info: "失败分类工具",
@@ -123,7 +123,7 @@ const ERRORS_LIB: ApiCompletion = {
   ]
 };
 
-const CONSOLE_LIB: ApiCompletion = {
+const CONSOLE_LIB: CompletionEntry = {
   label: "console",
   type: "namespace",
   info: "写入框架日志（js 记录器）",
@@ -147,7 +147,7 @@ const CONSOLE_LIB: ApiCompletion = {
   ]
 };
 
-const CRYPTO_LIB: ApiCompletion = {
+const CRYPTO_LIB: CompletionEntry = {
   label: "crypto",
   type: "namespace",
   info: "摘要、HMAC 与编码工具",
@@ -218,7 +218,7 @@ const CRYPTO_LIB: ApiCompletion = {
   ]
 };
 
-const CACHE_LIB: ApiCompletion = {
+const CACHE_LIB: CompletionEntry = {
   label: "cache",
   type: "namespace",
   info: "进程内缓存（如令牌缓存）",
@@ -249,7 +249,7 @@ const CACHE_LIB: ApiCompletion = {
   ]
 };
 
-const STDLIB_GLOBALS: ApiCompletion[] = [
+const STDLIB_GLOBALS: CompletionEntry[] = [
   {
     label: "dayjs",
     type: "function",
@@ -313,7 +313,7 @@ const STDLIB_GLOBALS: ApiCompletion[] = [
 // The always-on engine baseline every integration script surface sees.
 const BASELINE = [CONSOLE_LIB, CRYPTO_LIB, CACHE_LIB, ...STDLIB_GLOBALS];
 
-const INBOUND_REQUEST_BINDING: ApiCompletion = {
+const INBOUND_REQUEST_BINDING: CompletionEntry = {
   label: "request",
   type: "namespace",
   info: "外部系统投递的原始请求",
@@ -361,7 +361,7 @@ const INBOUND_REQUEST_BINDING: ApiCompletion = {
  * Outbound adapter scripts: contract input plus the system-scoped
  * capabilities the invoker installs.
  */
-export const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "input",
     type: "variable",
@@ -379,7 +379,7 @@ export const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: ApiCompletion[] = [
  * Inbound adapter scripts: the delivered request, the system snapshot and
  * the dispatch bridge — deliberately no http / sql capability.
  */
-export const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   INBOUND_REQUEST_BINDING,
   SYSTEM_BINDING,
   {
@@ -396,7 +396,7 @@ export const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: ApiCompletion[] = [
  * System-level envelope request scripts: rewrite the adapter's outgoing
  * request before it hits the wire.
  */
-export const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "request",
     type: "namespace",
@@ -434,7 +434,7 @@ export const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: ApiCompletion[] = [
  * System-level envelope response scripts: unwrap the completed response;
  * the return value replaces the Response object as the call's result.
  */
-export const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "response",
     type: "namespace",
@@ -492,7 +492,7 @@ export const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: ApiCompletion[] = [
  * Outbound auth signing scripts: read the fully built request and the
  * decrypted params, return the credential headers to add.
  */
-export const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "request",
     type: "namespace",
@@ -542,7 +542,7 @@ export const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: ApiCompletion[] = [
  * Inbound auth verification scripts: read the delivered request and the
  * decrypted params, return a truthy value to grant.
  */
-export const INBOUND_AUTH_SCRIPT_COMPLETIONS: ApiCompletion[] = [
+export const INBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   INBOUND_REQUEST_BINDING,
   {
     label: "params",
@@ -556,6 +556,6 @@ export const INBOUND_AUTH_SCRIPT_COMPLETIONS: ApiCompletion[] = [
 /**
  * The adapter-script catalog for a flow direction.
  */
-export function adapterScriptCompletions(direction: Direction): ApiCompletion[] {
+export function adapterScriptCompletions(direction: Direction): CompletionEntry[] {
   return direction === "inbound" ? INBOUND_ADAPTER_SCRIPT_COMPLETIONS : OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS;
 }

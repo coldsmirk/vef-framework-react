@@ -4,7 +4,7 @@ import type { BasicSetupOptions } from "@uiw/react-codemirror";
 import type { CSSProperties } from "react";
 
 import type { Length, Size } from "../_base";
-import type { ApiCompletion } from "./completions";
+import type { CompletionEntry } from "./completions";
 
 /**
  * Built-in language identifiers shipped with the CodeEditor. To use a
@@ -209,7 +209,7 @@ export interface CodeEditorProps {
    * "javascript" / "typescript" languages. Pass a stable reference — a fresh
    * array each render reconfigures the live editor.
    */
-  apiCompletions?: ApiCompletion[];
+  completions?: CompletionEntry[];
   /**
    * Extra CodeMirror extensions appended after the built-in basic setup
    * and the resolved language. Use this for linters, custom keymaps, or

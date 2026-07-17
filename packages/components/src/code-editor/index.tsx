@@ -2,7 +2,7 @@ import type { Extension } from "@codemirror/state";
 import type { BasicSetupOptions, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 
 import type { Length, PropsWithRef, Size } from "../_base";
-import type { ApiCompletion } from "./completions";
+import type { CompletionEntry } from "./completions";
 import type { CodeEditorLanguage, CodeEditorProps, CodeEditorRef, CodeEditorTheme } from "./props";
 
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState 
 
 import { getSpacingValue, globalCssVars } from "../_base";
 import { useIsDarkMode } from "../config-provider";
-import { apiCompletionSource } from "./completions";
+import { completeFromEntries } from "./completions";
 
 const BUILT_IN_LANGUAGES = new Set<CodeEditorLanguage>([
   "json",
@@ -129,23 +129,23 @@ function useLanguageExtensions(language: CodeEditorProps["language"]): Extension
 }
 
 /**
- * Turn a declarative API catalog into a language-data autocomplete extension.
- * Registered on every JS-family language object so it applies to both the
- * "javascript" and "typescript" built-ins; loading rides the same lazy chunk
- * as the language pack, and the source merges with the language's own
- * keyword / snippet / local-variable completions instead of replacing them.
- * Only the built-in JS languages are supported — for a custom language
+ * Turn a declarative completion catalog into a language-data autocomplete
+ * extension. Registered on every JS-family language object so it applies to
+ * both the "javascript" and "typescript" built-ins; loading rides the same
+ * lazy chunk as the language pack, and the source merges with the language's
+ * own keyword / snippet / local-variable completions instead of replacing
+ * them. Only the built-in JS languages are supported — for a custom language
  * extension, register a completion source through `extensions` instead.
  */
-function useApiCompletionExtensions(
-  apiCompletions: ApiCompletion[] | undefined,
+function useCompletionExtensions(
+  completions: CompletionEntry[] | undefined,
   language: CodeEditorProps["language"]
 ): Extension[] {
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const isJsLanguage = language === "javascript" || language === "typescript";
 
   useEffect(() => {
-    if (!apiCompletions?.length || !isJsLanguage) {
+    if (!completions?.length || !isJsLanguage) {
       setExtensions([]);
       return;
     }
@@ -156,7 +156,7 @@ function useApiCompletionExtensions(
         return;
       }
 
-      const source = apiCompletionSource(apiCompletions);
+      const source = completeFromEntries(completions);
       setExtensions([
         mod.javascriptLanguage,
         mod.jsxLanguage,
@@ -168,7 +168,7 @@ function useApiCompletionExtensions(
     return () => {
       cancelled = true;
     };
-  }, [apiCompletions, isJsLanguage]);
+  }, [completions, isJsLanguage]);
 
   return extensions;
 }
@@ -379,7 +379,7 @@ export function CodeEditor({
   bordered = true,
   className,
   style,
-  apiCompletions,
+  completions,
   extensions,
   basicSetupOptions
 }: PropsWithRef<CodeEditorRef, CodeEditorProps>) {
@@ -444,7 +444,7 @@ export function CodeEditor({
   );
 
   const languageExtensions = useLanguageExtensions(language);
-  const apiCompletionExtensions = useApiCompletionExtensions(apiCompletions, language);
+  const completionExtensions = useCompletionExtensions(completions, language);
 
   const mergedExtensions = useMemo<Extension[]>(
     () => [
@@ -455,10 +455,10 @@ export function CodeEditor({
       // instead of being cut off at its edge. Skipped when there's no DOM (SSR).
       ...typeof document === "undefined" ? [] : [tooltips({ parent: document.body })],
       ...languageExtensions,
-      ...apiCompletionExtensions,
+      ...completionExtensions,
       ...extensions ?? []
     ],
-    [size, languageExtensions, apiCompletionExtensions, extensions]
+    [size, languageExtensions, completionExtensions, extensions]
   );
 
   const containerStyle = useMemo(
@@ -511,5 +511,5 @@ export function CodeEditor({
   );
 }
 
-export { apiCompletionSource, type ApiCompletion } from "./completions";
+export { completeFromEntries, type CompletionEntry } from "./completions";
 export type { CodeEditorLanguage, CodeEditorProps, CodeEditorRef, CodeEditorTheme } from "./props";

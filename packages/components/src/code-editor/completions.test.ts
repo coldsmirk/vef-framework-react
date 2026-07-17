@@ -1,12 +1,12 @@
-import type { ApiCompletion } from "./completions";
+import type { CompletionEntry } from "./completions";
 
 import { CompletionContext } from "@codemirror/autocomplete";
 import { javascript } from "@codemirror/lang-javascript";
 import { EditorState } from "@codemirror/state";
 
-import { apiCompletionSource, resolveApiPath } from "./completions";
+import { completeFromEntries, resolveEntryPath } from "./completions";
 
-const CATALOG: ApiCompletion[] = [
+const CATALOG: CompletionEntry[] = [
   {
     label: "http",
     type: "namespace",
@@ -47,23 +47,23 @@ function completionContext(doc: string, explicit = false): CompletionContext {
   return new CompletionContext(state, doc.length, explicit);
 }
 
-describe("resolveApiPath", () => {
+describe("resolveEntryPath", () => {
   it("returns the root level for an empty path", () => {
-    expect(resolveApiPath(CATALOG, [])?.map(entry => entry.label), "empty path should yield the root entries").toEqual(["http", "system", "input"]);
+    expect(resolveEntryPath(CATALOG, [])?.map(entry => entry.label), "empty path should yield the root entries").toEqual(["http", "system", "input"]);
   });
 
   it("walks nested members", () => {
-    expect(resolveApiPath(CATALOG, ["http"])?.map(entry => entry.label), "http members should resolve").toEqual(["fetch", "get"]);
+    expect(resolveEntryPath(CATALOG, ["http"])?.map(entry => entry.label), "http members should resolve").toEqual(["fetch", "get"]);
   });
 
   it("returns null outside the catalog", () => {
-    expect(resolveApiPath(CATALOG, ["unknown"]), "an unknown segment should leave the catalog").toBeNull();
-    expect(resolveApiPath(CATALOG, ["input"]), "an entry without children offers no members").toBeNull();
+    expect(resolveEntryPath(CATALOG, ["unknown"]), "an unknown segment should leave the catalog").toBeNull();
+    expect(resolveEntryPath(CATALOG, ["input"]), "an entry without children offers no members").toBeNull();
   });
 });
 
-describe("apiCompletionSource", () => {
-  const source = apiCompletionSource(CATALOG);
+describe("completeFromEntries", () => {
+  const source = completeFromEntries(CATALOG);
 
   it("offers members right after a dot", async () => {
     const result = await source(completionContext("http."));

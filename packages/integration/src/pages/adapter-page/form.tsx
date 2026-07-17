@@ -93,7 +93,7 @@ export function AdapterForm({ scene }: AdapterFormProps) {
                   required
                   showFoldGutter
                   showLineNumbers
-                  apiCompletions={adapterScriptCompletions(direction)}
+                  completions={adapterScriptCompletions(direction)}
                   height={420}
                   label="脚本"
                   language="javascript"
