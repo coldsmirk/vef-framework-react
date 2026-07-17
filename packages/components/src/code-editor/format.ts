@@ -13,7 +13,7 @@ export type CodeFormatter = (source: string, tabSize: number) => Promise<string>
  * imported on first use so they load as their own chunk and never enter the
  * initial bundle.
  */
-async function formatWithPrettier(source: string, tabSize: number, parser: "babel" | "babel-ts"): Promise<string> {
+async function formatWithPrettier(source: string, tabSize: number, parser: "babel" | "babel-ts" | "json"): Promise<string> {
   const [standalone, babel, estree] = await Promise.all([
     import("prettier/standalone"),
     import("prettier/plugins/babel"),
@@ -29,7 +29,16 @@ async function formatWithPrettier(source: string, tabSize: number, parser: "babe
 }
 
 const FORMATTERS: Partial<Record<CodeEditorLanguage, CodeFormatter>> = {
-  json: (source, tabSize) => JSON.stringify(JSON.parse(source), null, tabSize),
+  // JSON goes through prettier too: it reprints tokens verbatim, so number
+  // literals beyond 2^53 (large numeric ids) survive formatting — a
+  // JSON.parse/stringify round-trip would silently rewrite them. Prettier
+  // keeps a single-line object single-line, so a fully minified document gets
+  // a newline seeded after its opening brace to make the root expand.
+  json: (source, tabSize) => {
+    const seeded = source.includes("\n") ? source : source.replace(/^\s*\{/, "{\n");
+
+    return formatWithPrettier(seeded, tabSize, "json");
+  },
   javascript: (source, tabSize) => formatWithPrettier(source, tabSize, "babel"),
   typescript: (source, tabSize) => formatWithPrettier(source, tabSize, "babel-ts")
 };

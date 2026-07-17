@@ -265,11 +265,26 @@ describe("CodeEditor format action", () => {
 
     await user.click(await screen.findByRole("button", { name: "格式化" }));
 
-    const pretty = JSON.stringify({ a: 1, b: [2, 3] }, null, 2);
+    const pretty = "{\n  \"a\": 1,\n  \"b\": [2, 3]\n}\n";
     await waitFor(() => {
       expect(ref.current?.getValue(), "the document should be re-indented").toBe(pretty);
     });
     expect(handleChange, "the change should flow through onChange").toHaveBeenCalledWith(pretty);
+  });
+
+  it("preserves numeric literals beyond double precision", async () => {
+    const user = userEvent.setup();
+    const ref = createRef<CodeEditorRef>();
+
+    render(<CodeEditor ref={ref} language="json" />);
+    await waitForView(ref);
+    ref.current!.setValue("{\"max\": 12345678901234567890}");
+
+    await user.click(await screen.findByRole("button", { name: "格式化" }));
+
+    await waitFor(() => {
+      expect(ref.current?.getValue(), "a large integer must not be rewritten through a JS number").toContain("12345678901234567890");
+    });
   });
 
   it("leaves the document intact when the source cannot be parsed", async () => {
