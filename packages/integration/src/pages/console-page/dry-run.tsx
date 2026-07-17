@@ -92,7 +92,7 @@ function OutboundResult({ result }: { result: DryRunResult }) {
         <JsonView value={result.output} />
       </Labeled>
 
-      <Labeled label="Wire Trace">
+      <Labeled label="通信轨迹">
         <WireTraceTimeline trace={result.trace} />
       </Labeled>
     </Stack>
@@ -313,7 +313,6 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                   height={240}
                   language="javascript"
                   placeholder="// 留空则使用已保存的适配器脚本"
-                  size="large"
                   value={script}
                   onChange={setScript}
                 />
@@ -326,7 +325,6 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                         showLineNumbers
                         height={160}
                         language="json"
-                        size="large"
                         value={input}
                         onChange={setInput}
                       />
@@ -360,7 +358,6 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                           height={140}
                           language="json"
                           placeholder="原样投递的请求体文本"
-                          size="large"
                           value={requestBody}
                           onChange={setRequestBody}
                         />
@@ -371,7 +368,6 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                           showLineNumbers
                           height={140}
                           language="json"
-                          size="large"
                           value={handlerOutput}
                           onChange={setHandlerOutput}
                         />

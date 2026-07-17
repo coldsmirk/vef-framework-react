@@ -1,6 +1,6 @@
 import type { DescriptionsItem } from "@vef-framework-react/components";
 
-import type { ConnectionCheck, DatabaseProbe, HttpProbe } from "../../types";
+import type { ConnectionCheck, DatabaseProbe, HttpProbe, System } from "../../types";
 
 import { Button, Descriptions, Drawer, Empty, Flex, Icon, Input, Labeled, Stack, Tag, Text } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
@@ -81,7 +81,7 @@ function databaseItems(probe: DatabaseProbe): DescriptionsItem[] {
 
 function ProbeResult({ check }: { check: ConnectionCheck }) {
   if (!check.http && !check.database) {
-    return <Empty description="该系统未配置任何可探测的传输" />;
+    return <Empty description="该系统未配置可探测的连接" />;
   }
 
   return (
@@ -89,7 +89,7 @@ function ProbeResult({ check }: { check: ConnectionCheck }) {
       {check.http
         ? (
             <Labeled label="HTTP 探测">
-              <Descriptions bordered column={1} items={httpItems(check.http)} size="small" />
+              <Descriptions bordered column={1} items={httpItems(check.http)} size="small" styles={{ label: { width: 90 } }} />
             </Labeled>
           )
         : null}
@@ -97,7 +97,7 @@ function ProbeResult({ check }: { check: ConnectionCheck }) {
       {check.database
         ? (
             <Labeled label="数据库探测">
-              <Descriptions bordered column={1} items={databaseItems(check.database)} size="small" />
+              <Descriptions bordered column={1} items={databaseItems(check.database)} size="small" styles={{ label: { width: 90 } }} />
             </Labeled>
           )
         : null}
@@ -107,17 +107,18 @@ function ProbeResult({ check }: { check: ConnectionCheck }) {
 
 export interface TestConnectionDrawerProps {
   open: boolean;
-  systemCode: string;
+  system: System | null;
   onClose: () => void;
 }
 
 /**
  * A drawer that probes a saved system's configured transports (HTTP and
- * database) and shows what each probe found.
+ * database) and shows what each probe found. The HTTP method/path inputs only
+ * render when the system actually has a Base URL to probe.
  */
 export function TestConnectionDrawer({
   open,
-  systemCode,
+  system,
   onClose
 }: TestConnectionDrawerProps) {
   const { testConnection } = useOpsApi();
@@ -129,6 +130,9 @@ export function TestConnectionDrawer({
   } = useMutation({ mutationFn: testConnection });
   const [method, setMethod] = useState("GET");
   const [path, setPath] = useState("/");
+  const systemCode = system?.code ?? "";
+  const hasHttp = Boolean(system?.baseUrl);
+  const hasDatabase = Boolean(system?.dataSource);
 
   // Reset the probe and inputs when the drawer targets a different system, so
   // a previous system's result never lingers under a new system's title.
@@ -138,33 +142,50 @@ export function TestConnectionDrawer({
     setPath("/");
   }, [systemCode, reset]);
 
+  const probeButton = (
+    <Button
+      disabled={!hasHttp && !hasDatabase}
+      icon={<Icon component={ActivityIcon} />}
+      loading={isPending}
+      type="primary"
+      onClick={() => mutate({
+        systemCode,
+        method,
+        path
+      })}
+    >
+      开始探测
+    </Button>
+  );
+
   return (
-    <Drawer open={open} size={520} title={`测试连接 · ${systemCode}`} onClose={onClose}>
+    <Drawer open={open} size={640} title={`测试连接 · ${systemCode}`} onClose={onClose}>
       <Stack gap="middle">
-        <Flex align="flex-end" gap="small">
-          <Labeled label="探测方法">
-            <Input aria-label="探测方法" placeholder="GET" style={{ width: 100 }} value={method} onChange={event => setMethod(event.target.value)} />
-          </Labeled>
+        {hasHttp
+          ? (
+              <Flex align="flex-end" gap="small">
+                <Labeled label="探测方法">
+                  <Input aria-label="探测方法" placeholder="GET" style={{ width: 100 }} value={method} onChange={event => setMethod(event.target.value)} />
+                </Labeled>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Labeled label="探测路径">
-              <Input aria-label="探测路径" placeholder="如 /health" value={path} onChange={event => setPath(event.target.value)} />
-            </Labeled>
-          </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Labeled label="探测路径">
+                    <Input aria-label="探测路径" placeholder="如 /health" value={path} onChange={event => setPath(event.target.value)} />
+                  </Labeled>
+                </div>
 
-          <Button
-            icon={<Icon component={ActivityIcon} />}
-            loading={isPending}
-            type="primary"
-            onClick={() => mutate({
-              systemCode,
-              method,
-              path
-            })}
-          >
-            开始探测
-          </Button>
-        </Flex>
+                {probeButton}
+              </Flex>
+            )
+          : (
+              <Flex align="center" gap="small" justify="space-between">
+                <Text type="secondary">
+                  {hasDatabase ? "该系统仅配置了直连数据源，将探测数据库连通性。" : "该系统未配置可探测的连接。"}
+                </Text>
+
+                {probeButton}
+              </Flex>
+            )}
 
         {data
           ? <ProbeResult check={data} />

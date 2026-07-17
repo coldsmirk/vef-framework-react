@@ -37,19 +37,19 @@ function BasicSection({ scene }: { scene: CrudBasicFormScene }) {
       <Grid columnGap="small">
         <Grid.Item span={12}>
           <AppField name="code" validators={{ onBlur: codeSchema }}>
-            {field => <field.Input required disabled={!isCreate} label="系统编码" placeholder="如 his-east" />}
+            {field => <field.Input required disabled={!isCreate} label="系统编码" placeholder="如 order-center" />}
           </AppField>
         </Grid.Item>
 
         <Grid.Item span={12}>
           <AppField name="name" validators={{ onBlur: nameSchema }}>
-            {field => <field.Input required label="系统名称" placeholder="如 东区 HIS" />}
+            {field => <field.Input required label="系统名称" placeholder="如 订单中心" />}
           </AppField>
         </Grid.Item>
 
         <Grid.Item span={16}>
           <AppField name="baseUrl">
-            {field => <field.Input label="Base URL" placeholder="https://his.example.com" />}
+            {field => <field.Input label="Base URL" placeholder="https://api.example.com" />}
           </AppField>
         </Grid.Item>
 
@@ -125,7 +125,6 @@ function OutboundAuthSection() {
                         label={<ScriptDocLabel doc={OUTBOUND_AUTH_SCRIPT_DOC} label="认证脚本" />}
                         language="javascript"
                         placeholder="// 读取 request 与 params，返回需追加的凭据请求头对象"
-                        size="large"
                       />
                     )}
                   </form.AppField>
@@ -173,7 +172,6 @@ function OutboundEnvelopeSection() {
                           label={<ScriptDocLabel doc={ENVELOPE_REQUEST_SCRIPT_DOC} label="请求包裹脚本（request）" />}
                           language="javascript"
                           placeholder="// 读取 request，返回改写后的 { method, path, headers, query, body }"
-                          size="large"
                         />
                       )}
                     </form.AppField>
@@ -190,7 +188,6 @@ function OutboundEnvelopeSection() {
                           label={<ScriptDocLabel doc={ENVELOPE_RESPONSE_SCRIPT_DOC} label="响应解包脚本（response）" />}
                           language="javascript"
                           placeholder="// 读取 response，返回解包后的业务数据作为调用结果"
-                          size="large"
                         />
                       )}
                     </form.AppField>
@@ -260,7 +257,6 @@ function InboundSection() {
                                   label={<ScriptDocLabel doc={INBOUND_AUTH_SCRIPT_DOC} label="验证脚本" />}
                                   language="javascript"
                                   placeholder="// 读取 request 与 params，返回真值即放行"
-                                  size="large"
                                 />
                               )}
                             </form.AppField>
@@ -306,7 +302,7 @@ function DataSourceSection() {
                           extra={field.state.value === "read_write"
                             ? (
                                 <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="warning">
-                                  脚本可用 sql.exec 写入该库，仅对可信的交换库开启
+                                  脚本可用 sql.execute 写入该库，仅对可信的交换库开启
                                 </Text>
                               )
                             : undefined}
@@ -322,7 +318,7 @@ function DataSourceSection() {
                   </Grid.Item>
 
                   <Grid.Item span={16}>
-                    <form.AppField name="dataSource.host">{field => <field.Input label="Host" placeholder="如 192.168.1.10" />}</form.AppField>
+                    <form.AppField name="dataSource.host">{field => <field.Input label="主机" placeholder="如 192.168.1.10" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={8}>
@@ -340,15 +336,15 @@ function DataSourceSection() {
                   </Grid.Item>
 
                   <Grid.Item span={8}>
-                    <form.AppField name="dataSource.database">{field => <field.Input label="数据库" placeholder="如 his_exchange" />}</form.AppField>
+                    <form.AppField name="dataSource.database">{field => <field.Input label="数据库" placeholder="如 exchange_db" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={12}>
-                    <form.AppField name="dataSource.schema">{field => <field.Input label="Schema" placeholder="如 public" />}</form.AppField>
+                    <form.AppField name="dataSource.schema">{field => <field.Input label="模式（Schema）" placeholder="如 public" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={12}>
-                    <form.AppField name="dataSource.path">{field => <field.Input label="Path（SQLite）" placeholder="如 /data/exchange.db" />}</form.AppField>
+                    <form.AppField name="dataSource.path">{field => <field.Input label="文件路径（SQLite）" placeholder="如 /data/exchange.db" />}</form.AppField>
                   </Grid.Item>
 
                   <Grid.Item span={24}>

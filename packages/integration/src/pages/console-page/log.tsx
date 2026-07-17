@@ -113,9 +113,11 @@ const logColumns: Array<TableColumn<InvocationLog>> = [
     align: "right"
   },
   {
-    title: "Request ID",
+    // The one flexible column: absorbs leftover table width so fixed-width
+    // columns keep their sizes instead of sharing the remainder.
+    title: "请求 ID",
     dataIndex: "requestId",
-    width: 170,
+    minWidth: 170,
     render: (value: string) => <Text code style={{ fontSize: globalCssVars.fontSizeSm }}>{value}</Text>
   }
 ];
@@ -149,7 +151,7 @@ function detailItems(log: InvocationLog): DescriptionsItem[] {
     },
     {
       key: "requestId",
-      label: "Request ID",
+      label: "请求 ID",
       children: <Text code copyable style={{ fontSize: globalCssVars.fontSizeSm }}>{log.requestId}</Text>
     },
     {
@@ -163,7 +165,7 @@ function detailItems(log: InvocationLog): DescriptionsItem[] {
 function LogDetail({ log }: { log: InvocationLog }) {
   return (
     <Stack gap="middle">
-      <Descriptions bordered column={2} items={detailItems(log)} size="small" />
+      <Descriptions bordered column={2} items={detailItems(log)} size="small" styles={{ label: { width: 90 } }} />
       {log.error ? <Alert showIcon title={log.error} type="error" /> : null}
 
       <Labeled label="输入">
@@ -176,7 +178,7 @@ function LogDetail({ log }: { log: InvocationLog }) {
 
       {log.httpTrace && log.httpTrace.length > 0
         ? (
-            <Labeled label="Wire Trace">
+            <Labeled label="通信轨迹">
               <WireTraceTimeline trace={log.httpTrace} />
             </Labeled>
           )
@@ -196,7 +198,7 @@ export function LogPanel() {
     <>
       <Crud<InvocationLog, LogSearch, LogSceneValues>
         basicSearch={<LogSearchFields />}
-        operationColumn={{ render: row => <Button size="small" type="link" onClick={() => setDetail(row)}>详情</Button> }}
+        operationColumn={{ width: 80, render: row => <Button size="small" type="link" onClick={() => setDetail(row)}>详情</Button> }}
         queryFn={api.findPage}
         rowKey="id"
         tableColumns={logColumns}

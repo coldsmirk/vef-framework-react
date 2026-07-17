@@ -55,6 +55,15 @@ function renderLastError(value: string | undefined) {
 
 const statsColumns: Array<TableColumn<InvocationStats>> = [
   {
+    // Mirrors the sequence column Crud tables render, keeping the console
+    // panels visually consistent (this snapshot table bypasses Crud).
+    key: "sequence",
+    title: "序号",
+    width: 60,
+    align: "center",
+    render: (_value, _row, index) => index + 1
+  },
+  {
     title: "系统",
     dataIndex: "system",
     width: 140
@@ -139,7 +148,6 @@ export function StatsPanel() {
             locale={{ emptyText: "暂无调用记录" }}
             pagination={false}
             rowKey={record => `${record.system}|${record.contract}|${record.direction}`}
-            size="small"
           />
         </div>
       </div>

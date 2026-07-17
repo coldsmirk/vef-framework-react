@@ -32,7 +32,7 @@ export function IntegrationSystemPage({
   const api = useSystemApi();
   const formMutations = useSystemFormMutations();
   const perms = { ...INTEGRATION_PERMISSIONS.system, ...permissions };
-  const [testTarget, setTestTarget] = useState<string | null>(null);
+  const [testTarget, setTestTarget] = useState<System | null>(null);
 
   return (
     <>
@@ -73,9 +73,10 @@ export function IntegrationSystemPage({
                     </OperationButton>
 
                     <OperationButton
+                      color="orange"
                       icon={<Icon component={ActivityIcon} />}
                       requiredPermissions={testConnectionPermission}
-                      onClick={() => setTestTarget(row.code)}
+                      onClick={() => setTestTarget(row)}
                     >
                       测试连接
                     </OperationButton>
@@ -148,7 +149,7 @@ export function IntegrationSystemPage({
         )}
       />
 
-      <TestConnectionDrawer open={testTarget !== null} systemCode={testTarget ?? ""} onClose={() => setTestTarget(null)} />
+      <TestConnectionDrawer open={testTarget !== null} system={testTarget} onClose={() => setTestTarget(null)} />
     </>
   );
 }

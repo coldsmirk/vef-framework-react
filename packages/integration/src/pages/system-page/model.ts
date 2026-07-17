@@ -217,15 +217,15 @@ export const DB_KIND_OPTIONS = [
 ];
 
 export const SSL_MODE_OPTIONS = [
-  { label: "disable", value: "disable" },
-  { label: "require", value: "require" },
-  { label: "verify-ca", value: "verify-ca" },
-  { label: "verify-full", value: "verify-full" }
+  { label: "禁用（disable）", value: "disable" },
+  { label: "仅加密（require）", value: "require" },
+  { label: "验证 CA（verify-ca）", value: "verify-ca" },
+  { label: "完整验证（verify-full）", value: "verify-full" }
 ];
 
 export const DATA_SOURCE_MODE_OPTIONS = [
-  { label: "只读（sql.query）", value: "read_only" },
-  { label: "读写（sql.exec）", value: "read_write" }
+  { label: "只读（sql.queryList）", value: "read_only" },
+  { label: "读写（sql.execute）", value: "read_write" }
 ];
 
 export const OUTBOUND_AUTH_SCHEME_OPTIONS = OUTBOUND_AUTH_SCHEMES.map(scheme => {

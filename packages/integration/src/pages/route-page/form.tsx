@@ -25,7 +25,7 @@ export function RouteForm() {
             <field.Input
               extra="业务调用时携带的分流标识；留空即默认路由，未指定路由键的调用都会命中它"
               label="路由键"
-              placeholder="如 hospital-east"
+              placeholder="如 branch-east"
             />
           )}
         </AppField>

@@ -88,7 +88,7 @@ const SQL_LIB: CompletionEntry = {
   boost: 2,
   children: [
     {
-      label: "query",
+      label: "queryList",
       type: "function",
       detail: "(sql, ...args)",
       info: "只读查询，返回行对象数组；? 占位符按序绑定参数"
@@ -100,7 +100,7 @@ const SQL_LIB: CompletionEntry = {
       info: "只读查询，返回首行（无结果为 null）"
     },
     {
-      label: "exec",
+      label: "execute",
       type: "function",
       detail: "(sql, ...args)",
       info: "写入语句，返回 { rowsAffected }；仅数据源为读写模式时可用"

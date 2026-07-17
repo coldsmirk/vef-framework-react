@@ -95,7 +95,7 @@ export function IntegrationConsolePage({ permissions, title }: IntegrationConsol
 
         {items.length > 0
           ? <FlexTabs defaultActiveKey={items[0]?.key} items={items} />
-          : <Result status="403" subTitle="你没有集成引擎控制台的任何操作权限。" title="无访问权限" />}
+          : <Result status="403" subTitle="暂无控制台操作权限，请联系管理员开通。" title="无访问权限" />}
       </div>
     </Page>
   );

@@ -17,7 +17,6 @@ export function JsonView({ value, height = 160 }: JsonViewProps) {
       showLineNumbers
       height={height}
       language="json"
-      size="large"
       value={JSON.stringify(value, null, 2)}
     />
   );
