@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/integration",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "private": false,
   "description": "Integration engine management pages for VEF framework",
   "keywords": [
