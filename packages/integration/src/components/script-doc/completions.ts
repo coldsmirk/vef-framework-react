@@ -361,7 +361,7 @@ const INBOUND_REQUEST_BINDING: CompletionEntry = {
  * Outbound adapter scripts: contract input plus the system-scoped
  * capabilities the invoker installs.
  */
-export const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "input",
     type: "variable",
@@ -379,7 +379,7 @@ export const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
  * Inbound adapter scripts: the delivered request, the system snapshot and
  * the dispatch bridge — deliberately no http / sql capability.
  */
-export const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   INBOUND_REQUEST_BINDING,
   SYSTEM_BINDING,
   {
@@ -396,7 +396,7 @@ export const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
  * System-level envelope request scripts: rewrite the adapter's outgoing
  * request before it hits the wire.
  */
-export const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "request",
     type: "namespace",
@@ -434,7 +434,7 @@ export const ENVELOPE_REQUEST_SCRIPT_COMPLETIONS: CompletionEntry[] = [
  * System-level envelope response scripts: unwrap the completed response;
  * the return value replaces the Response object as the call's result.
  */
-export const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "response",
     type: "namespace",
@@ -489,10 +489,11 @@ export const ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS: CompletionEntry[] = [
 ];
 
 /**
- * Outbound auth signing scripts: read the fully built request and the
- * decrypted params, return the credential headers to add.
+ * Outbound auth scripts: read the fully built request and the decrypted
+ * params, return the credential headers to add — signing is just the most
+ * common shape of that logic.
  */
-export const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   {
     label: "request",
     type: "namespace",
@@ -542,7 +543,7 @@ export const OUTBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
  * Inbound auth verification scripts: read the delivered request and the
  * decrypted params, return a truthy value to grant.
  */
-export const INBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
+const INBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   INBOUND_REQUEST_BINDING,
   {
     label: "params",
@@ -554,8 +555,72 @@ export const INBOUND_AUTH_SCRIPT_COMPLETIONS: CompletionEntry[] = [
 ];
 
 /**
- * The adapter-script catalog for a flow direction.
+ * One script surface's documentation: the contract in one line plus the
+ * bindings and libraries available to it. `entries` doubles as the editor's
+ * completion catalog, so the doc popover and the autocomplete never drift.
  */
-export function adapterScriptCompletions(direction: Direction): CompletionEntry[] {
-  return direction === "inbound" ? INBOUND_ADAPTER_SCRIPT_COMPLETIONS : OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS;
+export interface ScriptDoc {
+  /**
+   * What the script receives and what its return value means.
+   */
+  summary: string;
+  /**
+   * The surface's bindings and libraries.
+   */
+  entries: CompletionEntry[];
+}
+
+/**
+ * Outbound adapter scripts.
+ */
+export const OUTBOUND_ADAPTER_SCRIPT_DOC: ScriptDoc = {
+  summary: "把已按输入 Schema 校验的 input 译成对外部系统的调用；顶层 return 的值经输出 Schema 校验后作为契约输出。",
+  entries: OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS
+};
+
+/**
+ * Inbound adapter scripts.
+ */
+export const INBOUND_ADAPTER_SCRIPT_DOC: ScriptDoc = {
+  summary: "把外部系统的原始请求译成契约调度：dispatch(input) 执行业务处理器；顶层 return 的值即回给外部系统的响应。",
+  entries: INBOUND_ADAPTER_SCRIPT_COMPLETIONS
+};
+
+/**
+ * System-level envelope request scripts.
+ */
+export const ENVELOPE_REQUEST_SCRIPT_DOC: ScriptDoc = {
+  summary: "适配器每次 http 调用发出前执行：读取 request，return 改写后的请求，省略的字段保持适配器原值。",
+  entries: ENVELOPE_REQUEST_SCRIPT_COMPLETIONS
+};
+
+/**
+ * System-level envelope response scripts.
+ */
+export const ENVELOPE_RESPONSE_SCRIPT_DOC: ScriptDoc = {
+  summary: "适配器每次 http 调用返回后执行：读取 response，return 的值将替代响应对象成为调用结果。",
+  entries: ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS
+};
+
+/**
+ * Outbound auth scripts.
+ */
+export const OUTBOUND_AUTH_SCRIPT_DOC: ScriptDoc = {
+  summary: "每次出站请求发出前在零 IO 沙箱中执行：读取 request 与解密后的 params，return 需追加的凭据请求头对象（名称 → 值）。",
+  entries: OUTBOUND_AUTH_SCRIPT_COMPLETIONS
+};
+
+/**
+ * Inbound auth verification scripts.
+ */
+export const INBOUND_AUTH_SCRIPT_DOC: ScriptDoc = {
+  summary: "每次入站投递验证时在零 IO 沙箱中执行：读取 request 与解密后的 params，return 真值即放行，其余一律拒绝。",
+  entries: INBOUND_AUTH_SCRIPT_COMPLETIONS
+};
+
+/**
+ * The adapter-script documentation for a flow direction.
+ */
+export function adapterScriptDoc(direction: Direction): ScriptDoc {
+  return direction === "inbound" ? INBOUND_ADAPTER_SCRIPT_DOC : OUTBOUND_ADAPTER_SCRIPT_DOC;
 }

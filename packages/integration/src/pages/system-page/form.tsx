@@ -7,12 +7,13 @@ import { z } from "@vef-framework-react/shared";
 
 import {
   AuthParamsFields,
-  ENVELOPE_REQUEST_SCRIPT_COMPLETIONS,
-  ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS,
+  ENVELOPE_REQUEST_SCRIPT_DOC,
+  ENVELOPE_RESPONSE_SCRIPT_DOC,
   FormSection,
-  INBOUND_AUTH_SCRIPT_COMPLETIONS,
-  OUTBOUND_AUTH_SCRIPT_COMPLETIONS,
-  ParamsEditor
+  INBOUND_AUTH_SCRIPT_DOC,
+  OUTBOUND_AUTH_SCRIPT_DOC,
+  ParamsEditor,
+  ScriptDocLabel
 } from "../../components";
 import {
   DATA_SOURCE_MODE_OPTIONS,
@@ -119,9 +120,9 @@ function OutboundAuthSection() {
                     {field => (
                       <field.CodeEditor
                         showLineNumbers
-                        completions={OUTBOUND_AUTH_SCRIPT_COMPLETIONS}
+                        completions={OUTBOUND_AUTH_SCRIPT_DOC.entries}
                         height={200}
-                        label="签名脚本"
+                        label={<ScriptDocLabel doc={OUTBOUND_AUTH_SCRIPT_DOC} label="认证脚本" />}
                         language="javascript"
                         placeholder="// 读取 request 与 params，返回需追加的凭据请求头对象"
                         size="large"
@@ -166,10 +167,10 @@ function OutboundEnvelopeSection() {
                       {field => (
                         <field.CodeEditor
                           showLineNumbers
-                          completions={ENVELOPE_REQUEST_SCRIPT_COMPLETIONS}
+                          completions={ENVELOPE_REQUEST_SCRIPT_DOC.entries}
                           extra="留空则请求原样发送"
                           height={180}
-                          label="请求包裹脚本（request）"
+                          label={<ScriptDocLabel doc={ENVELOPE_REQUEST_SCRIPT_DOC} label="请求包裹脚本（request）" />}
                           language="javascript"
                           placeholder="// 读取 request，返回改写后的 { method, path, headers, query, body }"
                           size="large"
@@ -183,10 +184,10 @@ function OutboundEnvelopeSection() {
                       {field => (
                         <field.CodeEditor
                           showLineNumbers
-                          completions={ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS}
+                          completions={ENVELOPE_RESPONSE_SCRIPT_DOC.entries}
                           extra="留空则响应原样返回"
                           height={180}
-                          label="响应解包脚本（response）"
+                          label={<ScriptDocLabel doc={ENVELOPE_RESPONSE_SCRIPT_DOC} label="响应解包脚本（response）" />}
                           language="javascript"
                           placeholder="// 读取 response，返回解包后的业务数据作为调用结果"
                           size="large"
@@ -254,9 +255,9 @@ function InboundSection() {
                               {field => (
                                 <field.CodeEditor
                                   showLineNumbers
-                                  completions={INBOUND_AUTH_SCRIPT_COMPLETIONS}
+                                  completions={INBOUND_AUTH_SCRIPT_DOC.entries}
                                   height={200}
-                                  label="验证脚本"
+                                  label={<ScriptDocLabel doc={INBOUND_AUTH_SCRIPT_DOC} label="验证脚本" />}
                                   language="javascript"
                                   placeholder="// 读取 request 与 params，返回真值即放行"
                                   size="large"

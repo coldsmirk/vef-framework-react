@@ -5,7 +5,7 @@ import type { AdapterParams } from "../../types";
 import { Grid, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
-import { adapterScriptCompletions, DIRECTION_OPTIONS, ScriptBindingHints, useContractDirectory, useSystemDirectory } from "../../components";
+import { adapterScriptDoc, DIRECTION_OPTIONS, ScriptDocLabel, useContractDirectory, useSystemDirectory } from "../../components";
 
 function requiredId(message: string) {
   return z.string(message).min(1, message);
@@ -80,21 +80,15 @@ export function AdapterForm({ scene }: AdapterFormProps) {
 
       <Grid.Item span={24}>
         <form.Subscribe selector={state => state.values.direction ?? "outbound"}>
-          {direction => <ScriptBindingHints direction={direction} />}
-        </form.Subscribe>
-      </Grid.Item>
-
-      <Grid.Item span={24}>
-        <form.Subscribe selector={state => state.values.direction ?? "outbound"}>
           {direction => (
             <form.AppField name="script" validators={{ onChange: scriptSchema }}>
               {field => (
                 <field.CodeEditor
                   required
                   showLineNumbers
-                  completions={adapterScriptCompletions(direction)}
+                  completions={adapterScriptDoc(direction).entries}
                   height={420}
-                  label="脚本"
+                  label={<ScriptDocLabel doc={adapterScriptDoc(direction)} label="脚本" />}
                   language="javascript"
                   placeholder="// 参照上方的绑定说明编写，return 即本次调用的返回值"
                   size="large"
