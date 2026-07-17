@@ -4,10 +4,12 @@ import { css } from "@emotion/react";
 import {
   Alert,
   Button,
+  Center,
   CodeEditor,
   Empty,
   Flex,
   FlexCard,
+  globalCssVars,
   Grid,
   Icon,
   Input,
@@ -19,7 +21,8 @@ import {
   showErrorMessage,
   showWarningMessage,
   Spin,
-  Stack
+  Stack,
+  Text
 } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { PlayIcon } from "lucide-react";
@@ -27,11 +30,12 @@ import { useMemo, useState } from "react";
 
 import { useOpsApi } from "../../api";
 import {
-  adapterScriptCompletions,
+  adapterScriptDoc,
   DIRECTION_OPTIONS,
   FailureKindTag,
   JsonView,
   ParamsEditor,
+  ScriptDocLabel,
   useContractDirectory,
   useSystemDirectory,
   WireTraceTimeline
@@ -75,13 +79,8 @@ const scrollFillCss = css({
   height: "100%"
 });
 
-const modeBarItemCss = css({
-  flexShrink: 0
-});
-
-const modeBannerCss = css({
-  flex: 1,
-  minWidth: 280
+const modeHintCss = css({
+  fontSize: globalCssVars.fontSizeSm
 });
 
 function OutboundResult({ result }: { result: DryRunResult }) {
@@ -233,25 +232,9 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
   const pending = isOutbound ? outboundPending : inboundPending;
   const activeResult = isOutbound ? outboundResult : inboundResult;
 
-  const renderResultBody = () => {
-    if (pending) {
-      return (
-        <Flex align="center" justify="center" style={{ minHeight: 180 }}>
-          <Spin />
-        </Flex>
-      );
-    }
-
-    if (isOutbound && outboundResult) {
-      return <OutboundResult result={outboundResult} />;
-    }
-
-    if (!isOutbound && inboundResult) {
-      return <InboundResult result={inboundResult} />;
-    }
-
-    return <Empty description="运行后在此查看结果" style={{ padding: "32px 0" }} />;
-  };
+  const resultContent = isOutbound
+    ? outboundResult && <OutboundResult result={outboundResult} />
+    : inboundResult && <InboundResult result={inboundResult} />;
 
   const runAction = (
     <PermissionGate requiredPermissions={isOutbound ? outboundPermission : inboundPermission}>
@@ -270,7 +253,6 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
     <div css={rootCss}>
       <Flex align="center" gap="middle" wrap="wrap">
         <Segmented<Direction>
-          css={modeBarItemCss}
           options={DIRECTION_OPTIONS}
           value={direction}
           onChange={next => {
@@ -280,8 +262,8 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
         />
 
         {isOutbound
-          ? <Alert showIcon css={modeBannerCss} title="出站调试会真实调用外部系统，但不写入统计与调用日志。" type="warning" />
-          : <Alert showIcon css={modeBannerCss} title="入站调试使用桩业务处理器，不触发真实业务，也不写入统计与调用日志。" type="info" />}
+          ? <Text css={modeHintCss} type="warning">出站调试会真实调用外部系统，但不写入统计与调用日志。</Text>
+          : <Text css={modeHintCss} type="secondary">入站调试使用桩业务处理器，不触发真实业务，也不写入统计与调用日志。</Text>}
       </Flex>
 
       <div css={workbenchCss}>
@@ -324,10 +306,10 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
                 </Grid.Item>
               </Grid>
 
-              <Labeled label="脚本">
+              <Labeled label={<ScriptDocLabel doc={adapterScriptDoc(direction)} label="脚本" />}>
                 <CodeEditor
                   showLineNumbers
-                  completions={adapterScriptCompletions(direction)}
+                  completions={adapterScriptDoc(direction).entries}
                   height={240}
                   language="javascript"
                   placeholder="// 留空则使用已保存的适配器脚本"
@@ -404,9 +386,17 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
           extra={activeResult ? <FailureKindTag failureKind={activeResult.failureKind} /> : null}
           title="结果"
         >
-          <ScrollArea css={scrollFillCss} scrollbars="vertical">
-            {renderResultBody()}
-          </ScrollArea>
+          {!pending && resultContent
+            ? (
+                <ScrollArea css={scrollFillCss} scrollbars="vertical">
+                  {resultContent}
+                </ScrollArea>
+              )
+            : (
+                <Center css={scrollFillCss}>
+                  {pending ? <Spin /> : <Empty description="运行后在此查看结果" />}
+                </Center>
+              )}
         </FlexCard>
       </div>
     </div>

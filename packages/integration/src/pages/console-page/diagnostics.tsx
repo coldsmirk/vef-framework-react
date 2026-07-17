@@ -6,6 +6,7 @@ import { css } from "@emotion/react";
 import {
   Button,
   Card,
+  Center,
   Descriptions,
   Empty,
   Flex,
@@ -32,7 +33,8 @@ const panelCss = css({
 });
 
 const resultAreaCss = css({
-  flex: 1
+  flex: 1,
+  minHeight: 0
 });
 
 function findingItems(finding: RouteFinding): DescriptionsItem[] {
@@ -127,13 +129,21 @@ export function DiagnosticsPanel({ permission }: DiagnosticsPanelProps) {
           </PermissionGate>
         </Flex>
 
-        <ScrollArea css={resultAreaCss} scrollbars="vertical">
-          {report
-            ? report.findings.length === 0
-              ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
-              : <Stack gap="middle">{groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}</Stack>
-            : <Empty description="尚未运行诊断" style={{ padding: "48px 0" }} />}
-        </ScrollArea>
+        {report && report.findings.length > 0
+          ? (
+              <ScrollArea css={resultAreaCss} scrollbars="vertical">
+                <Stack gap="middle">
+                  {groupByKind(report.findings).map(group => <FindingGroup key={group.kind} findings={group.findings} kind={group.kind} />)}
+                </Stack>
+              </ScrollArea>
+            )
+          : (
+              <Center css={resultAreaCss}>
+                {report
+                  ? <Result status="success" subTitle="未发现任何路由配置问题。" title="路由配置健康" />
+                  : <Empty description="尚未运行诊断" />}
+              </Center>
+            )}
       </div>
     </FlexCard>
   );
