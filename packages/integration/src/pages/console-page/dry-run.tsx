@@ -26,6 +26,7 @@ import { useMemo, useState } from "react";
 
 import { useOpsApi } from "../../api";
 import {
+  adapterScriptCompletions,
   DIRECTION_OPTIONS,
   FailureKindTag,
   JsonView,
@@ -326,6 +327,7 @@ export function DryRunPanel({ outboundPermission, inboundPermission }: DryRunPan
               <Labeled label="脚本">
                 <CodeEditor
                   showLineNumbers
+                  apiCompletions={adapterScriptCompletions(direction)}
                   height={240}
                   language="javascript"
                   placeholder="// 留空则使用已保存的适配器脚本"

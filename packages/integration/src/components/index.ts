@@ -13,6 +13,15 @@ export { JsonView, type JsonViewProps } from "./json-view";
 export { Labeled, type LabeledProps } from "./labeled";
 export { ParamsEditor, type ParamsEditorProps } from "./params-editor";
 export { ScriptBindingHints } from "./script-hints";
+export {
+  adapterScriptCompletions,
+  ENVELOPE_REQUEST_SCRIPT_COMPLETIONS,
+  ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS,
+  INBOUND_ADAPTER_SCRIPT_COMPLETIONS,
+  INBOUND_AUTH_SCRIPT_COMPLETIONS,
+  OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS,
+  OUTBOUND_AUTH_SCRIPT_COMPLETIONS
+} from "./script-hints/completions";
 export { DirectionTag, EnabledTag, FailureKindTag, FindingKindTag } from "./status";
 export { DIRECTION_COLORS, FAILURE_KIND_COLORS, ROUTE_FINDING_SEVERITY } from "./status/colors";
 export {

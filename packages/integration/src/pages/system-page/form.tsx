@@ -5,7 +5,16 @@ import type { SystemFormValues } from "./model";
 import { globalCssVars, Grid, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
-import { AuthParamsFields, FormSection, Labeled, ParamsEditor } from "../../components";
+import {
+  AuthParamsFields,
+  ENVELOPE_REQUEST_SCRIPT_COMPLETIONS,
+  ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS,
+  FormSection,
+  INBOUND_AUTH_SCRIPT_COMPLETIONS,
+  Labeled,
+  OUTBOUND_AUTH_SCRIPT_COMPLETIONS,
+  ParamsEditor
+} from "../../components";
 import {
   DATA_SOURCE_MODE_OPTIONS,
   DB_KIND_OPTIONS,
@@ -111,6 +120,7 @@ function OutboundAuthSection() {
                     {field => (
                       <field.CodeEditor
                         showLineNumbers
+                        apiCompletions={OUTBOUND_AUTH_SCRIPT_COMPLETIONS}
                         height={200}
                         label="签名脚本"
                         language="javascript"
@@ -156,6 +166,7 @@ function OutboundEnvelopeSection() {
                       {field => (
                         <field.CodeEditor
                           showLineNumbers
+                          apiCompletions={ENVELOPE_REQUEST_SCRIPT_COMPLETIONS}
                           extra="留空则请求原样发送"
                           height={180}
                           label="请求包裹脚本（request）"
@@ -171,6 +182,7 @@ function OutboundEnvelopeSection() {
                       {field => (
                         <field.CodeEditor
                           showLineNumbers
+                          apiCompletions={ENVELOPE_RESPONSE_SCRIPT_COMPLETIONS}
                           extra="留空则响应原样返回"
                           height={180}
                           label="响应解包脚本（response）"
@@ -240,6 +252,7 @@ function InboundSection() {
                               {field => (
                                 <field.CodeEditor
                                   showLineNumbers
+                                  apiCompletions={INBOUND_AUTH_SCRIPT_COMPLETIONS}
                                   height={200}
                                   label="验证脚本"
                                   language="javascript"
