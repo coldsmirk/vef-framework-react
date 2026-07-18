@@ -17,10 +17,10 @@ export interface AppContext {
    */
   hasPermission?: (token: string) => boolean;
   /**
-   * The query function for fetching data dictionary entries.
-   * Accepts an array of dictionary keys and returns a record mapping each key to its options.
+   * The query function for fetching host code set entries (the data-dictionary seam).
+   * Accepts an array of code set keys and returns a record mapping each key to its options.
    */
-  dictionaryQueryFn?: QueryFunction<Record<string, DataOption[]>, string[]>;
+  codeSetQueryFn?: QueryFunction<Record<string, DataOption[]>, string[]>;
   /**
    * The base URL for file access.
    */

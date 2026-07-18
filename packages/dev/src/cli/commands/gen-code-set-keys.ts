@@ -2,21 +2,21 @@ import process from "node:process";
 
 import consola from "consola";
 
-import { generateDictionaryKeys } from "../../code-generation/dictionary";
+import { generateCodeSetKeys } from "../../code-generation/code-set";
 import { CliError } from "../utils";
 
-export interface GenDictionaryKeysOptions {
+export interface GenCodeSetKeysOptions {
   config?: string;
   output?: string;
   check?: boolean;
 }
 
-export async function handleGenDictionaryKeys(
-  options: GenDictionaryKeysOptions,
+export async function handleGenCodeSetKeys(
+  options: GenCodeSetKeysOptions,
   cwd: string = process.cwd()
 ): Promise<void> {
   try {
-    const result = await generateDictionaryKeys({
+    const result = await generateCodeSetKeys({
       projectDir: cwd,
       configFile: options.config,
       output: options.output,
@@ -26,12 +26,12 @@ export async function handleGenDictionaryKeys(
 
     if (options.check && result.changed) {
       throw new CliError(
-        `Generated dictionary keys file is stale at ${result.outputPath}. Run \`vef gen:dictionary-keys\` to refresh.`
+        `Generated code set keys file is stale at ${result.outputPath}. Run \`vef gen:code-set-keys\` to refresh.`
       );
     }
 
     const suffix = result.changed ? "" : " (unchanged)";
-    consola.success(`Generated ${result.keyCount} dictionary keys -> ${result.outputPath}${suffix}`);
+    consola.success(`Generated ${result.keyCount} code set keys -> ${result.outputPath}${suffix}`);
   } catch (error) {
     // Let our own clean failures (e.g. the stale-file guard) pass through untouched.
     if (error instanceof CliError) {
@@ -43,7 +43,7 @@ export async function handleGenDictionaryKeys(
     // locally, rethrow the original error so the developer sees full detail. Covers non-Error throws.
     if (process.env.CI) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new CliError(`gen:dictionary-keys failed: ${message}`);
+      throw new CliError(`gen:code-set-keys failed: ${message}`);
     }
 
     throw error;

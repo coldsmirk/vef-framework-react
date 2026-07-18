@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { program } from "commander";
 
-import { handleGenDictionaryKeys } from "./commands/gen-dictionary-keys";
+import { handleGenCodeSetKeys } from "./commands/gen-code-set-keys";
 import { handleInit } from "./commands/init";
 import { handlePrepare } from "./commands/prepare";
 import { handleUpdate } from "./commands/update";
@@ -40,12 +40,12 @@ program
   .action(() => handleUpdate());
 
 program
-  .command("gen:dictionary-keys")
-  .description("Generate the DictionaryKey union type from the project's code-generation config")
+  .command("gen:code-set-keys")
+  .description("Generate the CodeSetKey union type from the project's code-generation config")
   .option("-c, --config <file>", "Path to code-generation.config.ts (relative to cwd or absolute)")
-  .option("-o, --output <file>", "Output file path (overrides config.dictionaryKeys.output)")
+  .option("-o, --output <file>", "Output file path (overrides config.codeSetKeys.output)")
   .option("--check", "Exit non-zero if the generated file would change (CI guard)")
-  .action(options => handleGenDictionaryKeys(options));
+  .action(options => handleGenCodeSetKeys(options));
 
 // parseAsync (not parse) so action handler rejections propagate here; route them through the single
 // error sink for consistent output and a deterministic non-zero exit.

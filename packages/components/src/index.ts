@@ -213,13 +213,13 @@ export { ScrollArea, type ScrollAreaProps, type ScrollAreaScrollbars } from "./s
 export { Segmented, type SegmentedOption, type SegmentedProps } from "./segmented";
 export {
   Select,
+  useCodeSetOptionsSelect,
   useDataOptionsSelect,
-  useDictionaryOptionsSelect,
   type SelectOption,
   type SelectProps,
-  type UseDataOptionsSelectOptions,
-  type UseDictionaryOptionsSelectOptions,
-  type UseDictionaryOptionsSelectResult
+  type UseCodeSetOptionsSelectOptions,
+  type UseCodeSetOptionsSelectResult,
+  type UseDataOptionsSelectOptions
 } from "./select";
 export { Skeleton, type SkeletonButtonProps, type SkeletonImageProps, type SkeletonInputProps, type SkeletonNodeProps, type SkeletonParagraphProps, type SkeletonProps, type SkeletonTitleProps } from "./skeleton";
 export { Slider, type SliderProps, type SliderRangeProps, type SliderSingleProps } from "./slider";

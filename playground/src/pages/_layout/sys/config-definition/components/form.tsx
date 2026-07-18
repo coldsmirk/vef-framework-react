@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { ConfigDefinitionParams } from "~apis";
 
-import { Grid, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 const CONFIG_KEY_PATTERN = /^[\w.]+$/;
@@ -29,7 +29,7 @@ export function Form(): ReactNode {
   const {
     category: categorySelectProps,
     valueType: valueTypeSelectProps
-  } = useDictionaryOptionsSelect({
+  } = useCodeSetOptionsSelect({
     category: "sys.config_definition.category",
     valueType: "sys.config_definition.value_type"
   });

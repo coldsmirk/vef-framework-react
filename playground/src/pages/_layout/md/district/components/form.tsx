@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { DistrictParams } from "~apis";
 
-import { Grid, useDataOptionsTreeSelect, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useDataOptionsTreeSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 import { useMemo } from "react";
 import { findDistrictTreeOptions } from "~apis";
@@ -11,7 +11,7 @@ const TEXTAREA_AUTO_SIZE = { minRows: 3, maxRows: 6 };
 export function Form(): ReactNode {
   const { AppField } = useFormContext<DistrictParams>();
 
-  const { level: levelSelectProps } = useDictionaryOptionsSelect({
+  const { level: levelSelectProps } = useCodeSetOptionsSelect({
     level: "md.district.level"
   });
 

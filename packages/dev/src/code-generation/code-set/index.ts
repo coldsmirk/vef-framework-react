@@ -1,17 +1,17 @@
 export {
-  generateDictionaryKeys,
-  type GenerateDictionaryKeysOptions,
-  type GenerateDictionaryKeysResult
+  generateCodeSetKeys,
+  type GenerateCodeSetKeysOptions,
+  type GenerateCodeSetKeysResult
 } from "./core";
 export { CodeGenerationValidationError } from "./errors";
 export {
-  DICTIONARY_AUGMENT_TARGET,
-  renderDictionaryKeysFile,
-  type RenderDictionaryKeysOptions
+  CODE_SET_AUGMENT_TARGET,
+  renderCodeSetKeysFile,
+  type RenderCodeSetKeysOptions
 } from "./render";
 export {
   defineCodeGenerationConfig,
   type CodeGenerationConfig,
-  type DictionaryKeyEntry,
-  type DictionaryKeysConfig
+  type CodeSetKeyEntry,
+  type CodeSetKeysConfig
 } from "./types";

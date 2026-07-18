@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { FlexCard, Menu } from "@vef-framework-react/components";
 import { useShallow } from "@vef-framework-react/core";
-import { useDictionaryQuery } from "@vef-framework-react/hooks";
+import { useCodeSetQuery } from "@vef-framework-react/hooks";
 import { Loader } from "lucide-react";
 import { useEffect, useMemo } from "react";
 
@@ -19,7 +19,7 @@ export function Aside(): ReactNode {
     })
   );
 
-  const { data, isFetching } = useDictionaryQuery({
+  const { data, isFetching } = useCodeSetQuery({
     category: "sys.config_definition.category"
   } as const);
 

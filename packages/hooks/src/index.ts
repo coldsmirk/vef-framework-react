@@ -8,6 +8,17 @@ export {
 } from "./use-breakpoints";
 export { useCheckPermission } from "./use-check-permission";
 export {
+  resolveCodeSetKey,
+  useCodeSetQuery,
+  type CodeSetAliasMap,
+  type CodeSetKey,
+  type CodeSetKeyConfig,
+  type CodeSetKeyValue,
+  type CodeSetQueryData,
+  type Register,
+  type UseCodeSetQueryOptions
+} from "./use-code-set-query";
+export {
   useDataOptionsQuery,
   type FieldExtractor,
   type UseDataOptionsQueryOptions,
@@ -19,17 +30,6 @@ export { useDeepEffect } from "./use-deep-effect";
 export { useDeepIsomorphicEffect } from "./use-deep-isomorphic-effect";
 export { useDeepLayoutEffect } from "./use-deep-layout-effect";
 export { useDeepMemo } from "./use-deep-memo";
-export {
-  resolveDictKey,
-  useDictionaryQuery,
-  type DictionaryAliasMap,
-  type DictionaryKey,
-  type DictionaryKeyConfig,
-  type DictionaryKeyValue,
-  type DictionaryQueryData,
-  type Register,
-  type UseDictionaryQueryOptions
-} from "./use-dictionary-query";
 export { useDocumentEvent } from "./use-document-event";
 export { useEmitterEvent } from "./use-emitter-event";
 export { useHasFetching } from "./use-has-fetching";

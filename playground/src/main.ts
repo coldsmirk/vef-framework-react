@@ -18,7 +18,7 @@ createApp().render({
   apiClient,
   router,
   appContext: {
-    dictionaryQueryFn: findDictionaryItemsBatch,
+    codeSetQueryFn: findDictionaryItemsBatch,
     fileBaseUrl: FILE_BASE_URL
   },
   appVersionNotification: {

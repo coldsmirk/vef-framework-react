@@ -1,16 +1,16 @@
-import type { DictionaryKeyEntry } from "@vef-framework-react/dev";
+import type { CodeSetKeyEntry } from "@vef-framework-react/dev";
 
 import { createRequire } from "node:module";
 
 import { defineCodeGenerationConfig } from "@vef-framework-react/dev";
 
-interface PostgresDictionaryKeyRow {
+interface PostgresCodeSetKeyRow {
   key: string;
   comment: string | null;
 }
 
 interface PostgresPool {
-  query: (sql: string) => Promise<{ rows: PostgresDictionaryKeyRow[] }>;
+  query: (sql: string) => Promise<{ rows: PostgresCodeSetKeyRow[] }>;
   end: () => Promise<void>;
 }
 
@@ -22,9 +22,9 @@ interface PostgresModule {
 
 const nodeRequire = createRequire(import.meta.url);
 
-const DICTIONARY_SOURCE_POSTGRES = "postgres";
+const CODE_SET_SOURCE_POSTGRES = "postgres";
 
-const POSTGRES_DICTIONARY_KEYS_SQL = `
+const POSTGRES_CODE_SET_KEYS_SQL = `
 select
   d.key,
   nullif(d.remark, '') as comment
@@ -34,7 +34,7 @@ where d.type = 'T'
 order by d.key
 `;
 
-const DEMO_DICTIONARY_KEYS = [
+const DEMO_CODE_SET_KEYS = [
   { key: "common.gender", comment: "通用性别" },
   { key: "md.department.level", comment: "科室级别" },
   { key: "md.department.type", comment: "科室类型" },
@@ -57,46 +57,46 @@ const DEMO_DICTIONARY_KEYS = [
   { key: "sys.serial_no_rule.date_format", comment: "流水号日期格式" },
   { key: "sys.serial_no_rule.reset_cycle", comment: "流水号重置周期" },
   { key: "sys.user.gender", comment: "系统用户性别" }
-] satisfies readonly DictionaryKeyEntry[];
+] satisfies readonly CodeSetKeyEntry[];
 
 /**
- * Playground code generation config. The default dictionary-keys fetcher mocks
+ * Playground code generation config. The default code-set-keys fetcher mocks
  * a backend response so the demo runs without a live server.
  *
- * Real projects can set `VEF_DICTIONARY_SOURCE=postgres` and `DATABASE_URL`
- * to read dictionary keys directly from PostgreSQL. The SQL below mirrors the
+ * Real projects can set `VEF_CODE_SET_SOURCE=postgres` and `DATABASE_URL`
+ * to read code set keys directly from PostgreSQL. The SQL below mirrors the
  * playground dictionary model; adjust table and column names to match the
  * production schema.
  *
- * Future generators (i18n, apiSchema, ...) live alongside `dictionaryKeys`
+ * Future generators (i18n, apiSchema, ...) live alongside `codeSetKeys`
  * in this same file — one code generation entry point per project.
  */
 export default defineCodeGenerationConfig({
-  dictionaryKeys: {
-    output: "src/types/dictionary.gen.ts",
-    fetchDictionaryKeys: resolveDictionaryKeyFetcher()
+  codeSetKeys: {
+    output: "src/types/code-set-keys.gen.ts",
+    fetchCodeSetKeys: resolveCodeSetKeyFetcher()
   }
 });
 
-function resolveDictionaryKeyFetcher(): () => Promise<readonly DictionaryKeyEntry[]> {
-  const { VEF_DICTIONARY_SOURCE } = process.env;
+function resolveCodeSetKeyFetcher(): () => Promise<readonly CodeSetKeyEntry[]> {
+  const { VEF_CODE_SET_SOURCE } = process.env;
 
-  if (VEF_DICTIONARY_SOURCE === DICTIONARY_SOURCE_POSTGRES) {
-    return fetchPostgresDictionaryKeys;
+  if (VEF_CODE_SET_SOURCE === CODE_SET_SOURCE_POSTGRES) {
+    return fetchPostgresCodeSetKeys;
   }
 
-  return fetchDemoDictionaryKeys;
+  return fetchDemoCodeSetKeys;
 }
 
-function fetchDemoDictionaryKeys(): Promise<readonly DictionaryKeyEntry[]> {
-  return Promise.resolve(DEMO_DICTIONARY_KEYS);
+function fetchDemoCodeSetKeys(): Promise<readonly CodeSetKeyEntry[]> {
+  return Promise.resolve(DEMO_CODE_SET_KEYS);
 }
 
-async function fetchPostgresDictionaryKeys(): Promise<readonly DictionaryKeyEntry[]> {
+async function fetchPostgresCodeSetKeys(): Promise<readonly CodeSetKeyEntry[]> {
   const { DATABASE_URL } = process.env;
 
   if (!DATABASE_URL) {
-    throw new Error("DATABASE_URL is required when VEF_DICTIONARY_SOURCE=postgres.");
+    throw new Error("DATABASE_URL is required when VEF_CODE_SET_SOURCE=postgres.");
   }
 
   const Pool = loadPostgresPool();
@@ -106,14 +106,14 @@ async function fetchPostgresDictionaryKeys(): Promise<readonly DictionaryKeyEntr
   });
 
   try {
-    const { rows } = await pool.query(POSTGRES_DICTIONARY_KEYS_SQL);
-    return rows.map(row => toDictionaryKeyEntry(row));
+    const { rows } = await pool.query(POSTGRES_CODE_SET_KEYS_SQL);
+    return rows.map(row => toCodeSetKeyEntry(row));
   } finally {
     await pool.end();
   }
 }
 
-function toDictionaryKeyEntry({ key, comment }: PostgresDictionaryKeyRow): DictionaryKeyEntry {
+function toCodeSetKeyEntry({ key, comment }: PostgresCodeSetKeyRow): CodeSetKeyEntry {
   return {
     key,
     ...comment && { comment }
@@ -136,7 +136,7 @@ function loadPostgresPool(): PostgresPoolConstructor {
     return pg.Pool;
   } catch (error) {
     if (isModuleNotFoundError(error)) {
-      throw new Error("PostgreSQL dictionary generation requires `pg`. Install it with `pnpm add -D pg`.", {
+      throw new Error("PostgreSQL code set generation requires `pg`. Install it with `pnpm add -D pg`.", {
         cause: error
       });
     }

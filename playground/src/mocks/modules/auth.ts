@@ -59,13 +59,14 @@ const MENUS: UserMenu[] = [
     leaf("外部系统", "/sys/integration-system", "server"),
     leaf("集成适配器", "/sys/integration-adapter", "plug"),
     leaf("集成路由", "/sys/integration-route", "route"),
+    leaf("对码表", "/sys/integration-code-map", "arrow-right-left"),
     leaf("集成控制台", "/sys/integration-console", "terminal")
   ]),
   dir("系统", "/sys", "settings", [
     leaf("应用管理", "/sys/app", "app-window"),
     leaf("字典管理", "/sys/dictionary", "book"),
     leaf("字典项管理", "/sys/dictionary-item", "book-open"),
-    leaf("字典演示", "/sys/dictionary-demo", "sparkles"),
+    leaf("码集键演示", "/sys/code-set-demo", "sparkles"),
     leaf("配置定义", "/sys/config-definition", "list"),
     leaf("配置管理", "/sys/config", "sliders"),
     leaf("流水号规则", "/sys/serial-no-rule", "hash"),

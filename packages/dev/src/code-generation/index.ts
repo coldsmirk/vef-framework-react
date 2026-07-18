@@ -1,1 +1,1 @@
-export * from "./dictionary";
+export * from "./code-set";

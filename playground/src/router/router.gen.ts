@@ -26,15 +26,16 @@ import { Route as LayoutSysIntegrationSystemRouteRouteImport } from "./../pages/
 import { Route as LayoutSysIntegrationRouteRouteRouteImport } from "./../pages/_layout/sys/integration-route/route";
 import { Route as LayoutSysIntegrationContractRouteRouteImport } from "./../pages/_layout/sys/integration-contract/route";
 import { Route as LayoutSysIntegrationConsoleRouteRouteImport } from "./../pages/_layout/sys/integration-console/route";
+import { Route as LayoutSysIntegrationCodeMapRouteRouteImport } from "./../pages/_layout/sys/integration-code-map/route";
 import { Route as LayoutSysIntegrationAdapterRouteRouteImport } from "./../pages/_layout/sys/integration-adapter/route";
 import { Route as LayoutSysFormEditorRouteRouteImport } from "./../pages/_layout/sys/form-editor/route";
 import { Route as LayoutSysFilePreviewDemoRouteRouteImport } from "./../pages/_layout/sys/file-preview-demo/route";
 import { Route as LayoutSysEditableTableDemoRouteRouteImport } from "./../pages/_layout/sys/editable-table-demo/route";
 import { Route as LayoutSysDictionaryItemRouteRouteImport } from "./../pages/_layout/sys/dictionary-item/route";
-import { Route as LayoutSysDictionaryDemoRouteRouteImport } from "./../pages/_layout/sys/dictionary-demo/route";
 import { Route as LayoutSysDictionaryRouteRouteImport } from "./../pages/_layout/sys/dictionary/route";
 import { Route as LayoutSysConfigDefinitionRouteRouteImport } from "./../pages/_layout/sys/config-definition/route";
 import { Route as LayoutSysConfigRouteRouteImport } from "./../pages/_layout/sys/config/route";
+import { Route as LayoutSysCodeSetDemoRouteRouteImport } from "./../pages/_layout/sys/code-set-demo/route";
 import { Route as LayoutSysAuditLogRouteRouteImport } from "./../pages/_layout/sys/audit-log/route";
 import { Route as LayoutSysApprovalFlowEditorRouteRouteImport } from "./../pages/_layout/sys/approval-flow-editor/route";
 import { Route as LayoutSysAppRouteRouteImport } from "./../pages/_layout/sys/app/route";
@@ -123,6 +124,12 @@ const LayoutSysIntegrationConsoleRouteRoute =
     path: "/sys/integration-console",
     getParentRoute: () => LayoutRouteRoute,
   } as any);
+const LayoutSysIntegrationCodeMapRouteRoute =
+  LayoutSysIntegrationCodeMapRouteRouteImport.update({
+    id: "/sys/integration-code-map",
+    path: "/sys/integration-code-map",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
 const LayoutSysIntegrationAdapterRouteRoute =
   LayoutSysIntegrationAdapterRouteRouteImport.update({
     id: "/sys/integration-adapter",
@@ -153,12 +160,6 @@ const LayoutSysDictionaryItemRouteRoute =
     path: "/sys/dictionary-item",
     getParentRoute: () => LayoutRouteRoute,
   } as any);
-const LayoutSysDictionaryDemoRouteRoute =
-  LayoutSysDictionaryDemoRouteRouteImport.update({
-    id: "/sys/dictionary-demo",
-    path: "/sys/dictionary-demo",
-    getParentRoute: () => LayoutRouteRoute,
-  } as any);
 const LayoutSysDictionaryRouteRoute =
   LayoutSysDictionaryRouteRouteImport.update({
     id: "/sys/dictionary",
@@ -176,6 +177,12 @@ const LayoutSysConfigRouteRoute = LayoutSysConfigRouteRouteImport.update({
   path: "/sys/config",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
+const LayoutSysCodeSetDemoRouteRoute =
+  LayoutSysCodeSetDemoRouteRouteImport.update({
+    id: "/sys/code-set-demo",
+    path: "/sys/code-set-demo",
+    getParentRoute: () => LayoutRouteRoute,
+  } as any);
 const LayoutSysAuditLogRouteRoute = LayoutSysAuditLogRouteRouteImport.update({
   id: "/sys/audit-log",
   path: "/sys/audit-log",
@@ -299,15 +306,16 @@ export interface FileRoutesByFullPath {
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
+  "/sys/code-set-demo": typeof LayoutSysCodeSetDemoRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
   "/sys/dictionary": typeof LayoutSysDictionaryRouteRoute;
-  "/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/sys/integration-code-map": typeof LayoutSysIntegrationCodeMapRouteRoute;
   "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
   "/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
   "/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
@@ -340,15 +348,16 @@ export interface FileRoutesByTo {
   "/sys/app": typeof LayoutSysAppRouteRoute;
   "/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
   "/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
+  "/sys/code-set-demo": typeof LayoutSysCodeSetDemoRouteRoute;
   "/sys/config": typeof LayoutSysConfigRouteRoute;
   "/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
   "/sys/dictionary": typeof LayoutSysDictionaryRouteRoute;
-  "/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/sys/integration-code-map": typeof LayoutSysIntegrationCodeMapRouteRoute;
   "/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
   "/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
   "/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
@@ -383,15 +392,16 @@ export interface FileRoutesById {
   "/_layout/sys/app": typeof LayoutSysAppRouteRoute;
   "/_layout/sys/approval-flow-editor": typeof LayoutSysApprovalFlowEditorRouteRoute;
   "/_layout/sys/audit-log": typeof LayoutSysAuditLogRouteRoute;
+  "/_layout/sys/code-set-demo": typeof LayoutSysCodeSetDemoRouteRoute;
   "/_layout/sys/config": typeof LayoutSysConfigRouteRoute;
   "/_layout/sys/config-definition": typeof LayoutSysConfigDefinitionRouteRoute;
   "/_layout/sys/dictionary": typeof LayoutSysDictionaryRouteRoute;
-  "/_layout/sys/dictionary-demo": typeof LayoutSysDictionaryDemoRouteRoute;
   "/_layout/sys/dictionary-item": typeof LayoutSysDictionaryItemRouteRoute;
   "/_layout/sys/editable-table-demo": typeof LayoutSysEditableTableDemoRouteRoute;
   "/_layout/sys/file-preview-demo": typeof LayoutSysFilePreviewDemoRouteRoute;
   "/_layout/sys/form-editor": typeof LayoutSysFormEditorRouteRoute;
   "/_layout/sys/integration-adapter": typeof LayoutSysIntegrationAdapterRouteRoute;
+  "/_layout/sys/integration-code-map": typeof LayoutSysIntegrationCodeMapRouteRoute;
   "/_layout/sys/integration-console": typeof LayoutSysIntegrationConsoleRouteRoute;
   "/_layout/sys/integration-contract": typeof LayoutSysIntegrationContractRouteRoute;
   "/_layout/sys/integration-route": typeof LayoutSysIntegrationRouteRouteRoute;
@@ -426,15 +436,16 @@ export interface FileRouteTypes {
     | "/sys/app"
     | "/sys/approval-flow-editor"
     | "/sys/audit-log"
+    | "/sys/code-set-demo"
     | "/sys/config"
     | "/sys/config-definition"
     | "/sys/dictionary"
-    | "/sys/dictionary-demo"
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
     | "/sys/file-preview-demo"
     | "/sys/form-editor"
     | "/sys/integration-adapter"
+    | "/sys/integration-code-map"
     | "/sys/integration-console"
     | "/sys/integration-contract"
     | "/sys/integration-route"
@@ -467,15 +478,16 @@ export interface FileRouteTypes {
     | "/sys/app"
     | "/sys/approval-flow-editor"
     | "/sys/audit-log"
+    | "/sys/code-set-demo"
     | "/sys/config"
     | "/sys/config-definition"
     | "/sys/dictionary"
-    | "/sys/dictionary-demo"
     | "/sys/dictionary-item"
     | "/sys/editable-table-demo"
     | "/sys/file-preview-demo"
     | "/sys/form-editor"
     | "/sys/integration-adapter"
+    | "/sys/integration-code-map"
     | "/sys/integration-console"
     | "/sys/integration-contract"
     | "/sys/integration-route"
@@ -509,15 +521,16 @@ export interface FileRouteTypes {
     | "/_layout/sys/app"
     | "/_layout/sys/approval-flow-editor"
     | "/_layout/sys/audit-log"
+    | "/_layout/sys/code-set-demo"
     | "/_layout/sys/config"
     | "/_layout/sys/config-definition"
     | "/_layout/sys/dictionary"
-    | "/_layout/sys/dictionary-demo"
     | "/_layout/sys/dictionary-item"
     | "/_layout/sys/editable-table-demo"
     | "/_layout/sys/file-preview-demo"
     | "/_layout/sys/form-editor"
     | "/_layout/sys/integration-adapter"
+    | "/_layout/sys/integration-code-map"
     | "/_layout/sys/integration-console"
     | "/_layout/sys/integration-contract"
     | "/_layout/sys/integration-route"
@@ -627,6 +640,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutSysIntegrationConsoleRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
+    "/_layout/sys/integration-code-map": {
+      id: "/_layout/sys/integration-code-map";
+      path: "/sys/integration-code-map";
+      fullPath: "/sys/integration-code-map";
+      preLoaderRoute: typeof LayoutSysIntegrationCodeMapRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
     "/_layout/sys/integration-adapter": {
       id: "/_layout/sys/integration-adapter";
       path: "/sys/integration-adapter";
@@ -662,13 +682,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutSysDictionaryItemRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
-    "/_layout/sys/dictionary-demo": {
-      id: "/_layout/sys/dictionary-demo";
-      path: "/sys/dictionary-demo";
-      fullPath: "/sys/dictionary-demo";
-      preLoaderRoute: typeof LayoutSysDictionaryDemoRouteRouteImport;
-      parentRoute: typeof LayoutRouteRoute;
-    };
     "/_layout/sys/dictionary": {
       id: "/_layout/sys/dictionary";
       path: "/sys/dictionary";
@@ -688,6 +701,13 @@ declare module "@tanstack/react-router" {
       path: "/sys/config";
       fullPath: "/sys/config";
       preLoaderRoute: typeof LayoutSysConfigRouteRouteImport;
+      parentRoute: typeof LayoutRouteRoute;
+    };
+    "/_layout/sys/code-set-demo": {
+      id: "/_layout/sys/code-set-demo";
+      path: "/sys/code-set-demo";
+      fullPath: "/sys/code-set-demo";
+      preLoaderRoute: typeof LayoutSysCodeSetDemoRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
     "/_layout/sys/audit-log": {
@@ -856,15 +876,16 @@ interface LayoutRouteRouteChildren {
   LayoutSysAppRouteRoute: typeof LayoutSysAppRouteRoute;
   LayoutSysApprovalFlowEditorRouteRoute: typeof LayoutSysApprovalFlowEditorRouteRoute;
   LayoutSysAuditLogRouteRoute: typeof LayoutSysAuditLogRouteRoute;
+  LayoutSysCodeSetDemoRouteRoute: typeof LayoutSysCodeSetDemoRouteRoute;
   LayoutSysConfigRouteRoute: typeof LayoutSysConfigRouteRoute;
   LayoutSysConfigDefinitionRouteRoute: typeof LayoutSysConfigDefinitionRouteRoute;
   LayoutSysDictionaryRouteRoute: typeof LayoutSysDictionaryRouteRoute;
-  LayoutSysDictionaryDemoRouteRoute: typeof LayoutSysDictionaryDemoRouteRoute;
   LayoutSysDictionaryItemRouteRoute: typeof LayoutSysDictionaryItemRouteRoute;
   LayoutSysEditableTableDemoRouteRoute: typeof LayoutSysEditableTableDemoRouteRoute;
   LayoutSysFilePreviewDemoRouteRoute: typeof LayoutSysFilePreviewDemoRouteRoute;
   LayoutSysFormEditorRouteRoute: typeof LayoutSysFormEditorRouteRoute;
   LayoutSysIntegrationAdapterRouteRoute: typeof LayoutSysIntegrationAdapterRouteRoute;
+  LayoutSysIntegrationCodeMapRouteRoute: typeof LayoutSysIntegrationCodeMapRouteRoute;
   LayoutSysIntegrationConsoleRouteRoute: typeof LayoutSysIntegrationConsoleRouteRoute;
   LayoutSysIntegrationContractRouteRoute: typeof LayoutSysIntegrationContractRouteRoute;
   LayoutSysIntegrationRouteRouteRoute: typeof LayoutSysIntegrationRouteRouteRoute;
@@ -888,15 +909,16 @@ const LayoutRouteRouteChildren: LayoutRouteRouteChildren = {
   LayoutSysAppRouteRoute: LayoutSysAppRouteRoute,
   LayoutSysApprovalFlowEditorRouteRoute: LayoutSysApprovalFlowEditorRouteRoute,
   LayoutSysAuditLogRouteRoute: LayoutSysAuditLogRouteRoute,
+  LayoutSysCodeSetDemoRouteRoute: LayoutSysCodeSetDemoRouteRoute,
   LayoutSysConfigRouteRoute: LayoutSysConfigRouteRoute,
   LayoutSysConfigDefinitionRouteRoute: LayoutSysConfigDefinitionRouteRoute,
   LayoutSysDictionaryRouteRoute: LayoutSysDictionaryRouteRoute,
-  LayoutSysDictionaryDemoRouteRoute: LayoutSysDictionaryDemoRouteRoute,
   LayoutSysDictionaryItemRouteRoute: LayoutSysDictionaryItemRouteRoute,
   LayoutSysEditableTableDemoRouteRoute: LayoutSysEditableTableDemoRouteRoute,
   LayoutSysFilePreviewDemoRouteRoute: LayoutSysFilePreviewDemoRouteRoute,
   LayoutSysFormEditorRouteRoute: LayoutSysFormEditorRouteRoute,
   LayoutSysIntegrationAdapterRouteRoute: LayoutSysIntegrationAdapterRouteRoute,
+  LayoutSysIntegrationCodeMapRouteRoute: LayoutSysIntegrationCodeMapRouteRoute,
   LayoutSysIntegrationConsoleRouteRoute: LayoutSysIntegrationConsoleRouteRoute,
   LayoutSysIntegrationContractRouteRoute:
     LayoutSysIntegrationContractRouteRoute,

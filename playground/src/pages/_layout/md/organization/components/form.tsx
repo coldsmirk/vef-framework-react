@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { OrganizationParams } from "~apis";
 
-import { Grid, useDataOptionsTreeSelect, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useDataOptionsTreeSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 import { findOrganizationTreeOptions } from "~apis";
 
@@ -22,7 +22,7 @@ export function Form(): ReactNode {
   const {
     orgType: orgTypeSelectProps,
     hospitalLevel: hospitalLevelSelectProps
-  } = useDictionaryOptionsSelect({
+  } = useCodeSetOptionsSelect({
     orgType: "md.organization.type",
     hospitalLevel: "md.organization.hospital_level"
   });

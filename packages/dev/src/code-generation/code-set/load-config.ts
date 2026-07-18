@@ -1,4 +1,4 @@
-import type { CodeGenerationConfig, DictionaryKeysConfig } from "./types";
+import type { CodeGenerationConfig, CodeSetKeysConfig } from "./types";
 
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -33,7 +33,7 @@ export interface LoadedCodeGenerationConfig {
  * project tree.
  *
  * Shape safety: the loaded module is validated at the trust boundary —
- * if a `dictionaryKeys` block is present, its `fetchDictionaryKeys` must
+ * if a `codeSetKeys` block is present, its `fetchCodeSetKeys` must
  * be a function, `output` must be a string or absent, `timeout` must be a
  * finite non-negative number or absent.
  */
@@ -98,33 +98,33 @@ function validateCodeGenerationConfigShape(config: CodeGenerationConfig, configP
     );
   }
 
-  if (config.dictionaryKeys !== undefined) {
-    validateDictionaryKeysShape(config.dictionaryKeys, configPath);
+  if (config.codeSetKeys !== undefined) {
+    validateCodeSetKeysShape(config.codeSetKeys, configPath);
   }
 }
 
-function validateDictionaryKeysShape(block: DictionaryKeysConfig, configPath: string): void {
+function validateCodeSetKeysShape(block: CodeSetKeysConfig, configPath: string): void {
   if (typeof block !== "object" || block === null) {
     throw new CodeGenerationValidationError(
-      `Code generation config at ${configPath} field \`dictionaryKeys\` must be an object when set.`
+      `Code generation config at ${configPath} field \`codeSetKeys\` must be an object when set.`
     );
   }
 
-  if (typeof block.fetchDictionaryKeys !== "function") {
+  if (typeof block.fetchCodeSetKeys !== "function") {
     throw new CodeGenerationValidationError(
-      `Code generation config at ${configPath} field \`dictionaryKeys.fetchDictionaryKeys\` must be a function.`
+      `Code generation config at ${configPath} field \`codeSetKeys.fetchCodeSetKeys\` must be a function.`
     );
   }
 
   if (block.output !== undefined && typeof block.output !== "string") {
     throw new CodeGenerationValidationError(
-      `Code generation config at ${configPath} field \`dictionaryKeys.output\` must be a string when set; got ${typeof block.output}.`
+      `Code generation config at ${configPath} field \`codeSetKeys.output\` must be a string when set; got ${typeof block.output}.`
     );
   }
 
   if (block.timeout !== undefined && !isNonNegativeFiniteNumber(block.timeout)) {
     throw new CodeGenerationValidationError(
-      `Code generation config at ${configPath} field \`dictionaryKeys.timeout\` must be a finite non-negative number when set; got ${String(block.timeout)}.`
+      `Code generation config at ${configPath} field \`codeSetKeys.timeout\` must be a finite non-negative number when set; got ${String(block.timeout)}.`
     );
   }
 }

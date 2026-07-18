@@ -1,6 +1,6 @@
 import type { Menu, MenuParams } from "~apis";
 
-import { Grid, useDataOptionsSelect, useDataOptionsTreeSelect, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useDataOptionsSelect, useDataOptionsTreeSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 import { findAppOptions, findMenuTreeOptions } from "~apis";
 
@@ -67,7 +67,7 @@ export function Form() {
     }
   });
 
-  const { menuType: menuTypeSelectProps } = useDictionaryOptionsSelect({
+  const { menuType: menuTypeSelectProps } = useCodeSetOptionsSelect({
     menuType: "sys.menu.type"
   });
 

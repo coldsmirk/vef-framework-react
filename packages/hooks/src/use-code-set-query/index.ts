@@ -8,60 +8,60 @@ import { useCallback, useMemo } from "react";
  * Extension registry for hooks package types.
  *
  * Augment via `declare module "@vef-framework-react/hooks"` to constrain
- * dictionary keys to a known union; future hook-level extensions should be
+ * code set keys to a known union; future hook-level extensions should be
  * added as members of this registry.
  *
  * @example
  * declare module "@vef-framework-react/hooks" {
  *   interface Register {
- *     dictionaryKeys: "sys.menu.type" | "sys.user.gender";
+ *     codeSetKeys: "sys.menu.type" | "sys.user.gender";
  *   }
  * }
  */
 export interface Register {}
 
 /**
- * Valid dictionary keys for this project. Resolves to the `dictionaryKeys`
+ * Valid code set keys for this project. Resolves to the `codeSetKeys`
  * member augmented onto `Register`, or `string` when not augmented.
  */
-export type DictionaryKey = Register extends { dictionaryKeys: infer K extends string }
+export type CodeSetKey = Register extends { codeSetKeys: infer K extends string }
   ? K
   : string;
 
 /**
- * Per-key configuration with dict key and optional overrides.
+ * Per-key configuration with code set key and optional overrides.
  */
-export interface DictionaryKeyConfig {
-  key: DictionaryKey;
+export interface CodeSetKeyConfig {
+  key: CodeSetKey;
   filterable?: boolean;
 }
 
 /**
- * Value can be a plain dict key string or a config object.
+ * Value can be a plain code set key string or a config object.
  */
-export type DictionaryKeyValue = DictionaryKey | DictionaryKeyConfig;
+export type CodeSetKeyValue = CodeSetKey | CodeSetKeyConfig;
 
 /**
  * Alias map that rejects array inputs.
  */
-export interface DictionaryAliasMap {
-  readonly [alias: string]: DictionaryKeyValue;
+export interface CodeSetAliasMap {
+  readonly [alias: string]: CodeSetKeyValue;
   readonly [index: number]: never;
 }
 
 /**
- * Extract the actual dict key from a string or config value.
+ * Extract the actual code set key from a string or config value.
  */
-export function resolveDictKey(value: DictionaryKeyValue): string {
+export function resolveCodeSetKey(value: CodeSetKeyValue): string {
   return isString(value) ? value : value.key;
 }
 
-export type DictionaryQueryData<T extends DictionaryAliasMap> = Record<Extract<keyof T, string>, DataOption[]>;
+export type CodeSetQueryData<T extends CodeSetAliasMap> = Record<Extract<keyof T, string>, DataOption[]>;
 
 /**
- * Options for `useDictionaryQuery`.
+ * Options for `useCodeSetQuery`.
  */
-export interface UseDictionaryQueryOptions<T extends DictionaryAliasMap, TData = DictionaryQueryData<T>> {
+export interface UseCodeSetQueryOptions<T extends CodeSetAliasMap, TData = CodeSetQueryData<T>> {
   /**
    * Whether the query is enabled. Pass `false` to defer fetching, e.g.,
    * while upstream parameters are not yet ready.
@@ -70,19 +70,19 @@ export interface UseDictionaryQueryOptions<T extends DictionaryAliasMap, TData =
    */
   enabled?: boolean;
   /**
-   * Transform the resolved dictionary map into a custom shape.
+   * Transform the resolved code set map into a custom shape.
    * Runs after alias resolution; its return value becomes `data`.
    *
    * The function is passed through to React Query's `select`, so its identity
    * affects memoization: stabilize it with `useCallback` in the caller when
    * the enclosing component re-renders frequently.
    */
-  select?: (data: DictionaryQueryData<T>) => TData;
+  select?: (data: CodeSetQueryData<T>) => TData;
 }
 
 /**
- * Query data dictionaries and map them back to alias keys.
- * Uses the `dictionaryQueryFn` from app context.
+ * Query host code sets and map them back to alias keys.
+ * Uses the `codeSetQueryFn` from app context.
  *
  * `data` follows React Query's native semantics: it is `undefined` until the
  * query resolves successfully, so callers must guard against `undefined`.
@@ -91,31 +91,31 @@ export interface UseDictionaryQueryOptions<T extends DictionaryAliasMap, TData =
  * them in module scope, `as const`, `useMemo`, or `useCallback` as needed to
  * avoid invalidating React Query's `select` memoization on every render.
  */
-export function useDictionaryQuery<
-  const T extends DictionaryAliasMap,
-  TData = DictionaryQueryData<T>
+export function useCodeSetQuery<
+  const T extends CodeSetAliasMap,
+  TData = CodeSetQueryData<T>
 >(
   keys: T,
-  options?: UseDictionaryQueryOptions<NoInfer<T>, TData>
+  options?: UseCodeSetQueryOptions<NoInfer<T>, TData>
 ): UseQueryResult<TData> {
-  const { dictionaryQueryFn } = useAppContext();
+  const { codeSetQueryFn } = useAppContext();
 
-  if (!isFunction(dictionaryQueryFn)) {
-    throw new Error("Dictionary query function is not provided in the app context.");
+  if (!isFunction(codeSetQueryFn)) {
+    throw new Error("Code set query function is not provided in the app context.");
   }
 
   const { enabled, select: userSelect } = options ?? {};
 
   const sortedKeys = useMemo(
-    () => [...new Set(Object.values(keys).map(value => resolveDictKey(value)))].toSorted(),
+    () => [...new Set(Object.values(keys).map(value => resolveCodeSetKey(value)))].toSorted(),
     [keys]
   );
 
   const select = useCallback(
     (rawData: Record<string, DataOption[]>): TData => {
       const mapped = Object.fromEntries(
-        Object.entries(keys).map(([aliasKey, value]) => [aliasKey, rawData[resolveDictKey(value)] ?? []])
-      ) as DictionaryQueryData<T>;
+        Object.entries(keys).map(([aliasKey, value]) => [aliasKey, rawData[resolveCodeSetKey(value)] ?? []])
+      ) as CodeSetQueryData<T>;
 
       return (userSelect ? userSelect(mapped) : mapped) as TData;
     },
@@ -123,8 +123,8 @@ export function useDictionaryQuery<
   );
 
   return useQuery({
-    queryFn: sortedKeys.length === 0 ? skipQueryToken : dictionaryQueryFn,
-    queryKey: [dictionaryQueryFn.key, sortedKeys],
+    queryFn: sortedKeys.length === 0 ? skipQueryToken : codeSetQueryFn,
+    queryKey: [codeSetQueryFn.key, sortedKeys],
     enabled,
     select,
     staleTime: Infinity

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CodeGenerationValidationError, generateDictionaryKeys } from "./index";
+import { CodeGenerationValidationError, generateCodeSetKeys } from "./index";
 
 let projectDir: string;
 
@@ -28,13 +28,13 @@ function createWarnSpy(): { onWarn: (message: string) => void; warnings: string[
   };
 }
 
-describe("code-generation/dictionary/generateDictionaryKeys", () => {
+describe("code-generation/code-set/generateCodeSetKeys", () => {
   describe("happy path", () => {
     it("writes the generated file and reports the key count", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [
               { key: "sys.menu.type" },
               { key: "sys.user.gender" }
             ]
@@ -42,7 +42,7 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
         };
       `);
 
-      const result = await generateDictionaryKeys({ projectDir });
+      const result = await generateCodeSetKeys({ projectDir });
 
       expect(result.keyCount).toBe(2);
       expect(result.changed).toBe(true);
@@ -56,14 +56,14 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("reports changed=false on an identical second run", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "sys.menu.type" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "sys.menu.type" }]
           }
         };
       `);
 
-      await generateDictionaryKeys({ projectDir });
-      const second = await generateDictionaryKeys({ projectDir });
+      await generateCodeSetKeys({ projectDir });
+      const second = await generateCodeSetKeys({ projectDir });
 
       expect(second.changed).toBe(false);
     });
@@ -71,38 +71,38 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("honors output override over config value", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             output: "ignored.gen.ts",
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
-      const result = await generateDictionaryKeys({
+      const result = await generateCodeSetKeys({
         projectDir,
-        output: "custom/path/dict.gen.ts"
+        output: "custom/path/keys.gen.ts"
       });
 
-      expect(result.outputPath.endsWith("custom/path/dict.gen.ts")).toBe(true);
+      expect(result.outputPath.endsWith("custom/path/keys.gen.ts")).toBe(true);
     });
 
     it("honors augmentTarget override", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
-      const result = await generateDictionaryKeys({
+      const result = await generateCodeSetKeys({
         projectDir,
-        augmentTarget: "@my-fork/dict"
+        augmentTarget: "@my-fork/code-sets"
       });
 
       const written = await readFile(result.outputPath, "utf-8");
 
-      expect(written).toContain("declare module \"@my-fork/dict\"");
+      expect(written).toContain("declare module \"@my-fork/code-sets\"");
     });
   });
 
@@ -110,13 +110,13 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("does not write the file but still reports changed=true on first run", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "sys.menu.type" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "sys.menu.type" }]
           }
         };
       `);
 
-      const result = await generateDictionaryKeys({ projectDir, check: true });
+      const result = await generateCodeSetKeys({ projectDir, check: true });
 
       expect(result.changed).toBe(true);
       await expect(readFile(result.outputPath, "utf-8")).rejects.toThrow();
@@ -125,17 +125,17 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("reports changed=false when file is already in sync", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "sys.menu.type" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "sys.menu.type" }]
           }
         };
       `);
 
-      const initial = await generateDictionaryKeys({ projectDir });
+      const initial = await generateCodeSetKeys({ projectDir });
       const baselineStat = await stat(initial.outputPath);
       const baselineMtime = baselineStat.mtimeMs;
 
-      const check = await generateDictionaryKeys({ projectDir, check: true });
+      const check = await generateCodeSetKeys({ projectDir, check: true });
       const afterStat = await stat(initial.outputPath);
 
       expect(check.changed).toBe(false);
@@ -147,8 +147,8 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("dedupes duplicate keys and sorts by code point", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [
               { key: "z.last" },
               { key: "a.first" },
               { key: "a.first" }
@@ -157,7 +157,7 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
         };
       `);
 
-      const result = await generateDictionaryKeys({ projectDir });
+      const result = await generateCodeSetKeys({ projectDir });
 
       expect(result.keyCount).toBe(2);
 
@@ -169,8 +169,8 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("warns when duplicate keys have conflicting comments", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [
               { key: "k", comment: "first" },
               { key: "k", comment: "second" }
             ]
@@ -180,17 +180,17 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
 
       const { onWarn, warnings } = createWarnSpy();
 
-      await generateDictionaryKeys({ projectDir, onWarn });
+      await generateCodeSetKeys({ projectDir, onWarn });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toContain("Duplicate dictionary key \"k\" with conflicting comments");
+      expect(warnings[0]).toContain("Duplicate code set key \"k\" with conflicting comments");
     });
 
     it("does not warn when duplicate keys have identical comments", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [
               { key: "k", comment: "same" },
               { key: "k", comment: "same" }
             ]
@@ -200,7 +200,7 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
 
       const { onWarn, warnings } = createWarnSpy();
 
-      await generateDictionaryKeys({ projectDir, onWarn });
+      await generateCodeSetKeys({ projectDir, onWarn });
 
       expect(warnings).toHaveLength(0);
     });
@@ -208,8 +208,8 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("does not warn when duplicate keys both omit the comment", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [
               { key: "k" },
               { key: "k" }
             ]
@@ -219,31 +219,31 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
 
       const { onWarn, warnings } = createWarnSpy();
 
-      await generateDictionaryKeys({ projectDir, onWarn });
+      await generateCodeSetKeys({ projectDir, onWarn });
 
       expect(warnings).toHaveLength(0);
     });
   });
 
   describe("when fetcher returns no entries", () => {
-    it("warns and generates DictionaryKey = never", async () => {
+    it("warns and generates CodeSetKey = never", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => []
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => []
           }
         };
       `);
 
       const { onWarn, warnings } = createWarnSpy();
-      const result = await generateDictionaryKeys({ projectDir, onWarn });
+      const result = await generateCodeSetKeys({ projectDir, onWarn });
 
       expect(result.keyCount).toBe(0);
       expect(warnings[0]).toContain("returned no entries");
 
       const written = await readFile(result.outputPath, "utf-8");
 
-      expect(written).toContain("export type DictionaryKey = never;");
+      expect(written).toContain("export type CodeSetKey = never;");
     });
   });
 
@@ -251,13 +251,13 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("rejects keys containing characters outside [A-Za-z0-9_.-]", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "bad key with spaces" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "bad key with spaces" }]
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
         .toThrow(CodeGenerationValidationError);
     });
@@ -265,13 +265,13 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("rejects keys with quote injection attempts", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: \`evil"; import("x"); //\` }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: \`evil"; import("x"); //\` }]
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
         .toThrow(CodeGenerationValidationError);
     });
@@ -281,36 +281,36 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("rejects absolute output paths", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
       await expect(
-        generateDictionaryKeys({ projectDir, output: "/tmp/escape.gen.ts" })
+        generateCodeSetKeys({ projectDir, output: "/tmp/escape.gen.ts" })
       ).rejects.toThrow(CodeGenerationValidationError);
     });
 
     it("rejects output paths escaping the project root via ..", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
       await expect(
-        generateDictionaryKeys({ projectDir, output: "../escape.gen.ts" })
+        generateCodeSetKeys({ projectDir, output: "../escape.gen.ts" })
       ).rejects.toThrow(CodeGenerationValidationError);
     });
 
     it("refuses to overwrite a symlink", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
@@ -318,11 +318,11 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
       const decoyTarget = join(projectDir, "decoy-target.txt");
       await writeFile(decoyTarget, "decoy", "utf-8");
 
-      const symlinkPath = join(projectDir, "dict.gen.ts");
+      const symlinkPath = join(projectDir, "keys.gen.ts");
       await symlink(decoyTarget, symlinkPath);
 
       await expect(
-        generateDictionaryKeys({ projectDir, output: "dict.gen.ts" })
+        generateCodeSetKeys({ projectDir, output: "keys.gen.ts" })
       ).rejects.toThrow(CodeGenerationValidationError);
 
       expect(await readFile(decoyTarget, "utf-8")).toBe("decoy");
@@ -339,14 +339,14 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
 
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             timeout: 50,
-            fetchDictionaryKeys: () => new Promise(() => {})
+            fetchCodeSetKeys: () => new Promise(() => {})
           }
         };
       `);
 
-      const pending = generateDictionaryKeys({ projectDir });
+      const pending = generateCodeSetKeys({ projectDir });
       const assertion = await expect(pending).rejects.toThrow(/timed out after 50ms/);
 
       await vi.advanceTimersByTimeAsync(60);
@@ -356,14 +356,14 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
     it("does not time out when timeout is 0", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             timeout: 0,
-            fetchDictionaryKeys: () => Promise.resolve([{ key: "k" }])
+            fetchCodeSetKeys: () => Promise.resolve([{ key: "k" }])
           }
         };
       `);
 
-      const result = await generateDictionaryKeys({ projectDir });
+      const result = await generateCodeSetKeys({ projectDir });
 
       expect(result.keyCount).toBe(1);
     });
@@ -371,88 +371,88 @@ describe("code-generation/dictionary/generateDictionaryKeys", () => {
 
   describe("config loading errors", () => {
     it("throws ValidationError when no config file exists", async () => {
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
         .toThrow(CodeGenerationValidationError);
     });
 
-    it("throws ValidationError when the config has no dictionaryKeys block", async () => {
+    it("throws ValidationError when the config has no codeSetKeys block", async () => {
       await writeConfig("export default {};");
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
-        .toThrow(/no `dictionaryKeys` block/);
+        .toThrow(/no `codeSetKeys` block/);
     });
 
-    it("throws ValidationError when dictionaryKeys.fetchDictionaryKeys is missing", async () => {
-      await writeConfig("export default { dictionaryKeys: {} };");
+    it("throws ValidationError when codeSetKeys.fetchCodeSetKeys is missing", async () => {
+      await writeConfig("export default { codeSetKeys: {} };");
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
-        .toThrow(/`dictionaryKeys\.fetchDictionaryKeys` must be a function/);
+        .toThrow(/`codeSetKeys\.fetchCodeSetKeys` must be a function/);
     });
 
     it("rejects --config paths that escape the project root", async () => {
       await expect(
-        generateDictionaryKeys({ projectDir, configFile: "../etc/passwd" })
+        generateCodeSetKeys({ projectDir, configFile: "../etc/passwd" })
       ).rejects.toThrow(CodeGenerationValidationError);
     });
 
-    it("rejects non-string output in dictionaryKeys config", async () => {
+    it("rejects non-string output in codeSetKeys config", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             output: 123,
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
-        .toThrow(/`dictionaryKeys\.output` must be a string/);
+        .toThrow(/`codeSetKeys\.output` must be a string/);
     });
 
-    it("rejects negative timeout in dictionaryKeys config", async () => {
+    it("rejects negative timeout in codeSetKeys config", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             timeout: -1,
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
-        .toThrow(/`dictionaryKeys\.timeout` must be a finite non-negative number/);
+        .toThrow(/`codeSetKeys\.timeout` must be a finite non-negative number/);
     });
 
-    it("rejects string timeout in dictionaryKeys config", async () => {
+    it("rejects string timeout in codeSetKeys config", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
+          codeSetKeys: {
             timeout: "30s",
-            fetchDictionaryKeys: async () => [{ key: "k" }]
+            fetchCodeSetKeys: async () => [{ key: "k" }]
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
-        .toThrow(/`dictionaryKeys\.timeout` must be a finite non-negative number/);
+        .toThrow(/`codeSetKeys\.timeout` must be a finite non-negative number/);
     });
 
     it("propagates fetcher errors", async () => {
       await writeConfig(`
         export default {
-          dictionaryKeys: {
-            fetchDictionaryKeys: async () => { throw new Error("backend down"); }
+          codeSetKeys: {
+            fetchCodeSetKeys: async () => { throw new Error("backend down"); }
           }
         };
       `);
 
-      await expect(generateDictionaryKeys({ projectDir }))
+      await expect(generateCodeSetKeys({ projectDir }))
         .rejects
         .toThrow(/backend down/);
     });

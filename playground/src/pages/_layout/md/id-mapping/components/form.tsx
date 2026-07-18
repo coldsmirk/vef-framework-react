@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { IdMappingParams } from "~apis";
 
-import { Grid, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 const ALPHA_PATTERN = /^[a-z]+$/i;
@@ -15,7 +15,7 @@ const validators = {
 
 export function Form(): ReactNode {
   const { AppField } = useFormContext<IdMappingParams>();
-  const { externalApp: externalAppSelectProps } = useDictionaryOptionsSelect({ externalApp: "md.id_mapping.external_app" });
+  const { externalApp: externalAppSelectProps } = useCodeSetOptionsSelect({ externalApp: "md.id_mapping.external_app" });
 
   return (
     <Grid columnGap="small">

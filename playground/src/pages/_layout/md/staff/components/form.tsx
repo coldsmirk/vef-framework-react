@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { StaffParams } from "~apis";
 
-import { Grid, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 const ALPHANUMERIC_PATTERN = /^[a-z0-9]+$/i;
@@ -18,7 +18,7 @@ export function Form(): ReactNode {
     professionalRole,
     professionalTitle,
     status
-  } = useDictionaryOptionsSelect({
+  } = useCodeSetOptionsSelect({
     category: "md.staff.category",
     gender: "md.staff.gender",
     idType: "md.staff.id_type",

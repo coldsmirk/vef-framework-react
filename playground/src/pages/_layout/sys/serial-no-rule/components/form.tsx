@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { SerialNoRuleParams } from "~apis";
 
-import { Grid, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 const REMARK_AUTO_SIZE = { minRows: 3, maxRows: 6 } as const;
@@ -24,7 +24,7 @@ export function Form(): ReactNode {
   const {
     dateFormat: dateFormatSelectProps,
     resetCycle: resetCycleSelectProps
-  } = useDictionaryOptionsSelect({
+  } = useCodeSetOptionsSelect({
     dateFormat: "sys.serial_no_rule.date_format",
     resetCycle: "sys.serial_no_rule.reset_cycle"
   });

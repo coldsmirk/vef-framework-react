@@ -1,7 +1,7 @@
 import type { CrudBasicFormScene } from "@vef-framework-react/components";
 import type { UserCreateParams, UserUpdateParams } from "~apis";
 
-import { Grid, useDataOptionsSelect, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useDataOptionsSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 import { findRoleOptions, findStaffOptions } from "~apis";
 
@@ -26,7 +26,7 @@ const validators = {
 export function Form({ scene }: FormProps) {
   const { AppField } = useFormContext<UserCreateParams | UserUpdateParams>();
 
-  const { gender: genderSelectProps } = useDictionaryOptionsSelect({
+  const { gender: genderSelectProps } = useCodeSetOptionsSelect({
     gender: "common.gender"
   });
 

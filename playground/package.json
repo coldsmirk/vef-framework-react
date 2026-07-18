@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "pnpm clean && vite build",
-    "check:dictionary-keys": "vef gen:dictionary-keys --check",
+    "check:code-set-keys": "vef gen:code-set-keys --check",
     "clean": "rimraf dist",
     "dev": "vite",
-    "gen:dictionary-keys": "vef gen:dictionary-keys",
+    "gen:code-set-keys": "vef gen:code-set-keys",
     "preview": "vite preview",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run --config vitest.config.ts"
   },

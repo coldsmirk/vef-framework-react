@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { DepartmentParams } from "~apis";
 
-import { Grid, useDataOptionsTreeSelect, useDictionaryOptionsSelect, useFormContext } from "@vef-framework-react/components";
+import { Grid, useCodeSetOptionsSelect, useDataOptionsTreeSelect, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 import { findDepartmentTreeOptions } from "~apis";
 
@@ -25,7 +25,7 @@ export function Form({ orgId }: FormProps): ReactNode {
   const {
     level: levelSelectProps,
     type: typeSelectProps
-  } = useDictionaryOptionsSelect({
+  } = useCodeSetOptionsSelect({
     level: "md.department.level",
     type: "md.department.type"
   });

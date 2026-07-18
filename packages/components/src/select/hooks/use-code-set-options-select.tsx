@@ -1,17 +1,17 @@
 import type { DataOption, DataOptionWithPinyin } from "@vef-framework-react/core";
-import type { DictionaryAliasMap } from "@vef-framework-react/hooks";
+import type { CodeSetAliasMap } from "@vef-framework-react/hooks";
 import type { Key } from "@vef-framework-react/shared";
 
 import type { SelectProps } from "..";
 import type { GetProp } from "../../_base";
 
-import { useDictionaryQuery } from "@vef-framework-react/hooks";
+import { useCodeSetQuery } from "@vef-framework-react/hooks";
 import { isArray, withPinyin } from "@vef-framework-react/shared";
 import { useMemo } from "react";
 
 import { Loader } from "../../loader";
 
-export interface UseDictionaryOptionsSelectOptions {
+export interface UseCodeSetOptionsSelectOptions {
   /**
    * Whether each select should enable search.
    *
@@ -20,7 +20,7 @@ export interface UseDictionaryOptionsSelectOptions {
   filterable?: boolean;
 }
 
-export type UseDictionaryOptionsSelectResult<T extends DictionaryAliasMap> = Record<Extract<keyof T, string>, SelectProps<Key, DataOptionWithPinyin<DataOption>>>;
+export type UseCodeSetOptionsSelectResult<T extends CodeSetAliasMap> = Record<Extract<keyof T, string>, SelectProps<Key, DataOptionWithPinyin<DataOption>>>;
 
 const fieldNames: GetProp<SelectProps, "fieldNames"> = {
   label: "label",
@@ -42,16 +42,16 @@ const loadingPlaceholder = (
   </div>
 );
 
-export function useDictionaryOptionsSelect<const T extends DictionaryAliasMap>(
+export function useCodeSetOptionsSelect<const T extends CodeSetAliasMap>(
   keys: T,
-  options?: UseDictionaryOptionsSelectOptions
-): UseDictionaryOptionsSelectResult<T> {
+  options?: UseCodeSetOptionsSelectOptions
+): UseCodeSetOptionsSelectResult<T> {
   const { filterable = false } = options ?? {};
 
   const {
     data,
     isFetching
-  } = useDictionaryQuery(keys);
+  } = useCodeSetQuery(keys);
 
   return useMemo(
     () => Object.fromEntries(
@@ -74,7 +74,7 @@ export function useDictionaryOptionsSelect<const T extends DictionaryAliasMap>(
           }
         ];
       })
-    ) as UseDictionaryOptionsSelectResult<T>,
+    ) as UseCodeSetOptionsSelectResult<T>,
     [data, keys, isFetching, filterable]
   );
 }

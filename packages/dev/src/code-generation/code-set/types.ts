@@ -1,9 +1,9 @@
 /**
- * Single dictionary key entry returned by the project-provided fetcher.
+ * Single code set key entry returned by the project-provided fetcher.
  */
-export interface DictionaryKeyEntry {
+export interface CodeSetKeyEntry {
   /**
-   * Dictionary key string, e.g. `"sys.menu.type"`.
+   * CodeSet key string, e.g. `"sys.menu.type"`.
    * Must match `/^[\w.-]+$/` (letters, digits, underscore, dot, hyphen).
    */
   key: string;
@@ -14,23 +14,23 @@ export interface DictionaryKeyEntry {
 }
 
 /**
- * Configuration block for dictionary key generation.
+ * Configuration block for code set key generation.
  */
-export interface DictionaryKeysConfig {
+export interface CodeSetKeysConfig {
   /**
    * Output path resolved against the project root. Must stay within
    * `projectDir`; absolute paths and `..` traversal are rejected at runtime.
    *
-   * @default "src/types/dictionary.gen.ts"
+   * @default "src/types/code-set-keys.gen.ts"
    */
   output?: string;
   /**
-   * Fetcher invoked at generation time to retrieve all dictionary keys.
+   * Fetcher invoked at generation time to retrieve all code set keys.
    * Runs in Node, so use Node-side HTTP/DB clients with project credentials.
    */
-  fetchDictionaryKeys: () => Promise<readonly DictionaryKeyEntry[]>;
+  fetchCodeSetKeys: () => Promise<readonly CodeSetKeyEntry[]>;
   /**
-   * Timeout (ms) for `fetchDictionaryKeys`. After this, generation aborts with
+   * Timeout (ms) for `fetchCodeSetKeys`. After this, generation aborts with
    * an error. Set to `0` to disable the timeout entirely.
    *
    * @default 30000
@@ -41,14 +41,14 @@ export interface DictionaryKeysConfig {
 /**
  * Top-level code generation configuration container. Authored in
  * `code-generation.config.{ts,mts,js,mjs}` at the project root. Future generators
- * (i18n, apiSchema, etc.) live alongside `dictionaryKeys` so a project keeps
+ * (i18n, apiSchema, etc.) live alongside `codeSetKeys` so a project keeps
  * a single code generation entry point.
  */
 export interface CodeGenerationConfig {
   /**
-   * Dictionary keys generator. See {@link DictionaryKeysConfig}.
+   * CodeSet keys generator. See {@link CodeSetKeysConfig}.
    */
-  dictionaryKeys?: DictionaryKeysConfig;
+  codeSetKeys?: CodeSetKeysConfig;
 }
 
 /**

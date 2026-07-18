@@ -1,11 +1,11 @@
 import type { DefaultOptionType } from "antd/es/select";
 
 export {
+  useCodeSetOptionsSelect,
   useDataOptionsSelect,
-  useDictionaryOptionsSelect,
-  type UseDataOptionsSelectOptions,
-  type UseDictionaryOptionsSelectOptions,
-  type UseDictionaryOptionsSelectResult
+  type UseCodeSetOptionsSelectOptions,
+  type UseCodeSetOptionsSelectResult,
+  type UseDataOptionsSelectOptions
 } from "./hooks";
 export { Select } from "antd";
 
