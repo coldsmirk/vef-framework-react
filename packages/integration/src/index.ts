@@ -4,6 +4,7 @@ export * from "./pages";
 export { INTEGRATION_PERMISSIONS } from "./permissions";
 export type {
   AdapterPermissionCodes,
+  CodeMapPermissionCodes,
   ContractPermissionCodes,
   IntegrationPermissions,
   LogPermissionCodes,

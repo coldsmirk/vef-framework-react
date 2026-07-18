@@ -30,6 +30,14 @@ export const INTEGRATION_PERMISSIONS = {
     update: "integration.route.update",
     delete: "integration.route.delete"
   },
+  // The host code-set catalog endpoints reuse codeMap.query — the catalog
+  // exists solely to support the mapping editor.
+  codeMap: {
+    query: "integration.code_map.query",
+    create: "integration.code_map.create",
+    update: "integration.code_map.update",
+    delete: "integration.code_map.delete"
+  },
   log: {
     query: "integration.log.query"
   },
@@ -45,6 +53,7 @@ export type IntegrationPermissions = typeof INTEGRATION_PERMISSIONS;
 export type ContractPermissionCodes = IntegrationPermissions["contract"];
 export type SystemPermissionCodes = IntegrationPermissions["system"];
 export type AdapterPermissionCodes = IntegrationPermissions["adapter"];
+export type CodeMapPermissionCodes = IntegrationPermissions["codeMap"];
 export type RoutePermissionCodes = IntegrationPermissions["route"];
 export type LogPermissionCodes = IntegrationPermissions["log"];
 export type OpsPermissionCodes = IntegrationPermissions["ops"];

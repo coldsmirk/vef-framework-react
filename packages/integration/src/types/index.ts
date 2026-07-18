@@ -1,5 +1,7 @@
 export type { Adapter, AdapterParams, AdapterSearch } from "./adapter";
 export type { CreationAudited, FullAudited } from "./base";
+export type { CodeMap, CodeMapEntry, CodeMapParams, CodeMapSearch, CodeValue } from "./code-map";
+export type { CodeCatalog, CodeInfo, CodeSetCatalog, CodeSetInfo } from "./code-set";
 export type { Contract, ContractParams, ContractSearch, JsonSchema } from "./contract";
 export type { RouteDiagnostics, RouteFinding } from "./diagnostics";
 export * from "./enums";

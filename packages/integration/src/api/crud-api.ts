@@ -6,6 +6,9 @@ import type {
   Adapter,
   AdapterParams,
   AdapterSearch,
+  CodeMap,
+  CodeMapParams,
+  CodeMapSearch,
   Contract,
   ContractParams,
   ContractSearch,
@@ -124,6 +127,18 @@ export function useRouteApi(): CrudApi<Route, RouteParams, RouteSearch> {
 
   return useMemo(
     () => createCrudApi<Route, RouteParams, RouteSearch>(apiClient, "integration/route", "integration_route"),
+    [apiClient]
+  );
+}
+
+/**
+ * CRUD API for the code map resource.
+ */
+export function useCodeMapApi(): CrudApi<CodeMap, CodeMapParams, CodeMapSearch> {
+  const apiClient = useApiClient();
+
+  return useMemo(
+    () => createCrudApi<CodeMap, CodeMapParams, CodeMapSearch>(apiClient, "integration/code_map", "integration_code_map"),
     [apiClient]
   );
 }

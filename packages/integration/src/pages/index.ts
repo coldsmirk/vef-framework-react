@@ -1,5 +1,7 @@
 export { IntegrationAdapterPage } from "./adapter-page";
 export type { IntegrationAdapterPageProps } from "./adapter-page/props";
+export { IntegrationCodeMapPage } from "./code-map-page";
+export type { IntegrationCodeMapPageProps } from "./code-map-page/props";
 export { IntegrationConsolePage, type IntegrationConsolePageProps } from "./console-page";
 export { IntegrationContractPage } from "./contract-page";
 export type { IntegrationContractPageProps } from "./contract-page/props";

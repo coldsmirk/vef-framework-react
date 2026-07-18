@@ -107,6 +107,33 @@ const SQL_LIB: CompletionEntry = {
   ]
 };
 
+const CODES_LIB: CompletionEntry = {
+  label: "codes",
+  type: "namespace",
+  info: "该系统的码表转换：标准值 ↔ 外部值，按 (系统 × 码集) 读取已保存的码表",
+  boost: 2,
+  children: [
+    {
+      label: "toExternal",
+      type: "function",
+      detail: "(codeSet, value, options?)",
+      info: "标准值 → 外部值；别名可命中，输出始终为主值。未收录时按码表策略处理，可用 { fallback: v } / { passthrough: true } / { reject: true } 按调用覆盖；null 原样返回"
+    },
+    {
+      label: "toCanonical",
+      type: "function",
+      detail: "(codeSet, value, options?)",
+      info: "外部值 → 标准值；其余语义同 toExternal"
+    },
+    {
+      label: "entries",
+      type: "function",
+      detail: "(codeSet)",
+      info: "返回码表的原始映射条目数组（canonical / external / canonicalAliases / externalAliases）"
+    }
+  ]
+};
+
 const ERRORS_LIB: CompletionEntry = {
   label: "errors",
   type: "namespace",
@@ -370,6 +397,7 @@ const OUTBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
   SYSTEM_BINDING,
   HTTP_LIB,
   SQL_LIB,
+  CODES_LIB,
   ERRORS_LIB,
   ...BASELINE
 ];
@@ -388,6 +416,7 @@ const INBOUND_ADAPTER_SCRIPT_COMPLETIONS: CompletionEntry[] = [
     info: "校验契约输入 Schema，执行业务处理器，返回已校验的标准输出",
     boost: 2
   },
+  CODES_LIB,
   ...BASELINE
 ];
 

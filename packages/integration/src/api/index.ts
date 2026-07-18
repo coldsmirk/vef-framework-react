@@ -1,4 +1,5 @@
-export { createCrudApi, useAdapterApi, useContractApi, useRouteApi, useSystemApi, type CrudApi } from "./crud-api";
+export { useCodeSetApi, type CodeSetApi } from "./code-set-api";
+export { createCrudApi, useAdapterApi, useCodeMapApi, useContractApi, useRouteApi, useSystemApi, type CrudApi } from "./crud-api";
 export { useLogApi, type LogApi } from "./log-api";
 export { useOpsApi, type OpsApi } from "./ops-api";
 export { API_PATH, splitQueryParams } from "./query";

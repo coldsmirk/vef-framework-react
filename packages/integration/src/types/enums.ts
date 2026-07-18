@@ -61,6 +61,15 @@ export const DATA_SOURCE_MODES = ["read_only", "read_write"] as const;
 export type DataSourceMode = (typeof DATA_SOURCE_MODES)[number];
 
 /**
+ * How a code map answers a lookup no entry matches: reject fails the
+ * translation (fail closed, the default), passthrough returns the input
+ * unchanged, fallback returns the configured fallback value of the target
+ * side.
+ */
+export const UNMAPPED_POLICIES = ["reject", "passthrough", "fallback"] as const;
+export type UnmappedPolicy = (typeof UNMAPPED_POLICIES)[number];
+
+/**
  * The placeholder the management API returns in place of a stored secret.
  * Submitting it back on update keeps the existing value unchanged.
  */
