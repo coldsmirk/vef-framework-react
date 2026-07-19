@@ -36,6 +36,7 @@ export { useHasFetching } from "./use-has-fetching";
 export { useHasMutating } from "./use-has-mutating";
 export { useIsAuthorized } from "./use-is-authorized";
 export { useLatest } from "./use-latest";
+export { usePushMessage } from "./use-push-message";
 export { useRafState } from "./use-raf-state";
 export { useShallowCallback } from "./use-shallow-callback";
 export { useShallowCompare } from "./use-shallow-compare";
