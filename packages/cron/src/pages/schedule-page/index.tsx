@@ -13,7 +13,7 @@ import { scheduleColumns } from "./columns";
 import { ScheduleForm } from "./form";
 import { ScheduleActionButtonGroup, ScheduleOperationButtonGroup, useScheduleFormMutations } from "./helpers";
 import { SCHEDULE_FORM_DEFAULTS, scheduleToFormValues } from "./model";
-import { ScheduleSearchFields } from "./search";
+import { ScheduleAdvancedSearchFields, ScheduleSearchFields } from "./search";
 
 const FORM_DRAWER_WIDTH = {
   xxs: "100vw",
@@ -145,6 +145,7 @@ export function CronSchedulePage({
 
   return (
     <CrudPage<Schedule, ScheduleSearch, ScheduleSceneValues>
+      advancedSearch={<ScheduleAdvancedSearchFields />}
       basicSearch={<ScheduleSearchFields />}
       columnSettings={{ storageKey: columnStorageKey }}
       deleteMutationFn={api.remove}

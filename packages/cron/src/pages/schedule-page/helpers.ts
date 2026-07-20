@@ -1,4 +1,4 @@
-import type { CrudBasicSceneFormValues } from "@vef-framework-react/components";
+import type { CrudBasicSceneFormValues, CrudKit } from "@vef-framework-react/components";
 import type { ApiResult, MutationFunction } from "@vef-framework-react/core";
 
 import type { Schedule, ScheduleSearch } from "../../types";
@@ -18,8 +18,12 @@ const RESOURCE = "sys/cron/schedule";
  */
 export type ScheduleSceneValues = CrudBasicSceneFormValues<ScheduleFormValues, ScheduleFormValues>;
 
-export const { OperationButtonGroup: ScheduleOperationButtonGroup, ActionButtonGroup: ScheduleActionButtonGroup }
-  = createCrudKit<Schedule, ScheduleSearch, ScheduleSceneValues>();
+const scheduleCrudKit = createCrudKit<Schedule, ScheduleSearch, ScheduleSceneValues>();
+
+export const ScheduleOperationButtonGroup: CrudKit<Schedule, ScheduleSearch, ScheduleSceneValues>["OperationButtonGroup"]
+  = scheduleCrudKit.OperationButtonGroup;
+export const ScheduleActionButtonGroup: CrudKit<Schedule, ScheduleSearch, ScheduleSceneValues>["ActionButtonGroup"]
+  = scheduleCrudKit.ActionButtonGroup;
 
 /**
  * Form mutations that collapse the schedule form into API params before

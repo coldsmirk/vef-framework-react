@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useRunApi } from "../../api";
 import { runColumns } from "./columns";
 import { RunDetailDrawer } from "./detail";
-import { RunSearchFields } from "./search";
+import { RunAdvancedSearchFields, RunSearchFields } from "./search";
 
 type RunSceneValues = CrudBasicSceneFormValues<Record<string, never>, Record<string, never>>;
 
@@ -24,6 +24,7 @@ export function CronRunPage({ columnStorageKey = "cron.run", title }: CronRunPag
   return (
     <>
       <CrudPage<Run, RunSearch, RunSceneValues>
+        advancedSearch={<RunAdvancedSearchFields />}
         basicSearch={<RunSearchFields />}
         columnSettings={{ storageKey: columnStorageKey }}
         operationColumn={{ width: 80, render: row => <Button size="small" type="link" onClick={() => setDetailId(row.id)}>详情</Button> }}
