@@ -14,7 +14,7 @@ interface AdvancedSearchTogglerProps {
 export const AdvancedSearchToggler = memo(({ isVisible, onToggle }: AdvancedSearchTogglerProps) => (
   <Button
     css={styles.advancedSearchToggler}
-    iconPosition="end"
+    iconPlacement="end"
     type="link"
     icon={(
       <motion.div

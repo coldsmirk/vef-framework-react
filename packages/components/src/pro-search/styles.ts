@@ -22,12 +22,17 @@ export const contentLeft = css({
 });
 
 export const contentRight = css({
-  flex: "none",
+  flex: "1 1 auto",
+  minWidth: 0,
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-end",
   gap: globalCssVars.spacingSm,
   flexWrap: "wrap",
+  [`@media (max-width: ${breakpoints.sm})`]: {
+    width: "100%",
+    justifyContent: "flex-start"
+  },
   // antd wraps the raw <input> in an affix wrapper when allowClear / prefix / suffix
   // is set, so size that wrapper (the real control box); the bare .vef-input matches
   // the standalone input otherwise.
