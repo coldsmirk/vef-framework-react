@@ -47,10 +47,13 @@ export const scheduleColumns: Array<TableColumn<Schedule>> = [
     render: (value: boolean) => <EnabledTag enabled={value} />
   },
   {
+    // A paused schedule keeps its fire cursor so resuming can account for the
+    // paused gap, but it will not fire at that time — showing it would read
+    // as a scheduled run that never happens.
+    key: "nextFireAt",
     title: "下次触发",
-    dataIndex: "nextFireAt",
     width: 160,
-    render: formatTimestamp
+    render: (_: unknown, row: Schedule) => row.isEnabled ? formatTimestamp(row.nextFireAt) : "-"
   },
   {
     title: "上次触发",
