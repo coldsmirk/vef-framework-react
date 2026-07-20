@@ -3,7 +3,6 @@ import type { AssigneeDefinition, FlowDefinition } from "../types";
 import { describe, expect, it } from "vitest";
 
 import { EDGE_MARKER_END } from "../constants";
-import { nodeConfig } from "../store/config-access";
 import { fromFlowDefinition, toFlowDefinition } from "./serialization";
 
 describe("serialization", () => {
@@ -57,22 +56,19 @@ describe("serialization", () => {
   it("hydrates nodes with normalized, fully-explicit data", () => {
     const { nodes } = fromFlowDefinition(definition);
     const approvalNode = nodes.find(n => n.id === "approval_1");
-    const config = nodeConfig(approvalNode, "approval");
 
-    // Every node shares the engine's single xyflow type; the wire kind lives in data.
-    expect(approvalNode?.type).toBe("flowNode");
-    expect(approvalNode?.data.kind).toBe("approval");
+    expect(approvalNode?.type).toBe("approval");
 
-    if (!config) {
+    if (approvalNode?.type !== "approval") {
       return;
     }
 
     // The hydrated node must carry the designer defaults explicitly so a
     // round-trip serializes exactly what the config panels display.
-    expect(config.passRule).toBe("all");
-    expect(config.approvalMethod).toBe("parallel");
-    expect(config.isRollbackAllowed).toBe(true);
-    expect(config.assignees).toEqual([
+    expect(approvalNode.data.passRule).toBe("all");
+    expect(approvalNode.data.approvalMethod).toBe("parallel");
+    expect(approvalNode.data.isRollbackAllowed).toBe(true);
+    expect(approvalNode.data.assignees).toEqual([
       {
         kind: "user",
         ids: ["u1"],
@@ -106,9 +102,10 @@ describe("serialization", () => {
   it("hydrates nodes and edges detached from the definition", () => {
     const { nodes, edges } = fromFlowDefinition(definition);
     const approvalNode = nodes.find(n => n.id === "approval_1");
-    const config = nodeConfig(approvalNode, "approval");
 
-    if (!approvalNode || !config) {
+    expect(approvalNode?.type).toBe("approval");
+
+    if (approvalNode?.type !== "approval") {
       return;
     }
 
@@ -116,11 +113,10 @@ describe("serialization", () => {
     // definition it passed in must not rewrite store state behind zustand.
     expect(approvalNode.position).toEqual({ x: 200, y: 0 });
     expect(approvalNode.position).not.toBe(definition.nodes[1]?.position);
-    expect(config.assignees).toEqual(approvalAssignees);
-    expect(config.assignees).not.toBe(approvalAssignees);
-    // Edge business data is wrapped into the engine's { kind, config } shape.
-    expect(edges[0]?.data?.config).toEqual(edgeData);
-    expect(edges[0]?.data?.config).not.toBe(edgeData);
+    expect(approvalNode.data.assignees).toEqual(approvalAssignees);
+    expect(approvalNode.data.assignees).not.toBe(approvalAssignees);
+    expect(edges[0]?.data).toEqual(edgeData);
+    expect(edges[0]?.data).not.toBe(edgeData);
   });
 
   it("emits a definition detached from the live nodes and edges", () => {
@@ -133,11 +129,10 @@ describe("serialization", () => {
     // not reach back into live editor state.
     expect(emittedNode?.position).toEqual(liveNode?.position);
     expect(emittedNode?.position).not.toBe(liveNode?.position);
-    // The wire `data` is the live node's business config, flattened out of the engine wrapper.
-    expect(emittedNode?.data).toEqual(liveNode?.data.config);
-    expect(emittedNode?.data).not.toBe(liveNode?.data.config);
+    expect(emittedNode?.data).toEqual(liveNode?.data);
+    expect(emittedNode?.data).not.toBe(liveNode?.data);
     expect(serialized.edges[0]?.data).toEqual(edgeData);
-    expect(serialized.edges[0]?.data).not.toBe(edges[0]?.data?.config);
+    expect(serialized.edges[0]?.data).not.toBe(edges[0]?.data);
   });
 
   it("derives deletable from node rules during hydration", () => {

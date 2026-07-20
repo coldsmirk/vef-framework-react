@@ -2,7 +2,7 @@ import type { FlowValidationError } from "../shared/flow-validation";
 
 import { describe, expect, it } from "vitest";
 
-import { countIssuesByNode } from "./ui-store";
+import { countIssuesByNode } from "./validation-slice";
 
 describe("countIssuesByNode", () => {
   it("returns an empty record for a clean flow", () => {

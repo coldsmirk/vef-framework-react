@@ -2,7 +2,7 @@ import type { FC } from "react";
 
 import { Input } from "@vef-framework-react/components";
 
-import { anyNodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../../store";
+import { useEditorStore } from "../../store";
 import { ConfigSection, FormField } from "./shared";
 
 const TEXT_AREA_AUTO_SIZE = { minRows: 2, maxRows: 4 } as const;
@@ -14,9 +14,9 @@ export const BasicNodeConfig: FC<{ nodeId: string }> = ({ nodeId }) => {
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so the
   // form does not re-render during drags.
-  const data = useEditorStore(s => anyNodeConfig(s.nodes.find(n => n.id === nodeId)));
-  const readonly = useEditorUiStore(s => s.readonly);
-  const { updateNodeData } = useApprovalActions();
+  const data = useEditorStore(s => s.nodes.find(n => n.id === nodeId)?.data);
+  const readonly = useEditorStore(s => s.readonly);
+  const updateNodeData = useEditorStore(s => s.updateNodeData);
 
   if (!data) {
     return null;

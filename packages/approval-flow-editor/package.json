@@ -46,7 +46,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@coldsmirk/nodeloom-core": "^0.2.0",
     "@emotion/react": "^11.14.0",
     "@vef-framework-react/components": "workspace:*",
     "@vef-framework-react/core": "workspace:*",

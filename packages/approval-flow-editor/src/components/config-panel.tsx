@@ -5,10 +5,9 @@ import { globalCssVars, ScrollArea } from "@vef-framework-react/components";
 import { AnimatePresence, motion } from "@vef-framework-react/core";
 import { Trash2Icon } from "lucide-react";
 
-import { isNodeKind } from "../constants";
 import { XIcon } from "../icons";
 import { getSpecification } from "../specifications";
-import { anyNodeConfig, useApprovalActions, useEditorStore, useEditorUiStore } from "../store";
+import { useEditorStore } from "../store";
 import {
   configPanelBodyStyle,
   configPanelCloseStyle,
@@ -37,18 +36,15 @@ export const ConfigPanel: FC = () => {
   // Subscribe to the primitives the header needs instead of the node object:
   // dragging the selected node changes its object identity every frame, but
   // type / name / deletable stay stable, so the panel does not re-render.
-  const nodeKind = useEditorStore(s => {
-    const kind = s.selectedNodeId ? s.nodes.find(n => n.id === s.selectedNodeId)?.data.kind : undefined;
-    return kind !== undefined && isNodeKind(kind) ? kind : undefined;
-  });
-  const nodeName = useEditorStore(s => s.selectedNodeId ? anyNodeConfig(s.nodes.find(n => n.id === s.selectedNodeId))?.name : undefined);
+  const nodeType = useEditorStore(s => s.selectedNodeId ? s.nodes.find(n => n.id === s.selectedNodeId)?.type : undefined);
+  const nodeName = useEditorStore(s => s.selectedNodeId ? s.nodes.find(n => n.id === s.selectedNodeId)?.data.name : undefined);
   const deletable = useEditorStore(s => s.selectedNodeId ? s.nodes.find(n => n.id === s.selectedNodeId)?.deletable !== false : false);
-  const readonly = useEditorUiStore(s => s.readonly);
+  const readonly = useEditorStore(s => s.readonly);
   const selectNode = useEditorStore(s => s.selectNode);
-  const { removeNode } = useApprovalActions();
+  const removeNode = useEditorStore(s => s.removeNode);
 
-  const isVisible = !!selectedNodeId && !!nodeKind;
-  const spec = nodeKind ? getSpecification(nodeKind) : undefined;
+  const isVisible = !!selectedNodeId && !!nodeType;
+  const spec = nodeType ? getSpecification(nodeType) : undefined;
   const color = spec?.color ?? globalCssVars.colorPrimary;
   const Icon = spec?.icon;
   const ConfigComponent = spec?.configPanel ?? BasicNodeConfig;

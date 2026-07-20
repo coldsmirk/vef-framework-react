@@ -7,7 +7,7 @@ import { globalCssVars } from "@vef-framework-react/components";
 import { useNodeId } from "@xyflow/react";
 
 import { getSpecification } from "../../specifications";
-import { useEditorUiStore } from "../../store";
+import { useEditorStore } from "../../store";
 import { nodeContainerStyle } from "../../styles";
 
 interface NodeShellProps {
@@ -52,11 +52,11 @@ export function NodeShell({
   children
 }: NodeShellProps & { ref?: RefObject<HTMLDivElement | null> }) {
   const spec = getSpecification(type);
-  const readonly = useEditorUiStore(s => s.readonly);
+  const readonly = useEditorStore(s => s.readonly);
   const nodeId = useNodeId();
   // Subscribe only to this node's own issue count — a problem on another node
   // must not re-render this one.
-  const issueCount = useEditorUiStore(s => (nodeId ? s.nodeIssueCounts[nodeId] : undefined) ?? 0);
+  const issueCount = useEditorStore(s => (nodeId ? s.nodeIssueCounts[nodeId] : undefined) ?? 0);
   const invalid = issueCount > 0;
 
   // A node with validation problems swaps its accent to the error tokens, so

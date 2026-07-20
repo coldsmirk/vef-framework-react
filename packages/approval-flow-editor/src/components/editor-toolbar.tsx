@@ -12,7 +12,7 @@ import { useAutoLayout } from "../hooks/use-auto-layout";
 import { handleDragStart } from "../hooks/use-drag-drop";
 import { findFreePosition } from "../shared/node-placement";
 import { getAddableSpecifications } from "../specifications";
-import { useApprovalActions, useEditorStore, useEditorStoreApi } from "../store";
+import { useEditorStore, useEditorStoreApi } from "../store";
 import { toolbarContainerStyle } from "../styles";
 import { ValidationIndicator } from "./validation-indicator";
 
@@ -96,13 +96,14 @@ export const EditorToolbar: FC = () => {
   const { screenToFlowPosition } = useReactFlow();
   const domNode = useStore(s => s.domNode);
   const storeApi = useEditorStoreApi();
-  const { addNode } = useApprovalActions();
+  const addNode = useEditorStore(s => s.addNode);
+  const selectNode = useEditorStore(s => s.selectNode);
   const undo = useEditorStore(s => s.undo);
   const redo = useEditorStore(s => s.redo);
-  // Reactive availability flags — the engine derives them, so the buttons
-  // re-render only when availability flips, not on every history push.
-  const canUndo = useEditorStore(s => s.canUndo);
-  const canRedo = useEditorStore(s => s.canRedo);
+  // Boolean selectors: the buttons re-render only when availability flips,
+  // not on every history push.
+  const canUndo = useEditorStore(s => s.past.length > 0);
+  const canRedo = useEditorStore(s => s.future.length > 0);
   // Length-only selectors: the counts re-render the toolbar on add/remove,
   // never on drag/position churn.
   const nodeCount = useEditorStore(s => s.nodes.length);
@@ -129,8 +130,11 @@ export const EditorToolbar: FC = () => {
       },
       storeApi.getState().nodes
     );
-    // The engine's addNode selects what it appends, so the config panel opens right away.
-    addNode(type, position);
+    const id = addNode(type, position);
+
+    if (id) {
+      selectNode(id);
+    }
   };
 
   return (

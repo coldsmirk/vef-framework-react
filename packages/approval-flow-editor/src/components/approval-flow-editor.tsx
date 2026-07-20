@@ -1,28 +1,30 @@
-import type { EdgeMouseHandler, NodeMouseHandler } from "@xyflow/react";
-import type { CSSProperties, FC, RefObject } from "react";
+import type { EdgeMouseHandler, NodeMouseHandler, OnConnectEnd } from "@xyflow/react";
+import type { CSSProperties, FC } from "react";
 
 import type { EditorPlugins } from "../plugins";
-import type { FlowDefinition } from "../types";
+import type { ConnectionRejection } from "../shared/connection-rules";
+import type { FlowDefinition, NodeKind } from "../types";
 
-import { NodeloomProvider, useEditorStore, useEditorStoreApi, useReactFlowProps } from "@coldsmirk/nodeloom-core";
 import { Global } from "@emotion/react";
 import { Button, globalCssVars, showWarningMessage } from "@vef-framework-react/components";
-import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, useStore, useUpdateNodeInternals } from "@xyflow/react";
+import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useStore, useUpdateNodeInternals } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EDGE_MARKER_END, isNodeKind } from "../constants";
+import { useConnectionValidation } from "../hooks/use-connection-validation";
 import { useDrop } from "../hooks/use-drag-drop";
 import { useHistoryShortcuts } from "../hooks/use-history-shortcuts";
 import { EditorPluginsContext, useEditorPlugins } from "../plugins";
+import { explainConnectionRejection } from "../shared/connection-rules";
 import { validateFlowDefinition } from "../shared/flow-validation";
 import { createSeedFlow } from "../shared/seed-flow";
 import { fromFlowDefinition, toFlowDefinition } from "../shared/serialization";
-import { buildEditorOptions, EditorUiProvider, engineNodeRegistry, useEditorUiStoreApi } from "../store";
+import { EditorStoreProvider, useEditorStore, useEditorStoreApi } from "../store";
 import { canvasStyle, editorLayoutStyle, editorThemeStyle, NODE_KIND_COLORS, xyflowGlobalBaseStyle } from "../styles";
 import { ConfigPanel } from "./config-panel";
 import { edgeTypes } from "./edges";
 import { EditorToolbar } from "./editor-toolbar";
-import { renderApprovalNode } from "./nodes";
+import { nodeTypes } from "./nodes";
 import { ZoomControl } from "./zoom-control";
 
 export interface ApprovalFlowEditorProps {
@@ -79,6 +81,7 @@ export interface ApprovalFlowEditorProps {
 
 // Hoist stable object references to prevent ReactFlow from re-processing on every render
 const EMPTY_PLUGINS: EditorPlugins = {};
+const EMPTY_DEFINITION: FlowDefinition = { nodes: [], edges: [] };
 const DEFAULT_EDGE_OPTIONS = { type: "approval", markerEnd: EDGE_MARKER_END } as const;
 const PRO_OPTIONS = { hideAttribution: true } as const;
 const MINIMAP_STYLE = {
@@ -88,44 +91,53 @@ const MINIMAP_STYLE = {
 } as const;
 
 // Tint minimap nodes with their kind accent (soft fill, solid stroke) so the
-// overview reads the same color language as the canvas. The kind lives in
-// `data.kind` (every node shares the single "flowNode" xyflow type); unknown
-// kinds fall back to the neutral fill.
-function minimapAccent(node: { data?: { kind?: unknown } }): string | undefined {
-  const kind = node.data?.kind;
-
-  return typeof kind === "string" && isNodeKind(kind) ? NODE_KIND_COLORS[kind] : undefined;
+// overview reads the same color language as the canvas. Falls back to the
+// neutral fill for unknown kinds.
+function minimapNodeColor(node: { type?: string }): string {
+  return isNodeKind(node.type ?? "")
+    ? `color-mix(in srgb, ${NODE_KIND_COLORS[node.type as NodeKind]} 30%, transparent)`
+    : globalCssVars.colorFill;
 }
 
-function minimapNodeColor(node: { data?: { kind?: unknown } }): string {
-  const accent = minimapAccent(node);
-
-  return accent ? `color-mix(in srgb, ${accent} 30%, transparent)` : globalCssVars.colorFill;
+function minimapNodeStrokeColor(node: { type?: string }): string {
+  return isNodeKind(node.type ?? "") ? NODE_KIND_COLORS[node.type as NodeKind] : globalCssVars.colorFill;
 }
 
-function minimapNodeStrokeColor(node: { data?: { kind?: unknown } }): string {
-  return minimapAccent(node) ?? globalCssVars.colorFill;
-}
+// Human-readable hints for refused connection attempts — a silently dropped
+// edge looks like a bug, not a rule.
+const REJECTION_MESSAGES: Record<ConnectionRejection, string> = {
+  self: "不能连接节点自身",
+  occupied: "该出口已有连线，请先删除原有连线",
+  cycle: "无法连接：会形成循环流转"
+};
 
 // Validation runs debounced behind graph edits; long enough to coalesce a
 // burst of typing, short enough to feel live.
 const VALIDATION_DEBOUNCE_MS = 300;
 
-const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<FlowDefinition | null> }> = ({
+const EditorInner: FC<ApprovalFlowEditorProps> = ({
   value,
+  onChange,
   onPublish,
   publishText,
   publishLoading = false,
   readonly = false,
   className,
-  style,
-  lastEmittedRef
+  style
 }) => {
   const nodes = useEditorStore(s => s.nodes);
   const edges = useEditorStore(s => s.edges);
+  const onNodesChange = useEditorStore(s => s.onNodesChange);
+  const onEdgesChange = useEditorStore(s => s.onEdgesChange);
+  const onConnect = useEditorStore(s => s.onConnect);
   const selectNode = useEditorStore(s => s.selectNode);
+  const setHoveredEdgeId = useEditorStore(s => s.setHoveredEdgeId);
+  const setReadonly = useEditorStore(s => s.setReadonly);
+  const changeVersion = useEditorStore(s => s.changeVersion);
+  const toDefinition = useEditorStore(s => s.toDefinition);
+  const loadDefinition = useEditorStore(s => s.loadDefinition);
+  const setValidationIssues = useEditorStore(s => s.setValidationIssues);
   const storeApi = useEditorStoreApi();
-  const uiStoreApi = useEditorUiStoreApi();
   // The form's top-level field inventory, for cross-checking fieldPermissions
   // keys — same source the condition editor and field-permission table read.
   // Passed through as-is (including undefined) to validateFlowDefinition,
@@ -134,15 +146,8 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   // form has zero fields".
   const { formFields } = useEditorPlugins();
 
-  // The engine wires the canvas: graph, change dispatch, connection funnel (validation via
-  // EditorOptions.validateConnection, rejected-drop reporting via onInvalidConnection), and the
-  // single "flowNode" renderer dispatching on data.kind.
-  const reactFlowProps = useReactFlowProps({
-    nodeRegistry: engineNodeRegistry,
-    renderNode: renderApprovalNode
-  });
-
   const { onDragOver, onDrop } = useDrop();
+  const { isValidConnection } = useConnectionValidation();
   const updateNodeInternals = useUpdateNodeInternals();
 
   // Undo/redo keyboard shortcuts, scoped to this editor instance's shell.
@@ -150,18 +155,18 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
   useHistoryShortcuts(shellRef);
 
   // Live deploy-contract validation: re-validate (debounced) whenever the
-  // graph changes — including programmatic loads. Results land in the UI
-  // store, where node chrome and the toolbar indicator subscribe to their own
-  // slices.
+  // graph changes — including programmatic loads, which never bump
+  // changeVersion. Results land in the store, where node chrome and the
+  // toolbar indicator subscribe to their own slices.
   useEffect(() => {
     const timer = setTimeout(() => {
-      uiStoreApi.getState().setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges), formFields));
+      setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges), formFields));
     }, VALIDATION_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [nodes, edges, uiStoreApi, formFields]);
+  }, [nodes, edges, setValidationIssues, formFields]);
 
   // Re-measure every handle once ancestor transforms have settled. xyflow
   // measures node sizes through ResizeObserver (layout-based, immune to CSS
@@ -218,21 +223,18 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
     };
   }, [hasNodes, containerEl, updateNodeInternals]);
 
-  // Mirror the readonly prop into the UI store for chrome (node cards, panels,
-  // edges subscribe reactively); the engine-level mutation gate rides
-  // EditorOptions.readonly, resolved lazily from the same prop.
   useEffect(() => {
-    uiStoreApi.getState().setReadonly(readonly);
-  }, [readonly, uiStoreApi]);
+    setReadonly(readonly);
+  }, [readonly, setReadonly]);
 
   // Reload the canvas when `value` changes after mount (async load / record
-  // switch). The initial value is already seeded into the store's initial
-  // graph, so skip the first run. A definition this editor itself emitted
-  // through onChange is skipped too — hosts that store the emitted definition
-  // in state and pass it back (the standard controlled round-trip) must not
-  // trigger a reload, which would wipe the selection and remount every node
-  // mid-edit.
+  // switch). The initial value is already seeded into the store's initialState,
+  // so skip the first run. A definition this editor itself emitted through
+  // onChange is skipped too — hosts that store the emitted definition in state
+  // and pass it back (the standard controlled round-trip) must not trigger a
+  // reload, which would wipe the selection and remount every node mid-edit.
   const isInitialValueRef = useRef(true);
+  const lastEmittedRef = useRef<FlowDefinition | null>(null);
 
   useEffect(() => {
     if (isInitialValueRef.current) {
@@ -244,14 +246,24 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
       return;
     }
 
-    // An empty definition hydrates to the seed flow (start → end): start/end
-    // are neither deletable nor addable, so the editor must guarantee them.
-    // setGraph resets history (you cannot undo past a load).
-    const graph = value && value.nodes.length > 0 ? fromFlowDefinition(value) : createSeedFlow();
+    loadDefinition(value ?? EMPTY_DEFINITION);
+  }, [value, loadDefinition]);
 
-    storeApi.getState().setGraph(graph);
-    uiStoreApi.getState().setHoveredEdgeId(null);
-  }, [value, storeApi, uiStoreApi, lastEmittedRef]);
+  // Notify parent of meaningful data changes via version counter.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const prevVersionRef = useRef(changeVersion);
+
+  useEffect(() => {
+    if (changeVersion === prevVersionRef.current) {
+      return;
+    }
+
+    prevVersionRef.current = changeVersion;
+    const definition = toDefinition();
+    lastEmittedRef.current = definition;
+    onChangeRef.current?.(definition);
+  }, [changeVersion, toDefinition]);
 
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -266,14 +278,55 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
 
   const onEdgeMouseEnter: EdgeMouseHandler = useCallback(
     (_event, edge) => {
-      uiStoreApi.getState().setHoveredEdgeId(edge.id);
+      setHoveredEdgeId(edge.id);
     },
-    [uiStoreApi]
+    [setHoveredEdgeId]
   );
 
   const onEdgeMouseLeave: EdgeMouseHandler = useCallback(() => {
-    uiStoreApi.getState().setHoveredEdgeId(null);
-  }, [uiStoreApi]);
+    setHoveredEdgeId(null);
+  }, [setHoveredEdgeId]);
+
+  // A connection dropped on a real handle but refused by the rules gets an
+  // explanation; releasing over empty canvas is a cancel and stays silent.
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (_event, connectionState) => {
+      if (connectionState.isValid !== false) {
+        return;
+      }
+
+      const {
+        fromNode,
+        fromHandle,
+        toNode,
+        toHandle
+      } = connectionState;
+
+      if (!fromNode || !toNode) {
+        return;
+      }
+
+      // xyflow allows starting a connection from either end; normalize to the
+      // source → target orientation the rules are written for.
+      const connection = fromHandle?.type === "target"
+        ? {
+            source: toNode.id,
+            sourceHandle: toHandle?.id ?? null,
+            target: fromNode.id
+          }
+        : {
+            source: fromNode.id,
+            sourceHandle: fromHandle?.id ?? null,
+            target: toNode.id
+          };
+      const reason = explainConnectionRejection(connection, storeApi.getState().edges);
+
+      if (reason) {
+        showWarningMessage(REJECTION_MESSAGES[reason]);
+      }
+    },
+    [storeApi]
+  );
 
   // Editor-native publish CTA: validate the current graph, block on structural
   // errors, otherwise hand the definition to the host. Mirrors FormEditor's
@@ -283,8 +336,7 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
       return;
     }
 
-    const document = storeApi.getState().getDocument();
-    const definition = toFlowDefinition(document.nodes, document.edges);
+    const definition = toDefinition();
     const issues = validateFlowDefinition(definition, formFields);
 
     if (issues.length > 0) {
@@ -293,7 +345,7 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
     }
 
     onPublish(definition);
-  }, [onPublish, storeApi, formFields]);
+  }, [onPublish, toDefinition, formFields]);
 
   return (
     // tabIndex makes the shell focusable, so the history shortcuts only fire
@@ -301,21 +353,28 @@ const EditorInner: FC<ApprovalFlowEditorProps & { lastEmittedRef: RefObject<Flow
     <div ref={shellRef} className={className} css={[editorThemeStyle, editorLayoutStyle]} style={style} tabIndex={-1}>
       <div css={canvasStyle}>
         <ReactFlow
-          {...reactFlowProps}
           fitView
           panOnScroll
           connectionRadius={30}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          edges={edges}
           edgeTypes={edgeTypes}
           elementsSelectable={!readonly}
+          isValidConnection={isValidConnection}
+          nodes={nodes}
           nodesConnectable={!readonly}
           nodesDraggable={!readonly}
+          nodeTypes={nodeTypes}
           proOptions={PRO_OPTIONS}
+          onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
           onDragOver={onDragOver}
           onDrop={onDrop}
           onEdgeMouseEnter={onEdgeMouseEnter}
           onEdgeMouseLeave={onEdgeMouseLeave}
+          onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
+          onNodesChange={onNodesChange}
           onPaneClick={onPaneClick}
         >
           <Background gap={16} size={1} variant={BackgroundVariant.Dots} />
@@ -366,52 +425,32 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
   className,
   style
 }) => {
-  const [initialGraph] = useState(() => value && value.nodes.length > 0 ? fromFlowDefinition(value) : createSeedFlow());
-
-  // The last definition handed to onChange — the reload effect recognizes it by
-  // reference, so the controlled round-trip never remounts the canvas.
-  const lastEmittedRef = useRef<FlowDefinition | null>(null);
-  const onChangeRef = useRef(onChange);
-
-  onChangeRef.current = onChange;
-
-  // Rebuilt per render (cheap plain object) and read lazily by the engine, so
-  // prop flips — readonly above all — take effect without recreating the store.
-  const editorOptions = buildEditorOptions({
-    readonly: readonly ?? false,
-    onDefinitionChange: definition => {
-      lastEmittedRef.current = definition;
-      onChangeRef.current?.(definition);
-    },
-    onConnectionRejected: showWarningMessage
-  });
+  const [initialData] = useState(() => value && value.nodes.length > 0 ? fromFlowDefinition(value) : createSeedFlow());
 
   return (
-    <>
+    <ReactFlowProvider>
       <Global styles={xyflowGlobalBaseStyle} />
 
-      {/* NodeloomProvider composes xyflow's ReactFlowProvider itself, so every
-          canvas hook below resolves to the engine-owned instance. */}
       <EditorPluginsContext value={plugins ?? EMPTY_PLUGINS}>
-        <NodeloomProvider
-          defaultValue={initialGraph}
-          nodeRegistry={engineNodeRegistry}
-          options={editorOptions}
+        <EditorStoreProvider
+          initialState={{
+            readonly: readonly ?? false,
+            nodes: initialData.nodes,
+            edges: initialData.edges
+          }}
         >
-          <EditorUiProvider initialState={{ readonly: readonly ?? false }}>
-            <EditorInner
-              className={className}
-              lastEmittedRef={lastEmittedRef}
-              publishLoading={publishLoading}
-              publishText={publishText}
-              readonly={readonly}
-              style={style}
-              value={value}
-              onPublish={onPublish}
-            />
-          </EditorUiProvider>
-        </NodeloomProvider>
+          <EditorInner
+            className={className}
+            publishLoading={publishLoading}
+            publishText={publishText}
+            readonly={readonly}
+            style={style}
+            value={value}
+            onChange={onChange}
+            onPublish={onPublish}
+          />
+        </EditorStoreProvider>
       </EditorPluginsContext>
-    </>
+    </ReactFlowProvider>
   );
 };

@@ -56,8 +56,15 @@ export function useHistoryShortcuts(shellRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
-      // No readonly bail needed: the engine gates undo/redo at the store level.
-      const { redo, undo } = storeApi.getState();
+      const {
+        readonly,
+        redo,
+        undo
+      } = storeApi.getState();
+
+      if (readonly) {
+        return;
+      }
 
       const key = event.key.toLowerCase();
 

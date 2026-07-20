@@ -1,13 +1,12 @@
 import type { NodeProps } from "@xyflow/react";
 
-import type { ConditionBranchDefinition, FlowNode } from "../../types";
+import type { ConditionBranchDefinition, ConditionNode as ConditionNodeType } from "../../types";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { memo, useEffect, useRef } from "react";
 
-import { dataConfig } from "../../store";
 import { BaseNode } from "./base-node";
 
 const branchDividerStyle = css({
@@ -53,11 +52,10 @@ export const ConditionNode = memo(({
   id,
   data,
   selected
-}: NodeProps<FlowNode>) => {
+}: NodeProps<ConditionNodeType>) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const updateNodeInternals = useUpdateNodeInternals();
-  const config = dataConfig(data, "condition");
-  const branches = config?.branches ?? EMPTY_BRANCHES;
+  const branches = data.branches ?? EMPTY_BRANCHES;
   // The handle set is defined by the branch ids and their order — immer
   // produces a fresh `branches` array on every label keystroke, but handles
   // only appear/disappear/move when this key changes. Geometry-only changes
@@ -101,8 +99,8 @@ export const ConditionNode = memo(({
   return (
     <BaseNode
       ref={rootRef}
-      description={config?.description}
-      label={config?.name ?? "条件节点"}
+      description={data.description}
+      label={data.name ?? "条件节点"}
       selected={selected}
       type="condition"
     >

@@ -45,14 +45,16 @@ export { CONDITION_OPERATORS } from "./types";
 // Types
 export type {
   AddAssigneeType,
-  AnyNodeData,
+  NodeData as AnyNodeData,
   ApprovalMethod,
+  ApprovalNode,
   ApprovalNodeData,
   AssigneeDefinition,
   AssigneeKind,
   CcDefinition,
   CcFieldPermission,
   CcKind,
+  CcNode,
   CcNodeData,
   CcTiming,
   ConditionBranchDefinition,
@@ -73,6 +75,7 @@ export type {
   FlowEdge,
   FlowNode,
   FormFieldDefinition,
+  HandleNode,
   HandleNodeData,
   NodeDataMap,
   NodeDefinition,
@@ -82,6 +85,7 @@ export type {
   RollbackDataStrategy,
   RollbackType,
   SameApplicantAction,
+  StartNode,
   StartNodeData,
   TaskNodeData,
   TimeoutAction

@@ -6,7 +6,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback } from "react";
 
 import { isNodeKind } from "../constants";
-import { useApprovalActions } from "../store";
+import { useEditorStore } from "../store";
 
 /**
  * MIME type for drag data
@@ -28,7 +28,8 @@ function handleDragOver(event: DragEvent) {
  */
 export function useDrop() {
   const { screenToFlowPosition } = useReactFlow();
-  const { addNode } = useApprovalActions();
+  const addNode = useEditorStore(s => s.addNode);
+  const selectNode = useEditorStore(s => s.selectNode);
 
   const onDrop = useCallback(
     (event: DragEvent) => {
@@ -45,11 +46,15 @@ export function useDrop() {
         y: event.clientY
       });
 
-      // The engine's addNode selects what it appends, so the config panel opens
-      // right away — placing a node and configuring it are one task, not two.
-      addNode(type, position);
+      // Select the new node right away so its config panel opens — placing a
+      // node and configuring it are one task, not two.
+      const id = addNode(type, position);
+
+      if (id) {
+        selectNode(id);
+      }
     },
-    [screenToFlowPosition, addNode]
+    [screenToFlowPosition, addNode, selectNode]
   );
 
   return { onDragOver: handleDragOver, onDrop };

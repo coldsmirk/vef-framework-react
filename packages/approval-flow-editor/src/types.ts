@@ -1,13 +1,12 @@
-import type { XYPosition } from "@xyflow/react";
+import type { Edge, Node, XYPosition } from "@xyflow/react";
 
 /**
  * Node kind aligned with backend NodeKind enum.
  *
- * NOTE: every in-memory node shares the engine's single xyflow `type`
- * ("flowNode"); the discriminator is `data.kind`, which carries one of these
- * values. The wire-level `NodeDefinition` (the `value` / `onChange` contract)
- * lifts it to a top-level `kind`; `toFlowDefinition` / `fromFlowDefinition`
- * translate between the two shapes.
+ * NOTE: inside the editor, React Flow owns the `type` discriminator on a node
+ * (it drives `nodeTypes` rendering), so the in-memory `FlowNode` keeps `type`.
+ * Only the wire-level `NodeDefinition` (the `value` / `onChange` contract) uses
+ * `kind`; `toFlowDefinition` / `fromFlowDefinition` translate between the two.
  */
 export type NodeKind = "start" | "approval" | "handle" | "condition" | "cc" | "end";
 
@@ -348,18 +347,29 @@ export interface CcNodeData extends BaseNodeData {
 }
 
 /**
- * In-memory node/edge shapes are `@coldsmirk/nodeloom-core`'s uniform ones: every node carries
- * `type: "flowNode"` and `data: { kind, label, config }`, with the business fields (the wire
- * `data`) living in `config`. `label` is the static kind label — the node's display name stays
- * `config.name`, the only wire field. Type-safe per-kind access goes through
- * `nodeConfig(node, kind)` (store/config-access.ts), the package's single erasure boundary.
+ * Typed xyflow node per kind — enables type-safe NodeProps<T> without assertions
  */
-export type { FlowEdge, FlowNode } from "@coldsmirk/nodeloom-core";
+export type StartNode = Node<StartNodeData, "start">;
+export type EndNode = Node<EndNodeData, "end">;
+export type ApprovalNode = Node<ApprovalNodeData, "approval">;
+export type HandleNode = Node<HandleNodeData, "handle">;
+export type ConditionNode = Node<ConditionNodeData, "condition">;
+export type CcNode = Node<CcNodeData, "cc">;
 
 /**
- * Union of all wire-level node data shapes (the business fields stored in `config`).
+ * Union of all typed nodes
  */
-export type AnyNodeData = NodeDataMap[NodeKind];
+export type FlowNode = StartNode | EndNode | ApprovalNode | HandleNode | ConditionNode | CcNode;
+
+/**
+ * Union of all node data types
+ */
+export type NodeData = FlowNode["data"];
+
+/**
+ * Typed xyflow edge
+ */
+export type FlowEdge = Edge;
 
 /**
  * Mapping from NodeKind to its corresponding data type
@@ -375,8 +385,8 @@ export interface NodeDataMap {
 
 /**
  * Backend-compatible node definition — discriminated union keyed on `kind`
- * (the backend NodeDefinition tag). Inside the editor the discriminator lives
- * in `data.kind`; the serializer maps `data.kind` ↔ `kind`.
+ * (the backend NodeDefinition tag). Inside the editor the live node uses
+ * React Flow's `type`; the serializer maps `type` ↔ `kind`.
  */
 export type NodeDefinition = {
   [K in NodeKind]: {
