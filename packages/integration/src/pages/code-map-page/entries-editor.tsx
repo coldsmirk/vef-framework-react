@@ -76,23 +76,37 @@ export function CodeMapEntriesEditor({ value, onChange }: CodeMapEntriesEditorPr
   const columns = useMemo<Array<EditableColumn<EntryRow>>>(() => [
     createEditableColumn<EntryRow>("canonical", {
       title: "标准值",
-      width: "18%",
+      width: 120,
       renderEditor: field => <field.Input noWrapper placeholder="如 1" />
     }),
     createEditableColumn<EntryRow>("canonicalAliases", {
       title: "标准别名",
-      width: "32%",
-      renderEditor: field => <field.Select noWrapper mode="tags" open={false} placeholder="回车添加，仅参与匹配" />
+      renderEditor: field => (
+        <field.Select
+          noWrapper
+          mode="tags"
+          open={false}
+          placeholder="回车添加，仅参与匹配"
+          style={{ width: "100%" }}
+        />
+      )
     }),
     createEditableColumn<EntryRow>("external", {
       title: "外部值",
-      width: "18%",
+      width: 120,
       renderEditor: field => <field.Input noWrapper placeholder="如 M" />
     }),
     createEditableColumn<EntryRow>("externalAliases", {
       title: "外部别名",
-      width: "32%",
-      renderEditor: field => <field.Select noWrapper mode="tags" open={false} placeholder="回车添加，仅参与匹配" />
+      renderEditor: field => (
+        <field.Select
+          noWrapper
+          mode="tags"
+          open={false}
+          placeholder="回车添加，仅参与匹配"
+          style={{ width: "100%" }}
+        />
+      )
     })
   ], []);
 

@@ -3,7 +3,7 @@ import type { CrudBasicFormScene } from "@vef-framework-react/components";
 import type { CodeMapEntry } from "../../types";
 import type { CodeMapFormValues } from "./model";
 
-import { Grid, Labeled, Select, Text, useFormContext } from "@vef-framework-react/components";
+import { Grid, Labeled, Text, useFormContext } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { z } from "@vef-framework-react/shared";
 import { useMemo } from "react";
@@ -55,7 +55,7 @@ function HostCodesHint({ codeSet, supported }: { codeSet: string; supported: boo
 
   return (
     <Text type="secondary">
-      宿主标准值参考：
+      标准值参考：
       {data.codes.map(code => `${code.code} = ${code.label}`).join("，")}
     </Text>
   );
@@ -73,9 +73,13 @@ export function CodeMapForm({ scene }: CodeMapFormProps) {
   const { AppField } = form;
   const systemDir = useSystemDirectory();
   const api = useCodeSetApi();
-  const { data: catalog } = useQuery({ queryFn: api.listCodeSets, queryKey: [api.listCodeSets.key, {}] });
+  const {
+    data: catalog,
+    isError: isCatalogError,
+    isLoading: isCatalogLoading
+  } = useQuery({ queryFn: api.listCodeSets, queryKey: [api.listCodeSets.key, {}] });
   const isCreate = scene === "create";
-  const supported = catalog?.supported ?? false;
+  const supported = catalog?.supported === true;
 
   const codeSetOptions = useMemo(
     () => (catalog?.codeSets ?? []).map(info => { return { label: `${info.name}（${info.codeSet}）`, value: info.codeSet }; }),
@@ -99,38 +103,45 @@ export function CodeMapForm({ scene }: CodeMapFormProps) {
         </AppField>
       </Grid.Item>
 
-      {isCreate && supported && codeSetOptions.length > 0 && (
-        <Grid.Item span={24}>
-          <Labeled hint="从宿主注册的标准码集目录中选择，自动填充标识与名称" label="宿主码集目录">
-            <Select
-              allowClear
-              options={codeSetOptions}
-              placeholder="选择宿主码集（可选）"
-              style={{ width: "100%" }}
-              onChange={codeSet => {
-                const info = (catalog?.codeSets ?? []).find(entry => entry.codeSet === codeSet);
-
-                if (info) {
-                  form.setFieldValue("codeSet", info.codeSet);
-                  form.setFieldValue("name", info.name);
-                }
-              }}
-            />
-          </Labeled>
-        </Grid.Item>
-      )}
-
       <Grid.Item span={12}>
         <AppField name="codeSet" validators={{ onChange: codeSetSchema }}>
-          {field => (
-            <field.Input
-              required
-              disabled={!isCreate}
-              extra="适配器脚本以 codes.toExternal('<码集>', …) 引用"
-              label="码集标识"
-              placeholder="如 gender"
-            />
-          )}
+          {field => !isCreate || catalog?.supported === false
+            ? (
+                <field.Input
+                  required
+                  disabled={!isCreate}
+                  extra="适配器脚本以 codes.toExternal('<码集>', …) 引用"
+                  label="码集标识"
+                  placeholder="如 gender"
+                />
+              )
+            : (
+                <field.Select
+                  required
+                  disabled={isCatalogLoading || isCatalogError}
+                  label="标准码集"
+                  loading={isCatalogLoading}
+                  options={codeSetOptions}
+                  status={isCatalogError ? "error" : undefined}
+                  extra={isCatalogError
+                    ? "标准码集加载失败，请稍后重试"
+                    : "从本系统已注册的标准码集中选择，自动填充码表名称"}
+                  placeholder={isCatalogLoading
+                    ? "正在加载标准码集…"
+                    : isCatalogError
+                      ? "标准码集加载失败"
+                      : codeSetOptions.length === 0
+                        ? "暂无可用标准码集"
+                        : "选择标准码集"}
+                  onSelect={codeSet => {
+                    const info = catalog?.codeSets?.find(entry => entry.codeSet === codeSet);
+
+                    if (info) {
+                      form.setFieldValue("name", info.name);
+                    }
+                  }}
+                />
+              )}
         </AppField>
       </Grid.Item>
 
