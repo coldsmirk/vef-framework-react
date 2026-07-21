@@ -73,13 +73,13 @@ export function DelegationForm() {
       </Grid.Item>
 
       <Grid.Item span={12}>
-        <AppField name="startTime">
+        <AppField name="startsAt">
           {field => <field.DatePicker required showTime label="开始时间" placeholder="选择开始时间" />}
         </AppField>
       </Grid.Item>
 
       <Grid.Item span={12}>
-        <AppField name="endTime">
+        <AppField name="endsAt">
           {field => <field.DatePicker required showTime label="结束时间" placeholder="选择结束时间" />}
         </AppField>
       </Grid.Item>

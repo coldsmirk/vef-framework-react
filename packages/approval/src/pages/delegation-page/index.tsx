@@ -38,8 +38,8 @@ function delegationToFormValues(row: Delegation): DelegationParams {
     delegateeId: row.delegateeId,
     flowCategoryId: row.flowCategoryId ?? undefined,
     flowId: row.flowId ?? undefined,
-    startTime: row.startTime,
-    endTime: row.endTime,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
     isActive: row.isActive,
     reason: row.reason ?? undefined
   };

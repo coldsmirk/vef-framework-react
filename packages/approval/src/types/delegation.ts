@@ -10,8 +10,8 @@ export interface Delegation extends FullAudited {
   delegateeId: string;
   flowCategoryId?: string | null;
   flowId?: string | null;
-  startTime: string;
-  endTime: string;
+  startsAt: string;
+  endsAt: string;
   isActive: boolean;
   reason?: string | null;
 }
@@ -25,8 +25,8 @@ export interface DelegationParams {
   delegateeId: string;
   flowCategoryId?: string | null;
   flowId?: string | null;
-  startTime: string;
-  endTime: string;
+  startsAt: string;
+  endsAt: string;
   isActive: boolean;
   reason?: string | null;
 }

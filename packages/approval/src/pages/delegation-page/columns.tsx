@@ -21,13 +21,13 @@ export const delegationColumns: Array<TableColumn<Delegation>> = [
   },
   {
     title: "生效时间",
-    dataIndex: "startTime",
+    dataIndex: "startsAt",
     width: 160,
     render: (value: string) => formatTimestamp(value)
   },
   {
     title: "失效时间",
-    dataIndex: "endTime",
+    dataIndex: "endsAt",
     width: 160,
     render: (value: string) => formatTimestamp(value)
   },
