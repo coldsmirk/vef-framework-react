@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/approval",
-  "version": "2.12.0",
+  "version": "2.13.0",
   "private": false,
   "description": "Approval engine pages and runtime components for VEF framework",
   "keywords": [

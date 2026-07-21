@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/dev",
-  "version": "2.12.0",
+  "version": "2.13.0",
   "private": false,
   "description": "Dev tools for VEF framework",
   "keywords": [
