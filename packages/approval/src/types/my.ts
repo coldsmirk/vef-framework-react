@@ -122,6 +122,8 @@ export interface MyInstanceInfo {
   instanceId: string;
   instanceNo: string;
   title: string;
+  flowId: string;
+  flowCode: string;
   flowName: string;
   flowIcon?: string;
   labels?: Record<string, string>;

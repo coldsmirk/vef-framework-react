@@ -129,6 +129,7 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
         createdAt={instance.createdAt}
         currentNodeName={instance.currentNodeName}
         finishedAt={instance.finishedAt}
+        flowCode={instance.flowCode}
         flowName={instance.flowName}
         instanceNo={instance.instanceNo}
         labels={instance.labels}

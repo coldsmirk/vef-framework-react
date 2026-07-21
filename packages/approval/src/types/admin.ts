@@ -48,6 +48,7 @@ export interface AdminInstanceInfo {
   title: string;
   tenantId: string;
   flowId: string;
+  flowCode: string;
   flowName: string;
   flowVersionId: string;
   labels?: Record<string, string>;

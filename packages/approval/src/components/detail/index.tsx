@@ -62,6 +62,7 @@ export function InstanceHeader({
   status,
   instanceNo,
   flowName,
+  flowCode,
   applicant,
   createdAt,
   finishedAt,
@@ -73,6 +74,7 @@ export function InstanceHeader({
   status: MyInstanceDetail["instance"]["status"];
   instanceNo: string;
   flowName: string;
+  flowCode?: string;
   applicant: UserInfo;
   createdAt: string;
   finishedAt?: string;
@@ -93,6 +95,15 @@ export function InstanceHeader({
       label: "所属流程",
       children: flowName
     },
+    ...flowCode
+      ? [
+          {
+            key: "flowCode",
+            label: "流程编码",
+            children: <Text copyable>{flowCode}</Text>
+          }
+        ]
+      : [],
     {
       key: "applicant",
       label: "申请人",
@@ -513,6 +524,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
         createdAt={instance.createdAt}
         currentNodeName={instance.currentNodeName}
         finishedAt={instance.finishedAt}
+        flowCode={instance.flowCode}
         flowName={instance.flowName}
         instanceNo={instance.instanceNo}
         status={instance.status}
