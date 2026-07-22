@@ -39,7 +39,10 @@ export function useOpsApi(): OpsApi {
         dryRun: apiClient.createMutationFn<DryRunResult, DryRunParams>(
           "integration_ops_dry_run",
           ({ post }) => async params => {
-            const result = await post<DryRunResult>(API_PATH, { data: createApiRequest("integration/ops", "dry_run", params) });
+            const result = await post<DryRunResult>(API_PATH, {
+              data: createApiRequest("integration/ops", "dry_run", params),
+              bodyEncoding: "gzip+base64"
+            });
 
             return result.data;
           }
@@ -48,7 +51,8 @@ export function useOpsApi(): OpsApi {
           "integration_ops_dry_run_inbound",
           ({ post }) => async params => {
             const result = await post<InboundDryRunResult>(API_PATH, {
-              data: createApiRequest("integration/ops", "dry_run_inbound", params)
+              data: createApiRequest("integration/ops", "dry_run_inbound", params),
+              bodyEncoding: "gzip+base64"
             });
 
             return result.data;

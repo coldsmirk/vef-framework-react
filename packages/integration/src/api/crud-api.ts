@@ -1,5 +1,5 @@
 import type { PaginatedQueryParams } from "@vef-framework-react/components";
-import type { ApiClient, ApiResult, MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
+import type { ApiClient, ApiResult, BodyEncoding, MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
 import type { AnyObject } from "@vef-framework-react/shared";
 
 import type {
@@ -46,11 +46,14 @@ export interface CrudApi<TRow extends Identifiable, TParams, TSearch extends Any
 /**
  * Build the CRUD query/mutation functions for a resource against the app's
  * API client. `keyPrefix` namespaces the TanStack Query cache keys.
+ * `bodyEncoding` transport-encodes the create/update bodies so a script-carrying
+ * resource (adapter, system) survives middleboxes that inspect request payloads.
  */
 export function createCrudApi<TRow extends Identifiable, TParams extends object, TSearch extends AnyObject>(
   apiClient: ApiClient,
   resource: string,
-  keyPrefix: string
+  keyPrefix: string,
+  bodyEncoding?: BodyEncoding
 ): CrudApi<TRow, TParams, TSearch> {
   return {
     findPage: apiClient.createQueryFn<PaginationResult<TRow>, PaginatedQueryParams<TSearch>>(
@@ -66,11 +69,11 @@ export function createCrudApi<TRow extends Identifiable, TParams extends object,
     ),
     create: apiClient.createMutationFn<ApiResult<unknown>, TParams>(
       `${keyPrefix}_create`,
-      ({ post }) => params => post(API_PATH, { data: createApiRequest(resource, "create", params) })
+      ({ post }) => params => post(API_PATH, { data: createApiRequest(resource, "create", params), bodyEncoding })
     ),
     update: apiClient.createMutationFn<ApiResult<unknown>, TParams>(
       `${keyPrefix}_update`,
-      ({ post }) => params => post(API_PATH, { data: createApiRequest(resource, "update", params) })
+      ({ post }) => params => post(API_PATH, { data: createApiRequest(resource, "update", params), bodyEncoding })
     ),
     remove: apiClient.createMutationFn<ApiResult<unknown>, TRow>(
       `${keyPrefix}_delete`,
@@ -102,7 +105,7 @@ export function useSystemApi(): CrudApi<System, SystemParams, SystemSearch> {
   const apiClient = useApiClient();
 
   return useMemo(
-    () => createCrudApi<System, SystemParams, SystemSearch>(apiClient, "integration/system", "integration_system"),
+    () => createCrudApi<System, SystemParams, SystemSearch>(apiClient, "integration/system", "integration_system", "gzip+base64"),
     [apiClient]
   );
 }
@@ -114,7 +117,7 @@ export function useAdapterApi(): CrudApi<Adapter, AdapterParams, AdapterSearch> 
   const apiClient = useApiClient();
 
   return useMemo(
-    () => createCrudApi<Adapter, AdapterParams, AdapterSearch>(apiClient, "integration/adapter", "integration_adapter"),
+    () => createCrudApi<Adapter, AdapterParams, AdapterSearch>(apiClient, "integration/adapter", "integration_adapter", "gzip+base64"),
     [apiClient]
   );
 }
