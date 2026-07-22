@@ -104,6 +104,7 @@ export {
 export type {
   ApiResult,
   AuthTokens,
+  BodyEncoding,
   HttpClient,
   HttpClientOptions,
   HttpFileResponse,

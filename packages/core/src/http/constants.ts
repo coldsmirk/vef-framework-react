@@ -27,6 +27,12 @@ export const SKIP_AUTH_HEADER = "X-Skip-Authentication";
 export const SKIP_AUTH_VALUE = "1";
 
 /**
+ * The header naming the transport encoding applied to a request body, which the
+ * server's body-encoding middleware reverses before parsing.
+ */
+export const BODY_ENCODING_HEADER = "X-Body-Encoding";
+
+/**
  * Default request timeout in milliseconds (30 seconds).
  */
 export const DEFAULT_TIMEOUT = 30_000;

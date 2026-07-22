@@ -1,12 +1,14 @@
 import type { Awaitable, MaybeArray } from "@vef-framework-react/shared";
 import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosResponse, GenericAbortSignal, InternalAxiosRequestConfig } from "axios";
 
-import type { ApiResult, HttpClientOptions, HttpFileResponse, RequestOptions } from "./types";
+import type { ApiResult, BodyEncoding, HttpClientOptions, HttpFileResponse, RequestOptions } from "./types";
 
 import { encodeQueryString, isArray, isFunction, isNullish, isNumber, isString } from "@vef-framework-react/shared";
 import axios, { CanceledError } from "axios";
 
+import { encodeRequestBody } from "./body-encoding";
 import {
+  BODY_ENCODING_HEADER,
   CONTENT_DISPOSITION_FILENAME_REGEX,
   DEFAULT_TIMEOUT,
   PATH_PARAM_REGEX,
@@ -46,6 +48,18 @@ type RefreshWaiter = (success: boolean) => void;
 
 function isArrayBuffer(value: unknown): value is ArrayBuffer {
   return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
+/**
+ * Whether a request body is a JSON payload the client may transport-encode;
+ * binary and multipart bodies are always sent as-is.
+ */
+function isEncodableBody(data: unknown): boolean {
+  return !isNullish(data)
+    && !(data instanceof FormData)
+    && !(data instanceof Blob)
+    && !isArrayBuffer(data)
+    && !ArrayBuffer.isView(data);
 }
 
 function isObservableAbortSignal(signal: GenericAbortSignal): signal is ObservableAbortSignal {
@@ -704,6 +718,37 @@ export class HttpClient {
   }
 
   /**
+   * Apply the resolved transport body encoding to a request, adding the
+   * `X-Body-Encoding` header for the server to reverse. A non-JSON body or a
+   * resolved `none` encoding passes through untouched.
+   */
+  private async encodeRequestData<D, O extends RequestOptions>(
+    data: D | undefined,
+    bodyEncoding: BodyEncoding | undefined,
+    options: O
+  ): Promise<{ data: unknown; options: O }> {
+    const encoding = bodyEncoding ?? this.#options.defaultBodyEncoding ?? "none";
+
+    if (encoding === "none" || !isEncodableBody(data)) {
+      return { data, options };
+    }
+
+    const payload = isString(data) ? data : JSON.stringify(data);
+    const encoded = await encodeRequestBody(payload, encoding);
+
+    return {
+      data: encoded.body,
+      options: {
+        ...options,
+        headers: {
+          ...options.headers,
+          [BODY_ENCODING_HEADER]: encoded.encoding
+        }
+      }
+    };
+  }
+
+  /**
    * Ensure the token is refreshed. Can be called proactively by external code
    * (e.g., fetch-based SSE) to refresh token before/after request.
    *
@@ -740,10 +785,15 @@ export class HttpClient {
    */
   public async post<R = unknown, D = unknown, P = unknown>(
     url: string,
-    options?: RequestOptions & { data?: D; params?: P }
+    options?: RequestOptions & { data?: D; params?: P; bodyEncoding?: BodyEncoding }
   ): Promise<ApiResult<R>> {
-    const { data, ...restOptions } = options ?? {};
-    const response = await this.#axiosInstance.post<ApiResult<R>>(url, data, restOptions);
+    const {
+      data,
+      bodyEncoding,
+      ...restOptions
+    } = options ?? {};
+    const request = await this.encodeRequestData(data, bodyEncoding, restOptions);
+    const response = await this.#axiosInstance.post<ApiResult<R>>(url, request.data, request.options);
     return response.data;
   }
 
@@ -752,10 +802,15 @@ export class HttpClient {
    */
   public async put<R = unknown, D = unknown, P = unknown>(
     url: string,
-    options?: RequestOptions & { data?: D; params?: P }
+    options?: RequestOptions & { data?: D; params?: P; bodyEncoding?: BodyEncoding }
   ): Promise<ApiResult<R>> {
-    const { data, ...restOptions } = options ?? {};
-    const response = await this.#axiosInstance.put<ApiResult<R>>(url, data, restOptions);
+    const {
+      data,
+      bodyEncoding,
+      ...restOptions
+    } = options ?? {};
+    const request = await this.encodeRequestData(data, bodyEncoding, restOptions);
+    const response = await this.#axiosInstance.put<ApiResult<R>>(url, request.data, request.options);
     return response.data;
   }
 

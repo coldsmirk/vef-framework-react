@@ -13,7 +13,7 @@ import { AxiosHeaders, CanceledError } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HttpClient } from "./client";
-import { SKIP_AUTH_HEADER, SKIP_AUTH_VALUE } from "./constants";
+import { BODY_ENCODING_HEADER, SKIP_AUTH_HEADER, SKIP_AUTH_VALUE } from "./constants";
 import { BusinessError } from "./errors";
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -799,6 +799,72 @@ describe("http/HttpClient", () => {
         { name: "alice" },
         expect.objectContaining({ headers: { "X-Trace": "t1" } })
       );
+    });
+  });
+
+  describe("body encoding", () => {
+    beforeEach(() => {
+      mocks.instance.post.mockResolvedValue({
+        data: {
+          code: 0,
+          message: "ok",
+          data: null
+        }
+      });
+    });
+
+    it("base64-encodes the request body and marks it with the header", async () => {
+      const { client } = buildHttpClient();
+      const payload = { resource: "integration/adapter", action: "save" };
+
+      await client.post("/api", { data: payload, bodyEncoding: "base64" });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith(
+        "/api",
+        new TextEncoder().encode(JSON.stringify(payload)).toBase64(),
+        expect.objectContaining({ headers: { [BODY_ENCODING_HEADER]: "base64" } })
+      );
+    });
+
+    it("sends the raw object and no marker header when encoding is not requested", async () => {
+      const { client } = buildHttpClient();
+      const payload = { resource: "integration/contract" };
+
+      await client.post("/api", { data: payload });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith("/api", payload, {});
+    });
+
+    it("applies the client default encoding when a request does not specify one", async () => {
+      const { client } = buildHttpClient({ defaultBodyEncoding: "base64" });
+      const payload = { resource: "integration/route" };
+
+      await client.post("/api", { data: payload });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith(
+        "/api",
+        new TextEncoder().encode(JSON.stringify(payload)).toBase64(),
+        expect.objectContaining({ headers: { [BODY_ENCODING_HEADER]: "base64" } })
+      );
+    });
+
+    it("lets a request opt out of the client default with none", async () => {
+      const { client } = buildHttpClient({ defaultBodyEncoding: "base64" });
+      const payload = { resource: "integration/route" };
+
+      await client.post("/api", { data: payload, bodyEncoding: "none" });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith("/api", payload, {});
+    });
+
+    it("does not encode a multipart body", async () => {
+      const { client } = buildHttpClient({ defaultBodyEncoding: "base64" });
+      const form = new FormData();
+      form.append("field", "value");
+
+      await client.post("/api", { data: form });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith("/api", form, {});
     });
   });
 

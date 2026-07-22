@@ -22,6 +22,19 @@ export interface ApiResult<T = unknown> {
 }
 
 /**
+ * How a request body is transport-encoded so a code-shaped payload survives
+ * middleboxes (WAF / proxy) that false-positive on it; the server's
+ * body-encoding middleware reverses it before parsing.
+ *
+ * - `none` — send the body verbatim (also opts a single request out of a
+ * client-wide `defaultBodyEncoding`).
+ * - `base64` — base64 of the UTF-8 JSON body.
+ * - `gzip+base64` — base64 of a gzip stream of the UTF-8 JSON body; smaller on
+ * the wire and still text-shaped.
+ */
+export type BodyEncoding = "none" | "base64" | "gzip+base64";
+
+/**
  * The authenticated tokens.
  */
 export interface AuthTokens {
@@ -91,6 +104,12 @@ export interface HttpClientOptions {
    * The function to show the error message.
    */
   showErrorMessage?: (message: string) => void;
+  /**
+   * The transport encoding applied to every request body by default. Individual
+   * requests override it (including `"none"` to opt out); absent means the body
+   * is sent verbatim.
+   */
+  defaultBodyEncoding?: BodyEncoding;
 }
 
 /**
