@@ -13,6 +13,18 @@ async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   return new Uint8Array(inflated);
 }
 
+function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array.fromBase64 is still not universal.
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.codePointAt(index)!;
+  }
+
+  return bytes;
+}
+
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
@@ -24,14 +36,14 @@ describe("http/encodeRequestBody", () => {
     const { body, encoding } = await encodeRequestBody(payload, "base64");
 
     expect(encoding).toBe("base64");
-    expect(decodeUtf8(Uint8Array.fromBase64(body))).toBe(payload);
+    expect(decodeUtf8(base64ToBytes(body))).toBe(payload);
   });
 
   it("gzips then base64-encodes the payload and reports the encoding", async () => {
     const payload = JSON.stringify({ script: "return input.value * 2;" });
 
     const { body, encoding } = await encodeRequestBody(payload, "gzip+base64");
-    const inflated = await gunzip(Uint8Array.fromBase64(body));
+    const inflated = await gunzip(base64ToBytes(body));
 
     expect(encoding).toBe("gzip+base64");
     expect(decodeUtf8(inflated)).toBe(payload);
@@ -42,7 +54,7 @@ describe("http/encodeRequestBody", () => {
 
     const { body } = await encodeRequestBody(payload, "base64");
 
-    expect(decodeUtf8(Uint8Array.fromBase64(body))).toBe(payload);
+    expect(decodeUtf8(base64ToBytes(body))).toBe(payload);
   });
 
   describe("when the runtime cannot gzip", () => {
@@ -57,7 +69,33 @@ describe("http/encodeRequestBody", () => {
       const { body, encoding } = await encodeRequestBody(payload, "gzip+base64");
 
       expect(encoding).toBe("base64");
-      expect(decodeUtf8(Uint8Array.fromBase64(body))).toBe(payload);
+      expect(decodeUtf8(base64ToBytes(body))).toBe(payload);
+    });
+  });
+
+  // The native Uint8Array#toBase64 is absent on the Node versions and browsers
+  // this library still targets, so the btoa fallback must produce correct
+  // base64 even where a modern local runtime would use the native method.
+  describe("without the native Uint8Array base64 method", () => {
+    let nativeToBase64: unknown;
+
+    beforeEach(() => {
+      nativeToBase64 = Reflect.get(Uint8Array.prototype, "toBase64");
+      Reflect.deleteProperty(Uint8Array.prototype, "toBase64");
+    });
+
+    afterEach(() => {
+      if (nativeToBase64 !== undefined) {
+        Reflect.set(Uint8Array.prototype, "toBase64", nativeToBase64);
+      }
+    });
+
+    it("falls back to btoa and still produces decodable base64", async () => {
+      const payload = JSON.stringify({ note: "国密 SM4 适配器脚本" });
+
+      const { body } = await encodeRequestBody(payload, "base64");
+
+      expect(decodeUtf8(base64ToBytes(body))).toBe(payload);
     });
   });
 });

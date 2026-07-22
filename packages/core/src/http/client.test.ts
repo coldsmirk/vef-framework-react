@@ -121,6 +121,20 @@ function silenceConsole(method: "warn" | "info" | "error"): void {
   vi.spyOn(console, method).mockImplementation(silence);
 }
 
+// Independently derive the base64 the client should produce, using the same
+// portable path (btoa) rather than the not-yet-universal Uint8Array#toBase64.
+function base64Utf8(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+
+  for (let offset = 0; offset < bytes.length; offset += 0x80_00) {
+    binary += String.fromCodePoint(...bytes.subarray(offset, offset + 0x80_00));
+  }
+
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array#toBase64 is still not universal.
+  return btoa(binary);
+}
+
 type RequestHandler = (config: InternalAxiosRequestConfig) => Promise<InternalAxiosRequestConfig>;
 
 type ResponseHandler = (response: AxiosResponse<unknown>) => AxiosResponse<unknown>;
@@ -821,7 +835,7 @@ describe("http/HttpClient", () => {
 
       expect(mocks.instance.post).toHaveBeenCalledWith(
         "/api",
-        new TextEncoder().encode(JSON.stringify(payload)).toBase64(),
+        base64Utf8(JSON.stringify(payload)),
         expect.objectContaining({ headers: { [BODY_ENCODING_HEADER]: "base64" } })
       );
     });
@@ -843,7 +857,7 @@ describe("http/HttpClient", () => {
 
       expect(mocks.instance.post).toHaveBeenCalledWith(
         "/api",
-        new TextEncoder().encode(JSON.stringify(payload)).toBase64(),
+        base64Utf8(JSON.stringify(payload)),
         expect.objectContaining({ headers: { [BODY_ENCODING_HEADER]: "base64" } })
       );
     });

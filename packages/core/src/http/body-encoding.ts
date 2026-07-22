@@ -11,6 +11,32 @@ export interface EncodedRequestBody {
 }
 
 /**
+ * The slice size fed to `String.fromCodePoint`, kept under the argument-count
+ * limit so encoding a large body cannot overflow the call stack.
+ */
+const BASE64_CHUNK_SIZE = 0x80_00;
+
+/**
+ * Encode raw bytes to standard base64, preferring the native `Uint8Array`
+ * method where present and otherwise falling back to `btoa` — `toBase64` is not
+ * yet available across every browser and Node version this library targets.
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  if ("toBase64" in bytes && typeof bytes.toBase64 === "function") {
+    return bytes.toBase64();
+  }
+
+  let binary = "";
+
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCodePoint(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE));
+  }
+
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array#toBase64 is still not universal.
+  return btoa(binary);
+}
+
+/**
  * Whether the runtime can gzip a request body.
  */
 function canGzip(): boolean {
@@ -52,8 +78,8 @@ export async function encodeRequestBody(
   if (encoding === "gzip+base64" && canGzip()) {
     const compressed = await gzip(utf8);
 
-    return { body: compressed.toBase64(), encoding: "gzip+base64" };
+    return { body: bytesToBase64(compressed), encoding: "gzip+base64" };
   }
 
-  return { body: utf8.toBase64(), encoding: "base64" };
+  return { body: bytesToBase64(utf8), encoding: "base64" };
 }
