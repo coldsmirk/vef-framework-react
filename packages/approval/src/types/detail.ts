@@ -52,9 +52,13 @@ export interface CCRecipient {
 
 /**
  * Kind of an instance timeline entry: node entries plus the withdraw /
- * terminate milestones.
+ * terminate milestones. `condition` never appears — a branch routes without
+ * anything to narrate — but `end` does: reaching the end node is the only
+ * signal that an instance finished by passing, since approval writes no
+ * milestone the way withdraw and terminate do, and a rejection stops on the
+ * approval node with a `rejected` visit instead of traversing to the end.
  */
-export type TimelineEntryKind = "start" | "approval" | "handle" | "cc" | "withdraw" | "terminate";
+export type TimelineEntryKind = "start" | "approval" | "handle" | "cc" | "end" | "withdraw" | "terminate";
 
 /**
  * One step of the instance timeline — the chronological, node-by-node account
