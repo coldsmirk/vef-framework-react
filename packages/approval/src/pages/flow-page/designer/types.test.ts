@@ -1,6 +1,6 @@
 import type { BusinessBindingConfig } from "../../../types";
 
-import { createEmptyDraft, isBindingValid } from "./types";
+import { createEmptyDraft, initiatorsForSubmit, isBindingValid } from "./types";
 
 function validBinding(): BusinessBindingConfig {
   return {
@@ -66,5 +66,36 @@ describe("createEmptyDraft", () => {
     expect(draft.basic.isAllInitiationAllowed).toBe(false);
     expect(draft.storageMode).toBe("json");
     expect(draft.flowDefinition.nodes).toHaveLength(0);
+  });
+});
+
+function draftWithRules(isAllInitiationAllowed: boolean, ids: string[][]) {
+  const draft = createEmptyDraft("t1");
+
+  draft.basic.isAllInitiationAllowed = isAllInitiationAllowed;
+  draft.initiators = ids.map(entry => {
+    return { kind: "user" as const, ids: entry };
+  });
+
+  return draft;
+}
+
+describe("initiatorsForSubmit", () => {
+  it("keeps the rules of a restricted flow", () => {
+    expect(initiatorsForSubmit(draftWithRules(false, [["u1"], ["u2", "u3"]]))).toEqual([
+      { kind: "user", ids: ["u1"] },
+      { kind: "user", ids: ["u2", "u3"] }
+    ]);
+  });
+
+  it("drops rules with nothing selected", () => {
+    expect(initiatorsForSubmit(draftWithRules(false, [["u1"], []]))).toEqual([{ kind: "user", ids: ["u1"] }]);
+  });
+
+  // The two settings are mutually exclusive server-side, and the editor hides
+  // the rules rather than clearing them — so rules typed before the switch was
+  // turned on are still in the draft and must not reach the backend.
+  it("drops every rule when the flow is open to everyone", () => {
+    expect(initiatorsForSubmit(draftWithRules(true, [["u1"], ["u2"]]))).toEqual([]);
   });
 });

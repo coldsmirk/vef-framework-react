@@ -69,6 +69,27 @@ export function createEmptyDraft(tenantId: string): FlowDraft {
 export const BUSINESS_IDENTIFIER_PATTERN = /^[A-Z_]\w{0,62}$/i;
 
 /**
+ * The initiator rules a draft should be saved with.
+ *
+ * A flow open to everyone carries none: the two settings are mutually exclusive
+ * server-side, because initiation permission short-circuits on the flag and
+ * never reads the rules — saved rules would show a restriction that does not
+ * hold. The draft still keeps whatever was typed, so toggling the switch back
+ * does not lose it; the rules are dropped only on the way out, the same way a
+ * standalone flow drops its in-progress business binding.
+ *
+ * Rules with nothing selected are incomplete and never sent. Validation and
+ * submit both read this, so what the wizard accepts is exactly what it saves.
+ */
+export function initiatorsForSubmit(draft: FlowDraft): InitiatorParams[] {
+  if (draft.basic.isAllInitiationAllowed) {
+    return [];
+  }
+
+  return draft.initiators.filter(rule => rule.ids.length > 0);
+}
+
+/**
  * Client-side pre-check of the backend binding save gate
  * (`binding.NormalizeConfig`): table, key columns, status column and
  * instance-id column are mandatory, every name must be a plain SQL

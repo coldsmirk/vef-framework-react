@@ -17,6 +17,8 @@ import {
   Text
 } from "@vef-framework-react/components";
 
+import { initiatorsForSubmit } from "./types";
+
 export interface ReviewStepProps {
   draft: FlowDraft;
   /**
@@ -79,7 +81,11 @@ export function ReviewStep({
             {
               key: "initiation",
               label: "发起权限",
-              children: basic.isAllInitiationAllowed ? "所有人可发起" : `${draft.initiators.length} 条发起规则`
+              // Count what will actually be saved: rules with nothing selected are
+              // dropped on submit, so the draft length would overstate it.
+              children: basic.isAllInitiationAllowed
+                ? "所有人可发起"
+                : `${initiatorsForSubmit(draft).length} 条发起规则`
             },
             {
               key: "labels",

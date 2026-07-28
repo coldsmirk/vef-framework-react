@@ -17,7 +17,7 @@ import { BasicStep } from "./basic-step";
 import { FlowStep } from "./flow-step";
 import { FormStep } from "./form-step";
 import { ReviewStep } from "./review-step";
-import { createEmptyDraft, EMPTY_FLOW_DEFINITION, isBindingValid } from "./types";
+import { createEmptyDraft, EMPTY_FLOW_DEFINITION, initiatorsForSubmit, isBindingValid } from "./types";
 
 const STEP_ITEMS = [
   { title: "流程设置" },
@@ -182,7 +182,7 @@ function DesignerBody({
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
     && (basic.bindingMode !== "business" || isBindingValid(basic.businessBinding))
-    && (basic.isAllInitiationAllowed || draft.initiators.some(rule => rule.ids.length > 0));
+    && (basic.isAllInitiationAllowed || initiatorsForSubmit(draft).length > 0);
   const stepValid = [
     basicValid,
     formGate === null || formGate.valid,
@@ -195,11 +195,12 @@ function DesignerBody({
     setSubmitting(true);
 
     try {
-      // Standalone flows must not carry a binding (the backend rejects an
-      // unexpected one); the in-progress binding state is only dropped at
-      // submit so switching modes never loses input.
+      // Both of these are settings the backend rejects when they contradict
+      // their mode: a standalone flow must carry no binding, a flow open to
+      // everyone must carry no initiator rules. The in-progress state is
+      // dropped only here, so toggling either switch never loses input.
       const businessBinding = basic.bindingMode === "business" ? basic.businessBinding : undefined;
-      const initiators = currentDraft.initiators.filter(rule => rule.ids.length > 0);
+      const initiators = initiatorsForSubmit(currentDraft);
 
       let flowId: string;
 
