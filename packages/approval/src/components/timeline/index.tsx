@@ -164,14 +164,33 @@ function entryTitle(entry: TimelineEntry): string {
   return entry.name ?? "";
 }
 
+/**
+ * The time span of an entry, collapsed to a single timestamp when both ends
+ * render identically. Nodes that open and close in the same moment — start and
+ * end — would otherwise read as "10:38 → 10:38". The comparison runs on the
+ * formatted values rather than the raw ones because the display only resolves
+ * to the minute: a node that opened and closed inside one minute is just as
+ * redundant on screen, whatever its seconds were.
+ */
+function entryTimeSpan(entry: TimelineEntry): string {
+  const startedAt = formatTimestamp(entry.startedAt);
+
+  if (!entry.finishedAt) {
+    return startedAt;
+  }
+
+  const finishedAt = formatTimestamp(entry.finishedAt);
+
+  return finishedAt === startedAt ? startedAt : `${startedAt} → ${finishedAt}`;
+}
+
 function EntryHeader({ entry }: { entry: TimelineEntry }) {
   return (
     <Flex align="center" gap="small" wrap="wrap">
       <Text strong>{entryTitle(entry)}</Text>
 
       <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
-        {formatTimestamp(entry.startedAt)}
-        {entry.finishedAt ? ` → ${formatTimestamp(entry.finishedAt)}` : ""}
+        {entryTimeSpan(entry)}
       </Text>
     </Flex>
   );
