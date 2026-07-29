@@ -11,7 +11,7 @@ import { contractColumns } from "./columns";
 import { ContractForm } from "./form";
 import { ContractActionButtonGroup, ContractOperationButtonGroup, useContractFormMutations } from "./helpers";
 import { CONTRACT_FORM_DEFAULTS, contractToFormValues } from "./model";
-import { ContractSearchFields } from "./search";
+import { ContractAdvancedSearchFields, ContractSearchFields } from "./search";
 
 const FORM_DRAWER_WIDTH = {
   xxs: "100vw",
@@ -34,6 +34,7 @@ export function IntegrationContractPage({
   return (
     <CrudPage<Contract, ContractSearch, ContractSceneValues>
       rowSelection
+      advancedSearch={<ContractAdvancedSearchFields />}
       basicSearch={<ContractSearchFields />}
       columnSettings={{ storageKey: columnStorageKey }}
       deleteManyMutationFn={api.removeMany}

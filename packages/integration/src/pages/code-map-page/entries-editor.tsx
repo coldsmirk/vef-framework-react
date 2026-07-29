@@ -60,15 +60,47 @@ function sameEntries(a: CodeMapEntry[], b: CodeMapEntry[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * One suggestion offered while editing a cell: `value` is the code inserted on
+ * pick, `label` is what the dropdown shows (`0 = 独立科室`).
+ */
+export interface CodeSuggestion {
+  value: string;
+  label: string;
+}
+
 export interface CodeMapEntriesEditorProps {
   value?: CodeMapEntry[] | null;
   onChange?: (value: CodeMapEntry[]) => void;
+  /**
+   * Suggestions from the host code catalog (`mold.CodeSetInspector`) for the two
+   * primary-value columns. Empty leaves them as free text — which is also the
+   * state for hosts that registered no enumerable catalog.
+   *
+   * The external column gets them too even though the catalog describes the
+   * host's* coding: in practice the two sides overlap often enough (numeric
+   * levels, M/F, Y/N) that offering the list saves real typing, and the control
+   * suggests rather than constrains — an external code that differs is simply
+   * typed in.
+   *
+   * The alias columns stay plain tag inputs. A full catalog dropdown over a
+   * narrow multi-value cell covers half the form for a list the operator is
+   * usually not picking from — aliases are the values that fall *outside* the
+   * catalog.
+   */
+  codeSuggestions?: CodeSuggestion[];
 }
+
+const EMPTY_OPTIONS: CodeSuggestion[] = [];
 
 // The mapping-pair editor: each side holds one primary value and optional
 // aliases (entered as tags). Cells edit the display form; typed JSON values
 // are restored through parseCodeValue on change.
-export function CodeMapEntriesEditor({ value, onChange }: CodeMapEntriesEditorProps) {
+export function CodeMapEntriesEditor({
+  value,
+  onChange,
+  codeSuggestions = EMPTY_OPTIONS
+}: CodeMapEntriesEditorProps) {
   const [rows, setRows] = useState<EntryRow[]>(() => toRows(value ?? []));
   const seq = useRef(0);
   const synced = useRef<CodeMapEntry[]>(value ?? EMPTY_ENTRIES);
@@ -77,7 +109,15 @@ export function CodeMapEntriesEditor({ value, onChange }: CodeMapEntriesEditorPr
     createEditableColumn<EntryRow>("canonical", {
       title: "标准值",
       width: 120,
-      renderEditor: field => <field.Input noWrapper placeholder="如 1" />
+      renderEditor: field => (
+        <field.AutoComplete
+          noWrapper
+          preserveEmptyString
+          options={codeSuggestions}
+          placeholder="如 1"
+          popupMatchSelectWidth={false}
+        />
+      )
     }),
     createEditableColumn<EntryRow>("canonicalAliases", {
       title: "标准别名",
@@ -94,7 +134,15 @@ export function CodeMapEntriesEditor({ value, onChange }: CodeMapEntriesEditorPr
     createEditableColumn<EntryRow>("external", {
       title: "外部值",
       width: 120,
-      renderEditor: field => <field.Input noWrapper placeholder="如 M" />
+      renderEditor: field => (
+        <field.AutoComplete
+          noWrapper
+          preserveEmptyString
+          options={codeSuggestions}
+          placeholder="如 M"
+          popupMatchSelectWidth={false}
+        />
+      )
     }),
     createEditableColumn<EntryRow>("externalAliases", {
       title: "外部别名",
@@ -108,7 +156,7 @@ export function CodeMapEntriesEditor({ value, onChange }: CodeMapEntriesEditorPr
         />
       )
     })
-  ], []);
+  ], [codeSuggestions]);
 
   // Resync when the parent replaces `value` externally (form reset, loading a
   // record). Edits made here round-trip through `toEntries(rows)`, so they

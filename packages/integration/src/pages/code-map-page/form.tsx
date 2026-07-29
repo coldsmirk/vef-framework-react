@@ -1,6 +1,7 @@
 import type { CrudBasicFormScene } from "@vef-framework-react/components";
 
 import type { CodeMapEntry } from "../../types";
+import type { CodeSuggestion } from "./entries-editor";
 import type { CodeMapFormValues } from "./model";
 
 import { Grid, Labeled, Text, useFormContext } from "@vef-framework-react/components";
@@ -37,10 +38,11 @@ const POLICY_OPTIONS = [
   { label: "返回兜底值", value: "fallback" }
 ];
 
-// The host-catalog reference line under the entries editor: the canonical
-// codes (with labels) of the currently selected code set, when the host
-// registered an enumerable catalog.
-function HostCodesHint({ codeSet, supported }: { codeSet: string; supported: boolean }) {
+// The canonical codes of the currently selected code set, when the host
+// registered an enumerable catalog. Empty for every other case (no code set
+// picked yet, catalog unsupported, set has no codes) so callers can treat
+// "no suggestions" uniformly.
+function useHostCodes(codeSet: string, supported: boolean): CodeSuggestion[] {
   const api = useCodeSetApi();
   const enabled = supported && codeSet.length > 0;
   const { data } = useQuery({
@@ -49,15 +51,47 @@ function HostCodesHint({ codeSet, supported }: { codeSet: string; supported: boo
     queryKey: [api.listCodes.key, { codeSet }]
   });
 
-  if (!enabled || !data?.supported || !data.codes?.length) {
-    return null;
-  }
+  return useMemo(
+    () => {
+      if (!enabled || !data?.supported || !data.codes?.length) {
+        return [];
+      }
+
+      return data.codes.map(code => {
+        return { label: `${code.code} = ${code.label}`, value: code.code };
+      });
+    },
+    [data, enabled]
+  );
+}
+
+// The entries editor plus its host-catalog reference line. Both read the same
+// `useHostCodes` result, so the codes shown as a reference and the codes
+// offered as suggestions can never disagree.
+function EntriesField({
+  codeSet,
+  supported,
+  value,
+  onChange
+}: {
+  codeSet: string;
+  supported: boolean;
+  value: CodeMapEntry[];
+  onChange: (next: CodeMapEntry[]) => void;
+}) {
+  const codes = useHostCodes(codeSet, supported);
 
   return (
-    <Text type="secondary">
-      标准值参考：
-      {data.codes.map(code => `${code.code} = ${code.label}`).join("，")}
-    </Text>
+    <>
+      <CodeMapEntriesEditor codeSuggestions={codes} value={value} onChange={onChange} />
+
+      {codes.length > 0 && (
+        <Text type="secondary">
+          标准值参考：
+          {codes.map(code => code.label).join("，")}
+        </Text>
+      )}
+    </>
   );
 }
 
@@ -158,12 +192,18 @@ export function CodeMapForm({ scene }: CodeMapFormProps) {
               hint={"别名仅参与匹配，转换输出始终为主值；数字与 true/false 按 JSON 类型存储，需存为字面量字符串时加英文引号（如 \"1\"）"}
               label="映射条目"
             >
-              <CodeMapEntriesEditor value={field.state.value} onChange={field.handleChange} />
-              {field.state.meta.errors.length > 0 && <Text type="danger">{String(field.state.meta.errors[0])}</Text>}
-
               <form.Subscribe selector={state => state.values.codeSet}>
-                {codeSet => <HostCodesHint codeSet={codeSet} supported={supported} />}
+                {codeSet => (
+                  <EntriesField
+                    codeSet={codeSet}
+                    supported={supported}
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
+                )}
               </form.Subscribe>
+
+              {field.state.meta.errors.length > 0 && <Text type="danger">{String(field.state.meta.errors[0])}</Text>}
             </Labeled>
           )}
         </AppField>
