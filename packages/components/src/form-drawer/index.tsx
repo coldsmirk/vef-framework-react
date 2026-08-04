@@ -9,7 +9,7 @@ import type { FormDrawerProps } from "./props";
 import { css } from "@emotion/react";
 import { useMutation } from "@vef-framework-react/core";
 import { isFunction } from "@vef-framework-react/shared";
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Center } from "../center";
 import { Drawer } from "../drawer";
@@ -78,11 +78,10 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
       }
 
       if (mutationFn) {
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutateAsync/handleClose form a hook cycle (useForm.onSubmit -> mutateAsync -> onSuccess -> handleClose -> reset from useForm); the callback runs after mount, so the late binding is safe.
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- mutateAsync is defined below but only invoked from this deferred submit callback.
         await mutateAsync(formValues);
       } else if (!onSubmit) {
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- see above: handleClose is defined below but only invoked from this deferred submit callback.
-        handleClose();
+        onClose?.();
       }
     }
   });
@@ -93,11 +92,6 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
     reset
   } = formApi;
 
-  const handleClose = useCallback(() => {
-    reset();
-    onClose?.();
-  }, [onClose, reset]);
-
   const { isPending, mutateAsync } = useMutation({
     mutationKey: [mutationFn?.key],
     mutationFn,
@@ -106,7 +100,7 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
         await afterSubmit(formValues, data);
       }
 
-      handleClose();
+      onClose?.();
     },
     meta: mutationMeta
   });
@@ -120,8 +114,18 @@ export const FormDrawer = memo(<TValues extends object, TData = unknown>({
       return;
     }
 
-    handleClose();
-  }, [handleClose, isPending]);
+    onClose?.();
+  }, [isPending, onClose]);
+
+  const wasOpenRef = useRef(open);
+
+  useEffect(() => {
+    if (wasOpenRef.current && !open) {
+      reset();
+    }
+
+    wasOpenRef.current = open;
+  }, [open, reset]);
 
   const drawerStyles = useMemo<GetProp<DrawerProps, "styles">>(
     () => { return { wrapper: { width } }; },

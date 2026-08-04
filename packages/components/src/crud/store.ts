@@ -112,6 +112,10 @@ export interface CrudState<
   openForm: <const TScene extends CrudFormScene<TSceneFormValues>>(options: OpenFormOptions<TScene, TSceneFormValues>) => void;
   /**
    * Close the scene form.
+   *
+   * Single entry point for closing: the modal/drawer close icon and programmatic
+   * calls both go through this function. Closing also resets the form state, so
+   * the next openForm starts from fresh values.
    */
   closeForm: () => void;
   /**

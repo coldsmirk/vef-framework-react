@@ -1,9 +1,11 @@
 import type { ApiClient, ApiResult, HttpClient } from "@vef-framework-react/core";
+import type { ReactNode } from "react";
 
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTestApiClient, render, screen, waitFor } from "../../test-utils";
+import { useFormContext } from "../form";
 import { FormDrawer } from "./index";
 
 interface PostValues {
@@ -32,6 +34,16 @@ function buildOkMutationFn(apiClient: ApiClient) {
   return apiClient.createMutationFn<ApiResult<PostResponse>, PostValues>(
     "posts/create",
     okFactory
+  );
+}
+
+function TitleField(): ReactNode {
+  const { AppField } = useFormContext<PostValues>();
+
+  return (
+    <AppField name="title">
+      {field => <field.Input label="标题" />}
+    </AppField>
   );
 }
 
@@ -73,6 +85,60 @@ describe("form-drawer/FormDrawer", () => {
       render(<FormDrawer<PostValues> title="编辑文章" />, { apiClient });
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("close", () => {
+    it("invokes onClose when the close button is clicked", async () => {
+      const onClose = vi.fn();
+      const user = userEvent.setup();
+
+      render(
+        <FormDrawer<PostValues>
+          open
+          defaultValues={{ title: "x" }}
+          title="编辑"
+          onClose={onClose}
+        />,
+        { apiClient }
+      );
+
+      await user.click(screen.getByRole("button", { name: "关闭" }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("resets the form when closed so the next open starts from the new defaultValues", async () => {
+      const user = userEvent.setup();
+
+      const { rerender } = render(
+        <FormDrawer<PostValues> open defaultValues={{ title: "first" }} title="编辑">
+          <TitleField />
+        </FormDrawer>,
+        { apiClient }
+      );
+
+      const input = screen.getByRole("textbox");
+      expect(input).toHaveValue("first");
+
+      await user.clear(input);
+      await user.type(input, "edited");
+
+      rerender(
+        <FormDrawer<PostValues> defaultValues={{ title: "first" }} title="编辑">
+          <TitleField />
+        </FormDrawer>
+      );
+
+      rerender(
+        <FormDrawer<PostValues> open defaultValues={{ title: "second" }} title="编辑">
+          <TitleField />
+        </FormDrawer>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox")).toHaveValue("second");
+      });
     });
   });
 
