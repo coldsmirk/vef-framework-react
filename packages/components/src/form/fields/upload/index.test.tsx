@@ -30,6 +30,7 @@ const neverSettle = Function.prototype as () => void;
 const mocks = vi.hoisted(() => {
   return {
     UploaderMock: vi.fn(),
+    resolveFiles: vi.fn(),
     instance: {
       start: vi.fn(),
       abort: vi.fn()
@@ -42,7 +43,8 @@ vi.mock("@vef-framework-react/core", async importActual => {
   const actual = await importActual<typeof import("@vef-framework-react/core")>();
   return {
     ...actual,
-    Uploader: mocks.UploaderMock
+    Uploader: mocks.UploaderMock,
+    resolveFiles: mocks.resolveFiles
   };
 });
 
@@ -110,12 +112,38 @@ describe("form/fields/UploadField", () => {
     mocks.instance.start.mockReset();
     mocks.instance.abort.mockReset();
     mocks.UploaderMock.mockImplementation(buildUploader);
+    // Default: the registry has nothing to say, so hydration falls back to
+    // the key's base name. Cases that care override this.
+    mocks.resolveFiles.mockReset();
+    mocks.resolveFiles.mockResolvedValue({ files: [] });
   });
 
   it("hydrates a stored key into the rendered file list", async () => {
     renderUploadField(vi.fn());
 
     expect(await screen.findByText("report.docx")).toBeInTheDocument();
+  });
+
+  // The field value carries storage keys only, so without the registry a
+  // re-opened form can show nothing but the generated object name.
+  it("shows the recorded original filename once the registry resolves it", async () => {
+    mocks.resolveFiles.mockResolvedValue({
+      files: [
+        {
+          key: STORAGE_KEY,
+          originalFilename: "季度报告.docx",
+          contentType: "application/octet-stream",
+          size: 2048,
+          status: "claimed",
+          uploadedAt: "2026-07-01 09:00:00",
+          uploadedBy: "u-1"
+        }
+      ]
+    });
+
+    renderUploadField(vi.fn());
+
+    expect(await screen.findByText("季度报告.docx")).toBeInTheDocument();
   });
 
   it("dispatches a hydrated file to the preview provider with its storage key", async () => {

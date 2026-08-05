@@ -3,10 +3,12 @@ export {
   abortUpload,
   completeUpload,
   DEFAULT_API_PATH,
+  DEFAULT_FILE_RESOURCE,
   DEFAULT_RESOURCE,
   DEFAULT_VERSION,
   initUpload,
   listParts,
+  resolveFiles,
   uploadPart,
   type CompleteUploadResponse,
   type InitUploadParams,
@@ -15,6 +17,8 @@ export {
   type ListPartsResponse,
   type ObjectInfo,
   type ProtocolContext,
+  type ResolvedFile,
+  type ResolveFilesResponse,
   type UploadPartResponse
 } from "./protocol";
 export {

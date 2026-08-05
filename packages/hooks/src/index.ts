@@ -45,6 +45,7 @@ export { useShallowIsomorphicEffect } from "./use-shallow-isomorphic-effect";
 export { useShallowLayoutEffect } from "./use-shallow-layout-effect";
 export { useShallowMemo } from "./use-shallow-memo";
 export { useSingleton } from "./use-singleton";
+export { useStoredFileNames } from "./use-stored-file-names";
 export {
   useUpload,
   type UseUploadOptions,

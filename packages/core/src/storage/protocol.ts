@@ -13,11 +13,19 @@ export const DEFAULT_API_PATH = "/api";
 export const DEFAULT_RESOURCE = "sys/storage";
 export const DEFAULT_VERSION = "v1";
 
+/**
+ * Read side of the backend's durable upload registry. Separate from
+ * `DEFAULT_RESOURCE` because it is a query surface over recorded state,
+ * not a step in the chunked-upload state machine.
+ */
+export const DEFAULT_FILE_RESOURCE = "sys/storage/file";
+
 const ACTION_INIT = "init_upload";
 const ACTION_PART = "upload_part";
 const ACTION_LIST_PARTS = "list_parts";
 const ACTION_COMPLETE = "complete_upload";
 const ACTION_ABORT = "abort_upload";
+const ACTION_RESOLVE = "resolve";
 
 /**
  * Shared identifying fields for every storage RPC call. The protocol allows
@@ -177,6 +185,54 @@ export async function completeUpload(
     return result.data;
   } catch (error) {
     throw new UploadProtocolError(ACTION_COMPLETE, "failed to complete upload", { cause: error });
+  }
+}
+
+/**
+ * One row of `resolve`. Mirrors the backend's `ResolvedFile` struct.
+ *
+ * `status` follows the backend's file lifecycle: `"uploaded"` (recorded,
+ * not yet referenced by business data), `"claimed"` (adopted by a
+ * business transaction), `"deleted"` (the object is gone but the record
+ * of it remains).
+ */
+export interface ResolvedFile {
+  key: string;
+  originalFilename: string;
+  contentType: string;
+  size: number;
+  status: "uploaded" | "claimed" | "deleted";
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+export interface ResolveFilesResponse {
+  files: ResolvedFile[];
+}
+
+/**
+ * Resolve stored object keys into the metadata needed to render them —
+ * original filename above all. A business model stores only the key, so
+ * without this a re-opened form can only show the generated object name.
+ *
+ * Keys the caller may not read, and keys the backend has no record of,
+ * are omitted from the response rather than reported as errors: the
+ * caller is rendering a list and must degrade to the bare key.
+ */
+export async function resolveFiles(
+  ctx: ProtocolContext,
+  keys: string[],
+  signal?: GenericAbortSignal
+): Promise<ResolveFilesResponse> {
+  try {
+    const result = await ctx.http.post<ResolveFilesResponse>(ctx.apiPath, {
+      data: createApiRequest(ctx.resource, ACTION_RESOLVE, ctx.version, { keys }),
+      signal
+    });
+
+    return result.data;
+  } catch (error) {
+    throw new UploadProtocolError(ACTION_RESOLVE, "failed to resolve files", { cause: error });
   }
 }
 
