@@ -447,7 +447,10 @@ async function fetchGhsa(id: string, token: string): Promise<{ cvss?: number; re
   }
 
   return {
-    cvss: raw.cvss?.score,
+    // GitHub can publish an advisory before a CVSS is assigned — the score
+    // then arrives as null. Normalize to undefined so `cvss?: number` holds
+    // for every downstream `=== undefined` / `.toFixed` consumer.
+    cvss: raw.cvss?.score ?? undefined,
     references: (raw.references ?? [])
       .map(x => typeof x === "string" ? x : x.url ?? "")
       .filter(Boolean)
