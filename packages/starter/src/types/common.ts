@@ -41,6 +41,18 @@ export interface UserMenu {
  * extensible fields such as `UserInfo['details']` or the set of
  * login challenge types the backend may issue.
  *
+ * A challenge's `data` is whatever the backend provider put on it, so the
+ * shape declared here is the project's own contract with its backend. The
+ * built-in `department_selection` and `password_change` payloads both carry a
+ * free-form `meta` the framework only transports — per option (which
+ * organization owns this department, a `parentId` to render a tree) and per
+ * challenge (the organization hierarchy the options hang off). Declare only
+ * the keys the login screen actually reads.
+ *
+ * Note the organizations live in the challenge-level `meta` rather than as
+ * extra `departments` entries: every entry there is selectable, so a grouping
+ * node listed among them becomes a choosable one.
+ *
  * @example
  * declare module "@vef-framework-react/starter" {
  *   interface Register {
@@ -54,7 +66,16 @@ export interface UserMenu {
  *     };
  *     challenges: {
  *       department_selection: {
- *         data: { departments: Array<{ id: string; name: string }> };
+ *         data: {
+ *           departments: Array<{
+ *             id: string;
+ *             name: string;
+ *             meta?: { orgId?: string; parentId?: string };
+ *           }>;
+ *           meta?: {
+ *             organizations?: Array<{ id: string; name: string; parentId?: string }>;
+ *           };
+ *         };
  *         response: string;
  *       };
  *       totp: { response: string };
