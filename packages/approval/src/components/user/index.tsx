@@ -17,7 +17,12 @@ const AVATAR_COLORS = [
   "#d46b08"
 ] as const;
 
-function avatarColor(id: string): string {
+/**
+ * The avatar background for a person, stable for the life of their id. Shared
+ * so every surface that draws the same person draws them the same color —
+ * the timeline's labels and the flow graph's node avatars included.
+ */
+export function avatarColor(id: string): string {
   let hash = 0;
 
   for (const char of id) {
