@@ -115,10 +115,13 @@ export type RollbackType = "none" | "previous" | "start" | "any" | "specified";
 export type ExecutionType = "manual" | "auto_pass" | "auto_reject";
 
 /**
- * Action when the assignee is the same as the applicant, aligned with backend
- * SameApplicantAction enum
+ * Action for the applicant's own seat when they appear among a node's
+ * resolved assignees, aligned with backend SameApplicantAction enum. Applied
+ * per seat: `auto_pass` clears only the applicant's task (sole assignee passes
+ * the whole node), `exclude` recuses them so the remaining approvers decide,
+ * `transfer_superior` replaces only their seat.
  */
-export type SameApplicantAction = "auto_pass" | "self_approve" | "transfer_superior";
+export type SameApplicantAction = "auto_pass" | "self_approve" | "transfer_superior" | "exclude";
 
 /**
  * Strategy for handling form data during rollback

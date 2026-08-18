@@ -55,7 +55,8 @@ const EMPTY_HANDLER_OPTIONS: Array<{ label: string; value: EmptyAssigneeAction }
 const SAME_APPLICANT_OPTIONS: Array<{ label: string; value: SameApplicantAction }> = [
   { label: "自动通过", value: "auto_pass" },
   { label: "由本人审批", value: "self_approve" },
-  { label: "转交上级主管", value: "transfer_superior" }
+  { label: "转交上级主管", value: "transfer_superior" },
+  { label: "本人回避", value: "exclude" }
 ];
 
 const DUPLICATE_HANDLER_OPTIONS: Array<{ label: string; value: ConsecutiveApproverAction }> = [

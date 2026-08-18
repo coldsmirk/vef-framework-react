@@ -158,7 +158,8 @@ const PASS_RULES = enumSet<PassRule>({
 const SAME_APPLICANT_ACTIONS = enumSet<SameApplicantAction>({
   auto_pass: null,
   self_approve: null,
-  transfer_superior: null
+  transfer_superior: null,
+  exclude: null
 });
 const CONSECUTIVE_APPROVER_ACTIONS = enumSet<ConsecutiveApproverAction>({ none: null, auto_pass: null });
 const ROLLBACK_TYPES = enumSet<RollbackType>({
