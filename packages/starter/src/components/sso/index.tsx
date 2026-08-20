@@ -1,3 +1,4 @@
+import type { LoginResult, ResolveChallengeParams } from "../login/payload";
 import type { LoginChallengeRenderers } from "../login/props";
 import type { UseSsoLoginOptions } from "./use-sso-login";
 
@@ -9,14 +10,36 @@ import { LoginChallengeOutlet } from "../login/challenge-outlet";
 import * as styles from "./styles";
 import { useSsoLogin } from "./use-sso-login";
 
-export interface SsoLoginProps extends UseSsoLoginOptions {
+/**
+ * Challenge wiring for backends that issue them. A handoff runs the same
+ * challenge chain a password login does — the originating system authenticated
+ * the user, it did not satisfy this application's login policy.
+ */
+interface SsoLoginPropsWithChallenge {
+  onResolveChallenge: (params: ResolveChallengeParams) => Promise<LoginResult>;
   /**
-   * One renderer per challenge type the backend may issue. A handoff runs the
-   * same challenge chain a password login does — the originating system
-   * authenticated the user, it did not satisfy this application's login policy.
+   * One renderer per challenge type the backend may issue.
    */
-  challengeRenderers?: LoginChallengeRenderers;
+  challengeRenderers: LoginChallengeRenderers;
 }
+
+/**
+ * Single sign-on wiring for backends that never issue challenges.
+ */
+interface SsoLoginPropsWithoutChallenge {
+  onResolveChallenge?: never;
+  challengeRenderers?: never;
+}
+
+/**
+ * The props of the SsoLogin component. Either both challenge hooks are wired up
+ * or neither is, exactly as for `<Login>`: renderers without a dispatcher put a
+ * challenge on screen whose submit button can never do anything, because
+ * `LoginFlow.resolve` is a no-op without `onResolveChallenge`.
+ */
+export type SsoLoginProps
+  = Omit<UseSsoLoginOptions, "onResolveChallenge">
+    & (SsoLoginPropsWithChallenge | SsoLoginPropsWithoutChallenge);
 
 /**
  * The default single sign-on landing page: it exchanges the handoff in the URL

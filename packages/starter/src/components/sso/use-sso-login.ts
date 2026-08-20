@@ -5,6 +5,7 @@ import type { LoginFlow } from "../login/use-login-flow";
 import { useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
+import { useAppStore } from "../../stores";
 import { useLoginFlow } from "../login/use-login-flow";
 
 /**
@@ -15,6 +16,7 @@ export const SSO_APP_ID_PARAM = "app_id";
 export const SSO_CODE_PARAM = "code";
 
 const INVALID_HANDOFF_ERROR = "单点登录链接无效或已失效, 请返回原系统重新进入";
+const ABANDONED_HANDOFF_ERROR = "单点登录未完成, 请返回原系统重新进入或改用账号登录";
 
 /**
  * The handoff's query parameters, exactly as the gateway left them. Values are
@@ -43,13 +45,18 @@ export function readTrustCodeHandoff(search: SsoHandoffSearch): LoginParams | un
 }
 
 /**
- * Drops the handoff from the address bar once it has been spent.
+ * Drops the handoff from the address bar.
  *
- * The code is single-use, so leaving it in the URL only means a refresh replays
- * something the server will refuse, on top of parking a credential in browser
- * history. This writes history directly rather than navigating: the router
- * listens for `popstate`, so its in-memory search — which challenge
- * auto-resolvers still read — survives the cleanup untouched.
+ * Called as soon as the parameters have been read, not once the exchange
+ * settles: the code is about to be spent either way, and by the time the
+ * exchange resolves the browser may already be on the destination page — where
+ * rewriting the URL to its bare pathname would throw away that page's own query
+ * string and hash.
+ *
+ * Nothing in the flow reads the URL afterwards, because `useSsoLogin` hands out
+ * a snapshot of the search taken at mount instead. That matters: `replaceState`
+ * is monkey-patched by `@tanstack/history`, so this notifies the router and
+ * empties its in-memory search as well.
  */
 function clearHandoffFromUrl(): void {
   history.replaceState(null, "", location.pathname);
@@ -66,6 +73,14 @@ export interface UseSsoLoginOptions {
    * wire it unless the backend cannot issue challenges.
    */
   onResolveChallenge?: (params: ResolveChallengeParams) => Promise<LoginResult>;
+  /**
+   * RSA public key for encrypting secrets a challenge collects, matching the
+   * `<Login>` prop. A handoff runs the same challenge chain as a password
+   * login, so a user whose password expired meets `password_change` here too —
+   * and without the key its renderer would submit the new password in clear
+   * text to a backend configured to expect it encrypted.
+   */
+  publicKey?: string;
   /**
    * Builds the exchange request from the handoff's query parameters. Returning
    * `undefined` marks the link as invalid without calling the server.
@@ -99,9 +114,12 @@ export interface SsoLoginFlow extends LoginFlow {
    */
   status: "exchanging" | "challenge" | "failed";
   /**
-   * The handoff's query parameters. A custom landing page reads its own extra
-   * parameters from here — they stay available after the address bar is
-   * cleaned.
+   * The handoff's query parameters, snapshotted at mount. A custom landing page
+   * reads its own extra parameters from here, and a challenge auto-resolver
+   * reads the answers the link carried — both keep working after the address
+   * bar is cleaned, which the live router search does not: clearing the URL
+   * goes through `replaceState`, which `@tanstack/history` patches to notify
+   * the router, so its own search empties at that moment.
    */
   search: SsoHandoffSearch;
 }
@@ -127,9 +145,17 @@ export function useSsoLogin({
   redirectTo,
   onAuthenticated,
   autoResolve,
-  onError
+  onError,
+  publicKey
 }: UseSsoLoginOptions): SsoLoginFlow {
-  const search = useSearch({ strict: false }) as SsoHandoffSearch;
+  const liveSearch = useSearch({ strict: false }) as SsoHandoffSearch;
+  // Snapshot at mount. Clearing the handoff out of the address bar notifies the
+  // router, so the live search empties the moment the exchange starts — while
+  // the parameters the link carried stay relevant for as long as the page
+  // lives: a custom landing page renders from them, and an auto-resolver
+  // answers a challenge raised later with them.
+  const handoffSearch = useRef(liveSearch);
+  const isAuthenticated = useAppStore(state => state.isAuthenticated);
 
   const flow = useLoginFlow({
     onLogin,
@@ -137,10 +163,12 @@ export function useSsoLogin({
     redirectTo,
     onAuthenticated,
     autoResolve,
-    onError
+    onError,
+    publicKey
   });
 
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [spent, setSpent] = useState(false);
   // The handoff is spent once per mount. This is not the flow's in-flight
   // mutex under another name: that one only refuses calls that overlap, and it
   // happens to cover StrictMode's double invocation because both land in the
@@ -155,25 +183,34 @@ export function useSsoLogin({
 
     exchanged.current = true;
 
-    const params = readHandoff(search);
+    const params = readHandoff(handoffSearch.current);
+
+    // Cleared before the exchange rather than after it: the credential leaves
+    // the address bar at the first moment it can, and the exchange is free to
+    // navigate away without this racing the destination's own URL.
+    clearHandoffFromUrl();
 
     if (!params) {
       setLinkError(INVALID_HANDOFF_ERROR);
-      clearHandoffFromUrl();
 
       return;
     }
 
-    void flow.login(params).finally(clearHandoffFromUrl);
+    void flow.login(params).then(() => setSpent(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps -- the handoff is spent exactly once per mount; re-running on any changed identity would replay a one-time code the server has already consumed.
   }, []);
 
-  const error = flow.error ?? linkError;
+  // A spent handoff that produced neither a session nor a pending challenge is
+  // over, not still in flight — the user cancelled the challenge, or the result
+  // carried nothing to act on. Without this the page would sit on its spinner
+  // forever, and the one-time code is gone, so nothing can restart it.
+  const abandoned = spent && !flow.challenge && !isAuthenticated;
+  const error = flow.error ?? linkError ?? (abandoned ? ABANDONED_HANDOFF_ERROR : null);
 
   return {
     ...flow,
     error,
-    search,
+    search: handoffSearch.current,
     status: flow.challenge ? "challenge" : error ? "failed" : "exchanging"
   };
 }
