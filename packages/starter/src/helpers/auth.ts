@@ -10,6 +10,7 @@ export async function handleClientLogout(router: AnyRouter): Promise<void> {
     userInfo: undefined,
     userMenuMap: undefined,
     menuPathMap: undefined,
+    menuPathSet: undefined,
     menuItems: undefined,
     permissionTokens: undefined
   });
