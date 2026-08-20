@@ -1,11 +1,15 @@
 export {
+  LoginChallengeOutlet,
   PASSWORD_CHANGE_CHALLENGE_TYPE,
   PasswordChangeChallenge,
+  useLoginFlow,
   type AppItem,
   type LoginChallenge,
+  type LoginChallengeOutletProps,
   type LoginChallengeRenderer,
   type LoginChallengeRendererProps,
   type LoginChallengeRenderers,
+  type LoginFlow,
   type LoginParams,
   type LoginProps,
   type LoginResult,
@@ -15,6 +19,7 @@ export {
   type PasswordChangeReason,
   type PasswordLoginParams,
   type ResolveChallengeParams,
+  type UseLoginFlowOptions,
   type UserMenuItem
 } from "./components";
 export {
@@ -26,6 +31,7 @@ export {
   LOGIN_ROUTE_PATH
 } from "./constants";
 export {
+  clearIdentityState,
   createApiClient,
   createApp,
   createRouter,

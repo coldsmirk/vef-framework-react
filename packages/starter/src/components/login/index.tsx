@@ -1,24 +1,22 @@
 import type { CSSProperties } from "react";
 
-import type { LoginChallenge, LoginParams, LoginResult } from "./payload";
-import type { LoginChallengeRenderer, LoginChallengeRenderers, LoginProps } from "./props";
+import type { LoginParams } from "./payload";
+import type { LoginProps } from "./props";
 
-import { useRouter, useSearch } from "@tanstack/react-router";
-import { Alert, Button, Center, Group, Icon, LogoIcon, showSuccessNotification, SplitText, Stack, TypingAnimation, useForm, useThemeTokens } from "@vef-framework-react/components";
-import { isBusinessError } from "@vef-framework-react/core";
+import { Alert, Center, Group, Icon, LogoIcon, SplitText, Stack, TypingAnimation, useForm, useThemeTokens } from "@vef-framework-react/components";
 import { useInterval } from "@vef-framework-react/hooks";
-import { encryptUsingRSA, getLocalizedDateTime, z } from "@vef-framework-react/shared";
+import { getLocalizedDateTime, z } from "@vef-framework-react/shared";
 import {
   LockKeyholeIcon,
   SparklesIcon,
   UserRoundIcon
 } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 
-import { useAppStore } from "../../stores";
+import { LoginChallengeOutlet } from "./challenge-outlet";
 import { IconLogin } from "./icon-login";
 import * as styles from "./styles";
-import { getRandomWelcomeMessage } from "./welcome-messages";
+import { useLoginFlow } from "./use-login-flow";
 
 const DEFAULT_TITLE = "VEF 中后台管理系统";
 const DEFAULT_DESCRIPTION = "一款极度快速的开发框架, 用于构建中后台管理系统";
@@ -31,22 +29,6 @@ const leftContentStyle: CSSProperties = {
 const userIcon = <Icon component={UserRoundIcon} />;
 const lockIcon = <Icon component={LockKeyholeIcon} />;
 
-const DEFAULT_LOGIN_ERROR = "登录失败, 请稍后重试";
-
-/**
- * Resolve a user-facing message from an unknown rejection. Business errors
- * carry the server-provided message verbatim; everything else (network
- * failures, unexpected runtime errors) falls back to a generic prompt so a raw
- * technical message is never surfaced to the user.
- */
-function resolveErrorMessage(error: unknown): string {
-  if (isBusinessError(error)) {
-    return error.message;
-  }
-
-  return DEFAULT_LOGIN_ERROR;
-}
-
 const loginFormSchema = z.object({
   type: z.literal("password"),
   principal: z.string().nonempty("请输入账号"),
@@ -58,11 +40,6 @@ const defaultLoginValues: LoginParams = {
   principal: "",
   credentials: ""
 };
-
-interface PendingChallenge {
-  token: string;
-  challenge: LoginChallenge;
-}
 
 const Today = memo(() => {
   const [today, setToday] = useState(getLocalizedDateTime);
@@ -93,51 +70,11 @@ export function Login({
 }: LoginProps) {
   const { colorPrimary } = useThemeTokens();
 
-  const router = useRouter();
-  const { redirect } = useSearch({ strict: false });
-
-  const [pendingChallenge, setPendingChallenge] = useState<PendingChallenge | null>(null);
-  const [challengePending, setChallengePending] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [challengeError, setChallengeError] = useState<string | null>(null);
-
-  const encrypt = useMemo(() => {
-    if (!publicKey) {
-      return;
-    }
-
-    return (plaintext: string) => encryptUsingRSA(plaintext, publicKey);
-  }, [publicKey]);
-
-  async function applyLoginResult(result: LoginResult) {
-    if (result.challenge && result.challengeToken) {
-      setPendingChallenge({
-        token: result.challengeToken,
-        challenge: result.challenge
-      });
-      return;
-    }
-
-    if (!result.tokens) {
-      return;
-    }
-
-    useAppStore.setState(state => {
-      state.isAuthenticated = true;
-      state.authTokens = result.tokens;
-    });
-    setPendingChallenge(null);
-
-    await router.invalidate();
-    await router.navigate({
-      to: redirect,
-      replace: true
-    });
-
-    showSuccessNotification(getRandomWelcomeMessage(), {
-      title: result.message || "登录成功"
-    });
-  }
+  const flow = useLoginFlow({
+    onLogin,
+    onResolveChallenge,
+    publicKey
+  });
 
   const {
     AppForm,
@@ -150,56 +87,12 @@ export function Login({
       onSubmit: loginFormSchema
     },
     async onSubmit({ value }) {
-      setLoginError(null);
-
-      const credentials = publicKey
-        ? encryptUsingRSA(value.credentials, publicKey)
-        : value.credentials;
-
-      let result: LoginResult;
-
-      try {
-        result = await onLogin({ ...value, credentials });
-      } catch (error) {
-        setLoginError(resolveErrorMessage(error));
-        return;
-      }
-
-      await applyLoginResult(result);
+      await flow.login({
+        ...value,
+        credentials: flow.encrypt ? flow.encrypt(value.credentials) : value.credentials
+      });
     }
   });
-
-  async function resolveChallenge(response: unknown) {
-    if (!pendingChallenge || !onResolveChallenge) {
-      return;
-    }
-
-    setChallengePending(true);
-    setChallengeError(null);
-
-    let result: LoginResult;
-
-    try {
-      result = await onResolveChallenge({
-        challengeToken: pendingChallenge.token,
-        type: pendingChallenge.challenge.type,
-        response
-      });
-    } catch (error) {
-      setChallengeError(resolveErrorMessage(error));
-      return;
-    } finally {
-      setChallengePending(false);
-    }
-
-    await applyLoginResult(result);
-  }
-
-  function cancelChallenge() {
-    setPendingChallenge(null);
-    setChallengePending(false);
-    setChallengeError(null);
-  }
 
   return (
     <Group css={styles.login} gap={0} justify="center">
@@ -243,16 +136,11 @@ export function Login({
       <div css={styles.rightContent}>
         <Today />
 
-        {pendingChallenge
+        {flow.challenge
           ? (
-              <ChallengeView
-                challenge={pendingChallenge.challenge}
-                encrypt={encrypt}
-                error={challengeError}
-                pending={challengePending}
+              <LoginChallengeOutlet
+                flow={flow}
                 renderers={challengeRenderers}
-                onCancel={cancelChallenge}
-                onResolve={resolveChallenge}
               />
             )
           : (
@@ -271,11 +159,11 @@ export function Login({
                 <AppForm>
                   <Form>
                     <Stack gap="medium">
-                      {loginError && (
+                      {flow.error && (
                         <Alert
                           showIcon
-                          closable={{ onClose: () => setLoginError(null) }}
-                          title={loginError}
+                          closable={{ onClose: flow.clearError }}
+                          title={flow.error}
                           type="error"
                         />
                       )}
@@ -321,74 +209,6 @@ export function Login({
   );
 }
 
-interface ChallengeViewProps {
-  challenge: LoginChallenge;
-  pending: boolean;
-  error?: string | null;
-  renderers?: LoginChallengeRenderers;
-  encrypt?: (plaintext: string) => string;
-  onResolve: (response: unknown) => Promise<void>;
-  onCancel: () => void;
-}
-
-function ChallengeView({
-  challenge,
-  pending,
-  error,
-  renderers,
-  encrypt,
-  onResolve,
-  onCancel
-}: ChallengeViewProps) {
-  // Indexing into the per-key renderer map at runtime yields a union of
-  // function types; widen to the default-generic form so the call site
-  // accepts `LoginChallenge` (the full discriminated union) directly.
-  const renderer = renderers?.[challenge.type] as LoginChallengeRenderer | undefined;
-
-  if (!renderer) {
-    return (
-      <Stack gap="medium">
-        <div css={styles.formHeader}>
-          <h2>
-            <Group align="center" gap="small">
-              <Icon component={SparklesIcon} css={styles.formIcon} />
-              继续登录
-            </Group>
-          </h2>
-
-          <p css={styles.formSubtitle}>
-            服务器要求完成额外验证步骤
-          </p>
-        </div>
-
-        <Alert
-          showIcon
-          description={`未注册类型为「${challenge.type}」的挑战处理器，请联系系统管理员。`}
-          title="不支持的登录挑战"
-          type="warning"
-        />
-
-        <Button block size="large" onClick={onCancel}>
-          返回登录
-        </Button>
-      </Stack>
-    );
-  }
-
-  return (
-    <>
-      {renderer({
-        challenge,
-        pending,
-        error,
-        encrypt,
-        resolve: onResolve,
-        cancel: onCancel
-      })}
-    </>
-  );
-}
-
 const currentYear = new Date().getFullYear();
 
 function Copyright() {
@@ -403,6 +223,8 @@ function Copyright() {
   );
 }
 
+export { LoginChallengeOutlet, type LoginChallengeOutletProps } from "./challenge-outlet";
 export { PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge, type PasswordChangeChallengeData, type PasswordChangeChallengeProps, type PasswordChangeChallengeSpec, type PasswordChangeReason } from "./password-change-challenge";
 export { type LoginChallenge, type LoginParams, type LoginResult, type PasswordLoginParams, type ResolveChallengeParams } from "./payload";
 export { type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginProps } from "./props";
+export { useLoginFlow, type LoginFlow, type UseLoginFlowOptions } from "./use-login-flow";
