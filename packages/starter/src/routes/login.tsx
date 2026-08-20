@@ -18,8 +18,13 @@ type LoginRouteOptionsWithDefaultPage = LoginProps & {
 
 /**
  * Login route wiring for a page the application supplies itself.
+ *
+ * Every prop of the default page is explicitly forbidden rather than merely
+ * absent. Excess-property checking would catch a fresh object literal on its
+ * own, but not a pre-built value — and there the surplus props are dropped in
+ * silence, which is the failure mode this union exists to prevent.
  */
-interface LoginRouteOptionsWithCustomPage {
+type LoginRouteOptionsWithCustomPage = Partial<Record<keyof LoginProps, never>> & {
   /**
    * Replaces the login page entirely. It renders inside this route, so it can
    * call `useLoginFlow` to drive authentication — which is how an application
@@ -27,7 +32,7 @@ interface LoginRouteOptionsWithCustomPage {
    * already-authenticated guard that live on the route rather than in the page.
    */
   component: () => ReactNode;
-}
+};
 
 /**
  * Options for the login route. Either the framework's page is configured, or

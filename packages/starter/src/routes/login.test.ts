@@ -29,6 +29,16 @@ beforeEach(() => {
 });
 
 describe("createLoginRouteOptions", () => {
+  it("refuses a pre-built value that mixes a custom page with default-page props", () => {
+    const mixed = { component: CustomLoginPage, onLogin: () => Promise.resolve({}) };
+
+    // @ts-expect-error -- a custom page forbids every default-page prop. Excess-
+    // property checking already rejects the same shape written inline; this is
+    // the pre-built form it cannot see, where onLogin would otherwise be dropped
+    // in silence. The assertion is the absence of an error here.
+    expect(createLoginRouteOptions(mixed).component).toBe(CustomLoginPage);
+  });
+
   it("renders the page the application supplied", () => {
     expect(createLoginRouteOptions({ component: CustomLoginPage }).component).toBe(CustomLoginPage);
   });

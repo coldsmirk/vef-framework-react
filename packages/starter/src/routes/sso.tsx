@@ -13,8 +13,13 @@ type SsoRouteOptionsWithDefaultPage = SsoLoginProps & {
 
 /**
  * Single sign-on route wiring for a landing page the application supplies.
+ *
+ * Every prop of the default page is explicitly forbidden rather than merely
+ * absent, for the same reason as on the login route: excess-property checking
+ * catches a fresh object literal but not a pre-built value, where the surplus
+ * props would be dropped in silence.
  */
-interface SsoRouteOptionsWithCustomPage {
+type SsoRouteOptionsWithCustomPage = Partial<Record<keyof SsoLoginProps, never>> & {
   /**
    * Replaces the landing page entirely. It renders inside this route, so it can
    * call `useSsoLogin` to drive the exchange itself — which is how single
@@ -22,7 +27,7 @@ interface SsoRouteOptionsWithCustomPage {
    * one-time exchange or the challenge chain.
    */
   component: () => ReactNode;
-}
+};
 
 /**
  * Options for the single sign-on route. Either the framework's landing page is
