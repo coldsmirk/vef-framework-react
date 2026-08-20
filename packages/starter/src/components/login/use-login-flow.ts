@@ -100,7 +100,9 @@ export interface LoginFlow {
   resolve: (response: unknown) => Promise<void>;
   /**
    * Abandons the pending challenge and returns to credential entry. The held
-   * challenge token is discarded, so the user must authenticate again.
+   * challenge token is discarded, so the user must authenticate again. Ignored
+   * while `pending`: an answer already submitted will still be applied, so
+   * there is nothing left to abandon.
    */
   cancel: () => void;
   /**
@@ -136,6 +138,25 @@ export interface LoginFlow {
  * application building its own login screen composes it instead of
  * reimplementing it.
  */
+/**
+ * Narrows a redirect taken from the address bar to an internal absolute path.
+ *
+ * The value is not this application's data: on the single sign-on route the
+ * search is passed through as the originating system left it, so `redirect` is
+ * whatever that system appended to the handoff. Anything that is not a rooted
+ * path is dropped — "//host" is protocol-relative and "https://host" absolute,
+ * and the router resolves both relatively rather than leaving the origin, which
+ * turns them into a nonsense in-app route instead of a page. The caller's own
+ * `redirectTo` is unaffected; that one is the application's.
+ */
+function internalRedirect(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return undefined;
+  }
+
+  return value;
+}
+
 export function useLoginFlow({
   onLogin,
   onResolveChallenge,
@@ -226,21 +247,32 @@ export function useLoginFlow({
     });
     setPendingChallenge(null);
 
-    if (onAuthenticated) {
-      await onAuthenticated(result);
+    // The attempt has succeeded: the session is stored and the user is
+    // authenticated. Everything below is what happens next — a host hook, a
+    // route invalidation, navigation — and a failure there is not a login
+    // failure. Letting it reach `error` would put "登录失败" on screen over an
+    // authenticated session, on a form that can no longer accomplish anything
+    // and behind a "back to login" link the route guard bounces straight off.
+    // So it is reported through onError and nowhere else.
+    try {
+      if (onAuthenticated) {
+        await onAuthenticated(result);
 
-      return;
+        return;
+      }
+
+      await router.invalidate();
+      await router.navigate({
+        to: redirectTo ?? internalRedirect(redirect) ?? INDEX_ROUTE_PATH,
+        replace: true
+      });
+
+      showSuccessNotification(getRandomWelcomeMessage(), {
+        title: result.message || "登录成功"
+      });
+    } catch (error_) {
+      onError?.(error_);
     }
-
-    await router.invalidate();
-    await router.navigate({
-      to: redirectTo ?? redirect ?? INDEX_ROUTE_PATH,
-      replace: true
-    });
-
-    showSuccessNotification(getRandomWelcomeMessage(), {
-      title: result.message || "登录成功"
-    });
   }
 
   async function run(request: () => Promise<LoginResult>): Promise<void> {
@@ -286,6 +318,16 @@ export function useLoginFlow({
       }));
     },
     cancel() {
+      // Nothing to abandon while a call is in flight: the answer has already
+      // been submitted and its result will still be applied, so clearing the
+      // challenge here would show the credentials form for as long as the
+      // request takes and then replace it again. The built-in renderers
+      // already disable their cancel control on `pending`; refusing here makes
+      // that hold for every renderer.
+      if (inFlight.current) {
+        return;
+      }
+
       setPendingChallenge(null);
       setError(null);
     },

@@ -23,6 +23,12 @@ type RegisteredLoginParams = Register extends {
  *
  * Covers the two mechanisms the framework's backend ships with, plus whatever
  * the project declared through `Register['loginParams']`.
+ *
+ * This is a union, where it once was the password shape alone. An `onLogin`
+ * annotated with `PasswordLoginParams` therefore no longer satisfies it — a
+ * parameter has to accept every mechanism the flow can send. Handlers that stay
+ * contextually typed by the prop are unaffected; one typed explicitly against
+ * the old meaning has to widen to `LoginParams` and narrow on `type`.
  */
 export type LoginParams = PasswordLoginParams | TrustCodeLoginParams | RegisteredLoginParams;
 

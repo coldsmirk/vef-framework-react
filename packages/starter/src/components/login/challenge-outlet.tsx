@@ -58,17 +58,25 @@ export function LoginChallengeOutlet({
       : <UnsupportedChallenge challenge={challenge} onCancel={flow.cancel} />;
   }
 
+  // Rendered as an element rather than called as a function. A plain call would
+  // run the renderer's hooks inside this component's own hook list, so moving
+  // from one challenge type to the next — which a chain such as department
+  // selection followed by a forced password change does routinely — reuses the
+  // previous renderer's hook slots and crashes. The key makes each challenge a
+  // fresh instance, so state cannot carry over between two challenges of the
+  // same type either.
+  const Renderer = renderer;
+
   return (
-    <>
-      {renderer({
-        challenge,
-        pending: flow.pending,
-        error: flow.error,
-        encrypt: flow.encrypt,
-        resolve: flow.resolve,
-        cancel: flow.cancel
-      })}
-    </>
+    <Renderer
+      key={challenge.type}
+      cancel={flow.cancel}
+      challenge={challenge}
+      encrypt={flow.encrypt}
+      error={flow.error}
+      pending={flow.pending}
+      resolve={flow.resolve}
+    />
   );
 }
 

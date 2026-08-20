@@ -226,4 +226,59 @@ describe("useLoginFlow with an auto-resolver", () => {
     expect(onResolveChallenge).toHaveBeenCalledTimes(1);
     expect(result.current.error).toBe("登录失败, 请稍后重试");
   });
+
+  it("does not report a post-authentication failure as a login failure", async () => {
+    const onLogin = vi.fn().mockResolvedValue({ tokens });
+    const onAuthenticated = vi.fn().mockRejectedValue(new Error("prefetch failed"));
+    const onError = vi.fn();
+    const { result } = await renderRouterHook(() => useLoginFlow({
+      onAuthenticated,
+      onError,
+      onLogin
+    }));
+
+    await act(async () => {
+      await result.current.login({
+        type: "password",
+        principal: "u",
+        credentials: "p"
+      });
+    });
+
+    // The session is stored, so the attempt succeeded. Surfacing what came
+    // afterwards through `error` would render "登录失败" over an authenticated
+    // session, on a form that can no longer accomplish anything.
+    expect(useAppStore.getState().isAuthenticated).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores cancel while a challenge answer is in flight", async () => {
+    const onLogin = vi.fn().mockResolvedValue(challengeResult("department_selection"));
+    // Never settles: the answer stays with the server for the whole test.
+    const onResolveChallenge = vi.fn().mockReturnValue(new Promise<never>(() => {
+      // Intentionally never resolved.
+    }));
+    const { result } = await renderRouterHook(() => useLoginFlow({ onLogin, onResolveChallenge }));
+
+    await act(async () => {
+      await result.current.login({
+        type: "password",
+        principal: "u",
+        credentials: "p"
+      });
+    });
+
+    act(() => {
+      void result.current.resolve("d1");
+    });
+    await waitFor(() => expect(result.current.pending).toBe(true));
+
+    act(() => result.current.cancel());
+
+    // The answer is already with the server and its result will still be
+    // applied, so clearing the challenge here would show the credentials form
+    // for as long as the request takes and then replace it again.
+    expect(result.current.challenge?.type).toBe("department_selection");
+  });
 });
