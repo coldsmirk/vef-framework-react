@@ -2,7 +2,12 @@ export {
   LoginChallengeOutlet,
   PASSWORD_CHANGE_CHALLENGE_TYPE,
   PasswordChangeChallenge,
+  readTrustCodeHandoff,
+  SSO_APP_ID_PARAM,
+  SSO_CODE_PARAM,
+  SsoLogin,
   useLoginFlow,
+  useSsoLogin,
   type AppItem,
   type LoginChallenge,
   type LoginChallengeAutoResolver,
@@ -21,9 +26,13 @@ export {
   type PasswordChangeReason,
   type PasswordLoginParams,
   type ResolveChallengeParams,
+  type SsoHandoffSearch,
+  type SsoLoginFlow,
+  type SsoLoginProps,
   type TrustCodeLoginParams,
   type UseLoginFlowOptions,
-  type UserMenuItem
+  type UserMenuItem,
+  type UseSsoLoginOptions
 } from "./components";
 export {
   ACCESS_DENIED_ROUTE_ID,
@@ -31,7 +40,9 @@ export {
   INDEX_ROUTE_ID,
   INDEX_ROUTE_PATH,
   LOGIN_ROUTE_ID,
-  LOGIN_ROUTE_PATH
+  LOGIN_ROUTE_PATH,
+  SSO_ROUTE_ID,
+  SSO_ROUTE_PATH
 } from "./constants";
 export {
   clearIdentityState,
@@ -55,8 +66,10 @@ export {
   createLayoutRouteOptions,
   createLoginRouteOptions,
   createRootRouteOptions,
+  createSsoRouteOptions,
   type LayoutBeforeLoadArgs,
-  type LayoutLoaderArgs
+  type LayoutLoaderArgs,
+  type SsoRouteOptions
 } from "./routes";
 export {
   useAppStore,
