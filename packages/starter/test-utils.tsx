@@ -1,7 +1,7 @@
 import type { AnyRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createBrowserHistory, createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 
@@ -13,6 +13,13 @@ export interface RouterHarnessOptions {
    * search parameters (`useSearch`) needs it; the default is the bare root.
    */
   initialEntry?: string;
+  /**
+   * Which history drives the router. The default memory history keeps a test
+   * isolated from `window.location`, which also means it never writes there —
+   * so anything asserting on the address bar has to ask for "browser", or the
+   * assertion holds no matter what the code does.
+   */
+  history?: "memory" | "browser";
 }
 
 /**
@@ -28,7 +35,19 @@ export interface RouterHarnessOptions {
  * "run this once" guard has to survive — and what React does in development
  * anyway, so anything that only works without it is already broken.
  */
-async function mountRoute(component: () => ReactNode, initialEntry: string): Promise<AnyRouter> {
+function createHistory(kind: "memory" | "browser", initialEntry: string) {
+  if (kind === "memory") {
+    return createMemoryHistory({ initialEntries: [initialEntry] });
+  }
+
+  // createBrowserHistory reads the current location, so the entry is put there
+  // first. This also leaves the URL where a test asserting on it can see it.
+  history.replaceState(null, "", initialEntry);
+
+  return createBrowserHistory();
+}
+
+async function mountRoute(component: () => ReactNode, initialEntry: string, historyKind: "memory" | "browser"): Promise<AnyRouter> {
   let rendered = false;
 
   function RouteComponent(): ReactNode {
@@ -47,7 +66,7 @@ async function mountRoute(component: () => ReactNode, initialEntry: string): Pro
 
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute]),
-    history: createMemoryHistory({ initialEntries: [initialEntry] })
+    history: createHistory(historyKind, initialEntry)
   });
 
   render(
@@ -82,7 +101,7 @@ export interface RenderRouterHookResult<T> {
  */
 export async function renderRouterHook<T>(
   useHook: () => T,
-  { initialEntry = "/" }: RouterHarnessOptions = {}
+  { initialEntry = "/", history = "memory" }: RouterHarnessOptions = {}
 ): Promise<RenderRouterHookResult<T>> {
   const result = { current: undefined as T };
 
@@ -90,7 +109,7 @@ export async function renderRouterHook<T>(
     result.current = useHook();
 
     return null;
-  }, initialEntry);
+  }, initialEntry, history);
 
   return { result, router };
 }
@@ -108,9 +127,9 @@ export interface RenderInRouterResult {
  */
 export async function renderInRouter(
   element: ReactNode,
-  { initialEntry = "/" }: RouterHarnessOptions = {}
+  { initialEntry = "/", history = "memory" }: RouterHarnessOptions = {}
 ): Promise<RenderInRouterResult> {
-  const router = await mountRoute(() => element, initialEntry);
+  const router = await mountRoute(() => element, initialEntry, history);
 
   return { router };
 }
