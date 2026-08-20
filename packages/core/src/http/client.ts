@@ -1,5 +1,5 @@
 import type { Awaitable, MaybeArray } from "@vef-framework-react/shared";
-import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosResponse, GenericAbortSignal, InternalAxiosRequestConfig } from "axios";
+import type { AxiosError, AxiosInstance, AxiosProgressEvent, AxiosRequestConfig, AxiosRequestTransformer, AxiosResponse, GenericAbortSignal, InternalAxiosRequestConfig } from "axios";
 
 import type { ApiResult, BodyEncoding, HttpClientOptions, HttpFileResponse, RequestOptions } from "./types";
 
@@ -18,6 +18,26 @@ import {
 import { BusinessError } from "./errors";
 
 const RESPONSE_MODE_KEY = "__vefResponseMode";
+
+/**
+ * Hands an already-encoded request body to the transport untouched.
+ *
+ * A transport-encoded body is a base64 string, and the content type stays
+ * `application/json` because that is what it decodes back into — the server
+ * guards the `/api` surface on it. Axios's default `transformRequest` reads
+ * exactly that pair as "a JSON payload to serialize": for a string it tries
+ * `JSON.parse`, and base64 is not JSON, so it falls through to `JSON.stringify`
+ * and wraps the whole thing in double quotes. The server then cannot base64-
+ * decode it and answers 400 to every transport-encoded request. Replacing the
+ * transform is what says the body is already in its final wire form.
+ */
+const KEEP_BODY_VERBATIM: AxiosRequestTransformer[] = [body => body];
+
+/**
+ * Per-request options for a body that must reach the wire byte for byte.
+ */
+type EncodedBodyOptions<O> = O & { transformRequest: AxiosRequestTransformer[] };
+
 const MAX_ERROR_BODY_BYTES = 1024 * 1024;
 const DEFAULT_DOWNLOAD_FILENAME = "download";
 
@@ -726,7 +746,7 @@ export class HttpClient {
     data: D | undefined,
     bodyEncoding: BodyEncoding | undefined,
     options: O
-  ): Promise<{ data: unknown; options: O }> {
+  ): Promise<{ data: unknown; options: O | EncodedBodyOptions<O> }> {
     const encoding = bodyEncoding ?? this.#options.defaultBodyEncoding ?? "none";
 
     if (encoding === "none" || !isEncodableBody(data)) {
@@ -740,6 +760,7 @@ export class HttpClient {
       data: encoded.body,
       options: {
         ...options,
+        transformRequest: KEEP_BODY_VERBATIM,
         headers: {
           ...options.headers,
           [BODY_ENCODING_HEADER]: encoded.encoding

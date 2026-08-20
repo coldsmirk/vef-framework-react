@@ -6,6 +6,7 @@ import type { HttpClient } from "./client";
 import type { AuthTokens } from "./types";
 
 import { createServer } from "node:http";
+import { gunzipSync } from "node:zlib";
 
 interface TestServer {
   baseUrl: string;
@@ -79,6 +80,105 @@ describe("http/HttpClient Node adapter", () => {
       expect(result.blob.type).toBe("application/octet-stream");
       expect(result.filename).toBe("node.bin");
       expect([...new Uint8Array(await result.blob.arrayBuffer())]).toEqual([...payload]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("puts the transport-encoded body on the wire verbatim", async () => {
+    const payload = {
+      resource: "integration/adapter",
+      action: "update",
+      params: { script: "return input" }
+    };
+    const expected = Uint8Array.from(Buffer.from(JSON.stringify(payload), "utf-8")).toBase64();
+
+    let wireBody = "";
+    let bodyEncodingHeader: string | undefined;
+    let contentTypeHeader: string | undefined;
+    const server = await startServer((request, response) => {
+      bodyEncodingHeader = request.headers["x-body-encoding"] as string | undefined;
+      contentTypeHeader = request.headers["content-type"];
+
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      request.on("end", () => {
+        wireBody = Buffer.concat(chunks).toString("utf-8");
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({
+          code: 0,
+          message: "ok",
+          data: null
+        }));
+      });
+    });
+
+    try {
+      const client = new HttpClientConstructor({ baseUrl: server.baseUrl });
+
+      await client.post("/api", { data: payload, bodyEncoding: "base64" });
+
+      // The body is already in its final wire form. Axios JSON-encodes a string
+      // body whenever the content type is application/json, which would wrap the
+      // base64 in double quotes — the server then cannot decode it and answers
+      // 400 to every transport-encoded request.
+      expect(wireBody).toBe(expected);
+      expect(bodyEncodingHeader).toBe("base64");
+      // The decoded body is JSON, so the declared content type must stay JSON:
+      // the /api surface is guarded on it.
+      expect(contentTypeHeader).toContain("application/json");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("puts a gzipped transport-encoded body on the wire so the server can inflate it", async () => {
+    const payload = {
+      resource: "integration/ops",
+      action: "dry_run",
+      params: { script: "return input" }
+    };
+
+    let wireBody = "";
+    let bodyEncodingHeader: string | undefined;
+    const server = await startServer((request, response) => {
+      bodyEncodingHeader = request.headers["x-body-encoding"] as string | undefined;
+
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      request.on("end", () => {
+        wireBody = Buffer.concat(chunks).toString("utf-8");
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({
+          code: 0,
+          message: "ok",
+          data: null
+        }));
+      });
+    });
+
+    try {
+      const client = new HttpClientConstructor({ baseUrl: server.baseUrl });
+
+      await client.post("/api", { data: payload, bodyEncoding: "gzip+base64" });
+
+      // Asserted on the wire text, not just on what it decodes to: Node's base64
+      // decoder silently skips characters outside the alphabet, so a
+      // JSON-string wrapper would still round-trip and the round-trip alone
+      // would prove nothing. The server's Go decoder rejects it outright.
+      expect(wireBody).toMatch(/^[A-Z0-9+/]+={0,2}$/i);
+
+      // Decode the way the server does: base64 first, then inflate.
+      const compressed = Buffer.from(Uint8Array.fromBase64(wireBody));
+      const inflated = bodyEncodingHeader === "gzip+base64"
+        ? gunzipSync(compressed).toString("utf-8")
+        : compressed.toString("utf-8");
+
+      expect(JSON.parse(inflated)).toEqual(payload);
     } finally {
       await server.close();
     }
