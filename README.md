@@ -1,3 +1,5 @@
+
+
 <h1 align="center">VEF Framework React</h1>
 
 <p align="center">
@@ -52,6 +54,7 @@ VEF Framework React is a pnpm-workspace monorepo of composable packages for buil
 | [`@vef-framework-react/starter`](https://www.npmjs.com/package/@vef-framework-react/starter)                           | Ready-to-use layouts and auth components built on TanStack Router                                                                                     |
 | [`@vef-framework-react/form-editor`](https://www.npmjs.com/package/@vef-framework-react/form-editor)                   | Visual form-schema editor with ZEN-powered linkage expressions                                                                                        |
 | [`@vef-framework-react/approval-flow-editor`](https://www.npmjs.com/package/@vef-framework-react/approval-flow-editor) | Visual approval-flow editor on @xyflow/react with elkjs auto-layout                                                                                   |
+| [`@vef-framework-react/approval`](https://www.npmjs.com/package/@vef-framework-react/approval)                         | Approval engine pages and runtime components for VEF framework                                                                                        |
 | [`@vef-framework-react/dev`](https://www.npmjs.com/package/@vef-framework-react/dev)                                   | Shared ESLint / Stylelint / Commitlint configs, Vite plugins, and TypeScript configs                                                                  |
 
 ## Quick Start
