@@ -91,7 +91,8 @@ describe("http/HttpClient Node adapter", () => {
       action: "update",
       params: { script: "return input" }
     };
-    const expected = Uint8Array.from(Buffer.from(JSON.stringify(payload), "utf-8")).toBase64();
+    // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Uint8Array#toBase64 does not exist on the Node version CI runs, and the source it verifies avoids it for the same reason.
+    const expected = Buffer.from(JSON.stringify(payload), "utf-8").toString("base64");
 
     let wireBody = "";
     let bodyEncodingHeader: string | undefined;
@@ -173,7 +174,8 @@ describe("http/HttpClient Node adapter", () => {
       expect(wireBody).toMatch(/^[A-Z0-9+/]+={0,2}$/i);
 
       // Decode the way the server does: base64 first, then inflate.
-      const compressed = Buffer.from(Uint8Array.fromBase64(wireBody));
+      // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Uint8Array.fromBase64 does not exist on the Node version CI runs.
+      const compressed = Buffer.from(wireBody, "base64");
       const inflated = bodyEncodingHeader === "gzip+base64"
         ? gunzipSync(compressed).toString("utf-8")
         : compressed.toString("utf-8");
