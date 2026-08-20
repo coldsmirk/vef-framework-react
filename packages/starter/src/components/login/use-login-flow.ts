@@ -1,4 +1,5 @@
 import type { LoginChallenge, LoginParams, LoginResult, ResolveChallengeParams } from "./payload";
+import type { LoginChallengeAutoResolvers } from "./props";
 
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { showSuccessNotification } from "@vef-framework-react/components";
@@ -61,6 +62,18 @@ export interface UseLoginFlowOptions {
    * skipped, because the route guards read it.
    */
   onAuthenticated?: (result: LoginResult) => void | Promise<void>;
+  /**
+   * Answers selected challenges without showing them, keyed by challenge type.
+   * A resolver returning `undefined` leaves its challenge to be rendered
+   * normally, and each type is attempted at most once per flow: a silent
+   * answer the server rejects falls through to the renderer rather than
+   * retrying, which would loop and burn the account's lockout budget.
+   *
+   * Deliberately partial, unlike the renderer registry: presenting a challenge
+   * is mandatory, answering one on the user's behalf is opt-in per type. A
+   * type nobody declares here can never be resolved from ambient data.
+   */
+  autoResolve?: LoginChallengeAutoResolvers;
   /**
    * Receives the original rejection behind `error`. Useful for reporting;
    * `error` remains the message to render.
@@ -129,6 +142,7 @@ export function useLoginFlow({
   publicKey,
   redirectTo,
   onAuthenticated,
+  autoResolve,
   onError
 }: UseLoginFlowOptions): LoginFlow {
   const router = useRouter();
@@ -141,6 +155,10 @@ export function useLoginFlow({
   // Guards re-entrancy inside a single tick, which `pending` cannot: it is
   // state, so a second call in the same turn would still read the stale false.
   const inFlight = useRef(false);
+  // Challenge types already offered to an auto-resolver. A type is recorded
+  // before its attempt, so a rejected silent answer is never retried.
+  const autoResolveAttempted = useRef(new Set<string>());
+
   const encrypt = useMemo(() => {
     if (!publicKey) {
       return;
@@ -149,9 +167,44 @@ export function useLoginFlow({
     return (plaintext: string) => encryptUsingRSA(plaintext, publicKey);
   }, [publicKey]);
 
+  function autoAnswer(challenge: LoginChallenge): unknown {
+    if (!autoResolve || !onResolveChallenge || autoResolveAttempted.current.has(challenge.type)) {
+      return undefined;
+    }
+
+    // Indexing the per-key resolver map at runtime yields a union of function
+    // types; widen to the erased form so the call accepts the full challenge
+    // union, exactly as the renderer lookup does.
+    const resolver = autoResolve[challenge.type] as ((challenge: LoginChallenge) => unknown) | undefined;
+
+    return resolver?.(challenge);
+  }
+
   async function applyResult(result: LoginResult): Promise<void> {
     if (result.challenge && result.challengeToken) {
       const { challenge, challengeToken } = result;
+      const answer = autoAnswer(challenge);
+
+      if (answer !== undefined && onResolveChallenge) {
+        autoResolveAttempted.current.add(challenge.type);
+
+        try {
+          await applyResult(await onResolveChallenge({
+            challengeToken,
+            type: challenge.type,
+            response: answer
+          }));
+
+          return;
+        } catch (error_) {
+          // A silent answer the server refused must not strand the user on an
+          // error with no way forward. Record why, then fall through and let
+          // the renderer present the very same challenge; the type is already
+          // marked as attempted, so this cannot loop.
+          onError?.(error_);
+          setError(resolveErrorMessage(error_));
+        }
+      }
 
       setPendingChallenge({ token: challengeToken, challenge });
 
@@ -217,6 +270,8 @@ export function useLoginFlow({
     error,
     encrypt,
     login(params) {
+      autoResolveAttempted.current.clear();
+
       return run(() => onLogin(params));
     },
     resolve(response) {

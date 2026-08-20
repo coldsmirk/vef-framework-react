@@ -5,6 +5,7 @@ import { useAppStore } from "../../stores";
 import { useLoginFlow } from "./use-login-flow";
 
 const tokens = { accessToken: "access-token" };
+const DEPARTMENT_SELECTION = "department_selection";
 
 function challengeResult(type: string, token = "challenge-token"): LoginResult {
   return {
@@ -154,5 +155,75 @@ describe("useLoginFlow when the request fails", () => {
     });
 
     expect(onLogin).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useLoginFlow with an auto-resolver", () => {
+  it("answers a declared challenge without presenting it", async () => {
+    const onLogin = vi.fn().mockResolvedValue(challengeResult("department_selection"));
+    const onResolveChallenge = vi.fn().mockResolvedValue({ tokens });
+    const { result } = await renderRouterHook(() => useLoginFlow({
+      onLogin,
+      onResolveChallenge,
+      onAuthenticated: vi.fn(),
+      autoResolve: { [DEPARTMENT_SELECTION]: () => "d1" }
+    }));
+
+    await act(async () => {
+      await result.current.login({
+        type: "password",
+        principal: "u",
+        credentials: "p"
+      });
+    });
+
+    expect(onResolveChallenge).toHaveBeenCalledWith({
+      challengeToken: "challenge-token",
+      type: "department_selection",
+      response: "d1"
+    });
+    expect(result.current.challenge).toBeNull();
+    expect(useAppStore.getState().isAuthenticated).toBe(true);
+  });
+
+  it("presents the challenge when its resolver declines", async () => {
+    const onLogin = vi.fn().mockResolvedValue(challengeResult("department_selection"));
+    const { result } = await renderRouterHook(() => useLoginFlow({
+      onLogin,
+      onResolveChallenge: vi.fn(),
+      autoResolve: { [DEPARTMENT_SELECTION]: () => undefined }
+    }));
+
+    await act(async () => {
+      await result.current.login({
+        type: "password",
+        principal: "u",
+        credentials: "p"
+      });
+    });
+
+    expect(result.current.challenge?.type).toBe("department_selection");
+  });
+
+  it("falls back to presenting the challenge when the silent answer is rejected, without retrying", async () => {
+    const onLogin = vi.fn().mockResolvedValue(challengeResult("department_selection"));
+    const onResolveChallenge = vi.fn().mockRejectedValue(new Error("stale department"));
+    const { result } = await renderRouterHook(() => useLoginFlow({
+      onLogin,
+      onResolveChallenge,
+      autoResolve: { [DEPARTMENT_SELECTION]: () => "d1" }
+    }));
+
+    await act(async () => {
+      await result.current.login({
+        type: "password",
+        principal: "u",
+        credentials: "p"
+      });
+    });
+
+    await waitFor(() => expect(result.current.challenge?.type).toBe("department_selection"));
+    expect(onResolveChallenge).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBe("登录失败, 请稍后重试");
   });
 });

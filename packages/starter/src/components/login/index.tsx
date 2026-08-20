@@ -225,6 +225,6 @@ function Copyright() {
 
 export { LoginChallengeOutlet, type LoginChallengeOutletProps } from "./challenge-outlet";
 export { PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge, type PasswordChangeChallengeData, type PasswordChangeChallengeProps, type PasswordChangeChallengeSpec, type PasswordChangeReason } from "./password-change-challenge";
-export { type LoginChallenge, type LoginParams, type LoginResult, type PasswordLoginParams, type ResolveChallengeParams } from "./payload";
-export { type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginProps } from "./props";
+export { type LoginChallenge, type LoginParams, type LoginResult, type PasswordLoginParams, type ResolveChallengeParams, type TrustCodeLoginParams } from "./payload";
+export { type LoginChallengeAutoResolver, type LoginChallengeAutoResolvers, type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginProps } from "./props";
 export { useLoginFlow, type LoginFlow, type UseLoginFlowOptions } from "./use-login-flow";

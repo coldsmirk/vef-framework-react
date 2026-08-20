@@ -3,7 +3,7 @@ export { App, type AppProps } from "./app";
 export { BaseLayout, type BaseLayoutProps } from "./base-layout";
 export { Error } from "./error";
 export { Layout, type AppItem, type LayoutProps, type UserMenuItem } from "./layout";
-export { Login, LoginChallengeOutlet, PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge, useLoginFlow, type LoginChallenge, type LoginChallengeOutletProps, type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginFlow, type LoginParams, type LoginProps, type LoginResult, type PasswordChangeChallengeData, type PasswordChangeChallengeProps, type PasswordChangeChallengeSpec, type PasswordChangeReason, type PasswordLoginParams, type ResolveChallengeParams, type UseLoginFlowOptions } from "./login";
+export { Login, LoginChallengeOutlet, PASSWORD_CHANGE_CHALLENGE_TYPE, PasswordChangeChallenge, useLoginFlow, type LoginChallenge, type LoginChallengeAutoResolver, type LoginChallengeAutoResolvers, type LoginChallengeOutletProps, type LoginChallengeRenderer, type LoginChallengeRendererProps, type LoginChallengeRenderers, type LoginFlow, type LoginParams, type LoginProps, type LoginResult, type PasswordChangeChallengeData, type PasswordChangeChallengeProps, type PasswordChangeChallengeSpec, type PasswordChangeReason, type PasswordLoginParams, type ResolveChallengeParams, type TrustCodeLoginParams, type UseLoginFlowOptions } from "./login";
 export { NProgress, nProgressEventEmitter } from "./n-progress";
 export { NotFound } from "./not-found";
 export { RouterContextHookProvider, RouterProvider, type RouterProviderProps, type UseRouterContext } from "./router-provider";

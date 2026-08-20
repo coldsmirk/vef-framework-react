@@ -79,6 +79,33 @@ export type LoginChallengeRenderers = {
 };
 
 /**
+ * Answers a single challenge type from data the page already holds, without
+ * showing it. Return `undefined` to decline and let the renderer present the
+ * challenge normally.
+ *
+ * Validate the answer against the challenge's own payload before returning it —
+ * `challenge.data` carries the options the server is willing to accept, and a
+ * pre-check keeps a stale value from spending an attempt against the backend's
+ * brute-force guard.
+ */
+export type LoginChallengeAutoResolver<
+  K extends keyof ResolvedChallenges = keyof ResolvedChallenges
+> = (challenge: Extract<LoginChallenge, { type: K }>) => ResolvedChallenges[K]["response"] | undefined;
+
+/**
+ * Auto-resolvers keyed by challenge type.
+ *
+ * Deliberately partial where `LoginChallengeRenderers` is exhaustive:
+ * presenting a challenge is mandatory, answering one on the user's behalf is
+ * opt-in per type. A challenge type absent here can never be resolved from
+ * ambient data — which is the point, since silently answering a second factor
+ * from a URL parameter would be a hole rather than a convenience.
+ */
+export type LoginChallengeAutoResolvers = {
+  [K in keyof ResolvedChallenges]?: LoginChallengeAutoResolver<K>;
+};
+
+/**
  * The shared subset of LoginProps, independent of whether the flow may
  * surface challenges.
  */

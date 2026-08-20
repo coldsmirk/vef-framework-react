@@ -1,10 +1,30 @@
 import type { AuthTokens } from "../../models";
-import type { ResolvedChallenges } from "../../types/common";
+import type { Register, ResolvedChallenges } from "../../types/common";
 
 /**
- * The payload for login
+ * Login mechanisms the project adds beyond the framework's own. Augment
+ * `Register['loginParams']` with a union of payload shapes — an SMS code, a
+ * scanned QR ticket, a corporate directory handoff — and every login entry
+ * point accepts them without a cast.
+ *
+ * @example
+ * declare module "@vef-framework-react/starter" {
+ *   interface Register {
+ *     loginParams: { type: "sms"; principal: string; credentials: string };
+ *   }
+ * }
  */
-export type LoginParams = PasswordLoginParams;
+type RegisteredLoginParams = Register extends {
+  loginParams: infer T extends BaseLoginParams;
+} ? T : never;
+
+/**
+ * The payload for login.
+ *
+ * Covers the two mechanisms the framework's backend ships with, plus whatever
+ * the project declared through `Register['loginParams']`.
+ */
+export type LoginParams = PasswordLoginParams | TrustCodeLoginParams | RegisteredLoginParams;
 
 /**
  * The base payload for authentication
@@ -32,6 +52,19 @@ export interface PasswordLoginParams extends BaseLoginParams<string> {
    * The authentication type
    */
   type: "password";
+}
+
+/**
+ * The payload for single sign-on, exchanging the one-time code a trust-login
+ * gateway handed to the browser. `principal` is the app id that initiated the
+ * handoff; the gateway echoes it on the redirect so the exchange names the same
+ * application the code was issued for.
+ */
+export interface TrustCodeLoginParams extends BaseLoginParams<string> {
+  /**
+   * The authentication type
+   */
+  type: "trust_code";
 }
 
 /**

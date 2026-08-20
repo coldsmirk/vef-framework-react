@@ -5,6 +5,8 @@ export {
   useLoginFlow,
   type AppItem,
   type LoginChallenge,
+  type LoginChallengeAutoResolver,
+  type LoginChallengeAutoResolvers,
   type LoginChallengeOutletProps,
   type LoginChallengeRenderer,
   type LoginChallengeRendererProps,
@@ -19,6 +21,7 @@ export {
   type PasswordChangeReason,
   type PasswordLoginParams,
   type ResolveChallengeParams,
+  type TrustCodeLoginParams,
   type UseLoginFlowOptions,
   type UserMenuItem
 } from "./components";
