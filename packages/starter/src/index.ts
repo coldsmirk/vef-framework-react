@@ -69,6 +69,7 @@ export {
   createSsoRouteOptions,
   type LayoutBeforeLoadArgs,
   type LayoutLoaderArgs,
+  type LoginRouteOptions,
   type SsoRouteOptions
 } from "./routes";
 export {

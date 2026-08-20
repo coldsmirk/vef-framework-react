@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { LoginProps } from "../components";
 
 import { redirect } from "@tanstack/react-router";
@@ -7,11 +9,44 @@ import { Login } from "../components";
 import { INDEX_ROUTE_PATH } from "../constants";
 import { useAppStore } from "../stores";
 
-export function createLoginRouteOptions(props: LoginProps) {
-  function LoginComponent() {
-    return <Login {...props} />;
-  }
+/**
+ * Login route wiring that renders the framework's own page.
+ */
+type LoginRouteOptionsWithDefaultPage = LoginProps & {
+  component?: never;
+};
 
+/**
+ * Login route wiring for a page the application supplies itself.
+ */
+interface LoginRouteOptionsWithCustomPage {
+  /**
+   * Replaces the login page entirely. It renders inside this route, so it can
+   * call `useLoginFlow` to drive authentication — which is how an application
+   * gives login its own screen while keeping the redirect contract and the
+   * already-authenticated guard that live on the route rather than in the page.
+   */
+  component: () => ReactNode;
+}
+
+/**
+ * Options for the login route. Either the framework's page is configured, or
+ * the application supplies its own — a custom page wires `useLoginFlow` itself,
+ * so passing it alongside the default page's props would leave those props
+ * silently dead.
+ */
+export type LoginRouteOptions = LoginRouteOptionsWithDefaultPage | LoginRouteOptionsWithCustomPage;
+
+/**
+ * Route options for the login page.
+ *
+ * The route owns two things no login screen should have to restate: the
+ * `redirect` contract — where to return after authenticating, defaulted and
+ * `catch`-guarded so a malformed value cannot break the route — and the guard
+ * that sends an already-authenticated visitor straight there instead of showing
+ * them a login form.
+ */
+export function createLoginRouteOptions(options: LoginRouteOptions) {
   return {
     validateSearch: z.object({
       redirect: z.string().optional().default(INDEX_ROUTE_PATH).catch(INDEX_ROUTE_PATH)
@@ -21,6 +56,16 @@ export function createLoginRouteOptions(props: LoginProps) {
         throw redirect({ to: search.redirect, replace: true });
       }
     },
-    component: LoginComponent
+    component: resolveLoginComponent(options)
   } as const;
+}
+
+function resolveLoginComponent(options: LoginRouteOptions): () => ReactNode {
+  if (options.component) {
+    return options.component;
+  }
+
+  return function LoginComponent() {
+    return <Login {...options} />;
+  };
 }
