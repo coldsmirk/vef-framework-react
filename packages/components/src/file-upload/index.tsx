@@ -9,7 +9,7 @@ import { HTTP_CLIENT, Uploader, useApiClient, useAppContext } from "@vef-framewo
 import { useCallback, useMemo } from "react";
 
 import { Upload } from "../upload";
-import { resolveStoredFileUrl } from "./helpers";
+import { resolveStoredFileUrl, withPublicThumbnail } from "./helpers";
 
 type CustomRequestFn = NonNullable<GetProp<UploadProps, "customRequest">>;
 
@@ -30,6 +30,8 @@ export function FileUpload({
   partConcurrency,
   maxPartRetries,
   resolveFileUrl,
+  defaultFileList,
+  fileList,
   onUploadProgress,
   onUploadSuccess,
   onUploadError,
@@ -42,6 +44,21 @@ export function FileUpload({
   const resolveUrl = useCallback(
     (key: string): string => resolveStoredFileUrl(key, fileBaseUrl, resolveFileUrl),
     [resolveFileUrl, fileBaseUrl]
+  );
+
+  // AntD draws a picture-list thumbnail, and offers its preview action, only
+  // from `thumbUrl`/`url`. The upload family keeps source URLs off `url`, so
+  // without this a stored image renders as a generic file icon. Public objects
+  // are anonymously readable, so their source URL can stand in as the
+  // thumbnail; private ones keep the icon.
+  const thumbnailFileList = useMemo(
+    () => fileList?.map(file => withPublicThumbnail(file, isPublic)),
+    [fileList, isPublic]
+  );
+
+  const thumbnailDefaultFileList = useMemo(
+    () => defaultFileList?.map(file => withPublicThumbnail(file, isPublic)),
+    [defaultFileList, isPublic]
   );
 
   const customRequest = useMemo<CustomRequestFn>(() => (options: CustomRequestOptions): { abort: () => void } => {
@@ -103,7 +120,14 @@ export function FileUpload({
     onUploadError
   ]);
 
-  return <Upload {...uploadProps} customRequest={customRequest} />;
+  return (
+    <Upload
+      {...uploadProps}
+      customRequest={customRequest}
+      defaultFileList={thumbnailDefaultFileList}
+      fileList={thumbnailFileList}
+    />
+  );
 }
 
 export type { FileUploadProps } from "./props";

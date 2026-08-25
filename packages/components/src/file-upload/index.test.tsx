@@ -1,4 +1,5 @@
 import type { UploadResult } from "@vef-framework-react/core";
+import type { UploadFile } from "antd";
 
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,6 +52,24 @@ const neverSettle = Function.prototype as () => void;
 
 function cdnResolveFileUrl(key: string): string {
   return `https://cdn.example.com/${key}`;
+}
+
+// A stored, already-uploaded public image as `UploadField` hydrates it: the
+// source URL lives on `sourceUrl`, never on AntD's navigable `url`.
+function storedImage(overrides: Partial<UploadFile> = {}): UploadFile {
+  return {
+    uid: "pub/2026/05/12/abc.png",
+    name: "selfie.png",
+    status: "done",
+    sourceUrl: "https://files.test/pub/2026/05/12/abc.png",
+    ...overrides
+  } as UploadFile;
+}
+
+// AntD renders the picture-list thumbnail as an <img> only when it has a
+// `thumbUrl`/`url`; otherwise it falls back to a generic icon and no <img>.
+function getThumbnail(): HTMLImageElement | null {
+  return document.querySelector<HTMLImageElement>("img.vef-upload-list-item-image");
 }
 
 // Vitest mocks invoked with `new` require an implementation that has
@@ -135,6 +154,55 @@ describe("file-upload/FileUpload", () => {
       );
 
       expect(screen.queryByRole("button", { name: /上\s*传/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("public thumbnails", () => {
+    it("renders a stored public image as a thumbnail sourced from its source URL", () => {
+      render(
+        <FileUpload public fileList={[storedImage()]} listType="picture-card" maxCount={1} />
+      );
+
+      expect(getThumbnail()).toHaveAttribute("src", "https://files.test/pub/2026/05/12/abc.png");
+    });
+
+    it("leaves a private image on the icon fallback", () => {
+      render(
+        <FileUpload fileList={[storedImage()]} listType="picture-card" maxCount={1} />
+      );
+
+      expect(getThumbnail()).toBeNull();
+    });
+
+    it("leaves a public non-image on the icon fallback", () => {
+      const stored = storedImage({
+        name: "contract.pdf",
+        sourceUrl: "https://files.test/pub/2026/05/12/abc.pdf"
+      } as Partial<UploadFile>);
+
+      render(
+        <FileUpload public fileList={[stored]} listType="picture-card" maxCount={1} />
+      );
+
+      expect(getThumbnail()).toBeNull();
+    });
+
+    it("keeps an explicitly supplied thumbUrl", () => {
+      const stored = storedImage({ thumbUrl: "https://cdn.example.com/approved.png" });
+
+      render(
+        <FileUpload public fileList={[stored]} listType="picture-card" maxCount={1} />
+      );
+
+      expect(getThumbnail()).toHaveAttribute("src", "https://cdn.example.com/approved.png");
+    });
+
+    it("applies the thumbnail to defaultFileList as well", () => {
+      render(
+        <FileUpload public defaultFileList={[storedImage()]} listType="picture-card" maxCount={1} />
+      );
+
+      expect(getThumbnail()).toHaveAttribute("src", "https://files.test/pub/2026/05/12/abc.png");
     });
   });
 
