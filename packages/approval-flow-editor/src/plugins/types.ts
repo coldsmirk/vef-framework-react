@@ -20,6 +20,12 @@ export interface EditorPlugins {
    * Pickers that resolve concrete ids for each principal kind (user / role /
    * department). A kind left unset degrades gracefully to an inline hint, so a
    * host only wires the pickers it has.
+   *
+   * They also supply the value of a condition on a built-in applicant subject
+   * (`applicantId` → user, `applicantDepartmentId` → department) for the
+   * operators that compare a whole id, so those rules are picked rather than
+   * typed. There a missing picker degrades to the free-text input instead of
+   * the hint, since a hint would leave the rule unfillable.
    */
   pickers?: Partial<Record<PrincipalKind, FC<PickerProps>>>;
   /**
@@ -37,6 +43,11 @@ export interface EditorPlugins {
    * for form fields; a key colliding with a built-in subject is dropped, and
    * a form field colliding with either is shadowed (mirroring the engine's
    * resolution order).
+   *
+   * So this is not the seam for making a built-in subject selectable — the
+   * engine resolves those from the instance itself and ignores a same-named
+   * global. Wire `pickers` instead; the condition editor uses them for the
+   * built-in subjects' values.
    */
   globalSubjects?: FormFieldDefinition[];
 }

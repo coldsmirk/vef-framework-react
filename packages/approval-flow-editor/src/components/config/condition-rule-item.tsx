@@ -1,6 +1,6 @@
 import type { FC } from "react";
 
-import type { AggregateKind, ConditionDefinition, ConditionOperator, FormFieldDefinition } from "../../types";
+import type { AggregateKind, ConditionDefinition, ConditionOperator, FormFieldDefinition, PrincipalKind } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
@@ -10,6 +10,7 @@ import { XIcon } from "lucide-react";
 import { useEditorPlugins } from "../../plugins";
 import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
 import { AGGREGATE_LABELS, getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
+import { PrincipalPicker } from "./principal-picker";
 
 const FULL_WIDTH_STYLE = { width: "100%" } as const;
 
@@ -18,7 +19,10 @@ const FULL_WIDTH_STYLE = { width: "100%" } as const;
  * of form data. They share the field-condition pipeline (same operators as a
  * text field), so the picker offers them alongside the form fields. These
  * subjects are reserved names on the backend — a form field with a colliding
- * key is shadowed.
+ * key is shadowed, and so is a host global (the engine resolves the built-ins
+ * first), which is deliberate: the same instance column drives assignee
+ * resolution and the initiator check, so a global able to redefine it for
+ * condition routing alone would split one "department" into two values.
  */
 const BUILT_IN_SUBJECT_FIELDS: FormFieldDefinition[] = [
   {
@@ -32,6 +36,25 @@ const BUILT_IN_SUBJECT_FIELDS: FormFieldDefinition[] = [
     label: "发起人部门 ID"
   }
 ];
+
+/**
+ * The principal a built-in subject holds, so its value can be picked instead
+ * of typed. Since the engine owns these subjects' values, a host cannot make
+ * them selectable through `globalSubjects` (the collision is dropped) — the
+ * `pickers` it already wires for assignee selection answers it instead, with
+ * no extra registration and no second copy of the option list.
+ */
+const BUILT_IN_SUBJECT_PRINCIPALS: Record<string, PrincipalKind> = {
+  applicantId: "user",
+  applicantDepartmentId: "department"
+};
+
+/**
+ * Operators that compare a whole identifier, which is all a picker can supply.
+ * Substring operators keep the free-text input: an id chosen from a picker is
+ * complete, so `contains` over one would silently degenerate to `eq`.
+ */
+const IDENTITY_OPERATORS = new Set<ConditionOperator>(["eq", "ne", "in", "not_in"]);
 
 /**
  * Coerce a heterogeneous option value to a Select-compatible primitive.
@@ -132,7 +155,8 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   // Resolution order mirrors the engine: built-in applicant subjects, then
   // host-supplied globals, then form data. A key colliding with an earlier
   // layer is shadowed at runtime, so the duplicate is dropped here instead of
-  // offering a dead option.
+  // offering a dead option — a global cannot make a built-in subject
+  // selectable, which is what BUILT_IN_SUBJECT_PRINCIPALS is for.
   const globalSubjectFields = globalSubjects.filter(g => BUILT_IN_SUBJECT_FIELDS.every(b => b.key !== g.key));
   const contextSubjectFields = [...BUILT_IN_SUBJECT_FIELDS, ...globalSubjectFields];
   const subjectFields = [
@@ -206,6 +230,41 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       );
     }
 
+    const textInput = (
+      <Input
+        disabled={readonly}
+        placeholder="请输入值"
+        value={asStringValue(condition.value) ?? ""}
+        onChange={event => onChange({ ...condition, value: event.currentTarget.value })}
+      />
+    );
+
+    // A built-in subject holds a principal id, so it is picked rather than
+    // typed — through the same host picker assignee selection uses. A host
+    // that wired none falls back to the free-text input rather than the
+    // picker's "no plugin" hint, which would leave the rule unfillable.
+    const principalKind = BUILT_IN_SUBJECT_PRINCIPALS[selectedField.key];
+
+    if (principalKind && IDENTITY_OPERATORS.has(condition.operator)) {
+      const single = asStringValue(condition.value);
+      const selected = isMultiValue
+        ? Array.isArray(condition.value) ? condition.value.map(String) : []
+        : single ? [single] : [];
+
+      return (
+        <PrincipalPicker
+          disabled={readonly}
+          fallback={textInput}
+          kind={principalKind}
+          value={selected}
+          // Single-value operators keep the last pick: the picker is a
+          // multi-select by contract, so re-picking must replace rather than
+          // accumulate a value the engine would compare as one id.
+          onChange={ids => onChange({ ...condition, value: isMultiValue ? ids : ids.at(-1) })}
+        />
+      );
+    }
+
     const { kind } = selectedField;
 
     if (isMultiValue && kind === "select" && selectedField.options) {
@@ -274,14 +333,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       );
     }
 
-    return (
-      <Input
-        disabled={readonly}
-        placeholder="请输入值"
-        value={asStringValue(condition.value) ?? ""}
-        onChange={event => onChange({ ...condition, value: event.currentTarget.value })}
-      />
-    );
+    return textInput;
   };
 
   const valueInput = renderValueInput();

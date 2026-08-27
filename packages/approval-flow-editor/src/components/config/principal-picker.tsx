@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import type { FC, ReactNode } from "react";
 
 import type { PrincipalKind } from "../../types";
 
@@ -24,6 +24,14 @@ interface PrincipalPickerProps {
   value: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  /**
+   * Rendered instead of the "no plugin" hint when the host wired no picker for
+   * this kind. For a list that selects principals the hint is the whole answer
+   * — there is nothing else to offer — but where the value has another way in
+   * (a condition on a built-in applicant subject falls back to free text), the
+   * hint would leave the control unusable, so that caller passes its own.
+   */
+  fallback?: ReactNode;
 }
 
 /**
@@ -36,13 +44,14 @@ export const PrincipalPicker: FC<PrincipalPickerProps> = ({
   kind,
   value,
   onChange,
-  disabled
+  disabled,
+  fallback
 }) => {
   const { pickers } = useEditorPlugins();
   const Picker = pickers?.[kind];
 
   if (!Picker) {
-    return <div css={placeholderStyle}>{`未提供${PRINCIPAL_KIND_LABELS[kind]}选择器插件`}</div>;
+    return fallback ?? <div css={placeholderStyle}>{`未提供${PRINCIPAL_KIND_LABELS[kind]}选择器插件`}</div>;
   }
 
   return <Picker disabled={disabled} value={value} onChange={onChange} />;
