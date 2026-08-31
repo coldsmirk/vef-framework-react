@@ -148,7 +148,15 @@ export function useSsoLogin({
   onError,
   publicKey
 }: UseSsoLoginOptions): SsoLoginFlow {
-  const liveSearch = useSearch({ strict: false }) as SsoHandoffSearch;
+  // The assertion is deliberately a separate statement. A type assertion also
+  // supplies a contextual type, so writing it on the call makes TanStack infer
+  // `SsoHandoffSearch` as the `select` result — and because `Record<string,
+  // unknown>` is not JSON-validatable, its StructuralSharingOption then demands
+  // an explicit `structuralSharing` for a call that selects nothing at all.
+  // The error only surfaces once an app registers its router type, so it hits
+  // the host and never this package's own type-check.
+  const search = useSearch({ strict: false });
+  const liveSearch = search as SsoHandoffSearch;
   // Snapshot at mount. Clearing the handoff out of the address bar notifies the
   // router, so the live search empties the moment the exchange starts — while
   // the parameters the link carried stay relevant for as long as the page
