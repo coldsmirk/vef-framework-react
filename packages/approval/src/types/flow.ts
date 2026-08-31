@@ -1,4 +1,4 @@
-import type { FlowDefinition, FormFieldDefinition } from "@vef-framework-react/approval-flow-editor";
+import type { AssigneeKind, CcKind, FlowDefinition, FormFieldDefinition, KindDescriptor } from "@vef-framework-react/approval-flow-editor";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FullAudited } from "./base";
@@ -97,6 +97,19 @@ export interface FlowVersionSummary {
   publishedBy?: string | null;
   createdAt: string;
   createdBy: string;
+}
+
+/**
+ * The assignee / CC / initiator kinds the running application accepts, as
+ * served by `approval/flow.list_kind_options`. Each vocabulary is an open
+ * registry on the backend — a host adds a kind by registering a resolver — so
+ * this catalog, not a union in the client, is what the designer offers and
+ * what a deploy will validate.
+ */
+export interface KindOptions {
+  assignees: Array<KindDescriptor<AssigneeKind>>;
+  ccs: Array<KindDescriptor<CcKind>>;
+  initiators: Array<KindDescriptor<InitiatorKind>>;
 }
 
 /**

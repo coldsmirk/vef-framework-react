@@ -2,7 +2,6 @@ import type {
   AddAssigneeType,
   ApprovalMethod,
   ApprovalNodeData,
-  AssigneeKind,
   CcDefinition,
   CcFieldPermission,
   ConditionBranchDefinition,
@@ -14,16 +13,24 @@ import type {
   FieldPermission,
   FlowDefinition,
   FormFieldDefinition,
+  KindDescriptor,
   PassRule,
   RollbackDataStrategy,
   RollbackType,
   SameApplicantAction,
+  SelectionMode,
   TaskNodeData,
   TimeoutAction
 } from "../types";
 
 import { isNodeKind } from "../constants";
-import { AGGREGATE_KINDS, AGGREGATE_OPERATORS, CONDITION_OPERATORS as CONDITION_OPERATOR_LIST } from "../types";
+import {
+  AGGREGATE_KINDS,
+  AGGREGATE_OPERATORS,
+  BUILTIN_ASSIGNEE_KINDS,
+  BUILTIN_CC_KINDS,
+  CONDITION_OPERATORS as CONDITION_OPERATOR_LIST
+} from "../types";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -60,8 +67,10 @@ export type FlowValidationCode
     | "condition_duplicate_handle"
     | "condition_branch_no_edge"
     | "invalid_assignee_kind"
+    | "assignee_ids_required"
     | "assignee_form_field_required"
     | "invalid_cc_kind"
+    | "cc_ids_required"
     | "invalid_cc_timing"
     | "cc_form_field_required"
     | "invalid_execution_type"
@@ -110,21 +119,35 @@ function enumSet<T extends string>(members: Record<T, null>): Set<string> {
   return new Set(Object.keys(members));
 }
 
-const ASSIGNEE_KINDS = enumSet<AssigneeKind>({
-  user: null,
-  role: null,
-  department: null,
-  self: null,
-  superior: null,
-  department_leader: null,
-  form_field: null
-});
-const CC_KINDS = enumSet<CcDefinition["kind"]>({
-  user: null,
-  role: null,
-  department: null,
-  form_field: null
-});
+/**
+ * The selection modes that make a rule select ids from a catalog. A rule of
+ * such a kind that picks nothing matches nobody, which the backend rejects at
+ * deploy — mirrored here so the designer says so before the save.
+ */
+const SELECTS_IDS = new Set<SelectionMode>(["user", "role", "department", "custom"]);
+
+/**
+ * The kind vocabularies one validation run is checked against.
+ */
+interface KindVocabulary {
+  assignees: Map<string, SelectionMode>;
+  ccs: Map<string, SelectionMode>;
+}
+
+/**
+ * Indexes a kind catalog by kind, keeping only what validation reads.
+ */
+function selectionIndex<K extends string>(descriptors: ReadonlyArray<KindDescriptor<K>>): Map<string, SelectionMode> {
+  return new Map(descriptors.map(descriptor => [descriptor.kind, descriptor.selection]));
+}
+
+/**
+ * Reports whether an id list names at least one non-blank entry.
+ */
+function hasAnyId(ids: string[] | undefined): boolean {
+  return (ids ?? []).some(id => id.trim() !== "");
+}
+
 const CC_TIMINGS = enumSet<NonNullable<CcDefinition["timing"]>>({
   always: null,
   on_approve: null,
@@ -216,6 +239,50 @@ export interface FlowValidationError {
 }
 
 /**
+ * What a validation run is checked against, beyond the definition itself.
+ *
+ * Both kind catalogs are the running application's — served by
+ * `approval/flow.list_kind_options` and passed down from
+ * `EditorPlugins.assigneeKinds` / `ccKinds`. Omitting one falls back to the
+ * framework built-ins, which is right for a host that registers no kinds of
+ * its own and wrong for one that does: its kinds would be reported as unknown
+ * types. Pass the served catalog wherever it is available.
+ */
+export interface FlowValidationContext {
+  /**
+   * The form's top-level field inventory — the same list
+   * `EditorPlugins.formFields` feeds to the condition editor and the
+   * field-permission table — used to cross-check every node's
+   * `fieldPermissions` keys. It is tri-state, and the two "no fields" states
+   * are deliberately distinct:
+   * - omitted — the inventory is UNAVAILABLE, e.g. a host that renders the
+   * flow editor without any form-editor integration. Only the key-existence
+   * check (`field_permission_key_unknown`) is skipped, since there is
+   * nothing to check keys against; the enum-validity check and the CC
+   * visible/hidden-subset check still run — neither needs the inventory. A
+   * definition with dangling `fieldPermissions` keys is NOT flagged in this
+   * state, so omitting it never falsely blocks a host that genuinely has no
+   * form integration to supply the list.
+   * - `[]` (an explicit empty array) — the form is known to have NO fields:
+   * every `fieldPermissions` entry is a dangling reference, mirroring the
+   * backend's "flow whose form has zero fields" case.
+   *
+   * The wizard call sites always pass the projection's real `formFields`
+   * array (populated or `[]`, never omitted); a host with no form-editor
+   * integration at all should omit it rather than pass `[]`.
+   */
+  formFields?: FormFieldDefinition[];
+  /**
+   * The assignee kinds this application accepts.
+   */
+  assigneeKinds?: readonly KindDescriptor[];
+  /**
+   * The CC kinds this application accepts.
+   */
+  ccKinds?: readonly KindDescriptor[];
+}
+
+/**
  * Validate the structural integrity of a flow definition, mirroring the
  * backend's deploy-time `ValidateFlowDefinition`. Unlike the backend (which
  * returns the first error), this collects every violation so the editor can
@@ -225,31 +292,12 @@ export interface FlowValidationError {
  * `kind` discriminator and node `data` are read exactly as the backend reads
  * them off the wire.
  *
- * `formFields` is the form's top-level field inventory — the same list
- * `EditorPlugins.formFields` feeds to the condition editor and the
- * field-permission table — used to cross-check every node's
- * `fieldPermissions` keys. It is tri-state, and the two "no fields" states
- * are deliberately distinct:
- * - `undefined` (omit the argument) — the inventory is UNAVAILABLE, e.g. a
- * host that renders the flow editor without any form-editor integration.
- * Only the key-existence check (`field_permission_key_unknown`) is
- * skipped, since there is nothing to check keys against; the
- * enum-validity check and the CC visible/hidden-subset check still run —
- * neither needs the inventory. A definition with dangling
- * `fieldPermissions` keys is NOT flagged in this state, so passing
- * `undefined` never falsely blocks a host that genuinely has no form
- * integration to supply the list.
- * - `[]` (an explicit empty array) — the form is known to have NO fields:
- * every `fieldPermissions` entry is a dangling reference, mirroring the
- * backend's "flow whose form has zero fields" case.
- *
- * The wizard call sites always pass the projection's real `formFields`
- * array (populated or `[]`, never omitted); a host with no form-editor
- * integration at all should omit the argument rather than pass `[]`.
+ * Everything the check needs beyond the definition itself comes in through
+ * {@link FlowValidationContext}.
  */
 export function validateFlowDefinition(
   definition: FlowDefinition,
-  formFields?: FormFieldDefinition[]
+  context: FlowValidationContext = {}
 ): FlowValidationError[] {
   const errors: FlowValidationError[] = [];
 
@@ -259,9 +307,15 @@ export function validateFlowDefinition(
     return [{ code: "no_nodes", message: "流程至少需要一个节点" }];
   }
 
+  const { formFields } = context;
+
   // undefined stays undefined (inventory unavailable, key-existence check
   // skipped); an explicit array — including [] — becomes a lookup Set.
   const formFieldKeys = formFields ? new Set(formFields.map(field => field.key)) : undefined;
+  const vocabulary: KindVocabulary = {
+    assignees: selectionIndex(context.assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS),
+    ccs: selectionIndex(context.ccKinds ?? BUILTIN_CC_KINDS)
+  };
 
   // --- Phase 1: node validation ---
   const nodeIds = new Set<string>();
@@ -319,7 +373,7 @@ export function validateFlowDefinition(
 
     if (node.kind === "approval") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, formFieldKeys, errors);
+      validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
       validateApprovalNodeConfig(node.id, node.data, errors);
 
       if (node.data?.rollbackTargetKeys?.length) {
@@ -331,13 +385,13 @@ export function validateFlowDefinition(
 
     if (node.kind === "handle") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, formFieldKeys, errors);
+      validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
       validateHandleNodeConfig(node.id, node.data, errors);
       continue;
     }
 
     if (node.kind === "cc") {
-      validateCcDefinitions(node.id, node.data?.ccs, errors);
+      validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors);
       validateFieldPermissions(node.id, node.data?.fieldPermissions, true, formFieldKeys, errors);
     }
   }
@@ -540,6 +594,7 @@ function validateTaskNodeConfig(
   nodeId: string,
   data: TaskNodeData | undefined,
   formFieldKeys: Set<string> | undefined,
+  vocabulary: KindVocabulary,
   errors: FlowValidationError[]
 ): void {
   if (data?.executionType && !EXECUTION_TYPES.has(data.executionType)) {
@@ -569,7 +624,9 @@ function validateTaskNodeConfig(
   const assignees = data?.assignees ?? [];
 
   for (const assignee of assignees) {
-    if (!ASSIGNEE_KINDS.has(assignee.kind)) {
+    const selection = vocabulary.assignees.get(assignee.kind);
+
+    if (selection === undefined) {
       errors.push({
         code: "invalid_assignee_kind",
         message: `未知的审批人类型：${assignee.kind}`,
@@ -578,7 +635,15 @@ function validateTaskNodeConfig(
       continue;
     }
 
-    if (assignee.kind === "form_field" && !assignee.formField?.trim()) {
+    if (SELECTS_IDS.has(selection) && !hasAnyId(assignee.ids)) {
+      errors.push({
+        code: "assignee_ids_required",
+        message: "该审批人类型必须选择具体对象",
+        nodeId
+      });
+    }
+
+    if (selection === "form_field" && !assignee.formField?.trim()) {
       errors.push({
         code: "assignee_form_field_required",
         message: "表单字段审批人必须选择字段",
@@ -603,7 +668,7 @@ function validateTaskNodeConfig(
     });
   }
 
-  validateCcDefinitions(nodeId, data?.ccs, errors);
+  validateCcDefinitions(nodeId, data?.ccs, vocabulary, errors);
   validateFieldPermissions(nodeId, data?.fieldPermissions, false, formFieldKeys, errors);
   validateRequiredFieldTimeoutAutoPass(nodeId, data, errors);
 }
@@ -748,12 +813,15 @@ function validateHandleNodeConfig(
 function validateCcDefinitions(
   nodeId: string,
   ccs: CcDefinition[] | undefined,
+  vocabulary: KindVocabulary,
   errors: FlowValidationError[]
 ): void {
   const ccItems = ccs ?? [];
 
   for (const cc of ccItems) {
-    if (!CC_KINDS.has(cc.kind)) {
+    const selection = vocabulary.ccs.get(cc.kind);
+
+    if (selection === undefined) {
       errors.push({
         code: "invalid_cc_kind",
         message: `未知的抄送人类型：${cc.kind}`,
@@ -762,7 +830,15 @@ function validateCcDefinitions(
       continue;
     }
 
-    if (cc.kind === "form_field" && !cc.formField?.trim()) {
+    if (SELECTS_IDS.has(selection) && !hasAnyId(cc.ids)) {
+      errors.push({
+        code: "cc_ids_required",
+        message: "该抄送人类型必须选择具体对象",
+        nodeId
+      });
+    }
+
+    if (selection === "form_field" && !cc.formField?.trim()) {
       errors.push({
         code: "cc_form_field_required",
         message: "表单字段抄送人必须选择字段",

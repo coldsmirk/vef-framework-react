@@ -10,6 +10,7 @@ import type {
   FlowSearch,
   FlowVersion,
   FlowVersionSummary,
+  KindOptions,
   PublishVersionParams,
   ToggleFlowActiveParams,
   UpdateFlowParams
@@ -38,6 +39,12 @@ export interface FlowApi {
   getGraph: QueryFunction<FlowGraphBundle, { flowId: string; tenantId?: string; versionId?: string }>;
   findVersions: QueryFunction<FlowVersionSummary[], { flowId: string; tenantId?: string }>;
   findInitiators: QueryFunction<FlowInitiator[], { flowId: string; tenantId?: string }>;
+  /**
+   * The application's assignee / CC / initiator vocabularies. Application-wide
+   * rather than per-flow: every flow is designed against the same registered
+   * resolvers.
+   */
+  listKindOptions: QueryFunction<KindOptions, Record<string, never>>;
 }
 
 /**
@@ -111,6 +118,14 @@ export function useFlowApi(): FlowApi {
           "approval_flow_find_initiators",
           ({ post }) => async params => {
             const result = await post<FlowInitiator[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_initiators", params) });
+
+            return result.data;
+          }
+        ),
+        listKindOptions: apiClient.createQueryFn<KindOptions, Record<string, never>>(
+          "approval_flow_list_kind_options",
+          ({ post }) => async () => {
+            const result = await post<KindOptions>(API_PATH, { data: createApiRequest(RESOURCE, "list_kind_options", {}) });
 
             return result.data;
           }

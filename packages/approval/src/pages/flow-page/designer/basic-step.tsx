@@ -1,6 +1,6 @@
-import type { PrincipalKind } from "@vef-framework-react/approval-flow-editor";
+import type { KindDescriptor } from "@vef-framework-react/approval-flow-editor";
 
-import type { BusinessBindingConfig, InitiatorParams, InstanceStatus } from "../../../types";
+import type { BusinessBindingConfig, InitiatorKind, InitiatorParams, InstanceStatus } from "../../../types";
 import type { CategoryTreeOption } from "../../category-page/form";
 import type { FlowDraftBasic } from "./types";
 
@@ -27,56 +27,79 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { PrincipalSelect } from "../../../components";
 import { INSTANCE_STATUS_LABELS } from "../../../components/status/labels";
-
-const INITIATOR_KIND_OPTIONS: Array<{ label: string; value: PrincipalKind }> = [
-  { label: "用户", value: "user" },
-  { label: "角色", value: "role" },
-  { label: "部门", value: "department" }
-];
+import { BUILTIN_INITIATOR_KINDS } from "../../../types";
 
 /**
- * The initiator rule rows: each row is one principal kind plus its ids;
+ * The initiator rule rows: each row is one kind plus the ids it selects;
  * rules are OR-combined by the engine.
+ *
+ * The kinds come from the application's registered resolvers, so a host kind
+ * — "any ward supervisor", resolved from the applicant at run time — is
+ * offered here with no change to this component. A kind whose selection mode
+ * takes no input renders no picker at all and carries no ids, which is exactly
+ * what the server's save-time validation expects.
  */
 function InitiatorsEditor({
   initiators,
+  kinds,
   onChange
 }: {
   initiators: InitiatorParams[];
+  kinds: ReadonlyArray<KindDescriptor<InitiatorKind>>;
   onChange: (next: InitiatorParams[]) => void;
 }) {
+  const kindIndex = new Map(kinds.map(descriptor => [descriptor.kind, descriptor]));
+  const kindOptions = kinds.map(descriptor => {
+    return { label: descriptor.label, value: descriptor.kind };
+  });
+
   function updateRow(index: number, patch: Partial<InitiatorParams>): void {
     onChange(initiators.map((row, i) => i === index ? { ...row, ...patch } : row));
   }
 
   return (
     <Stack gap={8}>
-      {initiators.map((row, index) => (
-        // Rows have no identity beyond their position.
-        <Flex key={index} align="center" gap="small">
-          <Select
-            options={INITIATOR_KIND_OPTIONS}
-            style={{ width: 100, flexShrink: 0 }}
-            value={row.kind}
-            onChange={kind => updateRow(index, { kind, ids: [] })}
-          />
+      {initiators.map((row, index) => {
+        const descriptor = kindIndex.get(row.kind);
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <PrincipalSelect kind={row.kind} value={row.ids} onChange={ids => updateRow(index, { ids })} />
-          </div>
+        return (
+          // Rows have no identity beyond their position.
+          <Flex key={index} align="center" gap="small">
+            <Select
+              options={kindOptions}
+              style={{ width: 120, flexShrink: 0 }}
+              value={row.kind}
+              onChange={kind => updateRow(index, { kind, ids: [] })}
+            />
 
-          <Button
-            icon={<Icon component={Trash2Icon} />}
-            onClick={() => onChange(initiators.filter((_, i) => i !== index))}
-          />
-        </Flex>
-      ))}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {descriptor === undefined
+                ? <span style={{ color: globalCssVars.colorErrorText }}>{`当前应用未注册该类型：${row.kind}`}</span>
+                : descriptor.selection === "none"
+                  ? <span style={{ color: globalCssVars.colorTextTertiary }}>该类型按发起人自动解析，无需选择</span>
+                  : (
+                      <PrincipalSelect
+                        kind={row.kind}
+                        selection={descriptor.selection}
+                        value={row.ids}
+                        onChange={ids => updateRow(index, { ids })}
+                      />
+                    )}
+            </div>
+
+            <Button
+              icon={<Icon component={Trash2Icon} />}
+              onClick={() => onChange(initiators.filter((_, i) => i !== index))}
+            />
+          </Flex>
+        );
+      })}
 
       <Button
         block
         icon={<Icon component={PlusIcon} />}
         type="dashed"
-        onClick={() => onChange([...initiators, { kind: "user", ids: [] }])}
+        onClick={() => onChange([...initiators, { kind: kinds[0]?.kind ?? "user", ids: [] }])}
       >
         添加发起规则
       </Button>
@@ -213,6 +236,12 @@ const EMPTY_BINDING: BusinessBindingConfig = {
 export interface BasicStepProps {
   basic: FlowDraftBasic;
   initiators: InitiatorParams[];
+  /**
+   * The initiator kinds this application registers, from
+   * `approval/flow.list_kind_options`. Omitted (or still loading) falls back
+   * to the framework built-ins.
+   */
+  initiatorKinds?: ReadonlyArray<KindDescriptor<InitiatorKind>>;
   categoryOptions: CategoryTreeOption[];
   /**
    * The flow code is immutable after creation.
@@ -230,6 +259,7 @@ export interface BasicStepProps {
 export function BasicStep({
   basic,
   initiators,
+  initiatorKinds,
   categoryOptions,
   isEditing,
   onBasicChange,
@@ -351,7 +381,13 @@ export function BasicStep({
           </Flex>
 
           {!basic.isAllInitiationAllowed
-            && <InitiatorsEditor initiators={initiators} onChange={onInitiatorsChange} />}
+            && (
+              <InitiatorsEditor
+                initiators={initiators}
+                kinds={initiatorKinds ?? BUILTIN_INITIATOR_KINDS}
+                onChange={onInitiatorsChange}
+              />
+            )}
         </Stack>
       </Card>
 

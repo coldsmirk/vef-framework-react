@@ -84,6 +84,16 @@ function DesignerBody({
     queryKey: [flowApi.findInitiators.key, { flowId: flow?.id ?? "" }],
     enabled: isEditing
   });
+  // The assignee / CC / initiator vocabularies this application registers.
+  // Application-wide and immutable for the life of the process, so it is
+  // fetched once and shared by the initiator editor, the flow designer, and
+  // the client-side deploy pre-check — all three then offer and accept exactly
+  // what a deploy will.
+  const { data: kindOptions } = useQuery({
+    queryFn: flowApi.listKindOptions,
+    queryKey: [flowApi.listKindOptions.key, {}],
+    staleTime: Infinity
+  });
 
   useEffect(() => {
     if (!isEditing || draft !== null || versions === undefined || initiatorRows === undefined) {
@@ -144,12 +154,18 @@ function DesignerBody({
     [draft?.formSchema, plugins.registries]
   );
   const flowErrors = useMemo(
-    () => draft ? validateFlowDefinition(draft.flowDefinition, projection?.formFields ?? []) : [],
-    [draft, projection]
+    () => draft
+      ? validateFlowDefinition(draft.flowDefinition, {
+          formFields: projection?.formFields ?? [],
+          assigneeKinds: kindOptions?.assignees,
+          ccKinds: kindOptions?.ccs
+        })
+      : [],
+    [draft, projection, kindOptions]
   );
   const editorPlugins = useMemo(
-    () => toEditorPlugins(plugins, projection?.formFields ?? []),
-    [plugins, projection]
+    () => toEditorPlugins(plugins, projection?.formFields ?? [], kindOptions),
+    [plugins, projection, kindOptions]
   );
 
   const handleBasicChange = useCallback((patch: Partial<FlowDraftBasic>) => {
@@ -264,6 +280,7 @@ function DesignerBody({
       key="basic"
       basic={basic}
       categoryOptions={categoryOptions}
+      initiatorKinds={kindOptions?.initiators}
       initiators={draft.initiators}
       isEditing={isEditing}
       onBasicChange={handleBasicChange}

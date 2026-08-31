@@ -1,6 +1,6 @@
 import type { FC } from "react";
 
-import type { FormFieldDefinition, PrincipalKind } from "../types";
+import type { AssigneeKind, CcKind, FormFieldDefinition, KindDescriptor } from "../types";
 
 /**
  * Props for an external principal picker component. The editor only stores ids;
@@ -17,9 +17,12 @@ export interface PickerProps {
  */
 export interface EditorPlugins {
   /**
-   * Pickers that resolve concrete ids for each principal kind (user / role /
-   * department). A kind left unset degrades gracefully to an inline hint, so a
-   * host only wires the pickers it has.
+   * Pickers that resolve concrete ids, keyed by kind. A row looks up its own
+   * kind first and falls back to its selection mode, so the three built-in
+   * pickers (`user` / `role` / `department`) serve every kind that selects the
+   * same thing — a host kind picking roles needs no picker of its own, while a
+   * `custom` kind registers one under its own name. A kind left unset degrades
+   * gracefully to an inline hint, so a host only wires the pickers it has.
    *
    * They also supply the value of a condition on a built-in applicant subject
    * (`applicantId` → user, `applicantDepartmentId` → department) for the
@@ -27,7 +30,24 @@ export interface EditorPlugins {
    * typed. There a missing picker degrades to the free-text input instead of
    * the hint, since a hint would leave the rule unfillable.
    */
-  pickers?: Partial<Record<PrincipalKind, FC<PickerProps>>>;
+  pickers?: Partial<Record<string, FC<PickerProps>>>;
+  /**
+   * The assignee kinds this application accepts, from
+   * `approval/flow.list_kind_options`. Omitted, the editor offers the
+   * framework built-ins (`BUILTIN_ASSIGNEE_KINDS`) — correct for a host that
+   * registers no kinds of its own, but a host that does must pass the served
+   * catalog, or its kinds are simply absent from the dropdown.
+   *
+   * Each descriptor's `selection` drives the row's input: none renders
+   * nothing, `form_field` a field-key input, and everything else the picker
+   * resolved as described under {@link EditorPlugins.pickers}.
+   */
+  assigneeKinds?: ReadonlyArray<KindDescriptor<AssigneeKind>>;
+  /**
+   * The CC kinds this application accepts, with the same contract as
+   * {@link EditorPlugins.assigneeKinds}.
+   */
+  ccKinds?: ReadonlyArray<KindDescriptor<CcKind>>;
   /**
    * Form field definitions, consumed by the condition editor, the
    * field-permission table, and flow validation (fieldPermissions keys are

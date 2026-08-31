@@ -3,12 +3,13 @@ import type { CSSProperties, FC } from "react";
 
 import type { EditorPlugins } from "../plugins";
 import type { ConnectionRejection } from "../shared/connection-rules";
+import type { FlowValidationContext } from "../shared/flow-validation";
 import type { FlowDefinition, NodeKind } from "../types";
 
 import { Global } from "@emotion/react";
 import { Button, globalCssVars, showWarningMessage } from "@vef-framework-react/components";
 import { Background, BackgroundVariant, MiniMap, Panel, ReactFlow, ReactFlowProvider, useStore, useUpdateNodeInternals } from "@xyflow/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EDGE_MARKER_END, isNodeKind } from "../constants";
 import { useConnectionValidation } from "../hooks/use-connection-validation";
@@ -138,13 +139,26 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   const loadDefinition = useEditorStore(s => s.loadDefinition);
   const setValidationIssues = useEditorStore(s => s.setValidationIssues);
   const storeApi = useEditorStoreApi();
-  // The form's top-level field inventory, for cross-checking fieldPermissions
-  // keys — same source the condition editor and field-permission table read.
-  // Passed through as-is (including undefined) to validateFlowDefinition,
-  // whose formFields parameter is tri-state: undefined means "no inventory
-  // to check against", distinct from an explicit empty array meaning "the
-  // form has zero fields".
-  const { formFields } = useEditorPlugins();
+  // What validation is checked against: the form's top-level field inventory
+  // (tri-state — undefined means "no inventory to check against", distinct
+  // from an explicit empty array meaning "the form has zero fields") plus the
+  // application's own assignee / CC vocabularies, so a host kind is not
+  // reported as an unknown type.
+  const {
+    formFields,
+    assigneeKinds,
+    ccKinds
+  } = useEditorPlugins();
+  const validationContext = useMemo<FlowValidationContext>(
+    () => {
+      return {
+        formFields,
+        assigneeKinds,
+        ccKinds
+      };
+    },
+    [formFields, assigneeKinds, ccKinds]
+  );
 
   const { onDragOver, onDrop } = useDrop();
   const { isValidConnection } = useConnectionValidation();
@@ -160,13 +174,13 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   // toolbar indicator subscribe to their own slices.
   useEffect(() => {
     const timer = setTimeout(() => {
-      setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges), formFields));
+      setValidationIssues(validateFlowDefinition(toFlowDefinition(nodes, edges), validationContext));
     }, VALIDATION_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [nodes, edges, setValidationIssues, formFields]);
+  }, [nodes, edges, setValidationIssues, validationContext]);
 
   // Re-measure every handle once ancestor transforms have settled. xyflow
   // measures node sizes through ResizeObserver (layout-based, immune to CSS
@@ -337,7 +351,7 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
     }
 
     const definition = toDefinition();
-    const issues = validateFlowDefinition(definition, formFields);
+    const issues = validateFlowDefinition(definition, validationContext);
 
     if (issues.length > 0) {
       showWarningMessage(`流程校验未通过（${issues.length} 项），请先修正后再继续`);
@@ -345,7 +359,7 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
     }
 
     onPublish(definition);
-  }, [onPublish, toDefinition, formFields]);
+  }, [onPublish, toDefinition, validationContext]);
 
   return (
     // tabIndex makes the shell focusable, so the history shortcuts only fire

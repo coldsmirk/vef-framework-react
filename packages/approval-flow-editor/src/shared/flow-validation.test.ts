@@ -47,7 +47,7 @@ function flowWith(approvalNode: Partial<Extract<NodeDefinition, { kind: "approva
 }
 
 function codesOf(definition: FlowDefinition, formFields: FormFieldDefinition[] = []): string[] {
-  return validateFlowDefinition(definition, formFields).map(e => e.code);
+  return validateFlowDefinition(definition, { formFields }).map(e => e.code);
 }
 
 describe("validateFlowDefinition node config rules", () => {
@@ -263,14 +263,121 @@ describe("validateFlowDefinition node config rules", () => {
     }))).toContain("cc_form_field_required");
   });
 
-  it("rejects unknown assignee and cc kinds", () => {
+  it("rejects assignee and cc kinds the application does not register", () => {
     expect(codesOf(flowWith({
-      data: { name: "审批", assignees: [{ kind: "robot" as never, sortOrder: 1 }] }
+      data: { name: "审批", assignees: [{ kind: "robot", sortOrder: 1 }] }
     }))).toContain("invalid_assignee_kind");
 
     expect(codesOf(flowWith({
-      data: { name: "审批", ccs: [{ kind: "robot" as never }] }
+      data: { name: "审批", ccs: [{ kind: "robot" }] }
     }))).toContain("invalid_cc_kind");
+  });
+
+  it("requires selected ids for kinds that pick from a catalog", () => {
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        assignees: [
+          {
+            kind: "user",
+            ids: [],
+            sortOrder: 1
+          }
+        ]
+      }
+    }))).toContain("assignee_ids_required");
+
+    // Blank entries select nobody just as an empty list does.
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        assignees: [
+          {
+            kind: "role",
+            ids: ["  "],
+            sortOrder: 1
+          }
+        ]
+      }
+    }))).toContain("assignee_ids_required");
+
+    expect(codesOf(flowWith({
+      data: { name: "审批", ccs: [{ kind: "department", ids: [] }] }
+    }))).toContain("cc_ids_required");
+  });
+
+  it("accepts kinds resolved from the applicant without any selection", () => {
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        assignees: [
+          { kind: "self", sortOrder: 1 },
+          { kind: "superior", sortOrder: 2 },
+          { kind: "department_leader", sortOrder: 3 }
+        ]
+      }
+    }))).toEqual([]);
+  });
+
+  // The vocabularies are open registries on the backend: a host kind becomes
+  // valid by being served in the catalog, with no change here.
+  it("validates host kinds from the supplied catalog", () => {
+    const definition = flowWith({
+      data: {
+        name: "审批",
+        assignees: [{ kind: "head_nurse", sortOrder: 1 }],
+        ccs: [{ kind: "expert_panel", ids: ["panel-1"] }]
+      }
+    });
+
+    expect(validateFlowDefinition(definition, {
+      formFields: [],
+      assigneeKinds: [
+        {
+          kind: "head_nurse",
+          label: "护士长",
+          selection: "none"
+        }
+      ],
+      ccKinds: [
+        {
+          kind: "expert_panel",
+          label: "专家组",
+          selection: "custom"
+        }
+      ]
+    }).map(e => e.code)).toEqual([]);
+
+    // The same definition against the built-in catalog: both kinds unknown.
+    expect(codesOf(definition)).toEqual(
+      expect.arrayContaining(["invalid_assignee_kind", "invalid_cc_kind"])
+    );
+  });
+
+  it("holds a host catalog kind to the input its selection declares", () => {
+    const definition = flowWith({
+      data: {
+        name: "审批",
+        assignees: [
+          {
+            kind: "expert_panel",
+            ids: [],
+            sortOrder: 1
+          }
+        ]
+      }
+    });
+
+    expect(validateFlowDefinition(definition, {
+      formFields: [],
+      assigneeKinds: [
+        {
+          kind: "expert_panel",
+          label: "专家组",
+          selection: "custom"
+        }
+      ]
+    }).map(e => e.code)).toContain("assignee_ids_required");
   });
 
   it("validates branch conditions on condition nodes", () => {

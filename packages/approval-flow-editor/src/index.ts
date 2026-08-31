@@ -13,6 +13,7 @@ export type { EditorPlugins, PickerProps } from "./plugins";
 export {
   validateFlowDefinition,
   type FlowValidationCode,
+  type FlowValidationContext,
   type FlowValidationError
 } from "./shared/flow-validation";
 
@@ -37,6 +38,11 @@ export { NODE_KIND_COLORS } from "./styles/node-colors";
 // Principal kinds — runtime helpers a host needs to build a complete picker map
 // or settings UI without re-hardcoding the kind list.
 export { isPrincipalKind, PRINCIPAL_KINDS } from "./types";
+
+// The framework's own assignee / CC vocabularies — the fallback the editor
+// offers when a host wires no catalog, exported so a host can extend rather
+// than replace them.
+export { BUILTIN_ASSIGNEE_KINDS, BUILTIN_CC_KINDS } from "./types";
 
 // Condition-operator vocabulary — the closed set the backend's
 // approval.ConditionOperator mirrors, for hosts building their own condition UI.
@@ -77,6 +83,7 @@ export type {
   FormFieldDefinition,
   HandleNode,
   HandleNodeData,
+  KindDescriptor,
   NodeDataMap,
   NodeDefinition,
   NodeKind,
@@ -85,6 +92,7 @@ export type {
   RollbackDataStrategy,
   RollbackType,
   SameApplicantAction,
+  SelectionMode,
   StartNode,
   StartNodeData,
   TaskNodeData,

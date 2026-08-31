@@ -1,11 +1,12 @@
 import type { FC, ReactNode } from "react";
 
+import type { KindDescriptor, SelectionMode } from "../../types";
+
 import { css } from "@emotion/react";
 import { Collapse, globalCssVars, Input } from "@vef-framework-react/components";
 
 import { ChevronRightIcon } from "../../icons";
 import { configSectionContentStyle, configSectionStyle, formFieldLabelStyle, formFieldStyle } from "../../styles";
-import { isPrincipalKind } from "../../types";
 import { PrincipalPicker } from "./principal-picker";
 
 /* ── Collapsible Section ───────────────────────────────────────────────── */
@@ -141,6 +142,12 @@ export const principalListItemHeaderStyle = css({
   gap: globalCssVars.spacingXs
 });
 
+const unknownKindStyle = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorErrorText,
+  paddingBlock: globalCssVars.spacingXs
+});
+
 export const principalListItemIndexStyle = css({
   fontSize: globalCssVars.fontSizeSm,
   fontWeight: 600,
@@ -157,6 +164,12 @@ interface PrincipalListEntry {
 
 interface PrincipalKindPickerProps {
   item: PrincipalListEntry;
+  /**
+   * The registered descriptor for the row's kind, or undefined when the
+   * definition names a kind this application no longer offers — a flow saved
+   * before a host resolver was removed or renamed.
+   */
+  descriptor: KindDescriptor | undefined;
   disabled?: boolean;
   /**
    * The patch shape is the intersection of what assignee / cc rows accept, so a
@@ -166,16 +179,25 @@ interface PrincipalKindPickerProps {
 }
 
 /**
- * Resolver input for one principal-list row: a field-key input for `form_field`,
- * the host picker for user/role/department, or nothing for the self/superior
- * kinds that need no extra input. Shared by assignee-list and cc-list.
+ * Resolver input for one principal-list row, decided by the kind's selection
+ * mode rather than by its name: a field-key input for `form_field`, the host
+ * picker for anything that selects ids, and nothing at all for a kind resolved
+ * from the applicant at run time. Shared by assignee-list and cc-list.
+ *
+ * Reading the mode off the descriptor is what makes a host kind work here
+ * unchanged — the editor never needs to learn the kind's name.
  */
 export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
   item,
+  descriptor,
   disabled,
   onPatch
 }) => {
-  if (item.kind === "form_field") {
+  if (!descriptor) {
+    return <div css={unknownKindStyle}>{`当前应用未注册该类型：${item.kind}`}</div>;
+  }
+
+  if (descriptor.selection === "form_field") {
     return (
       <FormField label="字段标识">
         <Input
@@ -188,16 +210,44 @@ export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
     );
   }
 
-  if (!isPrincipalKind(item.kind)) {
+  if (descriptor.selection === "none") {
     return null;
   }
 
   return (
     <PrincipalPicker
       disabled={disabled}
-      kind={item.kind}
+      kind={descriptor.kind}
+      label={descriptor.label}
+      selection={descriptor.selection}
       value={item.ids ?? []}
       onChange={ids => onPatch({ ids })}
     />
   );
 };
+
+/**
+ * The value fields a row must carry after its kind changes, derived from the
+ * new kind's selection mode. Shared by assignee-list and cc-list so switching
+ * kinds cannot leave one list holding a value the other would have cleared —
+ * a stale `ids` under a `form_field` kind is exactly what save-time validation
+ * has no way to notice.
+ */
+export function principalRowResetFor(selection: SelectionMode | undefined): { ids?: string[]; formField?: string } {
+  if (selection === "form_field") {
+    return { ids: undefined, formField: "" };
+  }
+
+  if (selection === undefined || selection === "none") {
+    return { ids: undefined, formField: undefined };
+  }
+
+  return { ids: [], formField: undefined };
+}
+
+/**
+ * Indexes a kind catalog for lookup by kind.
+ */
+export function indexKinds<K extends string>(descriptors: ReadonlyArray<KindDescriptor<K>>): Map<string, KindDescriptor<K>> {
+  return new Map(descriptors.map(descriptor => [descriptor.kind, descriptor]));
+}

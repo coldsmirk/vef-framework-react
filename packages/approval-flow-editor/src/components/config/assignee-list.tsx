@@ -1,24 +1,15 @@
 import type { FC } from "react";
 
-import type { AssigneeDefinition, AssigneeKind } from "../../types";
+import type { AssigneeDefinition } from "../../types";
 
 import { Button, Icon, Select, Stack } from "@vef-framework-react/components";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { useRowKeys } from "../../hooks/use-row-keys";
+import { useEditorPlugins } from "../../plugins";
 import { fullWidthStyle } from "../../styles";
-import { isPrincipalKind } from "../../types";
-import { PrincipalKindPicker, principalListItemHeaderStyle, principalListItemIndexStyle, principalListItemStyle } from "./shared";
-
-const ASSIGNEE_KIND_OPTIONS: Array<{ label: string; value: AssigneeKind }> = [
-  { label: "指定用户", value: "user" },
-  { label: "指定角色", value: "role" },
-  { label: "指定部门", value: "department" },
-  { label: "发起人本人", value: "self" },
-  { label: "直属上级", value: "superior" },
-  { label: "部门负责人", value: "department_leader" },
-  { label: "表单字段", value: "form_field" }
-];
+import { BUILTIN_ASSIGNEE_KINDS } from "../../types";
+import { indexKinds, PrincipalKindPicker, principalListItemHeaderStyle, principalListItemIndexStyle, principalListItemStyle, principalRowResetFor } from "./shared";
 
 interface AssigneeListProps {
   value: AssigneeDefinition[];
@@ -37,6 +28,15 @@ export const AssigneeList: FC<AssigneeListProps> = ({
   disabled
 }) => {
   const rowKeys = useRowKeys(value.length);
+  const { assigneeKinds } = useEditorPlugins();
+  // The application's catalog when the host wires one, the framework built-ins
+  // otherwise — an editor with no metadata integration still offers the kinds
+  // every deployment has.
+  const kinds = assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS;
+  const kindIndex = indexKinds(kinds);
+  const kindOptions = kinds.map(descriptor => {
+    return { label: descriptor.label, value: descriptor.kind };
+  });
 
   const emitAssignees = (next: AssigneeDefinition[]) => {
     onChange(next.map((a, i) => {
@@ -45,11 +45,13 @@ export const AssigneeList: FC<AssigneeListProps> = ({
   };
 
   const addAssignee = () => {
+    const first = kinds[0];
+
     emitAssignees([
       ...value,
       {
-        kind: "user",
-        ids: [],
+        kind: first?.kind ?? "user",
+        ...principalRowResetFor(first?.selection),
         sortOrder: value.length + 1
       }
     ]);
@@ -74,24 +76,9 @@ export const AssigneeList: FC<AssigneeListProps> = ({
             <Select
               css={fullWidthStyle}
               disabled={disabled}
-              options={ASSIGNEE_KIND_OPTIONS}
+              options={kindOptions}
               value={item.kind}
-              onChange={kind => {
-                const next: Partial<AssigneeDefinition> = { kind };
-
-                if (isPrincipalKind(kind)) {
-                  next.ids = [];
-                  next.formField = undefined;
-                } else if (kind === "form_field") {
-                  next.ids = undefined;
-                  next.formField = "";
-                } else {
-                  next.ids = undefined;
-                  next.formField = undefined;
-                }
-
-                updateItem(index, next);
-              }}
+              onChange={kind => updateItem(index, { kind, ...principalRowResetFor(kindIndex.get(kind)?.selection) })}
             />
 
             {!disabled && (
@@ -107,6 +94,7 @@ export const AssigneeList: FC<AssigneeListProps> = ({
           </div>
 
           <PrincipalKindPicker
+            descriptor={kindIndex.get(item.kind)}
             disabled={disabled}
             item={item}
             onPatch={partial => updateItem(index, partial)}

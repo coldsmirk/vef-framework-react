@@ -1,6 +1,8 @@
-import type { EditorPlugins, FormFieldDefinition, PickerProps, PrincipalKind } from "@vef-framework-react/approval-flow-editor";
+import type { EditorPlugins, FormFieldDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
 import type { DeviceRegistries } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode } from "react";
+
+import type { KindOptions } from "../types";
 
 import { createApprovalRegistries } from "@vef-framework-react/approval-form-bridge";
 import { createContext, use, useMemo, useState } from "react";
@@ -12,12 +14,17 @@ import { createContext, use, useMemo, useState } from "react";
  */
 export interface ApprovalPlugins {
   /**
-   * Pickers that resolve concrete ids for each principal kind (user / role /
-   * department). The flow designer and the runtime action dialogs (transfer,
-   * add assignee, CC) share them. A kind left unset degrades to a plain
-   * id-tags input, so the pages stay functional without host wiring.
+   * Pickers that resolve concrete ids, keyed by kind. The flow designer and
+   * the runtime action dialogs (transfer, add assignee, CC) share them.
+   *
+   * The three built-in slots (`user` / `role` / `department`) cover every kind
+   * that selects the same thing: a rule looks up its own kind first and falls
+   * back to its selection mode, so a host assignee kind that picks roles needs
+   * no picker of its own, while a kind selecting from a host catalog registers
+   * one under that kind's name. A kind left unset degrades to a plain id-tags
+   * input, so the pages stay functional without host wiring.
    */
-  pickers?: Partial<Record<PrincipalKind, FC<PickerProps>>>;
+  pickers?: Partial<Record<string, FC<PickerProps>>>;
   /**
    * Form field registries for rendering and designing approval forms.
    * Defaults to the approval profile from `approval-form-bridge`
@@ -94,12 +101,23 @@ export function useApprovalPlugins(): ResolvedApprovalPlugins {
 
 /**
  * Projects the approval plugin set into the flow designer's `EditorPlugins`
- * shape, layering the deploy-derived form fields on top.
+ * shape, layering the deploy-derived form fields and the application's kind
+ * catalog on top.
+ *
+ * `kindOptions` comes from `approval/flow.list_kind_options`; while it is
+ * still loading the editor falls back to the framework built-ins, which is
+ * why the designer stays usable before the query resolves.
  */
-export function toEditorPlugins(plugins: ResolvedApprovalPlugins, formFields: FormFieldDefinition[]): EditorPlugins {
+export function toEditorPlugins(
+  plugins: ResolvedApprovalPlugins,
+  formFields: FormFieldDefinition[],
+  kindOptions?: KindOptions
+): EditorPlugins {
   return {
     pickers: plugins.pickers,
     globalSubjects: plugins.globalSubjects,
+    assigneeKinds: kindOptions?.assignees,
+    ccKinds: kindOptions?.ccs,
     formFields
   };
 }

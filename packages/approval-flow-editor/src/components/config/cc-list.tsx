@@ -1,22 +1,16 @@
 import type { FC } from "react";
 
-import type { CcDefinition, CcKind, CcTiming } from "../../types";
+import type { CcDefinition, CcTiming } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Icon, Select } from "@vef-framework-react/components";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
 import { useRowKeys } from "../../hooks/use-row-keys";
+import { useEditorPlugins } from "../../plugins";
 import { fullWidthStyle } from "../../styles";
-import { isPrincipalKind } from "../../types";
-import { FormField, PrincipalKindPicker, principalListItemHeaderStyle, principalListItemIndexStyle, principalListItemStyle } from "./shared";
-
-const CC_KIND_OPTIONS: Array<{ label: string; value: CcKind }> = [
-  { label: "指定用户", value: "user" },
-  { label: "指定角色", value: "role" },
-  { label: "指定部门", value: "department" },
-  { label: "表单字段", value: "form_field" }
-];
+import { BUILTIN_CC_KINDS } from "../../types";
+import { FormField, indexKinds, PrincipalKindPicker, principalListItemHeaderStyle, principalListItemIndexStyle, principalListItemStyle, principalRowResetFor } from "./shared";
 
 const CC_TIMING_OPTIONS: Array<{ label: string; value: CcTiming }> = [
   { label: "始终抄送", value: "always" },
@@ -44,9 +38,19 @@ export const CcList: FC<CcListProps> = ({
   showTiming = false
 }) => {
   const rowKeys = useRowKeys(value.length);
+  const { ccKinds } = useEditorPlugins();
+  // The application's catalog when the host wires one, the framework built-ins
+  // otherwise — mirrors AssigneeList.
+  const kinds = ccKinds ?? BUILTIN_CC_KINDS;
+  const kindIndex = indexKinds(kinds);
+  const kindOptions = kinds.map(descriptor => {
+    return { label: descriptor.label, value: descriptor.kind };
+  });
 
   const addItem = () => {
-    onChange([...value, { kind: "user", ids: [] }]);
+    const first = kinds[0];
+
+    onChange([...value, { kind: first?.kind ?? "user", ...principalRowResetFor(first?.selection) }]);
   };
 
   const removeItem = (index: number) => {
@@ -68,21 +72,9 @@ export const CcList: FC<CcListProps> = ({
             <Select
               css={fullWidthStyle}
               disabled={disabled}
-              options={CC_KIND_OPTIONS}
+              options={kindOptions}
               value={item.kind}
-              onChange={kind => {
-                const next: Partial<CcDefinition> = { kind };
-
-                if (isPrincipalKind(kind)) {
-                  next.ids = [];
-                  next.formField = undefined;
-                } else {
-                  next.ids = undefined;
-                  next.formField = "";
-                }
-
-                updateItem(index, next);
-              }}
+              onChange={kind => updateItem(index, { kind, ...principalRowResetFor(kindIndex.get(kind)?.selection) })}
             />
 
             {!disabled && (
@@ -98,6 +90,7 @@ export const CcList: FC<CcListProps> = ({
           </div>
 
           <PrincipalKindPicker
+            descriptor={kindIndex.get(item.kind)}
             disabled={disabled}
             item={item}
             onPatch={partial => updateItem(index, partial)}

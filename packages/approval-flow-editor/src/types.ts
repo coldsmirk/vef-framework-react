@@ -82,25 +82,96 @@ export type EmptyAssigneeAction = "auto_pass" | "transfer_admin" | "transfer_sup
 
 /**
  * Principal kinds that need a host-provided picker to resolve concrete ids —
- * the only assignee / cc kinds that select specific users, roles, or
- * departments. Single source of truth for the picker registry and the kind
- * unions derived below.
+ * users, roles, departments. Single source of truth for the picker registry.
  */
 export const PRINCIPAL_KINDS = ["user", "role", "department"] as const;
 
 export type PrincipalKind = typeof PRINCIPAL_KINDS[number];
 
 /**
- * Narrows an arbitrary kind string to a PrincipalKind (one that needs a picker).
+ * Narrows an arbitrary kind string to a PrincipalKind (one that has a built-in
+ * picker slot).
  */
 export function isPrincipalKind(kind: string): kind is PrincipalKind {
   return (PRINCIPAL_KINDS as readonly string[]).includes(kind);
 }
 
 /**
- * Assignee kind aligned with backend AssigneeKind enum
+ * What the designer must collect alongside a kind, aligned with the backend
+ * `approval.SelectionMode`. It is the single answer to which input a rule row
+ * renders and which companion field validation requires — so a host kind that
+ * ships a resolver needs no editor change to be configurable.
+ *
+ * `none` takes no input at all: the kind resolves entirely from the runtime
+ * context (the applicant, their department), which is the shape of `self`,
+ * `superior`, `department_leader`, and of a host kind such as "the applicant's
+ * head nurse". `custom` picks ids from a host catalog, through a picker the
+ * host registers under the kind's own name.
  */
-export type AssigneeKind = PrincipalKind | "self" | "superior" | "department_leader" | "form_field";
+export type SelectionMode = "none" | "user" | "role" | "department" | "form_field" | "custom";
+
+/**
+ * One assignee / cc / initiator kind the running application accepts, as
+ * served by `approval/flow.list_kind_options`. The vocabularies are open
+ * registries on the backend, so the deployable kinds are exactly the ones it
+ * reports — never a union declared here.
+ */
+export interface KindDescriptor<K extends string = string> {
+  kind: K;
+  label: string;
+  selection: SelectionMode;
+}
+
+/**
+ * Assignee kind. Open by design: the backend accepts every kind with a
+ * registered `approval.AssigneeResolver`, so this is the identifier's type,
+ * not an enumeration of the values.
+ */
+export type AssigneeKind = string;
+
+/**
+ * The framework's own assignee kinds, used when the host wires no descriptor
+ * list (see `EditorPlugins.assigneeKinds`). Labels mirror the backend's
+ * `approval_assignee_kind_*` messages; a host that serves the real catalog
+ * gets the application's kinds and the configured language instead.
+ */
+export const BUILTIN_ASSIGNEE_KINDS: ReadonlyArray<KindDescriptor<AssigneeKind>> = [
+  {
+    kind: "user",
+    label: "指定用户",
+    selection: "user"
+  },
+  {
+    kind: "role",
+    label: "指定角色",
+    selection: "role"
+  },
+  {
+    kind: "department",
+    label: "指定部门",
+    selection: "department"
+  },
+  {
+    kind: "self",
+    label: "发起人本人",
+    selection: "none"
+  },
+  {
+    kind: "superior",
+    label: "直属上级",
+    selection: "none"
+  },
+  {
+    kind: "department_leader",
+    label: "部门负责人",
+    selection: "none"
+  },
+  {
+    kind: "form_field",
+    label: "表单字段",
+    selection: "form_field"
+  }
+];
 
 /**
  * Rollback type aligned with backend RollbackType enum
@@ -145,9 +216,36 @@ export type TimeoutAction = "none" | "auto_pass" | "auto_reject" | "notify" | "t
 export type AddAssigneeType = "before" | "after" | "parallel";
 
 /**
- * CC recipient kind aligned with backend CCKind enum
+ * CC recipient kind. Open for the same reason as {@link AssigneeKind}: the
+ * deployable kinds are those with a registered `approval.CCResolver`.
  */
-export type CcKind = PrincipalKind | "form_field";
+export type CcKind = string;
+
+/**
+ * The framework's own CC kinds, used when the host wires no descriptor list.
+ */
+export const BUILTIN_CC_KINDS: ReadonlyArray<KindDescriptor<CcKind>> = [
+  {
+    kind: "user",
+    label: "指定用户",
+    selection: "user"
+  },
+  {
+    kind: "role",
+    label: "指定角色",
+    selection: "role"
+  },
+  {
+    kind: "department",
+    label: "指定部门",
+    selection: "department"
+  },
+  {
+    kind: "form_field",
+    label: "表单字段",
+    selection: "form_field"
+  }
+];
 
 /**
  * CC timing for when notifications are sent

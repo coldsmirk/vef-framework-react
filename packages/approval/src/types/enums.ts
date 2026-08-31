@@ -5,6 +5,8 @@
  * vocabulary the runtime pages consume.
  */
 
+import type { KindDescriptor } from "@vef-framework-react/approval-flow-editor";
+
 /**
  * Lifecycle status of an approval instance.
  */
@@ -100,9 +102,37 @@ export type BindingMode = "standalone" | "business";
 export type StorageMode = "json" | "table";
 
 /**
- * Kind of a flow initiator rule.
+ * Kind of a flow initiator rule. Open by design: the backend accepts every
+ * kind with a registered `approval.InitiatorResolver`, so the deployable kinds
+ * are the ones `approval/flow.list_kind_options` reports — never a union
+ * declared here.
  */
-export type InitiatorKind = "user" | "role" | "department";
+export type InitiatorKind = string;
+
+/**
+ * The framework's own initiator kinds — the vocabulary offered before
+ * `approval/flow.list_kind_options` resolves, and for a host that never wires
+ * the catalog through. Mirrors the built-in `approval.InitiatorResolver`
+ * registrations; a deployment that registers kinds of its own must pass the
+ * served catalog instead, or those kinds are simply absent from the designer.
+ */
+export const BUILTIN_INITIATOR_KINDS: ReadonlyArray<KindDescriptor<InitiatorKind>> = [
+  {
+    kind: "user",
+    label: "指定用户",
+    selection: "user"
+  },
+  {
+    kind: "role",
+    label: "指定角色",
+    selection: "role"
+  },
+  {
+    kind: "department",
+    label: "指定部门",
+    selection: "department"
+  }
+];
 
 /**
  * Convergence state of one business-record projection.
