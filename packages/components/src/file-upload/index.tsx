@@ -131,3 +131,4 @@ export function FileUpload({
 }
 
 export type { FileUploadProps } from "./props";
+export { StoredFileUpload, type StoredFileUploadProps, type StoredFileValue } from "./stored-file-upload";

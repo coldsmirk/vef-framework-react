@@ -126,7 +126,7 @@ export {
   type FilePreviewProviderProps,
   type FilePreviewTarget
 } from "./file-preview";
-export { FileUpload, type FileUploadProps } from "./file-upload";
+export { FileUpload, StoredFileUpload, type FileUploadProps, type StoredFileUploadProps, type StoredFileValue } from "./file-upload";
 export { Flex, type FlexProps } from "./flex";
 export { FlexCard, type FlexCardProps } from "./flex-card";
 export { FlexTabs, type FlexTabsProps } from "./flex-tabs";

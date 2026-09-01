@@ -52,7 +52,11 @@ export function InstanceFormPanel({
   apiRef,
   onSubmit
 }: InstanceFormPanelProps) {
-  const { registries } = useApprovalPlugins();
+  const {
+    dataSourceResolver,
+    evaluators,
+    registries
+  } = useApprovalPlugins();
 
   if (!schema) {
     return <Empty description="该流程未配置表单" />;
@@ -62,9 +66,11 @@ export function InstanceFormPanel({
     <RegistryProvider registries={registries}>
       <FormRenderer
         apiRef={apiRef}
+        dataSourceResolver={dataSourceResolver}
         defaultValues={formData}
         device={device}
         disabled={disabled}
+        evaluators={evaluators}
         fieldPermissions={fieldPermissions}
         schema={schema}
         onSubmit={onSubmit}

@@ -1,5 +1,5 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
-import type { DeviceRegistries } from "@vef-framework-react/form-editor";
+import type { DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode } from "react";
 
 import type { KindOptions } from "../types";
@@ -38,6 +38,21 @@ export interface ApprovalPlugins {
    * `Instance.Globals` at instance start.
    */
   globalSubjects?: FormFieldDefinition[];
+  /**
+   * Turns a form's remote data-source request into options. Without one, every
+   * remote source in an approval form resolves to an empty list — the designer
+   * lets you configure the request, but nothing fetches it. Wire the host's
+   * API client here.
+   */
+  dataSourceResolver?: DataSourceResolver;
+  /**
+   * Overrides for expression / script evaluation in form linkage and in
+   * data-source parameters bound to the form. Optional: the form runtime falls
+   * back to its built-in JavaScript evaluator (`$form` / `$vars` / `$user` /
+   * `$node` in scope), so wire this only to swap in a different expression
+   * language or sandbox.
+   */
+  evaluators?: LinkageEvaluators;
   /**
    * Renders an instance's opaque business reference as a host-navigable
    * element (a link to the business record, a drawer trigger, …). Defaults to
