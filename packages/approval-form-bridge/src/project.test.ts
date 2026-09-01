@@ -120,6 +120,12 @@ describe("projectFormSchema", () => {
           key: "tags",
           label: "标签",
           dataSource: { kind: "static", options: [{ label: "A", value: "a" }] }
+        },
+        {
+          id: "F8",
+          type: "upload",
+          key: "attachment",
+          label: "附件"
         }
       ]));
 
@@ -160,6 +166,10 @@ describe("projectFormSchema", () => {
           kind: "select",
           columnType: "json",
           options: [{ label: "A", value: "a" }]
+        },
+        {
+          key: "attachment",
+          kind: "upload"
         }
       ]);
     });

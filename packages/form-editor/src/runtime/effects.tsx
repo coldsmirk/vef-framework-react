@@ -1,12 +1,13 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, LinkageActionValue, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { RuntimeForm, RuntimeFormValues } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, use, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { exhaustive } from "../engine/assert-never";
+import { resolveRequestParams } from "../engine/data-source-params";
 import {
   collectConditionEffectRules,
   evaluateConditionEffectTruths,
@@ -90,9 +91,11 @@ async function runEffectActions(args: {
   sinks: EffectSinks;
 }): Promise<void> {
   const scopeValues = resolveScopeValues(args.form.store.state.values, args.prefix);
+  const resolveValue = (value: LinkageActionValue): unknown => resolveActionValue(value, scopeValues, args.evaluators, args.evaluationContext);
   const context: EffectDispatchContext = {
     values: scopeValues,
-    resolveValue: value => resolveActionValue(value, scopeValues, args.evaluators, args.evaluationContext)
+    resolveValue,
+    resolveRequest: request => resolveRequestParams(request, resolveValue)
   };
   // Host-delegated effects may be async; collect their promises so a caller that
   // awaits the run (the `beforeSubmit` / `afterSubmit` lifecycle) actually waits.

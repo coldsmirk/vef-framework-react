@@ -30,7 +30,8 @@ function installVefMessage(): MessageMock {
 function contextResolving(resolved?: unknown): EffectDispatchContext {
   return {
     values: {},
-    resolveValue: () => resolved
+    resolveValue: () => resolved,
+    resolveRequest: request => request
   };
 }
 

@@ -31,6 +31,7 @@ import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, memo, use, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 import { MobileScope } from "../components/mobile/scope";
+import { schemaHasBoundParams } from "../engine/data-source-params";
 import { isKeyedField } from "../engine/keys";
 import {
   deriveDefaultValues,
@@ -48,6 +49,7 @@ import { useRuntimeFieldState } from "../runtime/runtime-context";
 import { RuntimeStateController, SubformRowController } from "../runtime/runtime-state-controller";
 import { DeviceProvider, useContainerChrome, useDevice } from "../store/engine-provider";
 import { DataSourceProvider } from "./data-source-context";
+import { DataSourceParamScopeProvider } from "./data-source-param-scope";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
@@ -457,6 +459,11 @@ function FormRendererInner({
     []
   );
 
+  // Whether any data-source parameter is bound to the form. Computed once per
+  // schema so a form that binds nothing keeps the scope provider's values
+  // subscription closed and its selects out of the keystroke re-render path.
+  const boundParams = useMemo(() => schemaHasBoundParams(runtimeSchema), [runtimeSchema]);
+
   const evaluationContext = useMemo<EvaluationContext>(
     () => {
       return {
@@ -565,18 +572,25 @@ function FormRendererInner({
     <AppForm>
       <EvaluationScopeContext value={evaluationContext}>
         <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <RuntimeStateController
-            evaluationContext={evaluationContext}
+          <DataSourceParamScopeProvider
+            context={evaluationContext}
+            enabled={boundParams}
             evaluators={evaluators}
-            fieldPermissions={fieldPermissions}
             form={form}
-            schema={runtimeSchema}
-            sinks={sinks}
           >
-            <Form css={rootCss} disabled={disabled}>
-              <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
-            </Form>
-          </RuntimeStateController>
+            <RuntimeStateController
+              evaluationContext={evaluationContext}
+              evaluators={evaluators}
+              fieldPermissions={fieldPermissions}
+              form={form}
+              schema={runtimeSchema}
+              sinks={sinks}
+            >
+              <Form css={rootCss} disabled={disabled}>
+                <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
+              </Form>
+            </RuntimeStateController>
+          </DataSourceParamScopeProvider>
         </DataSourceProvider>
       </EvaluationScopeContext>
     </AppForm>

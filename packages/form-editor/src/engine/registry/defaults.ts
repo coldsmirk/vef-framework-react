@@ -10,6 +10,7 @@ import { selectFieldDefinition } from "../../components/select-field";
 import { switchFieldDefinition } from "../../components/switch-field";
 import { textareaFieldDefinition } from "../../components/textarea-field";
 import { textfieldDefinition } from "../../components/textfield";
+import { uploadFieldDefinition } from "../../components/upload-field";
 import { pcContainerChrome } from "../../render/chrome/pc-chrome";
 import { FormFieldRegistry } from "./form-field-registry";
 
@@ -36,6 +37,7 @@ export function registerDefaults(registry: FormFieldRegistry): void {
   registry.register(dateFieldDefinition);
   registry.register(datetimeFieldDefinition);
   registry.register(dateRangeFieldDefinition);
+  registry.register(uploadFieldDefinition);
   registry.register(buttonDefinition);
   registry.register(sectionDefinition);
   registry.register(tabsDefinition);

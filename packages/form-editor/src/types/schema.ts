@@ -576,6 +576,35 @@ export interface DateRangeField extends FormFieldBase, KeyedNode, Validatable {
 }
 
 /**
+ * File upload. Keyed: contributes the stored object key(s) — a string when
+ * `maxCount` is 1, a string array otherwise. That is the shape the approval
+ * backend's `upload` field kind validates, so the value needs no translation
+ * on the way out.
+ */
+export interface UploadField extends FormFieldBase, KeyedNode, Validatable {
+  type: "upload";
+  helperText?: string;
+  /**
+   * How many files the field accepts. `1` (the default) makes the value a
+   * single key rather than a list.
+   */
+  maxCount?: number;
+  /**
+   * Land the objects under `pub/` rather than `priv/`. Requires the backend's
+   * `vef.storage.allow_public_uploads`.
+   */
+  public?: boolean;
+  /**
+   * `accept` attribute forwarded to the file input (e.g. `.pdf,image/*`).
+   */
+  accept?: string;
+  /**
+   * Render as a drag-and-drop area instead of a button.
+   */
+  dragger?: boolean;
+}
+
+/**
  * Section divider. Non-keyed presentation — an optional inline title.
  */
 export interface DividerField extends FormFieldBase {
@@ -669,6 +698,7 @@ export interface FormFieldTypeMap {
   date: DateField;
   datetime: DatetimeField;
   daterange: DateRangeField;
+  upload: UploadField;
   divider: DividerField;
   "alert-block": AlertBlockField;
   paragraph: ParagraphField;

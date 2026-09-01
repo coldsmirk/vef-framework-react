@@ -1,7 +1,7 @@
 import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ChangeEvent, ReactElement } from "react";
 
-import type { FieldOption, RemoteDataSourceRequest, RemoteOptionMapping } from "../../types";
+import type { DynamicValue, FieldOption, RemoteDataSourceRequest, RemoteOptionMapping } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Input } from "@vef-framework-react/components";
@@ -9,6 +9,7 @@ import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } f
 import { useRef } from "react";
 
 import { EditorIcon } from "../../icons";
+import { DynamicValueEditor } from "./dynamic-value-editor";
 
 const emptyCss = css({
   fontSize: globalCssVars.fontSizeSm,
@@ -86,6 +87,35 @@ const gridCss = css({
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
   gap: 8
+});
+
+const paramsSectionCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  paddingTop: 8,
+  borderTop: `1px dashed ${globalCssVars.colorBorderSecondary}`
+});
+
+const paramsHeaderCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary
+});
+
+const paramRowCss = css({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 8
+});
+
+const paramKeyCss = css({
+  width: 140,
+  flexShrink: 0
+});
+
+const paramValueCss = css({
+  flex: 1,
+  minWidth: 0
 });
 
 export interface OptionListEditorProps {
@@ -346,6 +376,22 @@ export function RemoteRequestFields({
     onChange(request, hasMapping ? next : undefined);
   };
 
+  const params = request.params ?? {};
+  const paramEntries = Object.entries(params);
+
+  // `params` is a record, so a row edit rebuilds it from the entry list. That
+  // keeps insertion order (and therefore row order) stable across a rename,
+  // which patching the object in place would not.
+  const patchParams = (entries: Array<[string, DynamicValue]>): void => {
+    const next: Record<string, DynamicValue> = Object.fromEntries(entries);
+
+    patchRequest({ params: entries.length > 0 ? next : undefined });
+  };
+
+  const updateParam = (index: number, key: string, value: DynamicValue): void => {
+    patchParams(paramEntries.map((entry, i) => i === index ? [key, value] : entry));
+  };
+
   return (
     <>
       <div css={gridCss}>
@@ -356,6 +402,57 @@ export function RemoteRequestFields({
       <div css={gridCss}>
         <Input placeholder="labelKey（默认 label）" value={mapping?.labelKey ?? ""} onChange={event => patchMapping({ labelKey: event.target.value })} />
         <Input placeholder="valueKey（默认 value）" value={mapping?.valueKey ?? ""} onChange={event => patchMapping({ valueKey: event.target.value })} />
+      </div>
+
+      <div css={gridCss}>
+        <Input placeholder="disabledKey（可选）" value={mapping?.disabledKey ?? ""} onChange={event => patchMapping({ disabledKey: event.target.value })} />
+        <Input placeholder="descriptionKey（可选）" value={mapping?.descriptionKey ?? ""} onChange={event => patchMapping({ descriptionKey: event.target.value })} />
+      </div>
+
+      <div css={gridCss}>
+        <Input placeholder="version（默认 v1）" value={request.version ?? ""} onChange={event => patchRequest({ version: event.target.value })} />
+      </div>
+
+      <div css={paramsSectionCss}>
+        <span css={paramsHeaderCss}>
+          请求参数 —— 字面量为固定值，表达式按当前表单求值（如 `$form.departmentId`），可实现级联
+        </span>
+
+        {paramEntries.map(([key, value], index) => (
+          <div key={index} css={paramRowCss}>
+            <Input
+              css={paramKeyCss}
+              placeholder="参数名"
+              value={key}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => updateParam(index, event.target.value, value)}
+            />
+
+            <div css={paramValueCss}>
+              <DynamicValueEditor
+                expressionPlaceholder="$form.departmentId"
+                literalPlaceholder="固定值"
+                value={value}
+                onChange={next => updateParam(index, key, next)}
+              />
+            </div>
+
+            <Button
+              aria-label="删除参数"
+              icon={<EditorIcon name="trash-2" />}
+              type="text"
+              onClick={() => patchParams(paramEntries.filter((_, i) => i !== index))}
+            />
+          </div>
+        ))}
+
+        <Button
+          block
+          icon={<EditorIcon name="plus" />}
+          type="dashed"
+          onClick={() => patchParams([...paramEntries, ["", { kind: "literal", value: "" }]])}
+        >
+          新增参数
+        </Button>
       </div>
     </>
   );

@@ -78,7 +78,8 @@ const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
   radio: "select",
   "checkbox-group": "select",
   date: "date",
-  datetime: "date"
+  datetime: "date",
+  upload: "upload"
 };
 
 /**

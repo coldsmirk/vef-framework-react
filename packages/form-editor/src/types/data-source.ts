@@ -1,3 +1,4 @@
+import type { DynamicValue } from "./dynamic-value";
 import type { FieldOption } from "./schema";
 
 /**
@@ -7,6 +8,31 @@ import type { FieldOption } from "./schema";
  * editor never depends on a concrete `apiClient`.
  */
 export interface RemoteDataSourceRequest {
+  resource: string;
+  action: string;
+  version?: string;
+  /**
+   * Request parameters, each either a fixed value or an expression bound to the
+   * live form. Expressions are evaluated by the form runtime **before** the
+   * request reaches the resolver, so a {@link DataSourceResolver} always sees
+   * concrete values and stays transport-only.
+   *
+   * Binding a parameter is what makes a cascading select work — "the wards of
+   * the department picked above". The runtime keys its option cache on the
+   * resolved request, so a bound value changing re-resolves the options and an
+   * unrelated keystroke does not.
+   */
+  params?: Record<string, DynamicValue>;
+}
+
+/**
+ * A request whose parameters have already been evaluated — what the form
+ * runtime hands to a resolver or a host `api_call` handler. Splitting it from
+ * {@link RemoteDataSourceRequest} keeps expression evaluation the runtime's
+ * job: the schema type carries bindings, this one carries data, and nothing
+ * downstream has to know an expression ever existed.
+ */
+export interface ResolvedDataSourceRequest {
   resource: string;
   action: string;
   version?: string;
@@ -67,7 +93,7 @@ export interface FormVariable {
  * `LinkageEvaluators` host-injection philosophy.
  */
 export interface DataSourceResolver {
-  resolve: (request: RemoteDataSourceRequest, mapping?: RemoteOptionMapping) => Promise<FieldOption[]>;
+  resolve: (request: ResolvedDataSourceRequest, mapping?: RemoteOptionMapping) => Promise<FieldOption[]>;
 }
 
 /**

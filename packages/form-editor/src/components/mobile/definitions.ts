@@ -32,6 +32,7 @@ import { selectFieldDefinition } from "../select-field";
 import { switchFieldDefinition } from "../switch-field";
 import { textareaFieldDefinition } from "../textarea-field";
 import { textfieldDefinition } from "../textfield";
+import { uploadFieldDefinition } from "../upload-field";
 import { MobileAlertBlock } from "./alert-block";
 import { MobileButton } from "./button";
 import { MobileCheckboxGroupInput } from "./checkbox-group";
@@ -82,6 +83,10 @@ export const mobileFieldDefinitions: FieldDefinition[] = [
   mobileDefinition<DateField, string>(dateFieldDefinition, MobileDateInput),
   mobileDefinition<DatetimeField, string>(datetimeFieldDefinition, MobileDatetimeInput),
   mobileDefinition<DateRangeField, string[]>(dateRangeFieldDefinition, MobileDateRangeInput),
+  // Reused verbatim: a file picker is a native OS surface, so there is nothing
+  // for an antd-mobile renderer to do differently, and omitting it would render
+  // "未知字段类型" on mobile instead of a working control.
+  uploadFieldDefinition,
   mobileDefinition<ButtonField, undefined>(buttonDefinition, MobileButton),
   mobileDefinition<DividerField, undefined>(dividerDefinition, MobileDivider),
   mobileDefinition<AlertBlockField, undefined>(alertBlockDefinition, MobileAlertBlock),

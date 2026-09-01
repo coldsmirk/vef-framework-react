@@ -1,4 +1,5 @@
-import type { RemoteDataSourceRequest } from "./data-source";
+import type { RemoteDataSourceRequest, ResolvedDataSourceRequest } from "./data-source";
+import type { DynamicValue } from "./dynamic-value";
 
 /**
  * Linkage data model.
@@ -166,9 +167,7 @@ export interface FieldLinkageDefaults {
  * `navigate`). A literal carries the value verbatim; an expression is computed
  * at runtime via the injected evaluator.
  */
-export type LinkageActionValue
-  = | { kind: "literal"; value: unknown }
-    | { kind: "expression"; source: string };
+export type LinkageActionValue = DynamicValue;
 
 /**
  * Severity passed to an `alert` effect, mirroring antd's alert/message levels.
@@ -285,6 +284,12 @@ export interface EffectDispatchContext {
    * Resolve a literal / expression action value against {@link values}.
    */
   resolveValue: (value: LinkageActionValue) => unknown;
+  /**
+   * Resolve an `api_call` request's bound parameters against {@link values},
+   * the same way the option resolver's request is resolved — so a handler
+   * receives plain data and never has to evaluate an expression itself.
+   */
+  resolveRequest: (request: RemoteDataSourceRequest) => ResolvedDataSourceRequest;
 }
 
 /**

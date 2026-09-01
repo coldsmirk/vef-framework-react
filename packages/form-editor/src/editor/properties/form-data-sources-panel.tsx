@@ -64,6 +64,7 @@ function sourceHasPayload(source: FormDataSource): boolean {
 
   return source.request.resource.length > 0
     || source.request.action.length > 0
+    || Object.keys(source.request.params ?? {}).length > 0
     || source.mapping !== undefined;
 }
 

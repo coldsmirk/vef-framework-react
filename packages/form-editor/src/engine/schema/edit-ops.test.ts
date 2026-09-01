@@ -1005,7 +1005,7 @@ describe("edit-ops", () => {
                 request: {
                   resource: "city",
                   action: "list",
-                  params: { page: 1 }
+                  params: { page: { kind: "literal", value: 1 } }
                 }
               }
             ]
@@ -1014,7 +1014,7 @@ describe("edit-ops", () => {
       };
 
       const clone = cloneBlock(source, base => base);
-      const sourceAction = source.linkage.rules?.[0]?.actions[0];
+      const sourceAction = source.linkage?.rules?.[0]?.actions[0];
       const cloneAction = clone.linkage?.rules?.[0]?.actions[0];
 
       expect(cloneAction?.type).toBe("api_call");

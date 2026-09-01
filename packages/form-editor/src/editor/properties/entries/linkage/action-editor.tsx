@@ -1,17 +1,16 @@
 import type { FC, ReactElement } from "react";
 
-import type { FieldLinkageAction, LinkageActionType, LinkageActionValue, LinkageAlertLevel } from "../../../../types";
-import type { ActionValueMode } from "./mutators";
+import type { FieldLinkageAction, LinkageActionType, LinkageAlertLevel } from "../../../../types";
 import type { OptionItem, SourceFieldOption } from "./options";
 
-import { Button, CodeEditor, Input, Segmented, Select, Switch } from "@vef-framework-react/components";
+import { Button, CodeEditor, Input, Select, Switch } from "@vef-framework-react/components";
 
 import { sanitizeKey } from "../../../../engine/keys";
 import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
-import { coerceToString } from "../coerce";
-import { ExpressionInput, NO_COMPLETION_SETUP } from "./expression-input";
-import { createActionFor, setActionValueMode } from "./mutators";
+import { DynamicValueEditor as ActionValueEditor } from "../../dynamic-value-editor";
+import { NO_COMPLETION_SETUP } from "./expression-input";
+import { createActionFor } from "./mutators";
 import { alertLevelOptions, isLinkageActionType } from "./options";
 import {
   actionCardCss,
@@ -23,14 +22,8 @@ import {
   codeEditorWrapperCss,
   defaultHintCss,
   defaultTextCss,
-  selectStyle,
-  valueEditorCss
+  selectStyle
 } from "./styles";
-
-const valueModeOptions: Array<{ value: ActionValueMode; label: string }> = [
-  { value: "literal", label: "字面量" },
-  { value: "expression", label: "表达式" }
-];
 
 export interface ActionEditorProps {
   action: FieldLinkageAction;
@@ -306,56 +299,6 @@ return { value: field.B + field.C };'
       return null;
     }
   }
-}
-
-interface ActionValueEditorProps {
-  value: LinkageActionValue;
-  literalPlaceholder?: string;
-  expressionPlaceholder?: string;
-  onChange: (next: LinkageActionValue) => void;
-}
-
-/**
- * Literal / expression switch plus the matching input — the value editor shared
- * by `assign`, `set_field`, `alert`, and `navigate`.
- */
-function ActionValueEditor({
-  expressionPlaceholder,
-  literalPlaceholder,
-  value,
-  onChange
-}: ActionValueEditorProps): ReactElement {
-  return (
-    <div css={valueEditorCss}>
-      <Segmented
-        options={[...valueModeOptions]}
-        value={value.kind}
-        onChange={mode => {
-          if (mode === "literal" || mode === "expression") {
-            onChange(setActionValueMode(value, mode));
-          }
-        }}
-      />
-
-      {value.kind === "literal"
-        ? (
-            <Input
-              placeholder={literalPlaceholder}
-              value={coerceToString(value.value)}
-              onChange={event => onChange({ kind: "literal", value: event.target.value })}
-            />
-          )
-        : (
-            <div css={codeEditorWrapperCss}>
-              <ExpressionInput
-                placeholder={expressionPlaceholder}
-                value={value.source}
-                onChange={source => onChange({ kind: "expression", source })}
-              />
-            </div>
-          )}
-    </div>
-  );
 }
 
 function asAlertLevel(value: unknown): LinkageAlertLevel {

@@ -3,7 +3,6 @@ import type {
   FieldLinkageAction,
   FieldLinkageRule,
   LinkageActionType,
-  LinkageActionValue,
   LinkageCondition,
   LinkageConditionGroup,
   LinkageConditionLeaf,
@@ -339,22 +338,4 @@ export function appendChild(
 
     return { ...group, children: [...group.children, child] };
   });
-}
-
-export type ActionValueMode = LinkageActionValue["kind"];
-
-/**
- * Switch a {@link LinkageActionValue} between literal and expression mode,
- * preserving the value when the mode is unchanged. Shared by every value-bearing
- * action editor (`assign` / `set_field` / `alert` / `navigate`).
- */
-export function setActionValueMode(
-  current: LinkageActionValue,
-  mode: ActionValueMode
-): LinkageActionValue {
-  if (mode === "literal") {
-    return current.kind === "literal" ? current : { kind: "literal", value: "" };
-  }
-
-  return current.kind === "expression" ? current : { kind: "expression", source: "" };
 }

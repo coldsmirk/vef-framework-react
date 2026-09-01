@@ -15,7 +15,6 @@ import {
   normalizeLinkage,
   reconcileRuleTrigger,
   removeAtPath,
-  setActionValueMode,
   updateAtPath
 } from "./mutators";
 
@@ -327,23 +326,6 @@ describe("condition tree mutators", () => {
     const root = tree();
 
     expect(appendChild(root, [0], createLeaf("c"))).toEqual(root);
-  });
-});
-
-describe("setActionValueMode", () => {
-  it("keeps the current value when the mode is unchanged", () => {
-    const literal = { kind: "literal", value: "x" } as const;
-
-    expect(setActionValueMode(literal, "literal")).toBe(literal);
-  });
-
-  it("resets the payload when switching modes both ways", () => {
-    const literal = { kind: "literal", value: "x" } as const;
-
-    const expression = setActionValueMode(literal, "expression");
-    expect(expression).toEqual({ kind: "expression", source: "" });
-
-    expect(setActionValueMode(expression, "literal")).toEqual({ kind: "literal", value: "" });
   });
 });
 
