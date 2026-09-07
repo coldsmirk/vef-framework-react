@@ -88,9 +88,13 @@ export interface HistoryEntry {
 export interface EditCoalesceOptions {
   /**
    * Coalescing key for this edit run: consecutive edits sharing a key fold
-   * into one undo step. Defaults to a per-node key (`field:<id>` /
-   * `block:<id>`); pass a finer key (e.g. `field:<id>:<property>`) so edits to
-   * different properties of one node stay separately undoable.
+   * into one undo step. Name what is being edited, finely enough that moving
+   * to another property starts a fresh step (e.g. `field:<id>:<property>`).
+   *
+   * Omitting it means "this edit continues nothing" — the edit gets its own
+   * undo step, and so does the next one. Folding is opt-in: a default derived
+   * from the node would fold every discrete action on it into one step, which
+   * is what made three add-tab clicks a single undo.
    */
   coalesceKey?: string;
 }

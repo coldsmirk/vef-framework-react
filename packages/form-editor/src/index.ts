@@ -12,6 +12,7 @@ export { selectFieldDefinition } from "./components/select-field";
 export { switchFieldDefinition } from "./components/switch-field";
 export { textareaFieldDefinition } from "./components/textarea-field";
 export { textfieldDefinition } from "./components/textfield";
+export { uploadFieldDefinition } from "./components/upload-field";
 export {
   FormEditor,
   FormEditorProvider,
