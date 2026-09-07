@@ -51,6 +51,22 @@ describe("MobileDatetimeInput", () => {
     expect(onChange).toHaveBeenCalledWith("2026-06-03 14:30:45");
   });
 
+  it("keeps an instant far outside antd-mobile's default decade window", async () => {
+    // Same clamp as the date field: antd-mobile bounds the seeded value into
+    // thisYear ± 10 before rendering the wheel, so a stored 1980 timestamp used
+    // to be silently rewritten to today on a no-op confirm.
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const onChange = vi.fn();
+    render(
+      <MobileDatetimeInput domId="d1" field={makeField()} value="1980-05-12 08:15:00" onChange={onChange} />
+    );
+
+    await user.click(screen.getByRole("button", { name: "日期时间" }));
+    await user.click(await screen.findByRole("button", { name: "确定" }));
+
+    expect(onChange).toHaveBeenCalledWith("1980-05-12 08:15:00");
+  });
+
   it("commits an empty string when the value is cleared from the trigger", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

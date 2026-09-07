@@ -42,6 +42,21 @@ describe("MobileDateInput", () => {
     expect(onChange).toHaveBeenCalledWith("2026-06-03");
   });
 
+  it("keeps a date far outside antd-mobile's default decade window", async () => {
+    // antd-mobile's DatePicker defaults to thisYear ± 10 and CLAMPS the seeded
+    // value into that window before rendering the wheel, so confirming without
+    // touching anything used to overwrite a stored 1980 birth date with today —
+    // while the trigger, which formats the value directly, still showed 1980.
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const onChange = vi.fn();
+    render(<MobileDateInput domId="d1" field={makeField()} value="1980-05-12" onChange={onChange} />);
+
+    await user.click(screen.getByRole("button", { name: "日期" }));
+    await user.click(await screen.findByRole("button", { name: "确定" }));
+
+    expect(onChange).toHaveBeenCalledWith("1980-05-12");
+  });
+
   it("renders the field label", () => {
     render(<MobileDateInput domId="d1" field={makeField({ label: "出生日期" })} value="" onChange={vi.fn()} />);
 

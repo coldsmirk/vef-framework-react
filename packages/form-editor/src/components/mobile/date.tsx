@@ -8,7 +8,7 @@ import { useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
-import { formatTrigger, fromPickerDate, toPickerDate } from "./date-adapters";
+import { formatTrigger, fromPickerDate, PICKER_MAX_DATE, PICKER_MIN_DATE, toPickerDate } from "./date-adapters";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
 
@@ -60,6 +60,8 @@ export function MobileDateInput({
 
       <DatePicker
         getContainer={getContainer}
+        max={PICKER_MAX_DATE}
+        min={PICKER_MIN_DATE}
         precision="day"
         title={field.label ?? "日期"}
         value={toPickerDate(value)}
