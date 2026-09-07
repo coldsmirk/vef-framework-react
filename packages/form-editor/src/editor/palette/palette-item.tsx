@@ -10,6 +10,7 @@ import { currentLayer } from "../../engine/schema/presentation";
 import { findNode, isContainerNode } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStoreApi } from "../../store/form-store";
+import { isColumnEligibleDefinition } from "../canvas/subform-column-eligibility";
 import { FIELD_DRAG_TYPE, palettePointerSensors } from "../dnd";
 
 const itemCss = css({
@@ -176,7 +177,19 @@ export function PaletteItem({ definition, iconOnly = false }: PaletteItemProps):
     // hint promises "双击组件追加到此处", so honour it. Tabs are excluded
     // (which tab is open is canvas-local state the store cannot see); those
     // and plain selections append to the form tail as before.
-    const target = selected !== undefined && isContainerNode(selected) && selected.type !== "tabs"
+    //
+    // A table subform takes the same eligibility gate its drop zones apply: a
+    // block that cannot be a column would be spliced into the template where
+    // the preview filters it out — invisible on the canvas yet selected in the
+    // properties panel, and only a warning at publish. Ineligible definitions
+    // fall through to the form tail, where they are a legitimate field.
+    const acceptsDefinition = selected?.type !== "subform"
+      || selected.variant !== "table"
+      || isColumnEligibleDefinition(definition);
+    const target = selected !== undefined
+      && isContainerNode(selected)
+      && selected.type !== "tabs"
+      && acceptsDefinition
       ? { kind: "container" as const, containerId: selected.id }
       : undefined;
 

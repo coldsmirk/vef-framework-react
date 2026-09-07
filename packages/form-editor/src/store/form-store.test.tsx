@@ -853,7 +853,10 @@ describe("form store", () => {
   });
 
   describe("history coalescing", () => {
-    it("folds consecutive edits to one field into a single undo step", () => {
+    it("gives each keyless edit its own undo step", () => {
+      // The default used to be a node-derived key, so every discrete action on
+      // one node folded together: three 新增标签 clicks became one Cmd-Z that
+      // removed all three, and a 删除标签 folded with whatever came next.
       const api = setup();
       act(() => api.getState().insertField({ definition: textfieldDefinition }));
       const fieldId = api.getState().selectedId as string;
@@ -865,10 +868,32 @@ describe("form store", () => {
       }));
       act(() => api.getState().editField({
         fieldId,
-        updater: field => { return { ...field, label: "AB" }; }
+        updater: field => { return { ...field, label: "B" }; }
       }));
 
-      // Two edits to the same field share one history entry.
+      expect(api.getState().past).toHaveLength(pastAfterInsert + 2);
+    });
+
+    it("folds consecutive edits to one field into a single undo step", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const fieldId = api.getState().selectedId as string;
+      const pastAfterInsert = api.getState().past.length;
+
+      // Folding is opt-in by naming what is being edited — which is what the
+      // properties panel does, one key per entry.
+      const label = { coalesceKey: `field:${fieldId}:label` };
+
+      act(() => api.getState().editField({
+        fieldId,
+        updater: field => { return { ...field, label: "A" }; }
+      }, label));
+      act(() => api.getState().editField({
+        fieldId,
+        updater: field => { return { ...field, label: "AB" }; }
+      }, label));
+
+      // Two edits under the same key share one history entry.
       expect(api.getState().past).toHaveLength(pastAfterInsert + 1);
 
       act(() => api.getState().undo());

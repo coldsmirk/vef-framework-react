@@ -233,3 +233,23 @@ export function getDataSourceOptions(dataSources: FormDataSource[] | undefined):
     return { value: source.id, label: source.name.length > 0 ? source.name : source.id };
   });
 }
+
+/**
+ * The source key a newly seeded condition should prefer: any option OTHER than
+ * the rule's own field, or `undefined` when self is all there is. A
+ * self-referencing condition ("show me when my own value is …") is almost
+ * always a mistake, so the three places that seed one — creating a rule,
+ * switching an expression back to visual mode, and switching a trigger back to
+ * 满足条件 — must agree on that much.
+ *
+ * They deliberately differ on the no-sibling case, so the fallback stays with
+ * the caller: creating a rule yields an edge rule instead of a pre-filled
+ * self-condition, while the two switches fall back to self rather than refusing
+ * an action the user explicitly asked for.
+ */
+export function seedSourceKey(
+  options: ReadonlyArray<{ value: string }>,
+  selfKey: string | undefined
+): string | undefined {
+  return options.find(option => option.value !== selfKey)?.value;
+}

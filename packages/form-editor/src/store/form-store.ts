@@ -332,14 +332,20 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
     /**
      * Snapshot only when this edit does not continue the previous one (same
      * `key`), so a stream of keystrokes collapses into one undoable step.
+     *
+     * `undefined` means "this edit continues nothing": it always snapshots and
+     * leaves no key behind, so the NEXT edit snapshots too. Folding is opt-in
+     * by naming the thing being edited — a default key derived from the node
+     * would fold every discrete action on it (three 新增标签 clicks into one
+     * undo step, a 删除标签 with the gap change after it) which no caller wants.
      */
-    function checkpointCoalescing(key: string): void {
-      if (coalesceKey === key) {
+    function checkpointCoalescing(key: string | undefined): void {
+      if (key !== undefined && coalesceKey === key) {
         return;
       }
 
       pushHistory();
-      coalesceKey = key;
+      coalesceKey = key ?? null;
     }
 
     return {
@@ -768,7 +774,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpointCoalescing(options?.coalesceKey ?? `field:${fieldId}`);
+        checkpointCoalescing(options?.coalesceKey);
         set({ schema: withPresentation(schema, device, next) });
       },
 
@@ -838,7 +844,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpointCoalescing(options?.coalesceKey ?? `block:${nodeId}`);
+        checkpointCoalescing(options?.coalesceKey);
         set({ schema: withPresentation(schema, device, next) });
       },
 

@@ -8,7 +8,7 @@ import { Popconfirm, Select } from "@vef-framework-react/components";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { ConditionEditor } from "./condition-editor";
 import { createTrigger } from "./mutators";
-import { isLinkageTriggerKind, triggerOptionsFor } from "./options";
+import { isLinkageTriggerKind, seedSourceKey, triggerOptionsFor } from "./options";
 import { sectionCss, sectionLabelCss, selectStyle, triggerHintCss } from "./styles";
 
 /**
@@ -66,7 +66,10 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
   const kindSwitch = useConfirmableKindSwitch<LinkageTriggerKind>({
     current: trigger.kind,
     needsConfirm: confirmKindSwitch,
-    commit: kind => onChange(createTrigger(kind, sourceOptions[0]?.value))
+    // Prefer a source other than the rule's own field, mirroring how a freshly
+    // created rule and the visual-mode switch both seed: a self-referencing
+    // condition is almost always a mistake. Self stays selectable afterwards.
+    commit: kind => onChange(createTrigger(kind, seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value))
   });
 
   return (

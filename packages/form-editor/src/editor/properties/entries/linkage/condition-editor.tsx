@@ -25,7 +25,7 @@ import {
   removeAtPath,
   updateAtPath
 } from "./mutators";
-import { isLinkageOperator, isLogicValue, logicOptions, operatorNeedsValue, operatorOptions } from "./options";
+import { isLinkageOperator, isLogicValue, logicOptions, operatorNeedsValue, operatorOptions, seedSourceKey } from "./options";
 import {
   addInlineButtonCss,
   addRowCss,
@@ -136,7 +136,7 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
     // Prefer a field other than the rule's own: a self-referencing show rule
     // is almost always a mistake — mirroring how a freshly created rule seeds
     // its first condition.
-    const seed = sourceOptions.find(option => option.value !== selfKey)?.value ?? sourceOptions[0]?.value;
+    const seed = seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value;
 
     if (!seed) {
       setNoSourceNotice(true);

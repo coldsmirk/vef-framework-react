@@ -44,7 +44,7 @@ const RadioInput: FC<FieldComponentProps<RadioField, string | number | undefined
                 disabled={disabled}
                 options={options}
                 optionType={field.optionType}
-                orientation={field.direction}
+                orientation={field.direction ?? "vertical"}
                 value={value === "" ? undefined : value}
                 onChange={event => onChange(event.target.value)}
               />

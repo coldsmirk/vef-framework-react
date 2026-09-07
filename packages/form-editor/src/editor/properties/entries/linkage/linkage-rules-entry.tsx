@@ -9,6 +9,7 @@ import { isKeyedField } from "../../../../engine/keys";
 import { FIELD_TRIGGER_KINDS } from "../../../../engine/linkage";
 import { useCurrentLayer } from "../../../../store/form-store";
 import { createRule, normalizeLinkage } from "./mutators";
+import { seedSourceKey } from "./options";
 import { RuleListEditor } from "./rule-list-editor";
 import {
   defaultHintCss,
@@ -58,7 +59,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   // a pre-filled self-condition (self stays selectable in the dropdown after).
   // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
-  const seedSourceKey = fieldOptions.find(option => option.value !== selfKey)?.value;
+  const seedKey = seedSourceKey(fieldOptions, selfKey);
   // Drop trigger kinds the target can't actually use, rather than letting an
   // author configure a silently-inert (and validator-rejected) rule:
   // - `change` rides the keyed field's onChange, so a non-keyed field
@@ -113,7 +114,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
         allowStateActions
         // No sibling source seeds an edge rule; the edge must suit the target,
         // so pass whether it's keyed (a non-keyed block can't fire `change`).
-        createRule={() => createRule(seedSourceKey, isTargetKeyed)}
+        createRule={() => createRule(seedKey, isTargetKeyed)}
         dataSourceOptions={dataSourceOptions}
         issuesByRule={issuesByRule}
         isTargetKeyed={isTargetKeyed}

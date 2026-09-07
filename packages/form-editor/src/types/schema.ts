@@ -479,7 +479,10 @@ export interface RadioField extends FormFieldBase, KeyedNode, Validatable {
   buttonStyle?: "outline" | "solid";
   /**
    * Option layout direction. Maps to antd `Radio.Group` `orientation` on PC and
-   * drives the flex direction on mobile. Defaults to vertical.
+   * drives the flex direction on mobile. Defaults to vertical — applied
+   * EXPLICITLY by both renderers, since antd's own default is horizontal and
+   * antd-mobile's is vertical, which laid the same schema out differently on
+   * the two devices.
    */
   direction?: "horizontal" | "vertical";
 }
@@ -492,7 +495,9 @@ export interface CheckboxGroupField extends FormFieldBase, KeyedNode, Validatabl
   helperText?: string;
   dataSource?: FieldOptionSource;
   /**
-   * Option layout direction. antd `Checkbox.Group` has no orientation prop, so
+   * Option layout direction. Defaults to vertical, applied explicitly by both
+   * renderers (see RadioField.direction). antd `Checkbox.Group` has no
+   * orientation prop, so
    * the PC renderer realizes vertical layout via flex; the mobile renderer drives
    * its flex direction the same way. Defaults to vertical.
    */

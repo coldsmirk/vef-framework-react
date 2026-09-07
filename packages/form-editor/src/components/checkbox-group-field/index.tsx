@@ -61,7 +61,7 @@ const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<strin
               <Checkbox.Group
                 disabled={disabled}
                 options={options}
-                style={field.direction === "vertical" ? VERTICAL_GROUP_STYLE : undefined}
+                style={(field.direction ?? "vertical") === "vertical" ? VERTICAL_GROUP_STYLE : undefined}
                 value={Array.isArray(value) ? value : EMPTY_VALUE}
                 onChange={next => onChange(orderByOptions(next, options))}
               />
