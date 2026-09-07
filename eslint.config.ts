@@ -19,5 +19,18 @@ export default defineConfig(
       "unicorn/no-top-level-side-effects": "off"
     }
   },
+  {
+    // Shipped runtime code must not carry debug logging: `console.log("DBG"...)`
+    // calls reached npm in v2.19.0, firing on every render of every option-backed
+    // field. warn / error / info stay allowed — they are the framework's real
+    // diagnostic channel (a failed data-source resolve, a failed effect, and
+    // `editor/toolbar/notify.ts`'s provider-less fallback all use them).
+    // `packages/dev` is exempt: it is build tooling, where stdout IS the output.
+    files: ["packages/*/src/**/*.{ts,tsx}"],
+    ignores: ["packages/dev/**"],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error", "info"] }]
+    }
+  },
   ...tanstackConfig
 );
