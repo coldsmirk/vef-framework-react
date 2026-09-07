@@ -65,7 +65,9 @@ export function inferColumnType(field: FormField): ColumnDataType {
     return maxCount !== undefined && maxCount > 1 ? "json" : "text";
   }
 
-  const mapped = COLUMN_TYPE_BY_WIDGET[field.type];
+  const mapped = Object.hasOwn(COLUMN_TYPE_BY_WIDGET, field.type)
+    ? COLUMN_TYPE_BY_WIDGET[field.type]
+    : undefined;
 
   if (mapped !== undefined) {
     return mapped;

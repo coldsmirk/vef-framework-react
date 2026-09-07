@@ -60,6 +60,37 @@ const schema: FormSchema = {
 };
 
 describe("toFormFieldDefinitions", () => {
+  it("projects an upload field as the upload kind", () => {
+    // `upload` is a built-in registered type AND a declared FieldKind member,
+    // so folding it into "input" made the union member unreachable and told the
+    // approval permission matrix an attachment was a text box.
+    const uploadSchema: FormSchema = {
+      id: "Form_upload",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "F1",
+              type: "upload",
+              key: "attachment",
+              label: "附件",
+              maxCount: 5
+            }
+          ]
+        }
+      }
+    };
+
+    expect(toFormFieldDefinitions(uploadSchema)).toEqual([
+      {
+        key: "attachment",
+        kind: "upload",
+        label: "附件"
+      }
+    ]);
+  });
+
   it("emits one entry per root keyed leaf field, mapped to its backend kind", () => {
     expect(toFormFieldDefinitions(schema)).toEqual([
       {

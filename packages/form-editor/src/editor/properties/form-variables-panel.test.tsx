@@ -247,6 +247,39 @@ describe("form variables panel", () => {
       expect(action).toMatchObject({ type: "set_variable", variable: "sum" });
     });
 
+    it("refuses a digit-leading name on first naming, like a rename", async () => {
+      // First naming used to bypass renameVariable's isValidVariableName guard
+      // and reach the schema through a plain field update. `sanitizeKey` only
+      // strips non-word characters, so "1total" survived it — a name
+      // validateSchema rejects as an error, and one `$vars.1total` cannot even
+      // compile into, leaving every condition that reads it silently false.
+      const user = userEvent.setup();
+      const api = setup();
+
+      await user.click(screen.getByRole("button", { name: /新增变量/ }));
+
+      const input = screen.getByPlaceholderText("变量名");
+      await user.click(input);
+      await user.type(input, "1total");
+      await user.tab();
+
+      expect(storeVariables(api)[0]?.name).toBe("");
+    });
+
+    it("accepts a valid first name", async () => {
+      const user = userEvent.setup();
+      const api = setup();
+
+      await user.click(screen.getByRole("button", { name: /新增变量/ }));
+
+      const input = screen.getByPlaceholderText("变量名");
+      await user.click(input);
+      await user.type(input, "total1");
+      await user.tab();
+
+      expect(storeVariables(api)[0]?.name).toBe("total1");
+    });
+
     it("keeps the current name when the committed input sanitizes to empty", async () => {
       const user = userEvent.setup();
       const api = setup([

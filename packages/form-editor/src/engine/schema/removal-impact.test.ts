@@ -95,6 +95,26 @@ describe("collectRemovalImpact", () => {
       expect(impact.unreachable).toEqual([{ id: "Field_b", label: "字段b" }]);
     });
 
+    it("ignores a show on an edge trigger, matching the validator", () => {
+      // `state_action_on_edge_trigger` rejects a state action on an edge
+      // trigger, so this rule never reaches the state lane and cannot lift the
+      // default. Counting it here left the delete dialog silent about a field
+      // that `validateSchema` flags as unreachable one keystroke later.
+      const edgeShow: FieldLinkageRule = {
+        id: "Rule_edge_show",
+        trigger: { kind: "change" },
+        actions: [{ id: "Action_edge_show", type: "show" }]
+      };
+      const layer = layerOf([
+        field("a", "a"),
+        field("b", "b", { defaults: { hidden: true }, rules: [edgeShow, showWhen("a")] })
+      ]);
+
+      const impact = collectRemovalImpact(layer, "Field_a");
+
+      expect(impact.unreachable).toEqual([{ id: "Field_b", label: "字段b" }]);
+    });
+
     it("does not re-report a field that was already unreachable", () => {
       const layer = layerOf([
         field("a", "a"),

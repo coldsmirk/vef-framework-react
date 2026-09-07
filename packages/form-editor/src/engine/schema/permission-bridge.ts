@@ -41,11 +41,17 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   "checkbox-group": "select",
   date: "date",
   datetime: "date",
-  daterange: "date"
+  daterange: "date",
+  upload: "upload"
 };
 
 function fieldKind(type: string): FieldKind {
-  return KIND_BY_TYPE[type] ?? "input";
+  // Own-property guarded: a consumer-registered widget named like an Object
+  // prototype member ("constructor", "toString") would otherwise read a
+  // function out of the table and hand it back typed as a FieldKind.
+  const mapped = Object.hasOwn(KIND_BY_TYPE, type) ? KIND_BY_TYPE[type] : undefined;
+
+  return mapped ?? "input";
 }
 
 /**

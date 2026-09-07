@@ -20,6 +20,7 @@ import { isLeafField, walkNodes } from "../schema/walk";
 import { createIssue, isRecord, validateRemoteRequest } from "../validation";
 import { findLinkageCycles } from "./cycle";
 import { LINKAGE_OPERATORS } from "./operators";
+import { hasConditionTriggeredShow } from "./shape";
 import { collectConditionSourceKeys } from "./source-tracking";
 import { ALERT_LEVELS, FIELD_TRIGGER_KINDS, FORM_TRIGGER_KINDS, isStateAction, KEYED_ONLY_ACTIONS, LINKAGE_ACTION_TYPES } from "./taxonomy";
 
@@ -264,16 +265,7 @@ function flagUnreachableHidden(args: {
     return;
   }
 
-  // Only a condition-triggered `show` can ever lift the default: a `show` on
-  // an edge trigger is separately rejected (`state_action_on_edge_trigger`)
-  // and never reaches the state lane, so it must not suppress this warning.
-  const hasShow = Array.isArray(rules) && rules.some(rule => isRecord(rule)
-    && isRecord(rule.trigger)
-    && rule.trigger.kind === "condition"
-    && Array.isArray(rule.actions)
-    && rule.actions.some(action => isRecord(action) && action.type === "show"));
-
-  if (!hasShow) {
+  if (!hasConditionTriggeredShow(rules)) {
     issues.push(createIssue(`${where}.defaults.hidden`, "default_hidden_unreachable"));
   }
 }

@@ -17,6 +17,7 @@ import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
 import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
 import { matchLeaf } from "./operators";
+import { linkageRules } from "./shape";
 import { isStateAction } from "./taxonomy";
 
 /**
@@ -178,9 +179,7 @@ function evaluateLinkageResolved(
     required: linkage.defaults?.required === true
   };
 
-  const linkageRules = linkage.rules ?? [];
-
-  for (const rule of linkageRules) {
+  for (const rule of linkageRules(linkage)) {
     // Shape guard first: the render path evaluates host-supplied schemas that
     // may never have passed validateLinkageSchema, and a malformed rule must
     // degrade to "skipped", never crash. Then: edge triggers (field events,
@@ -451,7 +450,7 @@ export function deriveDefaultValues(
     }
 
     if (node.type === "subform") {
-      const seeded = initialValues[node.key];
+      const seeded = seedFor(initialValues, node.key);
       values[node.key] = Array.isArray(seeded)
         ? seeded.map(row => {
             // Fresh seed per row: nested subform arrays must not share refs.
@@ -467,11 +466,22 @@ export function deriveDefaultValues(
     }
 
     if (isLeafField(node) && isKeyedField(node)) {
-      values[node.key] = initialValues[node.key] ?? getFieldDefaultValue(node);
+      values[node.key] = seedFor(initialValues, node.key) ?? getFieldDefaultValue(node);
     }
   });
 
   return values;
+}
+
+/**
+ * One key's seed from the host's initial values. Own-property guarded for the
+ * same reason {@link getFieldPermission} is: a field keyed like an Object
+ * prototype member ("constructor", "toString") is legal grammar, and reading
+ * the prototype slot would seed the field with a function that renders as
+ * source text and vanishes at JSON.stringify.
+ */
+function seedFor(initialValues: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(initialValues, key) ? initialValues[key] : undefined;
 }
 
 /**

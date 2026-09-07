@@ -1,6 +1,7 @@
 import type { FieldLinkage, PresentationLayer } from "../../types";
 
 import { collectSubtreeKeysByScope } from "../keys";
+import { hasConditionTriggeredShow } from "../linkage/shape";
 import { removeBlock } from "./mutate";
 import { pruneFormLinkageForRootBucket, pruneScopedReferences } from "./reconcile";
 import { findNode, findScope, nodeLabel, walkNodes } from "./walk";
@@ -144,9 +145,7 @@ function collectUnreachableHidden(layer: PresentationLayer): RemovalImpactField[
       return;
     }
 
-    const hasShow = node.linkage.rules?.some(rule => rule.actions.some(action => action.type === "show")) ?? false;
-
-    if (!hasShow) {
+    if (!hasConditionTriggeredShow(node.linkage.rules)) {
       fields.push({ id: node.id, label: nodeLabel(node) ?? node.id });
     }
   });

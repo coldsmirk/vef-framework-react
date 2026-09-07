@@ -1,5 +1,6 @@
 import type { DynamicValue, RemoteDataSourceRequest, ResolvedDataSourceRequest, RuntimeSchema } from "../types";
 
+import { linkageRules, ruleActions } from "./linkage/shape";
 import { walkFields } from "./schema/walk";
 
 /**
@@ -44,10 +45,8 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
       return;
     }
 
-    const rules = field.linkage?.rules ?? [];
-
-    for (const rule of rules) {
-      for (const action of rule.actions) {
+    for (const rule of linkageRules(field.linkage)) {
+      for (const action of ruleActions(rule)) {
         if (action.type === "api_call" && hasBoundParams(action.request)) {
           bound = true;
 

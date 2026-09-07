@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { createId } from "../../engine/ids";
 import { nextUniqueKey, sanitizeKey } from "../../engine/keys";
+import { isValidVariableName } from "../../engine/schema/validate";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStoreApi } from "../../store/form-store";
 
@@ -136,6 +137,14 @@ export function FormVariablesPanel({ onChange, variables }: FormVariablesPanelPr
     const unique = nextUniqueKey(used, sanitized);
 
     if (unique === variable.name) {
+      return;
+    }
+
+    // Both naming paths answer to the same grammar. `sanitizeKey` only strips
+    // non-word characters, so it still admits a digit lead (`1total`) — which
+    // `validateSchema` rejects as an error and `$vars.1total` cannot even be
+    // compiled into, leaving every condition using it silently false.
+    if (!isValidVariableName(unique)) {
       return;
     }
 

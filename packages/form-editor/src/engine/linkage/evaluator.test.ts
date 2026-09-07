@@ -29,6 +29,30 @@ function subform(template: Block[], overrides: Partial<SubformNode> = {}): Subfo
 }
 
 describe("deriveDefaultValues", () => {
+  describe("host-supplied initial values", () => {
+    it("never seeds a prototype slot for a prototype-named key", () => {
+      // KEY_CHARSET is /^\w+$/, so "constructor" is a legal field key. Read
+      // without an own-property guard, `({})["constructor"]` returns the Object
+      // constructor — the input then renders "function Object() { [native code] }"
+      // and JSON.stringify drops it, so the field submits empty.
+      const values = deriveDefaultValues(
+        { id: "Layer", children: [textfield("constructor"), textfield("toString")] },
+        {}
+      );
+
+      expect(values).toEqual({ constructor: "", toString: "" });
+    });
+
+    it("still honors an own property with a prototype-shadowing name", () => {
+      const values = deriveDefaultValues(
+        { id: "Layer", children: [textfield("constructor")] },
+        { constructor: "typed" }
+      );
+
+      expect(values.constructor).toBe("typed");
+    });
+  });
+
   describe("typed blank seeds", () => {
     it("seeds minRows rows with type-appropriate defaults per field type", () => {
       const node = subform(

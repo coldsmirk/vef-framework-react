@@ -10,6 +10,7 @@ import type {
 
 import { isRootScope, walkNodes } from "../schema/walk";
 import { matchCondition } from "./evaluator";
+import { ruleActions, ruleCondition, ruleTriggerKind } from "./shape";
 import { collectConditionSourceKeys } from "./source-tracking";
 import { isEffectAction, isFieldEventTriggerKind } from "./taxonomy";
 
@@ -90,22 +91,24 @@ export function collectConditionEffectRules(schema: RuntimeSchema): ConditionEff
 }
 
 function pushConditionEffectRules(rules: FieldLinkageRule[] | undefined, out: ConditionEffectRule[]): void {
-  const linkageRules = rules ?? [];
+  const linkageRules = Array.isArray(rules) ? rules : [];
 
   for (const rule of linkageRules) {
-    if (rule.trigger.kind !== "condition") {
+    const condition = ruleCondition(rule);
+
+    if (condition === undefined) {
       continue;
     }
 
-    const actions = rule.actions.filter(action => isEffectAction(action));
+    const actions = ruleActions(rule).filter(action => isEffectAction(action));
 
     if (actions.length > 0) {
       const sourceKeys = new Set<string>();
-      collectConditionSourceKeys(rule.trigger.condition, sourceKeys);
+      collectConditionSourceKeys(condition, sourceKeys);
 
       out.push({
         ruleId: rule.id,
-        condition: rule.trigger.condition,
+        condition,
         sourceKeys: [...sourceKeys],
         actions,
         alwaysActions: actions.filter(action => action.retrigger === "always")
@@ -139,13 +142,13 @@ export function getTriggerEffectActions(
   rules: FieldLinkageRule[] | undefined,
   kind: LinkageTriggerKind
 ): EffectAction[] {
-  if (!rules) {
+  if (!Array.isArray(rules)) {
     return [];
   }
 
   return rules
-    .filter(rule => rule.trigger.kind === kind)
-    .flatMap(rule => rule.actions.filter(action => isEffectAction(action)));
+    .filter(rule => ruleTriggerKind(rule) === kind)
+    .flatMap(rule => ruleActions(rule).filter(action => isEffectAction(action)));
 }
 
 /**
@@ -157,11 +160,13 @@ export function getFieldEventTriggerKinds(
   rules: FieldLinkageRule[] | undefined
 ): Set<LinkageTriggerKind> {
   const kinds = new Set<LinkageTriggerKind>();
-  const linkageRules = rules ?? [];
+  const linkageRules = Array.isArray(rules) ? rules : [];
 
   for (const rule of linkageRules) {
-    if (isFieldEventTriggerKind(rule.trigger.kind) && rule.actions.some(action => isEffectAction(action))) {
-      kinds.add(rule.trigger.kind);
+    const kind = ruleTriggerKind(rule);
+
+    if (kind !== undefined && isFieldEventTriggerKind(kind) && ruleActions(rule).some(action => isEffectAction(action))) {
+      kinds.add(kind);
     }
   }
 

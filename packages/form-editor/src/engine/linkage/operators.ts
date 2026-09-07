@@ -69,7 +69,10 @@ function resolveLeafSourceValue(
   context: EvaluationContext | undefined
 ): unknown {
   if (!sourceKey.startsWith("$")) {
-    return values[sourceKey];
+    // Own-property guarded, like getFieldPermission: a field keyed
+    // "constructor" would otherwise read the Object constructor off the
+    // prototype and make every `notEmpty` condition on it true forever.
+    return Object.hasOwn(values, sourceKey) ? values[sourceKey] : undefined;
   }
 
   const [root, ...path] = sourceKey.split(".");
