@@ -53,6 +53,35 @@ describe("deriveDefaultValues", () => {
     });
   });
 
+  describe("upload seeds", () => {
+    it("seeds the empty value the widget itself emits when cleared", () => {
+      // Three shapes used to mean "empty": "" (never touched, from the
+      // catch-all), null (single-file, cleared) and [] (multi-file, cleared).
+      // Under table storage a multi-file field is a `json` column, so "" was
+      // not even the right type.
+      const values = deriveDefaultValues({
+        id: "Layer",
+        children: [
+          {
+            id: "Field_one",
+            type: "upload",
+            key: "one",
+            label: "one"
+          },
+          {
+            id: "Field_many",
+            type: "upload",
+            key: "many",
+            label: "many",
+            maxCount: 3
+          }
+        ]
+      });
+
+      expect(values).toEqual({ one: null, many: [] });
+    });
+  });
+
   describe("typed blank seeds", () => {
     it("seeds minRows rows with type-appropriate defaults per field type", () => {
       const node = subform(

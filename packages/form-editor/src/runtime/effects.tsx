@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, LinkageActionValue, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, KeyedFormField, LinkageActionValue, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { RuntimeForm, RuntimeFormValues } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
@@ -8,12 +8,14 @@ import { createContext, use, useCallback, useEffect, useMemo, useRef } from "rea
 
 import { exhaustive } from "../engine/assert-never";
 import { resolveRequestParams } from "../engine/data-source-params";
+import { isKeyedField } from "../engine/keys";
 import {
   collectConditionEffectRules,
   evaluateConditionEffectTruths,
   resolveActionValue,
   resolveLinkageEvaluators
 } from "../engine/linkage";
+import { isRootScope, walkFields } from "../engine/schema/walk";
 import { writeFieldValue } from "./field-write";
 import { resolveScopeValues } from "./resolve-scope-values";
 
@@ -88,9 +90,15 @@ async function runEffectActions(args: {
   fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
   prefix: string;
+  /**
+   * The firing scope's schema, used only to resolve a `set_field` target back
+   * to its field so the written value can be coerced to that field's shape.
+   */
+  schema: RuntimeSchema;
   sinks: EffectSinks;
 }): Promise<void> {
   const scopeValues = resolveScopeValues(args.form.store.state.values, args.prefix);
+  const scopeFields = scopeFieldsByKey(args.schema);
   const resolveValue = (value: LinkageActionValue): unknown => resolveActionValue(value, scopeValues, args.evaluators, args.evaluationContext);
   const context: EffectDispatchContext = {
     values: scopeValues,
@@ -102,7 +110,7 @@ async function runEffectActions(args: {
   const pending: Array<Promise<void>> = [];
 
   for (const action of args.actions) {
-    runEffectAction(action, args, context, pending);
+    runEffectAction(action, { ...args, scopeFields }, context, pending);
   }
 
   await Promise.all(pending);
@@ -115,6 +123,11 @@ function runEffectAction(
     fieldPermissions: Record<string, FieldPermission> | undefined;
     form: RuntimeForm;
     prefix: string;
+    /**
+     * The firing scope's keyed fields by key, so a `set_field` write can be
+     * coerced to its target's value shape.
+     */
+    scopeFields: Map<string, KeyedFormField>;
     sinks: EffectSinks;
   },
   context: EffectDispatchContext,
@@ -129,6 +142,7 @@ function runEffectAction(
         form: args.form,
         key: action.targetKey,
         prefix: args.prefix,
+        targetField: args.scopeFields.get(action.targetKey),
         value: context.resolveValue(action.value)
       });
       return;
@@ -189,6 +203,23 @@ function runEffectAction(
 }
 
 /**
+ * The scope's root-scope keyed fields by key — what a `set_field` target names.
+ * A target the schema does not declare simply resolves to `undefined`, and the
+ * write gate then leaves the value untouched.
+ */
+function scopeFieldsByKey(schema: RuntimeSchema): Map<string, KeyedFormField> {
+  const fields = new Map<string, KeyedFormField>();
+
+  walkFields(schema, (field, scope) => {
+    if (isRootScope(scope) && isKeyedField(field)) {
+      fields.set(field.key, field);
+    }
+  });
+
+  return fields;
+}
+
+/**
  * Run form-scope effect actions (the global `load` / `beforeSubmit` /
  * `afterSubmit` lifecycle) against the root value scope. Used by `FormRenderer`,
  * which owns the form directly and has no surrounding scope provider. Returns a
@@ -205,6 +236,7 @@ export function dispatchFormEffects(args: {
    */
   fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeForm;
+  schema: RuntimeSchema;
   sinks: EffectSinks;
 }): Promise<void> {
   if (args.actions.length === 0) {
@@ -218,6 +250,7 @@ export function dispatchFormEffects(args: {
     fieldPermissions: args.fieldPermissions,
     form: args.form,
     prefix: "",
+    schema: args.schema,
     sinks: args.sinks
   });
 }
@@ -335,13 +368,14 @@ export function useScopeEffects(args: {
           fieldPermissions: fieldPermissionsRef.current,
           form,
           prefix,
+          schema,
           sinks
         }).catch((error: unknown) => {
           console.error("[form-editor] effect action failed:", error);
         });
       }
     },
-    [resolved, form, prefix, sinks]
+    [resolved, form, prefix, schema, sinks]
   );
 
   useEffect(() => {

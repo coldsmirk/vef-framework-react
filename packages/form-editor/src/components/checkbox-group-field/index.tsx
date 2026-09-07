@@ -12,6 +12,7 @@ import { Checkbox, Spin } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { orderByOptions } from "../../render/parts/option-order";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { optionDirectionEntry, requiredEntry } from "../field-entries";
@@ -61,7 +62,7 @@ const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<strin
                 options={options}
                 style={field.direction === "vertical" ? VERTICAL_GROUP_STYLE : undefined}
                 value={Array.isArray(value) ? value : EMPTY_VALUE}
-                onChange={next => onChange(next)}
+                onChange={next => onChange(orderByOptions(next, options))}
               />
             </Spin>
           )

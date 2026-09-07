@@ -536,6 +536,13 @@ function getFieldDefaultValue(field: KeyedFormField): unknown {
       return [];
     }
 
+    case "upload": {
+      // Matches what the widget itself emits when the user clears it, so
+      // "never touched" and "emptied" are one shape: a list for a multi-file
+      // field (a `json` column under table storage), `null` for a single one.
+      return (field.maxCount ?? 1) > 1 ? [] : null;
+    }
+
     default: {
       return "";
     }

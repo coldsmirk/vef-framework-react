@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { EvaluationContext, FieldPermission, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { EvaluationContext, FieldPermission, KeyedFormField, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { EffectSinks } from "./effects";
 import type { RuntimeForm, RuntimeFormValues, RuntimeStateMap } from "./types";
 
@@ -263,7 +263,7 @@ function applyScopedAssignments(args: {
   schema: RuntimeSchema;
   stateMap: RuntimeStateMap;
 }): void {
-  const assignments: Array<{ key: string; value: unknown }> = [];
+  const assignments: Array<{ field: KeyedFormField; value: unknown }> = [];
 
   walkFields(args.schema, (field, scope) => {
     if (!isRootScope(scope) || !isKeyedField(field)) {
@@ -298,15 +298,16 @@ function applyScopedAssignments(args: {
       return;
     }
 
-    assignments.push({ key: field.key, value: runtimeState.assignedValue });
+    assignments.push({ field, value: runtimeState.assignedValue });
   });
 
   for (const assignment of assignments) {
     writeFieldValue({
       fieldPermissions: args.fieldPermissions,
       form: args.form,
-      key: assignment.key,
+      key: assignment.field.key,
       prefix: args.prefix,
+      targetField: assignment.field,
       value: assignment.value
     });
   }

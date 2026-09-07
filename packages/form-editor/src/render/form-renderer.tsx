@@ -294,6 +294,7 @@ function useRuntimeForm(
           evaluationContext: args.evaluationContext,
           fieldPermissions: args.fieldPermissions,
           form,
+          schema: args.runtimeSchema,
           sinks: args.sinks
         });
       }
@@ -322,6 +323,7 @@ function useRuntimeForm(
           evaluationContext: args.evaluationContext,
           fieldPermissions: args.fieldPermissions,
           form,
+          schema: args.runtimeSchema,
           sinks: args.sinks
         });
       }
@@ -554,6 +556,7 @@ function FormRendererInner({
       evaluationContext,
       fieldPermissions,
       form,
+      schema: runtimeSchema,
       sinks
     }).catch((error: unknown) => {
       console.error("[form-editor] load effect failed:", error);

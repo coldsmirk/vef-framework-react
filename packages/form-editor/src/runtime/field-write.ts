@@ -1,4 +1,4 @@
-import type { FieldPermission } from "../types";
+import type { FieldPermission, KeyedFormField } from "../types";
 import type { RuntimeForm } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
@@ -38,6 +38,12 @@ export function writeFieldValue(args: {
    * The scope's field-name prefix: `""` at the root, `"lines[0]."` in a row.
    */
   prefix: string;
+  /**
+   * The field being written, when the caller knows it. Used only to coerce the
+   * value to the shape that field's control and validation expect; omitted for
+   * a `set_field` aiming at a key the scope's schema does not declare.
+   */
+  targetField?: KeyedFormField;
   value: unknown;
 }): void {
   if (!isWritableFieldPermission(getFieldPermission(args.fieldPermissions, topLevelKey(args.key)))) {
@@ -45,15 +51,59 @@ export function writeFieldValue(args: {
   }
 
   const name = `${args.prefix}${args.key}`;
+  const value = coerceToFieldValue(args.targetField, args.value);
 
-  if (isDeepEqual(args.form.getFieldValue(name), args.value)) {
+  if (isDeepEqual(args.form.getFieldValue(name), value)) {
     return;
   }
 
-  args.form.setFieldValue(name, args.value, {
+  args.form.setFieldValue(name, value, {
     dontRunListeners: true,
     dontUpdateMeta: true
   });
+}
+
+/**
+ * Bring a written value to the shape its target field actually holds.
+ *
+ * The designer's literal editor is a plain text input, so every literal
+ * `assign` / `set_field` value arrives as a string no matter what it is aimed
+ * at. A string in a number field silently disables the numeric constraint
+ * checks — they gate on `typeof value === "number"` — and the backend, which
+ * does not accept a string there, then rejects the whole submission with no
+ * field-level hint. A switch is worse: the string `"false"` is truthy, so the
+ * control reads "on".
+ *
+ * Only the two value shapes a string genuinely breaks are coerced. String-like
+ * fields take whatever they are given, exactly as before: an expression that
+ * resolves to a number is a legitimate thing to put in a text field, and
+ * stringifying it here would be a second, unasked-for behaviour change.
+ */
+function coerceToFieldValue(field: KeyedFormField | undefined, value: unknown): unknown {
+  if (field === undefined || typeof value !== "string") {
+    return value;
+  }
+
+  if (field.type === "number") {
+    const trimmed = value.trim();
+
+    if (trimmed === "") {
+      return undefined;
+    }
+
+    const parsed = Number(trimmed);
+
+    // A non-numeric literal is a design error. Writing `undefined` leaves the
+    // control empty, which the required check reports honestly — better than
+    // parking a string the backend will reject at submit time.
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  if (field.type === "switch") {
+    return value === "true" || value === "1";
+  }
+
+  return value;
 }
 
 /**

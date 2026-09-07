@@ -6,6 +6,7 @@ import Checkbox from "antd-mobile/es/components/checkbox";
 
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { orderByOptions } from "../../render/parts/option-order";
 import { MobileOptionGroup } from "./option-group";
 
 // Identity-stable fallback so a missing value doesn't hand Checkbox.Group a
@@ -48,7 +49,7 @@ export const MobileCheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField
       <Checkbox.Group
         disabled={disabled}
         value={Array.isArray(value) ? value : EMPTY_VALUE}
-        onChange={next => onChange(next)}
+        onChange={next => onChange(orderByOptions(next, options))}
       >
         <MobileOptionGroup direction={field.direction} error={error} isEmpty={options.length === 0} loading={loading}>
           {options.map(option => (
