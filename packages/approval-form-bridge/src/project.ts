@@ -13,7 +13,13 @@ import type {
   Validatable
 } from "@vef-framework-react/form-editor";
 
-import type { ApprovalFieldKind, ApprovalFieldOption, ApprovalFormField, ApprovalValidationRule } from "./contract";
+import type {
+  ApprovalFieldKind,
+  ApprovalFieldOption,
+  ApprovalFieldOptionSource,
+  ApprovalFormField,
+  ApprovalValidationRule
+} from "./contract";
 import type { ProjectionIssue } from "./issues";
 
 import { findParentContainer, inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/form-editor";
@@ -312,7 +318,7 @@ function projectLeaf(
   warnOnLinkage(field, path, issues);
 
   const label = field.label ?? field.key;
-  const options = resolveOptions(field, path, dataSources, issues);
+  const { options, optionSource } = resolveOptionSource(field, path, dataSources, issues);
   const { isRequired, rule } = splitValidation(field);
   const columnType = resolveColumnType(field);
   const { precision } = field as { precision?: number };
@@ -334,6 +340,7 @@ function projectLeaf(
     ...placeholder !== undefined && { placeholder },
     ...isRequired && { isRequired },
     ...options !== undefined && { options },
+    ...optionSource !== undefined && { optionSource },
     ...rule !== undefined && { validation: rule },
     ...columnType !== undefined && { columnType },
     ...columnType === "decimal" && hasScale && { scale: precision }
@@ -427,39 +434,51 @@ function projectSubform(
 }
 
 /**
- * Static `{ label, value }` options for a selection field: an inline
- * `static` source or a `ref` to a form-global static data source resolve
- * here; a remote source (inline or referenced) — and a dangling ref — is
- * host-resolved at runtime, so the projection omits options and warns that
- * the backend will accept any submitted value.
+ * Collapse a selection field's option source into exactly one of two
+ * projections: the enumerated `{ label, value }` options of a static source,
+ * or the descriptor of a remote one. A `ref` is dereferenced first, so the
+ * result is always post-dereference and a consumer never chases a
+ * `dataSourceId`.
+ *
+ * A remote source still warns: the backend validates a submitted value against
+ * `options` alone, so it will accept anything for this field either way — the
+ * descriptor tells a consumer how to DISPLAY a stored value, it does not make
+ * the value checked. A remote source whose request the designer left unset is
+ * emitted rather than dropped, so the Go deploy validation names it instead of
+ * the projection silently degrading it to a source-less field. A dangling ref
+ * and an unknown kind yield neither.
  */
-function resolveOptions(
+function resolveOptionSource(
   field: KeyedField,
   path: string,
   dataSources: Map<string, FormDataSource>,
   issues: ProjectionIssue[]
-): ApprovalFieldOption[] | undefined {
+): { options?: ApprovalFieldOption[]; optionSource?: ApprovalFieldOptionSource } {
   const source = (field as { dataSource?: FieldOptionSource }).dataSource;
 
   if (source === undefined) {
-    return undefined;
+    return {};
   }
 
-  if (source.kind === "static") {
-    return source.options;
-  }
+  const resolved = source.kind === "ref" ? dataSources.get(source.dataSourceId) : source;
 
-  if (source.kind === "ref") {
-    const referenced = dataSources.get(source.dataSourceId);
-
-    if (referenced?.kind === "static") {
-      return referenced.options;
-    }
+  if (resolved?.kind === "static") {
+    return { options: resolved.options };
   }
 
   issues.push(issueOptionsNotStatic(path));
 
-  return undefined;
+  if (resolved?.kind === "remote") {
+    return {
+      optionSource: {
+        kind: "remote",
+        ...resolved.request !== undefined && { request: resolved.request },
+        ...resolved.mapping !== undefined && { mapping: resolved.mapping }
+      }
+    };
+  }
+
+  return {};
 }
 
 /**

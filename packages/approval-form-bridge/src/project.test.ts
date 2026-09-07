@@ -379,6 +379,112 @@ describe("projectFormSchema", () => {
       ]);
     });
 
+    it("projects an inline remote source's request and mapping as the option source", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "select",
+          key: "city",
+          label: "城市",
+          dataSource: {
+            kind: "remote",
+            request: {
+              resource: "city",
+              action: "list",
+              version: "v1"
+            },
+            mapping: { labelKey: "name", valueKey: "code" }
+          }
+        }
+      ]));
+
+      expect(result.fields[0]?.optionSource).toEqual({
+        kind: "remote",
+        request: {
+          resource: "city",
+          action: "list",
+          version: "v1"
+        },
+        mapping: { labelKey: "name", valueKey: "code" }
+      });
+    });
+
+    it("dereferences a ref before projecting the option source", () => {
+      const mapped: FormDataSource = {
+        id: "DS3",
+        kind: "remote",
+        name: "mapped",
+        request: { resource: "ward", action: "list" },
+        mapping: { labelKey: "name" }
+      };
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "F1",
+            type: "select",
+            key: "ward",
+            label: "病区",
+            dataSource: { kind: "ref", dataSourceId: "DS3" }
+          }
+        ],
+        { dataSources: [mapped] }
+      ));
+
+      // The referenced source's own request and mapping, so a consumer never
+      // has to resolve a dataSourceId of its own.
+      expect(result.fields[0]?.optionSource).toEqual({
+        kind: "remote",
+        request: { resource: "ward", action: "list" },
+        mapping: { labelKey: "name" }
+      });
+    });
+
+    it("carries bound request parameters unevaluated", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "select",
+          key: "ward",
+          label: "病区",
+          dataSource: {
+            kind: "remote",
+            request: {
+              resource: "ward",
+              action: "list",
+              params: {
+                deptId: { kind: "expression", source: "formData.dept" },
+                active: { kind: "literal", value: true }
+              }
+            }
+          }
+        }
+      ]));
+
+      // Neither the backend nor a list-rendering consumer holds the form values
+      // an expression reads, so the binding travels intact and whoever replays
+      // the request owns the evaluation.
+      expect(result.fields[0]?.optionSource?.request?.params).toEqual({
+        deptId: { kind: "expression", source: "formData.dept" },
+        active: { kind: "literal", value: true }
+      });
+    });
+
+    it("omits the option source for a dangling ref", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "select",
+          key: "city",
+          label: "城市",
+          dataSource: { kind: "ref", dataSourceId: "missing" }
+        }
+      ]));
+
+      // Nothing was resolved, so there is nothing a consumer could replay —
+      // a descriptor naming no source would be worse than none.
+      expect(result.fields[0]).not.toHaveProperty("optionSource");
+    });
+
     it("emits neither options nor a warning when no source is configured", () => {
       const result = projectFormSchema(schemaOf([
         {
