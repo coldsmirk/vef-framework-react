@@ -88,6 +88,37 @@ describe("inferColumnType", () => {
     } as FormField)).toBe("text");
   });
 
+  it("infers an upload field by its file count, not by maxLength", () => {
+    // One file is one storage key — a string. Several is an array of them, the
+    // same shape checkbox-group carries, so it needs the same JSON column.
+    expect(inferColumnType({
+      id: "1",
+      type: "upload",
+      key: "a"
+    } as FormField)).toBe("text");
+    expect(inferColumnType({
+      id: "1",
+      type: "upload",
+      key: "a",
+      maxCount: 1
+    } as FormField)).toBe("text");
+    expect(inferColumnType({
+      id: "1",
+      type: "upload",
+      key: "a",
+      maxCount: 5
+    } as FormField)).toBe("json");
+    // maxLength bounds a string's length; an upload's bound is its file count,
+    // so the string/text fallback must not claim this widget.
+    expect(inferColumnType({
+      id: "1",
+      type: "upload",
+      key: "a",
+      maxCount: 5,
+      validate: { maxLength: 64 }
+    } as FormField)).toBe("json");
+  });
+
   it("honors an explicit columnType override over inference", () => {
     expect(inferColumnType({
       id: "1",

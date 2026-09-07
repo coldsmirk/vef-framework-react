@@ -53,6 +53,18 @@ export function inferColumnType(field: FormField): ColumnDataType {
     return precision !== undefined && precision > 0 ? "decimal" : "integer";
   }
 
+  // An upload field's value is a storage key: one string when it accepts a
+  // single file, an array of them otherwise — the same array shape
+  // checkbox-group carries, so a multi-file field needs the same JSON column.
+  // It cannot ride COLUMN_TYPE_BY_WIDGET because the answer depends on
+  // `maxCount`, and it must not reach the maxLength fallback below: maxLength
+  // bounds a string's length, while an upload's bound is its file COUNT.
+  if (field.type === "upload") {
+    const { maxCount } = field as { maxCount?: number };
+
+    return maxCount !== undefined && maxCount > 1 ? "json" : "text";
+  }
+
   const mapped = COLUMN_TYPE_BY_WIDGET[field.type];
 
   if (mapped !== undefined) {
