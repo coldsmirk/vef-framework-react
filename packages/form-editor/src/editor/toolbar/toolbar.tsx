@@ -13,7 +13,7 @@ import { validateSchema } from "../../engine/schema/validate";
 import { formatIssueLine } from "../../engine/validation";
 import { EditorIcon } from "../../icons";
 import { useDeviceRegistries } from "../../store/engine-provider";
-import { selectFieldCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { selectFieldCount, selectTotalFieldCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useEditorLayout } from "../editor-layout-context";
 import { IssueList } from "../validation-summary";
 import { confirmDialog, notify } from "./notify";
@@ -301,16 +301,27 @@ export function Toolbar({
   const showSummary = layout !== "drawer";
 
   const handleClear = (): void => {
-    if (fieldsCount === 0) {
+    // Scoped to what `clearSchema` actually resets — both presentations plus
+    // the variables, data sources and form-level linkage — not to the device on
+    // screen. Judging emptiness by the current device alone reported "already
+    // empty" over a designed PC form, and offered a bare confirmation next to a
+    // field count that understated the loss by two orders of magnitude.
+    const totalFields = selectTotalFieldCount(storeApi.getState());
+
+    if (totalFields === 0) {
       notify("success", "当前表单已为空");
       return;
     }
 
-    confirmDialog("确认清空当前表单？", "该操作可通过撤销恢复。", {
-      onOk: () => {
-        storeApi.getState().clearSchema();
+    confirmDialog(
+      "确认清空当前表单？",
+      `将清空 PC 与移动端的全部 ${totalFields} 个字段，以及变量、数据源与表单级联动。该操作可通过撤销恢复。`,
+      {
+        onOk: () => {
+          storeApi.getState().clearSchema();
+        }
       }
-    });
+    );
   };
 
   // Pre-publish validation outlet: the schema's structured issues (65 codes,

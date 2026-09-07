@@ -7,7 +7,7 @@ import type { Block, FieldCreateResult, FieldDefinition, FlexSlot, FormField, Fo
 import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
-import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
+import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, nextUniqueKey, sanitizeKey } from "../engine/keys";
 import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, setStackSlot as setStackSlotOp, targetScope } from "../engine/schema/edit-ops";
 import {
   editField as editFieldOp,
@@ -15,7 +15,7 @@ import {
   updateNode as updateNodeOp
 } from "../engine/schema/mutate";
 import { createEmptySchema } from "../engine/schema/nodes";
-import { currentLayer, withPresentation } from "../engine/schema/presentation";
+import { currentLayer, resolvePresentation, withPresentation } from "../engine/schema/presentation";
 import {
   pruneDataSourceReferences,
   pruneFormLinkageForRootBucket,
@@ -385,7 +385,14 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // active device's layer.
         const sharedChanged = (Object.keys(shared) as Array<keyof typeof shared>)
           .some(key => schema[key] !== shared[key]);
-        const gapChanged = "gap" in patch && currentLayer(schema, device).gap !== gap;
+        // Only against a presentation that EXISTS: `currentLayer` falls back to
+        // an empty layer for an undesigned device, and writing a gap onto that
+        // fallback materializes the presentation — replacing the mobile seed
+        // state (and its one-click convert-from-PC entry) with an empty canvas.
+        // Materializing stays reserved for an explicit seed or the first insert.
+        const gapChanged = "gap" in patch
+          && resolvePresentation(schema, device) !== undefined
+          && currentLayer(schema, device).gap !== gap;
 
         if (!sharedChanged && !gapChanged) {
           return;
@@ -402,6 +409,14 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           if (Object.hasOwn(shared, key) && shared[key] === undefined) {
             delete next[key];
           }
+        }
+
+        // `id` is required on FormSchema; the patch type only widens it because
+        // `Partial<Pick<…>>` cannot express "present or absent, never
+        // undefined". Writing the undefined through would leave the store with
+        // a schema export rejects as `id_required`.
+        if (next.id === undefined) {
+          next.id = schema.id;
         }
 
         // `gap` is a layout default of the active device's presentation, not
@@ -762,15 +777,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const layer = currentLayer(schema, device);
         const field = findField(layer, fieldId);
 
-        if (!field || !isKeyedField(field)) {
+        // `key` in the field, not `isKeyedField`: the latter is a VALUE guard
+        // (non-empty string), so it refused the one field that most needs a key
+        // set — an imported one whose key is empty, which `validateSchema`
+        // flags as `key_required` and which no other action can repair.
+        if (!field || !("key" in field)) {
           return;
         }
 
         const scope = findScope(layer, fieldId) ?? [];
         const sanitized = sanitizeKey(key);
         // An all-invalid input sanitizes to empty — keep the current key rather
-        // than dropping the field's binding.
-        const base = sanitized.length > 0 ? sanitized : field.key;
+        // than dropping the field's binding. A field that has no key yet has
+        // nothing to keep, so it falls back to its type instead of staying
+        // unusable.
+        const base = sanitized.length > 0 ? sanitized : field.key || sanitizeKey(field.type);
         // Unique within the scope, excluding the field's own current key so
         // re-typing the same key is a no-op.
         const used = collectScopeKeys(layer, scope);
@@ -888,7 +909,6 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
       undo: () => {
         const {
-          device,
           future,
           past,
           schema,
@@ -911,14 +931,20 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           schema: previous.schema,
           device: previous.device,
           past: past.slice(0, -1),
-          future: [...future, { schema, device }],
+          // The entry we push carries the device the state being LEFT belongs
+          // to — which is the device the edit that produced it happened on,
+          // i.e. `previous.device`. Stamping the live view device instead meant
+          // undoing after a device switch pushed the wrong device, and the
+          // matching redo then jumped the view to a presentation the change was
+          // never made on (an undesigned one shows its seed state, so the redo
+          // looks like it did nothing).
+          future: [...future, { schema, device: previous.device }],
           selectedId: keepSelection ? selectedId : null
         });
       },
 
       redo: () => {
         const {
-          device,
           future,
           past,
           schema,
@@ -938,7 +964,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({
           schema: next.schema,
           device: next.device,
-          past: [...past, { schema, device }],
+          past: [...past, { schema, device: next.device }],
           future: future.slice(0, -1),
           selectedId: keepSelection ? selectedId : null
         });
@@ -998,6 +1024,18 @@ const fieldCountOfLayer = memoizeByLayer(countFields);
  */
 export function selectFieldCount(state: FormEditorStoreState): number {
   return fieldCountOfLayer(currentLayer(state.schema, state.device));
+}
+
+/**
+ * Fields across BOTH presentations. What a whole-schema action (clearing,
+ * importing) actually affects — `selectFieldCount` speaks for the device on
+ * screen, which understates a form whose other device carries the design.
+ */
+export function selectTotalFieldCount(state: FormEditorStoreState): number {
+  const { presentations } = state.schema;
+
+  return fieldCountOfLayer(presentations.pc)
+    + (presentations.mobile === undefined ? 0 : fieldCountOfLayer(presentations.mobile));
 }
 
 const fieldRuleCountOfLayer = memoizeByLayer((layer: PresentationLayer): number => {

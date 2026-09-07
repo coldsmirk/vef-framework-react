@@ -734,6 +734,24 @@ describe("form store", () => {
       expect(api.getState().schema).toBe(afterInsert);
     });
 
+    it("redoes onto the device the change was made on, not the one on screen", () => {
+      // The entry pushed to the other stack carried the LIVE view device rather
+      // than its own schema's, so undoing after a device switch and redoing
+      // jumped the view to a presentation the change was never made on — an
+      // undesigned one renders its seed state, so the redo looked inert.
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().undo());
+      expect(api.getState().device).toBe("pc");
+
+      act(() => api.getState().redo());
+
+      expect(api.getState().device).toBe("pc");
+      expect(rootKeys(api.getState().schema)).toHaveLength(1);
+    });
+
     it("restores the cleared schema through undo", () => {
       const api = setup();
       act(() => api.getState().insertField({ definition: textfieldDefinition }));
@@ -934,6 +952,28 @@ describe("form store", () => {
   });
 
   describe("setFieldKey", () => {
+    it("names a field whose imported key is empty", () => {
+      // `isKeyedField` is a VALUE guard, so it refused the one field that most
+      // needs a key: an imported one whose key is "", which validateSchema
+      // flags as `key_required` and no other action can repair.
+      const api = setup();
+      act(() => api.getState().setSchema(schemaOf([tf("fa", "")])));
+
+      act(() => api.getState().setFieldKey({ fieldId: "fa", key: "amount" }));
+
+      expect((findField(api.getState().schema.presentations.pc, "fa") as TextfieldField).key).toBe("amount");
+    });
+
+    it("falls back to the field type when a key-less field gets an all-invalid name", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(schemaOf([tf("fa", "")])));
+
+      act(() => api.getState().setFieldKey({ fieldId: "fa", key: "!!!" }));
+
+      // Anything non-empty beats leaving the field unusable.
+      expect((findField(api.getState().schema.presentations.pc, "fa") as TextfieldField).key).toBe("textfield");
+    });
+
     it("sanitizes characters reserved by the value-path machinery", () => {
       const api = setup();
       act(() => api.getState().insertField({ definition: textfieldDefinition }));
@@ -1227,6 +1267,28 @@ describe("form store", () => {
   });
 
   describe("patchSchema", () => {
+    it("keeps the required id when a patch carries an explicit undefined", () => {
+      const api = setup();
+      const { id } = api.getState().schema;
+
+      act(() => api.getState().patchSchema({ id: undefined, variables: [] }));
+
+      expect(api.getState().schema.id).toBe(id);
+    });
+
+    it("does not materialize an undesigned presentation through a gap edit", () => {
+      // A layout preference must not make a device-design decision: writing the
+      // gap onto `currentLayer`'s empty-layer fallback replaced the mobile seed
+      // state — and its one-click convert-from-PC entry — with a blank canvas.
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().patchSchema({ gap: "large" }));
+
+      expect(api.getState().schema.presentations.mobile).toBeUndefined();
+    });
+
     it("routes gap to the active device's presentation layer", () => {
       const api = setup();
 
