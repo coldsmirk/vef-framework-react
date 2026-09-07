@@ -49,7 +49,6 @@ import { useRuntimeFieldState } from "../runtime/runtime-context";
 import { RuntimeStateController, SubformRowController } from "../runtime/runtime-state-controller";
 import { DeviceProvider, useContainerChrome, useDevice } from "../store/engine-provider";
 import { DataSourceProvider } from "./data-source-context";
-import { DataSourceParamScopeProvider } from "./data-source-param-scope";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
@@ -172,6 +171,12 @@ const EvaluationScopeContext = createContext<EvaluationContext | undefined>(unde
 EvaluationScopeContext.displayName = "EvaluationScopeContext";
 
 interface RenderCtx {
+  /**
+   * Whether the schema binds any data-source parameter to the form. Threaded
+   * down so each subform row's controller publishes its own parameter scope —
+   * a bound parameter inside a repeated row must resolve against THAT row.
+   */
+  boundParams: boolean;
   disabled: boolean;
   /**
    * Renderer-instance prefix (React `useId`) for every field's DOM id. Two
@@ -562,35 +567,30 @@ function FormRendererInner({
         form,
         gutter: resolveStackGap(runtimeSchema.gap, DEFAULT_STACK_GAP),
         namePrefix: "",
-        sinks
+        sinks,
+        boundParams
       };
     },
-    [disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, runtimeSchema.gap, sinks]
+    [boundParams, disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, runtimeSchema.gap, sinks]
   );
 
   return (
     <AppForm>
       <EvaluationScopeContext value={evaluationContext}>
         <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <DataSourceParamScopeProvider
-            context={evaluationContext}
-            enabled={boundParams}
+          <RuntimeStateController
+            boundParams={boundParams}
+            evaluationContext={evaluationContext}
             evaluators={evaluators}
+            fieldPermissions={fieldPermissions}
             form={form}
+            schema={runtimeSchema}
+            sinks={sinks}
           >
-            <RuntimeStateController
-              evaluationContext={evaluationContext}
-              evaluators={evaluators}
-              fieldPermissions={fieldPermissions}
-              form={form}
-              schema={runtimeSchema}
-              sinks={sinks}
-            >
-              <Form css={rootCss} disabled={disabled}>
-                <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
-              </Form>
-            </RuntimeStateController>
-          </DataSourceParamScopeProvider>
+            <Form css={rootCss} disabled={disabled}>
+              <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
+            </Form>
+          </RuntimeStateController>
         </DataSourceProvider>
       </EvaluationScopeContext>
     </AppForm>
@@ -1086,6 +1086,7 @@ function SubformRowScope({
 
   return (
     <SubformRowController
+      boundParams={ctx.boundParams}
       evaluationContext={evaluationContext}
       evaluators={ctx.evaluators}
       form={ctx.form}

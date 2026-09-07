@@ -132,6 +132,44 @@ describe("FormRenderer bound data-source params", () => {
     });
   });
 
+  it("子表单行内的绑定参数按本行求值，而不是按整表单", async () => {
+    const user = userEvent.setup();
+    const resolve = vi.fn().mockResolvedValue([{ label: "W", value: "w" }]);
+    const subform: Block = {
+      id: "Sub_lines",
+      type: "subform",
+      variant: "stack",
+      key: "lines",
+      label: "明细",
+      minRows: 2,
+      template: [departmentField, wardSelect()]
+    };
+
+    renderRuntime(
+      <FormRenderer
+        dataSourceResolver={{ resolve }}
+        evaluators={evaluators}
+        schema={stack(subform)}
+      />
+    );
+
+    await waitFor(() => expect(resolve).toHaveBeenCalled());
+
+    // 两行各自输入不同的科室。行作用域生效时，两行解析出的请求不同；
+    // 若参数按根 values 求值，`deptId` 不是根键 ⇒ 参数被丢弃 ⇒ 两行请求
+    // 完全相同，还会因为缓存键相同而共用同一份选项列表。
+    const inputs = screen.getAllByRole("textbox", { name: "deptId" });
+    await user.type(inputs[0] as HTMLElement, "D1");
+    await user.type(inputs[1] as HTMLElement, "D2");
+
+    await waitFor(() => {
+      const seen = resolve.mock.calls.map(call => (call[0] as { params?: Record<string, unknown> }).params?.departmentId);
+
+      expect(seen).toContain("D1");
+    });
+    expect(seen).toContain("D2");
+  });
+
   it("全固定参数的表单不会因无关输入重新解析", async () => {
     const user = userEvent.setup();
     const resolve = vi.fn().mockResolvedValue([{ label: "W", value: "w" }]);

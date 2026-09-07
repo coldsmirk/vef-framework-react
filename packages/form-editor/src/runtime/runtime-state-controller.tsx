@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { isKeyedField } from "../engine/keys";
 import { evaluateRuntimeStates } from "../engine/linkage";
 import { isRootScope, walkFields } from "../engine/schema/walk";
+import { DataSourceParamScopeProvider } from "../render/data-source-param-scope";
 import { EffectDispatchProvider, useScopeEffects } from "./effects";
 import { writeFieldValue } from "./field-write";
 import { resolveScopeValues } from "./resolve-scope-values";
@@ -18,6 +19,12 @@ import { RuntimeStateContextProvider } from "./runtime-context";
 import { stabilizeStateMap } from "./stabilize-state-map";
 
 interface LinkageScopeProps {
+  /**
+   * Whether the schema binds any data-source parameter to the form. False
+   * publishes no parameter scope at all, keeping every option-backed field out
+   * of the keystroke render path on a form that has nothing to re-resolve.
+   */
+  boundParams: boolean;
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
@@ -44,6 +51,7 @@ interface LinkageScopeProps {
  * root and per-row controllers.
  */
 function LinkageScope({
+  boundParams,
   children,
   evaluators,
   evaluationContext,
@@ -114,7 +122,15 @@ function LinkageScope({
 
   return (
     <RuntimeStateContextProvider value={stateMap}>
-      <EffectDispatchProvider run={runEffects}>{children}</EffectDispatchProvider>
+      <EffectDispatchProvider run={runEffects}>
+        <DataSourceParamScopeProvider
+          context={evaluationContext}
+          evaluators={evaluators}
+          values={boundParams ? values : undefined}
+        >
+          {children}
+        </DataSourceParamScopeProvider>
+      </EffectDispatchProvider>
     </RuntimeStateContextProvider>
   );
 }
@@ -125,6 +141,7 @@ function LinkageScope({
  * write, so the default `Object.is` compare on the selector is correct here.
  */
 export function RuntimeStateController({
+  boundParams,
   children,
   evaluators,
   evaluationContext,
@@ -133,6 +150,7 @@ export function RuntimeStateController({
   schema,
   sinks
 }: {
+  boundParams: boolean;
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
@@ -145,6 +163,7 @@ export function RuntimeStateController({
 
   return (
     <LinkageScope
+      boundParams={boundParams}
       evaluationContext={evaluationContext}
       evaluators={evaluators}
       fieldPermissions={fieldPermissions}
@@ -167,6 +186,7 @@ export function RuntimeStateController({
  * ids (which repeat across rows) resolve to this row's own state map.
  */
 export function SubformRowController({
+  boundParams,
   children,
   evaluators,
   evaluationContext,
@@ -175,6 +195,7 @@ export function SubformRowController({
   sinks,
   templateSchema
 }: {
+  boundParams: boolean;
   children: ReactNode;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
@@ -191,6 +212,7 @@ export function SubformRowController({
 
   return (
     <LinkageScope
+      boundParams={boundParams}
       evaluationContext={evaluationContext}
       evaluators={evaluators}
       // Top-level permissions clamp the subform node itself, never a template
