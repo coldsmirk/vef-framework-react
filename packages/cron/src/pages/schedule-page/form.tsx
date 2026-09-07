@@ -1,7 +1,7 @@
 import type { ConcurrencyPolicy, MisfirePolicy } from "../../types";
 import type { ScheduleFormValues } from "./model";
 
-import { Flex, globalCssVars, Grid, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { filterOptionByLabel, Flex, globalCssVars, Grid, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { z } from "@vef-framework-react/shared";
 
 import {
@@ -50,6 +50,7 @@ export function ScheduleForm() {
               <field.Select
                 required
                 showSearch
+                filterOption={filterOptionByLabel}
                 label="任务处理器"
                 loading={jobs.loading}
                 options={jobs.options}

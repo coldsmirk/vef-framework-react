@@ -1,6 +1,6 @@
 import type { ScheduleSearch } from "../../types";
 
-import { Col, Row, useFormContext } from "@vef-framework-react/components";
+import { Col, filterOptionByLabel, Row, useFormContext } from "@vef-framework-react/components";
 
 import { TRIGGER_KIND_OPTIONS } from "../../components";
 import { useJobNames } from "./helpers";
@@ -38,6 +38,7 @@ export function ScheduleAdvancedSearchFields() {
             <field.Select
               allowClear
               showSearch
+              filterOption={filterOptionByLabel}
               label="任务处理器"
               loading={jobs.loading}
               options={jobs.options}

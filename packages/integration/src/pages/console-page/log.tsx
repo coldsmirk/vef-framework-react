@@ -2,7 +2,7 @@ import type { CrudBasicSceneFormValues, DescriptionsItem, TableColumn } from "@v
 
 import type { Direction, FailureKind, InvocationLog, LogSearch } from "../../types";
 
-import { Alert, Button, Crud, Descriptions, Drawer, globalCssVars, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
+import { Alert, Button, Crud, Descriptions, Drawer, filterOptionByLabel, globalCssVars, Labeled, Stack, Text, useFormContext } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { useLogApi } from "../../api";
@@ -44,6 +44,7 @@ function LogSearchFields() {
             allowClear
             noWrapper
             showSearch
+            filterOption={filterOptionByLabel}
             options={systemOptions}
             placeholder="系统"
             style={{ minWidth: 140 }}
@@ -57,6 +58,7 @@ function LogSearchFields() {
             allowClear
             noWrapper
             showSearch
+            filterOption={filterOptionByLabel}
             options={contractOptions}
             placeholder="契约"
             style={{ minWidth: 140 }}

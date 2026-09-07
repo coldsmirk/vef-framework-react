@@ -212,6 +212,7 @@ export { Row, type RowProps } from "./row";
 export { ScrollArea, type ScrollAreaProps, type ScrollAreaScrollbars } from "./scroll-area";
 export { Segmented, type SegmentedOption, type SegmentedProps } from "./segmented";
 export {
+  filterOptionByLabel,
   Select,
   useCodeSetOptionsSelect,
   useDataOptionsSelect,

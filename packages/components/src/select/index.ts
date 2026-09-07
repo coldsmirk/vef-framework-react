@@ -1,5 +1,6 @@
 import type { DefaultOptionType } from "antd/es/select";
 
+export { filterOptionByLabel } from "./filter";
 export {
   useCodeSetOptionsSelect,
   useDataOptionsSelect,

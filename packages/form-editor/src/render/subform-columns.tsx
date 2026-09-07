@@ -2,12 +2,11 @@ import type { EditableColumn } from "@vef-framework-react/components";
 
 import type { Block, FieldOptionSource, KeyedFormField } from "../types";
 
-import { createEditableColumn } from "@vef-framework-react/components";
+import { createEditableColumn, filterOptionByLabel } from "@vef-framework-react/components";
 import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
 import { isContainerNode } from "../engine/schema/walk";
-import { filterOptionByLabel } from "./parts/option-filter";
 import { validateKeyedFieldValue } from "./submit";
 
 /**

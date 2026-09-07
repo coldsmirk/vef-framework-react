@@ -2,11 +2,10 @@ import type { FC } from "react";
 
 import type { FieldComponentProps, FieldDefinition, FieldOptionSource, PropertiesDescriptor, SelectField } from "../../types";
 
-import { Select } from "@vef-framework-react/components";
+import { filterOptionByLabel, Select } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
-import { filterOptionByLabel } from "../../render/parts/option-filter";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, columnTypeEntry, requiredEntry, sizeEntry } from "../field-entries";
 
