@@ -26,7 +26,7 @@ import type {
 } from "../types";
 
 import { css } from "@emotion/react";
-import { EditableTable, Flex, globalCssVars, Stack, useForm } from "@vef-framework-react/components";
+import { EditableTable, Flex, globalCssVars, Stack, useForm, useFormStore } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, memo, use, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 
@@ -834,6 +834,10 @@ const SUBFORM_ROW_ID = "__rid";
  * `EditableTable` on PC; everything else — the `stack` variant, or `table` on
  * mobile (`EditableTable` is desktop antd) — renders the stacked layout.
  */
+// Stable empty array: a fresh `[]` per selector run would churn the
+// subscription on every store notification.
+const EMPTY_ERRORS: unknown[] = [];
+
 function SubformFlow({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }): ReactElement {
   const device = useDevice();
 
@@ -859,6 +863,10 @@ function SubformFlow({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode })
 function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform }): ReactElement {
   const chrome = useContainerChrome();
   const arrayName = `${ctx.namePrefix}${subform.key}`;
+  // The subform mounts ONE field for the whole array, so its own errors
+  // ("at least one row", and a table variant's rolled-up row error) have no
+  // other slot — without this they block submission with nothing on screen.
+  const fieldErrors = useFormStore(ctx.form.store, state => state.fieldMeta[arrayName]?.errors ?? EMPTY_ERRORS);
   const minRows = subform.minRows ?? 0;
   const idsRef = useRef<string[]>([]);
   const idSeedRef = useRef(0);
@@ -874,7 +882,7 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
   const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
 
   return (
-    <chrome.Subform title={subform.label}>
+    <chrome.Subform errors={formatErrors(fieldErrors)} title={subform.label}>
       <ctx.form.AppField mode="array" name={arrayName}>
         {(fieldApi: RuntimeArrayFieldApi) => {
           const rows = (Array.isArray(fieldApi.state.value) ? fieldApi.state.value : []) as Array<Record<string, unknown>>;
@@ -949,6 +957,10 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
 function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }): ReactElement {
   const chrome = useContainerChrome();
   const arrayName = `${ctx.namePrefix}${subform.key}`;
+  // The subform mounts ONE field for the whole array, so its own errors
+  // ("at least one row", and a table variant's rolled-up row error) have no
+  // other slot — without this they block submission with nothing on screen.
+  const fieldErrors = useFormStore(ctx.form.store, state => state.fieldMeta[arrayName]?.errors ?? EMPTY_ERRORS);
   const minRows = subform.minRows ?? 0;
   const rowKeysRef = useRef<string[]>([]);
   const rowKeySeedRef = useRef(0);
@@ -971,7 +983,7 @@ function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }
   }, []);
 
   return (
-    <chrome.Subform title={subform.label}>
+    <chrome.Subform errors={formatErrors(fieldErrors)} title={subform.label}>
       <ctx.form.AppField mode="array" name={arrayName}>
         {(fieldApi: RuntimeArrayFieldApi) => {
           arrayApiRef.current = fieldApi;

@@ -14,6 +14,7 @@ import type {
 import { Button, Card, Collapse, Tabs } from "@vef-framework-react/components";
 
 import { EditorIcon } from "../../icons";
+import { FieldFooter } from "../parts/field-shell";
 import {
   SECTION_PANEL_KEY,
   subformBodyCss,
@@ -59,10 +60,15 @@ function PcTabs({
   return <Tabs activeKey={activeKey} items={tabItems} onChange={onChange} />;
 }
 
-function PcSubform({ children, title }: SubformChromeProps): ReactElement {
+function PcSubform({
+  children,
+  errors,
+  title
+}: SubformChromeProps): ReactElement {
   return (
     <Card title={title}>
       <div css={subformBodyCss}>{children}</div>
+      <FieldFooter errors={errors} />
     </Card>
   );
 }

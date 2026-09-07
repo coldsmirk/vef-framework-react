@@ -169,6 +169,44 @@ describe("FormRenderer bound data-source params", () => {
     });
   });
 
+  it("无关按键不会为飞行中的固定参数请求重复发起", async () => {
+    // `resolveRequestParams` 每次调用都新建对象，而 paramScope 的身份随任意
+    // 表单值变化而变——`schemaHasBoundParams` 是整表单开关，所以一个绑定参数
+    // 就把每一个远程数据源都拖进了按键路径。慢接口 + 打字 = 线性放大的重复请求。
+    const user = userEvent.setup();
+    // 永不 settle：让缓存在整个用例期间保持未命中，暴露飞行窗口内的重复发起。
+    const resolve = vi.fn().mockReturnValue(new Promise<never>(() => {
+      // Deliberately never settles.
+    }));
+    const fixedSelect: SelectField = {
+      ...wardSelect(),
+      id: "Field_fixed",
+      key: "fixed",
+      dataSource: {
+        kind: "remote",
+        request: { resource: "sys/fixed", action: "find_options" }
+      }
+    };
+
+    renderRuntime(
+      <FormRenderer
+        dataSourceResolver={{ resolve }}
+        evaluators={evaluators}
+        schema={stack(departmentField, wardSelect(), fixedSelect)}
+      />
+    );
+
+    await waitFor(() => expect(resolve).toHaveBeenCalled());
+
+    const fixedCalls = (): number => resolve.mock.calls.filter(call => (call[0] as { resource: string }).resource === "sys/fixed").length;
+    const before = fixedCalls();
+
+    await user.type(screen.getByRole("textbox", { name: "deptId" }), "abc");
+
+    // 绑定字段的那一个会重新解析（级联本意），固定参数的那个不该动。
+    expect(fixedCalls()).toBe(before);
+  });
+
   it("全固定参数的表单不会因无关输入重新解析", async () => {
     const user = userEvent.setup();
     const resolve = vi.fn().mockResolvedValue([{ label: "W", value: "w" }]);

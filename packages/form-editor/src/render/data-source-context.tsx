@@ -9,7 +9,7 @@ import type {
   RemoteOptionMapping
 } from "../types";
 
-import { createContext, use, useEffect, useMemo, useState } from "react";
+import { createContext, use, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveRequestParams } from "../engine/data-source-params";
 import { noopDataSourceResolver } from "../types";
@@ -177,7 +177,9 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
   // Refresh nonce for a `ref`-to-remote source: a `refresh_data_source` effect
   // bumps it, re-running the fetch below against the same request. Inline remote
   // and static sources have no `refreshId`, so they pin to 0 and never re-fetch.
-  const refreshVersion = resolved.kind === "remote" && resolved.refreshId ? versions[resolved.refreshId] ?? 0 : 0;
+  const refreshId = resolved.kind === "remote" ? resolved.refreshId : undefined;
+  const mapping = resolved.kind === "remote" ? resolved.mapping : undefined;
+  const refreshVersion = refreshId === undefined ? 0 : versions[refreshId] ?? 0;
   // Cache key: the concrete request (+ mapping) plus the refresh nonce, so a
   // refresh bump is a guaranteed miss while a plain remount is a hit.
   const cacheKey = useMemo(
@@ -198,8 +200,18 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     };
   });
 
+  // The effect below keys on `cacheKey` (a string) rather than on `request` (a
+  // fresh object per render), so it re-runs exactly when the resolved request
+  // actually changes. The request itself travels through a ref, which the
+  // effect reads at fire time.
+  const requestRef = useRef(request);
+
+  requestRef.current = request;
+
   useEffect(() => {
-    if (resolved.kind !== "remote" || request === null || cacheKey === null) {
+    const currentRequest = requestRef.current;
+
+    if (currentRequest === null || cacheKey === null) {
       return;
     }
 
@@ -226,7 +238,7 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
       };
     });
 
-    resolver.resolve(request, resolved.mapping)
+    resolver.resolve(currentRequest, mapping)
       .then(options => {
         cache.set(cacheKey, options);
 
@@ -246,7 +258,7 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
         // Dev-visible signal: a silently empty select after a resolver failure
         // is otherwise indistinguishable from a legitimately empty source.
         console.warn(
-          `[form-editor] data source "${resolved.refreshId ?? "(inline remote)"}" failed to resolve:`,
+          `[form-editor] data source "${refreshId ?? "(inline remote)"}" failed to resolve:`,
           error
         );
         setRemote(prev => {
@@ -261,7 +273,10 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     return () => {
       cancelled = true;
     };
-  }, [resolved, request, resolver, cache, cacheKey]);
+    // `resolved` is deliberately absent: its mapping and refresh id are both
+    // folded into `cacheKey`, and including the object would reintroduce the
+    // per-render identity churn this fix removes.
+  }, [cache, cacheKey, mapping, refreshId, resolver]);
 
   return resolved.kind === "static" ? { options: resolved.options, ...STATIC_RESULT } : remote;
 }

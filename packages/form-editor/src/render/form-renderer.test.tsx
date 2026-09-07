@@ -526,6 +526,36 @@ describe("FormRenderer", () => {
     await waitFor(() => expect(total().value).toBe("500"));
   });
 
+  it("shows a table subform's row error on a field that is actually mounted", async () => {
+    // Row errors are keyed `lines[0].amount`. The stack variant mounts that
+    // name as a real field; the table variant mounts ONE field for the whole
+    // array, so the error had nowhere to render and submission was blocked with
+    // no message anywhere — the button simply did nothing.
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const subform: SubformNode = {
+      id: "Sub_lines",
+      type: "subform",
+      variant: "table",
+      key: "lines",
+      label: "明细",
+      template: [makeField("amount", { label: "金额", validate: { required: true } })]
+    };
+
+    renderRuntime(
+      <FormRenderer
+        defaultValues={{ lines: [{ amount: "" }] }}
+        schema={stack(subform, submitButton())}
+        onSubmit={onSubmit}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("第 1 行「金额」此项为必填");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("delivers a beforeSubmit set_field write in the payload", async () => {
     // form-core hands `onSubmit` the values snapshot it captured for
     // validation, and `writeFieldValue` mints a NEW values object — so the

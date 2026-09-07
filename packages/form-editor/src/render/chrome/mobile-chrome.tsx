@@ -18,6 +18,7 @@ import Collapse from "antd-mobile/es/components/collapse";
 import Tabs from "antd-mobile/es/components/tabs";
 
 import { EditorIcon } from "../../icons";
+import { FieldFooter } from "../parts/field-shell";
 import {
   SECTION_PANEL_KEY,
   subformBodyCss,
@@ -114,8 +115,17 @@ function MobileTabs({
   );
 }
 
-function MobileSubform({ children, title }: SubformChromeProps): ReactElement {
-  return <MobileCard bodyExtra={subformBodyCss} title={title}>{children}</MobileCard>;
+function MobileSubform({
+  children,
+  errors,
+  title
+}: SubformChromeProps): ReactElement {
+  return (
+    <MobileCard bodyExtra={subformBodyCss} title={title}>
+      {children}
+      <FieldFooter errors={errors} />
+    </MobileCard>
+  );
 }
 
 function MobileSubformRow({ children, removeControl }: SubformRowChromeProps): ReactElement {
