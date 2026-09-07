@@ -6,7 +6,7 @@ import type { DynamicValue, FieldOption, RemoteDataSourceRequest, RemoteOptionMa
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Input } from "@vef-framework-react/components";
 import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { DynamicValueEditor } from "./dynamic-value-editor";
@@ -376,20 +376,64 @@ export function RemoteRequestFields({
     onChange(request, hasMapping ? next : undefined);
   };
 
+  // Row index → a typed-but-uncommitted parameter name (see `updateParam`).
+  const [paramKeyDrafts, setParamKeyDrafts] = useState<Record<number, string>>({});
   const params = request.params ?? {};
   const paramEntries = Object.entries(params);
 
   // `params` is a record, so a row edit rebuilds it from the entry list. That
   // keeps insertion order (and therefore row order) stable across a rename,
   // which patching the object in place would not.
+  //
+  // A rebuild is only safe while the keys are unique: `Object.fromEntries`
+  // keeps the LAST entry for a duplicate, so committing a colliding rename
+  // would delete the other row's value outright. A collision therefore holds
+  // the edit in the draft below and warns, matching the option list's policy —
+  // the user is mid-edit, and mid-edit is not a licence to drop their data.
   const patchParams = (entries: Array<[string, DynamicValue]>): void => {
-    const next: Record<string, DynamicValue> = Object.fromEntries(entries);
-
-    patchRequest({ params: entries.length > 0 ? next : undefined });
+    patchRequest({ params: entries.length > 0 ? Object.fromEntries(entries) : undefined });
   };
 
   const updateParam = (index: number, key: string, value: DynamicValue): void => {
-    patchParams(paramEntries.map((entry, i) => i === index ? [key, value] : entry));
+    const entries: Array<[string, DynamicValue]> = paramEntries.map(
+      (entry, i) => i === index ? [key, value] : entry
+    );
+
+    setParamKeyDrafts(drafts => {
+      return { ...drafts, [index]: key };
+    });
+
+    if (new Set(entries.map(([entryKey]) => entryKey)).size !== entries.length) {
+      return;
+    }
+
+    patchParams(entries);
+  };
+
+  // Row index → the key the user has typed but that has not been committed
+  // (because it currently collides). Cleared as soon as the stored key catches
+  // up, so a committed rename stops shadowing.
+  const paramKeyOf = (index: number, storedKey: string): string => {
+    const draft = paramKeyDrafts[index];
+
+    return draft !== undefined && draft !== storedKey ? draft : storedKey;
+  };
+
+  const duplicatedParamKeys = (): string[] => {
+    const seen = new Set<string>();
+    const duplicated = new Set<string>();
+
+    for (const [index, [storedKey]] of paramEntries.entries()) {
+      const key = paramKeyOf(index, storedKey);
+
+      if (seen.has(key)) {
+        duplicated.add(key);
+      }
+
+      seen.add(key);
+    }
+
+    return [...duplicated];
   };
 
   return (
@@ -418,12 +462,16 @@ export function RemoteRequestFields({
           请求参数 —— 字面量为固定值，表达式按当前表单求值（如 `$form.departmentId`），可实现级联
         </span>
 
+        {duplicatedParamKeys().length > 0
+          ? <span css={duplicateWarningCss}>{`参数名重复，未保存：${duplicatedParamKeys().join("、")}`}</span>
+          : null}
+
         {paramEntries.map(([key, value], index) => (
           <div key={index} css={paramRowCss}>
             <Input
               css={paramKeyCss}
               placeholder="参数名"
-              value={key}
+              value={paramKeyOf(index, key)}
               onChange={(event: ChangeEvent<HTMLInputElement>) => updateParam(index, event.target.value, value)}
             />
 

@@ -150,9 +150,17 @@ export interface ScopeKeyBucket {
  * simulation that previews that prune).
  */
 export function collectSubtreeKeysByScope(node: Block, baseScope: ScopePath): ScopeKeyBucket[] {
+  return collectBlocksKeysByScope([node], baseScope);
+}
+
+/**
+ * {@link collectSubtreeKeysByScope} over a block LIST rather than a single
+ * subtree root — what a tab body is, since a tab is not itself a `Block`.
+ */
+export function collectBlocksKeysByScope(blocks: Block[], baseScope: ScopePath): ScopeKeyBucket[] {
   const buckets = new Map<string, ScopeKeyBucket>();
 
-  walkNodes({ children: [node] }, (descendant, relativeScope) => {
+  walkNodes({ children: blocks }, (descendant, relativeScope) => {
     if (!isKeyedNode(descendant)) {
       return;
     }

@@ -24,6 +24,7 @@ import {
   renameLinkageKeyReferences,
   renameVariableReferences
 } from "../engine/schema/reconcile";
+import { removeTabBody } from "../engine/schema/removal-impact";
 import { isValidVariableName } from "../engine/schema/validate";
 import { countFields, findField, findNode, findScope, scopeEquals, walkNodes } from "../engine/schema/walk";
 
@@ -174,6 +175,16 @@ export interface FormEditorStoreState {
    * form-level linkage when root-scope pc keys are affected.
    */
   removeNode: (nodeId: string) => void;
+  /**
+   * Remove one tab of a tabs container, together with its whole body. Runs the
+   * same reference prune and selection cleanup as {@link removeNode} — a tab
+   * body is a subtree, and dropping it through a plain block update left every
+   * surviving rule pointing at keys that no longer existed, then silently
+   * rebound those rules when the freed key was handed to a new field. A tabs
+   * container always keeps at least one tab, so removing the last one is a
+   * no-op.
+   */
+  removeTab: (tabsId: string, tabId: string) => void;
   /**
    * Deep-clone a node (fresh ids, fresh keys) and drop it on a new row right
    * below its source.
@@ -600,6 +611,40 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
         // The removed node may have contained the selection — clear it whenever
         // it no longer resolves in the pruned tree, not only on an exact match.
+        const selectionSurvives = selectedId !== null && findNode(nextLayer, selectedId) !== undefined;
+
+        checkpoint();
+        set({
+          schema: nextSchema,
+          selectedId: selectionSurvives ? selectedId : null
+        });
+      },
+
+      removeTab: (tabsId, tabId) => {
+        const {
+          device,
+          schema,
+          selectedId
+        } = get();
+        const layer = currentLayer(schema, device);
+        const removal = removeTabBody(layer, tabsId, tabId);
+
+        if (!removal) {
+          return;
+        }
+
+        const nextLayer = pruneScopedReferences(removal.layer, removal.buckets);
+
+        let nextSchema = withPresentation(schema, device, nextLayer);
+
+        if (device === "pc" && nextSchema.linkage !== undefined) {
+          const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removal.buckets);
+
+          if (linkage !== nextSchema.linkage) {
+            nextSchema = { ...nextSchema, linkage };
+          }
+        }
+
         const selectionSurvives = selectedId !== null && findNode(nextLayer, selectedId) !== undefined;
 
         checkpoint();

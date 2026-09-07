@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { Block, FieldLinkageRule, FormSchema, SectionNode, SubformNode, TextfieldField } from "../types";
+import type { Block, FieldLinkageRule, FormSchema, SectionNode, SubformNode, TabsNode, TextfieldField } from "../types";
 import type { FormEditorStoreApi } from "./form-store";
 
 import { act, renderHook } from "@testing-library/react";
@@ -71,6 +71,28 @@ function schemaOf(children: Block[], extra: Partial<FormSchema> = {}): FormSchem
     presentations: { pc: { children } },
     ...extra
   };
+}
+
+function tabsSchema(): FormSchema {
+  return schemaOf([
+    {
+      id: "tabs",
+      type: "tabs",
+      tabs: [
+        {
+          id: "t1",
+          label: "\u{4E00}",
+          children: [tf("fa", "amount")]
+        },
+        {
+          id: "t2",
+          label: "\u{4E8C}",
+          children: []
+        }
+      ]
+    },
+    tf("fb", "note", { linkage: { rules: [conditionRule("r1", "amount")] } })
+  ]);
 }
 
 function variablesSchema(): FormSchema {
@@ -245,6 +267,54 @@ describe("form store", () => {
       // de-duplicated against the original.
       expect(clone.children[0]).toMatchObject({ type: "textfield", key: "textfield_2" });
       expect(api.getState().selectedId).toBe(clone.id);
+    });
+  });
+
+  describe("removeTab", () => {
+    it("prunes a rule that referenced a key inside the removed tab", () => {
+      // Deleting a tab deletes its whole body, so it must run the same
+      // reference prune a node removal does. A plain block update left `fb`
+      // pointing at a key that no longer existed — and the freed `amount` would
+      // later be handed to an unrelated new field, silently rebinding the rule.
+      const api = setup();
+      act(() => api.getState().setSchema(tabsSchema()));
+
+      act(() => api.getState().removeTab("tabs", "t1"));
+
+      expect(findField(api.getState().schema.presentations.pc, "fb")?.linkage?.rules).toEqual([]);
+    });
+
+    it("clears a selection that lived inside the removed tab", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(tabsSchema()));
+      act(() => api.getState().selectNode("fa"));
+
+      act(() => api.getState().removeTab("tabs", "t1"));
+
+      expect(api.getState().selectedId).toBeNull();
+    });
+
+    it("refuses to remove the last tab", () => {
+      // A tabs container with no tabs is rejected by validation, and the
+      // properties panel offers no way back.
+      const api = setup();
+      act(() => api.getState().setSchema(schemaOf([
+        {
+          id: "tabs",
+          type: "tabs",
+          tabs: [
+            {
+              id: "t1",
+              label: "\u{4E00}",
+              children: []
+            }
+          ]
+        }
+      ])));
+
+      act(() => api.getState().removeTab("tabs", "t1"));
+
+      expect((findNode(api.getState().schema.presentations.pc, "tabs") as TabsNode).tabs).toHaveLength(1);
     });
   });
 

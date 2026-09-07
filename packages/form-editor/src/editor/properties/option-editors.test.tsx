@@ -1,13 +1,13 @@
 import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ReactElement } from "react";
 
-import type { FieldOption } from "../../types";
+import type { FieldOption, RemoteDataSourceRequest } from "../../types";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { OptionListEditor, reorderOptionRows } from "./option-editors";
+import { OptionListEditor, RemoteRequestFields, reorderOptionRows } from "./option-editors";
 
 interface HarnessProps {
   initial: FieldOption[];
@@ -162,5 +162,88 @@ describe("OptionListEditor", () => {
 
       expect(onCommit).toHaveBeenLastCalledWith([...threeOptions(), { label: "", value: "" }]);
     });
+  });
+});
+
+interface RemoteHarnessProps {
+  initial: RemoteDataSourceRequest;
+  onCommit?: (next: RemoteDataSourceRequest) => void;
+}
+
+/**
+ * Stateful round-trip harness for the remote request editor, mirroring the
+ * controlled usage in the option-source entry.
+ */
+function RemoteHarness({ initial, onCommit }: RemoteHarnessProps): ReactElement {
+  const [request, setRequest] = useState(initial);
+
+  return (
+    <RemoteRequestFields
+      mapping={undefined}
+      request={request}
+      onChange={next => {
+        onCommit?.(next);
+        setRequest(next);
+      }}
+    />
+  );
+}
+
+describe("RemoteRequestFields params", () => {
+  const twoParams: RemoteDataSourceRequest = {
+    resource: "sys/ward",
+    action: "find_options",
+    params: {
+      deptId: { kind: "literal", value: "1" },
+      wardId: { kind: "expression", source: "$form.x" }
+    }
+  };
+
+  it("does not drop the other row when a rename collides", async () => {
+    // `Object.fromEntries` keeps the LAST entry for a duplicate key, so
+    // committing the collision deleted the first row — its literal "1" and all
+    // — the instant the keystroke completed the name.
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<RemoteHarness initial={twoParams} onCommit={onCommit} />);
+
+    const [, second] = screen.getAllByPlaceholderText("参数名");
+    await user.clear(second as HTMLElement);
+    await user.type(second as HTMLElement, "deptId");
+
+    // Nothing that collides reaches the schema, so both rows survive.
+    for (const call of onCommit.mock.calls) {
+      expect(Object.keys((call[0] as RemoteDataSourceRequest).params ?? {})).toHaveLength(2);
+    }
+
+    expect(screen.getAllByPlaceholderText("参数名")).toHaveLength(2);
+  });
+
+  it("warns about the collision instead of silently resolving it", async () => {
+    const user = userEvent.setup();
+    render(<RemoteHarness initial={twoParams} />);
+
+    const [, second] = screen.getAllByPlaceholderText("参数名");
+    await user.clear(second as HTMLElement);
+    await user.type(second as HTMLElement, "deptId");
+
+    expect(screen.getByText(/参数名重复，未保存/)).toBeInTheDocument();
+  });
+
+  it("commits a rename that does not collide", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<RemoteHarness initial={twoParams} onCommit={onCommit} />);
+
+    const [, second] = screen.getAllByPlaceholderText("参数名");
+    await user.clear(second as HTMLElement);
+    await user.type(second as HTMLElement, "unitId");
+
+    expect(onCommit).toHaveBeenLastCalledWith(expect.objectContaining({
+      params: {
+        deptId: { kind: "literal", value: "1" },
+        unitId: { kind: "expression", source: "$form.x" }
+      }
+    }));
   });
 });

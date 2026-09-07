@@ -7,7 +7,7 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
 import { currentLayer } from "../engine/schema/presentation";
-import { collectRemovalImpact, hasRemovalImpact } from "../engine/schema/removal-impact";
+import { collectRemovalImpact, collectTabRemovalImpact, hasRemovalImpact } from "../engine/schema/removal-impact";
 import { confirmDialog } from "./toolbar/notify";
 
 const summaryCss = css({
@@ -76,19 +76,32 @@ export function removeNodeWithConfirm(storeApi: FormEditorStoreApi, nodeId: stri
   // The form-level linkage resolves against the PC root scope only.
   const impact = collectRemovalImpact(layer, nodeId, device === "pc" ? schema.linkage : undefined);
 
+  confirmRemoval(impact, "删除该控件将影响联动规则", () => storeApi.getState().removeNode(nodeId));
+}
+
+/**
+ * Remove one tab through the same impact-aware confirmation. A tab body is a
+ * whole subtree of fields, so deleting one must not be quieter than deleting
+ * the container that holds it.
+ */
+export function removeTabWithConfirm(storeApi: FormEditorStoreApi, tabsId: string, tabId: string): void {
+  const { device, schema } = storeApi.getState();
+  const layer = currentLayer(schema, device);
+  const impact = collectTabRemovalImpact(layer, tabsId, tabId, device === "pc" ? schema.linkage : undefined);
+
+  confirmRemoval(impact, "删除该标签页将影响联动规则", () => storeApi.getState().removeTab(tabsId, tabId));
+}
+
+function confirmRemoval(impact: RemovalImpact, title: string, commit: () => void): void {
   if (!hasRemovalImpact(impact)) {
-    storeApi.getState().removeNode(nodeId);
+    commit();
     return;
   }
 
   const lines = removalImpactLines(impact);
 
-  confirmDialog(
-    "删除该控件将影响联动规则",
-    <RemovalImpactSummary lines={lines} />,
-    {
-      onOk: () => storeApi.getState().removeNode(nodeId),
-      detail: lines.join("\n")
-    }
-  );
+  confirmDialog(title, <RemovalImpactSummary lines={lines} />, {
+    onOk: commit,
+    detail: lines.join("\n")
+  });
 }

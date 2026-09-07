@@ -10,6 +10,7 @@ import { createId } from "../../engine/ids";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { ROW_COLS } from "../../types";
+import { removeTabWithConfirm } from "../remove-node-confirm";
 import { panelBodyCss } from "../styles";
 import { BlockLayoutSection } from "./block-layout-section";
 import { ContainerLinkageSection } from "./entries/linkage/container-linkage-section";
@@ -189,16 +190,20 @@ function SectionEditor({ section, update }: { section: SectionNode; update: Upda
 }
 
 function TabsEditor({ tabs, update }: { tabs: TabsNode; update: Update }): ReactElement {
+  const storeApi = useFormEditorStoreApi();
+
   const setLabel = (tabId: string, label: string): void => {
     update(node => node.type === "tabs"
       ? { ...node, tabs: node.tabs.map(tab => tab.id === tabId ? { ...tab, label } : tab) }
       : node, `tab:${tabId}:label`);
   };
 
+  // Deleting a tab deletes its whole body, so it goes through the store's
+  // removal pipeline (reference prune + selection cleanup) behind the same
+  // impact confirmation a control deletion gets — never through `update`, which
+  // is a plain tree mutator with no notion of what the subtree referenced.
   const removeTab = (tabId: string): void => {
-    update(node => node.type === "tabs" && node.tabs.length > 1
-      ? { ...node, tabs: node.tabs.filter(tab => tab.id !== tabId) }
-      : node);
+    removeTabWithConfirm(storeApi, tabs.id, tabId);
   };
 
   const addTab = (): void => {

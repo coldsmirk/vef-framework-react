@@ -1,8 +1,9 @@
 import type { FieldLinkage, PresentationLayer } from "../../types";
+import type { ScopeKeyBucket } from "../keys";
 
-import { collectSubtreeKeysByScope } from "../keys";
+import { collectBlocksKeysByScope, collectSubtreeKeysByScope } from "../keys";
 import { hasConditionTriggeredShow } from "../linkage/shape";
-import { removeBlock } from "./mutate";
+import { removeBlock, updateNode } from "./mutate";
 import { pruneFormLinkageForRootBucket, pruneScopedReferences } from "./reconcile";
 import { findNode, findScope, nodeLabel, walkNodes } from "./walk";
 
@@ -67,8 +68,77 @@ export function collectRemovalImpact(layer: PresentationLayer, nodeId: string, f
 
   // The same composite removal-prune the store commits, so this preview can
   // never drift from the real delete: drop the subtree, then prune references.
-  const after = pruneScopedReferences(removeBlock(layer, nodeId), buckets);
+  return compareRemoval(layer, pruneScopedReferences(removeBlock(layer, nodeId), buckets), buckets, formLinkage);
+}
 
+/**
+ * What deleting one TAB of a tabs container does to the rest of the schema.
+ *
+ * A tab carries a whole body of fields, so removing one is as destructive as
+ * removing a container — but it is not a node removal, and routing it through a
+ * plain block update would skip the reference prune entirely: surviving rules
+ * would keep pointing at keys that no longer exist, and the freed key would
+ * later be handed to an unrelated new field, silently rebinding those rules to
+ * it. Tabs never open a value scope, so the body's keys live in the tabs node's
+ * own scope.
+ */
+export function collectTabRemovalImpact(
+  layer: PresentationLayer,
+  tabsId: string,
+  tabId: string,
+  formLinkage?: FieldLinkage
+): RemovalImpact {
+  const removal = removeTabBody(layer, tabsId, tabId);
+
+  if (!removal) {
+    return EMPTY_IMPACT;
+  }
+
+  return compareRemoval(layer, pruneScopedReferences(removal.layer, removal.buckets), removal.buckets, formLinkage);
+}
+
+/**
+ * Drop one tab from a tabs container, returning the resulting layer and the
+ * keys that died with the body — `undefined` when the tab (or its container)
+ * does not resolve, or when it is the last tab (a tabs container always keeps
+ * at least one).
+ */
+export function removeTabBody(
+  layer: PresentationLayer,
+  tabsId: string,
+  tabId: string
+): { layer: PresentationLayer; buckets: ScopeKeyBucket[] } | undefined {
+  const node = findNode(layer, tabsId);
+
+  if (node?.type !== "tabs" || node.tabs.length <= 1) {
+    return undefined;
+  }
+
+  const tab = node.tabs.find(candidate => candidate.id === tabId);
+
+  if (!tab) {
+    return undefined;
+  }
+
+  return {
+    layer: updateNode(layer, tabsId, current => current.type === "tabs"
+      ? { ...current, tabs: current.tabs.filter(candidate => candidate.id !== tabId) }
+      : current),
+    buckets: collectBlocksKeysByScope(tab.children, findScope(layer, tabsId) ?? [])
+  };
+}
+
+/**
+ * Diff a before/after tree pair into the impact the designer is shown. Shared
+ * by every removal shape so a new one cannot describe its consequences
+ * differently from the existing ones.
+ */
+function compareRemoval(
+  layer: PresentationLayer,
+  after: PresentationLayer,
+  buckets: ScopeKeyBucket[],
+  formLinkage: FieldLinkage | undefined
+): RemovalImpact {
   const beforeRules = collectRulesByOwner(layer);
   const afterRules = collectRulesByOwner(after);
   const removedRules: RemovalImpactOwner[] = [];
