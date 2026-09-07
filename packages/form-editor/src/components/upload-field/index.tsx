@@ -39,6 +39,7 @@ function UploadInput({
       errors={errors}
       helperText={field.helperText}
       label={field.label ?? "附件"}
+      labelledBy="group"
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >

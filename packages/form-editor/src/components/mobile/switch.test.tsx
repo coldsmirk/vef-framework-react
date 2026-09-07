@@ -83,3 +83,25 @@ describe("MobileSwitch", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe("MobileSwitch accessible name", () => {
+  it("names the control itself, since antd-mobile's switch cannot be reached by a label", () => {
+    // Without this the reader announces "开关, 未选中" for every switch on the
+    // form — `aria-checked` is a state, not a name.
+    render(
+      <MobileSwitch
+        domId="s1"
+        value={false}
+        field={{
+          id: "f1",
+          type: "switch",
+          key: "vip",
+          label: "会员"
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("switch", { name: "会员" })).toBeInTheDocument();
+  });
+});

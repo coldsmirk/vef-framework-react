@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
+import type { ConditionEffectRule } from "../engine/linkage";
 import type { EffectAction, EffectDispatchContext, EvaluationContext, FieldPermission, KeyedFormField, LinkageActionValue, LinkageEvaluators, RuntimeSchema } from "../types";
 import type { RuntimeForm, RuntimeFormValues } from "./types";
 
@@ -268,12 +269,16 @@ export function dispatchFormEffects(args: {
  * Reads keys the same way `matchLeaf` does (flat `values[key]`), so the tuple
  * tracks exactly what the condition evaluates.
  */
-function inputSignature(sourceKeys: string[], values: RuntimeFormValues): unknown[] | null {
-  if (sourceKeys.length === 0) {
+function inputSignature(rule: ConditionEffectRule, values: RuntimeFormValues): unknown[] | null {
+  // Only an opaque condition gets the "diff the whole values object" fallback.
+  // An enumerable condition with no form-value keys — one reading a `$`-rooted
+  // context path — has a STABLE empty signature, so its `always` actions repeat
+  // when the context changes the rule's truth, not on every keystroke.
+  if (rule.opaque) {
     return null;
   }
 
-  return sourceKeys.map(key => values[key]);
+  return rule.sourceKeys.map(key => values[key]);
 }
 
 /**
@@ -384,7 +389,9 @@ export function useScopeEffects(args: {
     }
 
     const truths = evaluateConditionEffectTruths(conditionRules, values, resolved, evaluationContext);
-    const signatures = conditionRules.map(rule => rule.alwaysActions.length > 0 ? inputSignature(rule.sourceKeys, values) : null);
+    const signatures = conditionRules.map(
+      rule => rule.alwaysActions.length > 0 ? inputSignature(rule, values) : null
+    );
     const previousTruths = truthsRef.current;
     const previousSignatures = signaturesRef.current;
     const previousValues = previousValuesRef.current;

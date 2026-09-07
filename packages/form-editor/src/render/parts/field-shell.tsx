@@ -107,6 +107,21 @@ export interface FieldShellProps {
   label: ReactNode;
   labelPosition?: LabelPosition;
   required?: boolean;
+  /**
+   * How the label associates with what it names.
+   *
+   * `"control"` (the default) emits `<label for={domId}>`, which requires the
+   * field to put `domId` on a LABELABLE element — an input, select, textarea or
+   * button.
+   *
+   * `"group"` is for fields that render a set rather than a single control
+   * (radio / checkbox groups, the upload dropzone, the code editor): `for` is
+   * inert against their wrapper, so the label carries an id and the body
+   * becomes a `role="group"` that points back at it. Without this the field has
+   * NO accessible name — the reader announces the first option and nothing
+   * about the question being asked.
+   */
+  labelledBy?: "control" | "group";
 }
 
 export function FieldShell({
@@ -116,14 +131,39 @@ export function FieldShell({
   helperText,
   label,
   labelPosition = "top",
+  labelledBy = "control",
   required
 }: FieldShellProps): ReactElement {
   const labelTitle = typeof label === "string" ? label : undefined;
+  const isGroup = labelledBy === "group";
+  const labelId = `${domId}-label`;
   const labelNode = (
-    <Label htmlFor={domId} position={labelPosition} required={required} title={labelTitle}>
+    <Label
+      htmlFor={isGroup ? undefined : domId}
+      id={isGroup ? labelId : undefined}
+      position={labelPosition}
+      required={required}
+      title={labelTitle}
+    >
       {label}
     </Label>
   );
+  // TODO: thread `aria-describedby` to the control itself so the error text is
+  // announced on focus as well as when it appears. That needs every field
+  // renderer to accept the id, so it is a separate change from giving the
+  // group-shaped fields a name at all.
+  const body = isGroup
+    ? (
+        <div
+          aria-invalid={errors !== undefined && errors.length > 0}
+          aria-labelledby={labelId}
+          aria-required={required}
+          role="group"
+        >
+          {children}
+        </div>
+      )
+    : children;
 
   if (labelPosition === "left" || labelPosition === "right") {
     return (
@@ -133,7 +173,7 @@ export function FieldShell({
             {labelNode}
           </div>
 
-          <div css={controlCss}>{children}</div>
+          <div css={controlCss}>{body}</div>
         </div>
 
         <FieldFooter errors={errors} helperText={helperText} />
@@ -144,7 +184,7 @@ export function FieldShell({
   return (
     <div css={stackCss}>
       {labelNode}
-      {children}
+      {body}
       <FieldFooter errors={errors} helperText={helperText} />
     </div>
   );

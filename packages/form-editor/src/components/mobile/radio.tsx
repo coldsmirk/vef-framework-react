@@ -39,6 +39,7 @@ export const MobileRadioInput: FC<FieldComponentProps<RadioField, string | numbe
       errors={errors}
       helperText={field.helperText}
       label={field.label ?? "单选"}
+      labelledBy="group"
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >

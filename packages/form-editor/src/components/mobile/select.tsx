@@ -71,7 +71,12 @@ export const MobileSelectInput: FC<FieldComponentProps<SelectField, string | num
     >
       <PickerTrigger
         disabled={disabled}
-        display={selected?.label ?? ""}
+        // Falls back to the raw value, matching the PC `Select` (rc-select
+        // renders `label ?? value`). Showing the placeholder instead made a
+        // held value whose option is missing — a failed or in-flight remote
+        // source, a retired option — look identical to an empty field, and took
+        // the clear affordance with it, so the value could not be removed.
+        display={selected?.label ?? (hasValue ? String(value) : "")}
         domId={domId}
         hasError={hasError}
         placeholder={triggerPlaceholder}

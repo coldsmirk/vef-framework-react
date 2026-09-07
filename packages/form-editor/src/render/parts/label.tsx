@@ -26,8 +26,21 @@ const requiredMarkCss = css({
 });
 
 export interface LabelProps {
+  /**
+   * Hide the label from assistive technology. For a control that carries the
+   * same text as its own `aria-label` (the mobile switch, whose antd-mobile
+   * element cannot be reached by `<label for>`), so the name is announced once
+   * rather than twice.
+   */
+  "aria-hidden"?: boolean;
   children: ReactNode;
   htmlFor?: string;
+  /**
+   * DOM id, so a `role="group"` body can point back at this label. Used
+   * instead of `htmlFor` for fields that render a set rather than one
+   * labelable control.
+   */
+  id?: string;
   position?: LabelPosition;
   required?: boolean;
   /**
@@ -44,14 +57,16 @@ export interface LabelProps {
  * owns the label-vs-control axis.
  */
 export function Label({
+  "aria-hidden": ariaHidden,
   children,
   htmlFor,
+  id,
   position = "top",
   required,
   title
 }: LabelProps): ReactElement {
   return (
-    <label css={[labelCss, position === "top" && topGapCss]} htmlFor={htmlFor} title={title}>
+    <label aria-hidden={ariaHidden} css={[labelCss, position === "top" && topGapCss]} htmlFor={htmlFor} id={id} title={title}>
       {children}
       {required ? <span aria-hidden="true" css={requiredMarkCss}>*</span> : null}
     </label>

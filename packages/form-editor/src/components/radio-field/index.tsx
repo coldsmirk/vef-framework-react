@@ -32,6 +32,7 @@ const RadioInput: FC<FieldComponentProps<RadioField, string | number | undefined
       errors={errors}
       helperText={field.helperText}
       label={field.label ?? "单选"}
+      labelledBy="group"
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >

@@ -43,6 +43,7 @@ export const MobileCheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField
       errors={errors}
       helperText={field.helperText}
       label={field.label ?? "多选"}
+      labelledBy="group"
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >

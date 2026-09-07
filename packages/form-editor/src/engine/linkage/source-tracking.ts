@@ -47,13 +47,37 @@ export function getLinkageSourceKeys(node: LinkageBearer): string[] {
   return [...sourceKeys];
 }
 
+/**
+ * A condition's form-value dependencies, plus whether any part of it is opaque
+ * — i.e. reads inputs that cannot be enumerated statically.
+ *
+ * Only an `expression` condition is opaque. A `$`-rooted leaf
+ * (`$user.departmentId`) has a perfectly knowable dependency; it just is not a
+ * form value, so it contributes no key while leaving the condition
+ * enumerable. Collapsing the two into "empty key set" is what let a context
+ * condition be treated as opaque, which the `always` retrigger reads as
+ * "re-fire on any value change".
+ */
+export function describeConditionSources(condition: LinkageCondition): { keys: string[]; opaque: boolean } {
+  const keys = new Set<string>();
+  const opaque = collectConditionSourceKeys(condition, keys);
+
+  return { keys: [...keys], opaque };
+}
+
+/**
+ * Collect a condition's form-value source keys into `out`, returning whether
+ * any visited node was opaque (see {@link describeConditionSources}).
+ */
 export function collectConditionSourceKeys(
   condition: LinkageCondition,
   out: Set<string>
-): void {
+): boolean {
   // Mirrors matchCondition's shape defense: a malformed node yields no keys.
+  // It is not opaque either — a rule that cannot be evaluated cannot depend on
+  // anything.
   if (!isRecord(condition)) {
-    return;
+    return false;
   }
 
   if (condition.kind === "leaf") {
@@ -65,14 +89,25 @@ export function collectConditionSourceKeys(
       out.add(condition.sourceKey);
     }
 
-    return;
+    return false;
+  }
+
+  if (condition.kind === "expression") {
+    return true;
   }
 
   if (condition.kind === "group" && Array.isArray(condition.children)) {
+    let opaque = false;
+
     for (const child of condition.children) {
-      collectConditionSourceKeys(child, out);
+      // Not short-circuited: every child still contributes its keys.
+      opaque = collectConditionSourceKeys(child, out) || opaque;
     }
+
+    return opaque;
   }
+
+  return false;
 
   // Expression sources are opaque — re-evaluation must come from a
   // broader trigger than a single source key.

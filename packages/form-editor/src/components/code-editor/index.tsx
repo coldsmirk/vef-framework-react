@@ -46,6 +46,7 @@ export const CodeEditor: FC<FieldComponentProps<CodeEditorField, string>> = ({
     errors={errors}
     helperText={field.helperText}
     label={field.label ?? "代码编辑器"}
+    labelledBy="group"
     labelPosition={field.labelPosition ?? labelPosition}
     required={required ?? field.validate?.required}
   >

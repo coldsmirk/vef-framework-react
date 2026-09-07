@@ -565,6 +565,37 @@ describe("validateRuntimeField", () => {
     expect(error).toBeUndefined();
   });
 
+  it("counts a maxLength in characters, matching the backend's rune count", () => {
+    // `String.length` counts UTF-16 code units, so an emoji counts 2 in the
+    // browser and 1 in Go's `utf8.RuneCountInString` — the browser rejected
+    // what the server accepts, for a limit the designer wrote once.
+    const error = validateRuntimeField({
+      disabled: false,
+      evaluators: undefined,
+      evaluationContext: undefined,
+      field: field("nickname", { validate: { maxLength: 1 } }),
+      namePrefix: "",
+      value: "😀",
+      values: { nickname: "😀" }
+    });
+
+    expect(error).toBeUndefined();
+  });
+
+  it("counts a minLength in characters too", () => {
+    const error = validateRuntimeField({
+      disabled: false,
+      evaluators: undefined,
+      evaluationContext: undefined,
+      field: field("nickname", { validate: { minLength: 2 } }),
+      namePrefix: "",
+      value: "😀",
+      values: { nickname: "😀" }
+    });
+
+    expect(error).toBe("最少 2 个字符");
+  });
+
   it("validates a required field against its own row scope", () => {
     const error = validateRuntimeField({
       disabled: false,

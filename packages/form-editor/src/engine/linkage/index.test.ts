@@ -1165,6 +1165,9 @@ describe("linkage engine", () => {
             value: "2"
           },
           sourceKeys: ["b"],
+          // A leaf condition is enumerable, so the `always` tracker diffs its
+          // keys rather than the whole values object.
+          opaque: false,
           actions: [{ type: "alert", message: { kind: "literal", value: "hey" } }],
           alwaysActions: []
         }

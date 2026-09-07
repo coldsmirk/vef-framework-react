@@ -46,6 +46,23 @@ describe("MobileSelectInput", () => {
     expect(screen.getByText("请选择城市")).toBeInTheDocument();
   });
 
+  it("shows the raw value when its option is missing, like the PC select", () => {
+    // A failed or in-flight remote source, or a retired option, used to render
+    // the placeholder — making a held value indistinguishable from an empty
+    // field, and hiding the clear affordance so it could not be removed.
+    render(
+      <MobileSelectInput
+        domId="field-s"
+        field={makeField({ dataSource: undefined, placeholder: "请选择城市" })}
+        value="bj"
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("请选择城市")).not.toBeInTheDocument();
+    expect(screen.getByText("bj")).toBeInTheDocument();
+  });
+
   it("shows the label of the seeded value", () => {
     render(
       <MobileSelectInput domId="field-s" field={makeField()} value="sh" onChange={vi.fn()} />

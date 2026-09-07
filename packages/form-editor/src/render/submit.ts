@@ -355,6 +355,20 @@ export function validateRuntimeField(args: {
 }
 
 /**
+ * A string's length in CHARACTERS, matching the Go backend's
+ * `utf8.RuneCountInString`.
+ *
+ * `String.length` counts UTF-16 code units, so an emoji or a
+ * supplementary-plane CJK character counts 2 in the browser and 1 on the
+ * server — the two sides then disagree about the same limit the designer wrote
+ * once. Iterating the string yields code points, which is what both the
+ * designer and the user mean by "character".
+ */
+function characterLength(value: string): number {
+  return [...value].length;
+}
+
+/**
  * The value-level check shared by the live validators and the submit gate.
  * Required catches an absent value; the constraint rules then apply only to a
  * value that is actually present (an empty optional field is not "too short").
@@ -401,11 +415,13 @@ export function validateFieldConstraints(field: KeyedFormField, value: unknown):
   } = field.validate;
 
   if (typeof value === "string") {
-    if (minLength !== undefined && value.length < minLength) {
+    const length = characterLength(value);
+
+    if (minLength !== undefined && length < minLength) {
       return message ?? `最少 ${minLength} 个字符`;
     }
 
-    if (maxLength !== undefined && value.length > maxLength) {
+    if (maxLength !== undefined && length > maxLength) {
       return message ?? `最多 ${maxLength} 个字符`;
     }
 

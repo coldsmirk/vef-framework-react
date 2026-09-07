@@ -49,6 +49,7 @@ const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<strin
       errors={errors}
       helperText={field.helperText}
       label={field.label ?? "多选"}
+      labelledBy="group"
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >

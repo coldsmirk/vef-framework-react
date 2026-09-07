@@ -11,7 +11,7 @@ import type {
 import { isRootScope, walkNodes } from "../schema/walk";
 import { matchCondition } from "./evaluator";
 import { ruleActions, ruleCondition, ruleTriggerKind } from "./shape";
-import { collectConditionSourceKeys } from "./source-tracking";
+import { describeConditionSources } from "./source-tracking";
 import { isEffectAction, isFieldEventTriggerKind } from "./taxonomy";
 
 /**
@@ -42,11 +42,21 @@ export interface ConditionEffectRule {
   ruleId: string;
   condition: LinkageCondition;
   /**
-   * The source fields this condition reads (leaf / group keys; empty for an
-   * opaque `expression` condition). The `"always"` tracker diffs these between
-   * evaluations so an unrelated field change does not re-fire {@link alwaysActions}.
+   * The FORM-VALUE fields this condition reads. The `"always"` tracker diffs
+   * these between evaluations so an unrelated field change does not re-fire
+   * {@link alwaysActions}. Empty is a real answer — a condition on a `$`-rooted
+   * context path depends on nothing in the form — and must not be confused with
+   * {@link opaque}.
    */
   sourceKeys: string[];
+  /**
+   * Whether the condition reads inputs that cannot be enumerated (an
+   * `expression` condition). Only then does the tracker fall back to diffing
+   * the whole values object; treating an empty {@link sourceKeys} as opaque
+   * turned a context-only condition's `"always"` actions into one dispatch per
+   * keystroke anywhere on the form.
+   */
+  opaque: boolean;
   /**
    * The rule's effect actions, in declaration order — every one fires on the
    * condition's false→true rising edge. State actions (if any) are excluded;
@@ -103,13 +113,13 @@ function pushConditionEffectRules(rules: FieldLinkageRule[] | undefined, out: Co
     const actions = ruleActions(rule).filter(action => isEffectAction(action));
 
     if (actions.length > 0) {
-      const sourceKeys = new Set<string>();
-      collectConditionSourceKeys(condition, sourceKeys);
+      const sources = describeConditionSources(condition);
 
       out.push({
         ruleId: rule.id,
         condition,
-        sourceKeys: [...sourceKeys],
+        sourceKeys: sources.keys,
+        opaque: sources.opaque,
         actions,
         alwaysActions: actions.filter(action => action.retrigger === "always")
       });
