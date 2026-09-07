@@ -947,9 +947,18 @@ export type Block = FormField | ContainerNode;
 export type KeyedNodeUnion = Extract<Block, KeyedNode>;
 
 /**
- * Which device a {@link PresentationLayer} targets. PC and mobile each carry an
- * independent field tree and layout; the data layer (variables / data sources /
- * keys) is shared, so the same key binds the same value on both.
+ * Which device a {@link PresentationLayer} targets.
+ *
+ * PC and mobile each carry an independent field tree and layout, and the two
+ * designs may legitimately differ: a field can exist on one device and not the
+ * other, and the same field can sit in a different container or order.
+ *
+ * The DATA layer is shared, though — variables, data sources, and keys. A key
+ * names one value on both devices, which is what `walkUniqueRootKeyedFields`
+ * relies on when it folds the two trees into one field inventory deduped by
+ * key. So renaming a field that both devices carry renames it on both
+ * (`setFieldKey`); letting the two drift apart would project one field as two
+ * and hand the backend a phantom.
  */
 export type PresentationDevice = "pc" | "mobile";
 

@@ -7,7 +7,7 @@ import type { Block, FieldCreateResult, FieldDefinition, FlexSlot, FormField, Fo
 import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
-import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, nextUniqueKey, sanitizeKey } from "../engine/keys";
+import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
 import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, setStackSlot as setStackSlotOp, targetScope } from "../engine/schema/edit-ops";
 import {
   editField as editFieldOp,
@@ -26,7 +26,7 @@ import {
 } from "../engine/schema/reconcile";
 import { removeTabBody } from "../engine/schema/removal-impact";
 import { isValidVariableName } from "../engine/schema/validate";
-import { countFields, findField, findNode, findScope, scopeEquals, walkNodes } from "../engine/schema/walk";
+import { countFields, findField, findNode, findScope, scopeEquals, walkFields, walkNodes } from "../engine/schema/walk";
 
 export type { DropTarget } from "../engine/schema/edit-ops";
 export { createEmptySchema } from "../engine/schema/nodes";
@@ -798,9 +798,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // nothing to keep, so it falls back to its type instead of staying
         // unusable.
         const base = sanitized.length > 0 ? sanitized : field.key || sanitizeKey(field.type);
-        // Unique within the scope, excluding the field's own current key so
-        // re-typing the same key is a no-op.
-        const used = collectScopeKeys(layer, scope);
+        // Unique within the scope across BOTH presentations. The two device
+        // trees are designed independently, but the data layer is shared — the
+        // projection dedupes root-scope keys across them — so renaming onto a
+        // key the other device already binds to a DIFFERENT field would merge
+        // two fields into one.
+        const used = collectScopeKeysAcrossDevices(schema, scope);
 
         used.delete(field.key);
 
@@ -821,9 +824,31 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         );
         let nextSchema = withPresentation(schema, device, nextLayer);
 
-        // The form-level linkage resolves against the PC root scope: a pc
-        // root-scope rename must reconcile it too. Mobile keys never touch it.
-        if (device === "pc" && scope.length === 0 && nextSchema.linkage !== undefined) {
+        // A field carrying the same key at the same scope on the other device
+        // IS this field — the trees differ, the data layer does not — so the
+        // rename follows it there, or the two presentations would project as
+        // two separate fields and hand the backend a phantom. A device that
+        // simply does not carry this field is a legitimate design difference
+        // and is left untouched.
+        const otherDevice: PresentationDevice = device === "pc" ? "mobile" : "pc";
+        const otherLayer = resolvePresentation(nextSchema, otherDevice);
+        const twin = otherLayer === undefined ? undefined : findFieldByKeyInScope(otherLayer, scope, previousKey);
+
+        if (otherLayer !== undefined && twin !== undefined) {
+          nextSchema = withPresentation(nextSchema, otherDevice, renameKeyReferences(
+            editFieldOp(otherLayer, twin.id, current => ({ ...current, key: unique } as FormField)),
+            scope,
+            previousKey,
+            unique
+          ));
+        }
+
+        // The form-level linkage resolves against the PC root scope, so it
+        // reconciles whenever the PC key changed — whether this rename started
+        // there or reached it through the twin above.
+        const pcKeyChanged = device === "pc" || (twin !== undefined && otherDevice === "pc");
+
+        if (pcKeyChanged && scope.length === 0 && nextSchema.linkage !== undefined) {
           const linkage = renameLinkageKeyReferences(nextSchema.linkage, previousKey, unique);
 
           if (linkage !== nextSchema.linkage) {
@@ -1028,6 +1053,44 @@ const fieldCountOfLayer = memoizeByLayer(countFields);
  * Field count of the active device's presentation, for `useFormEditorStore`
  * subscribers (toolbar / footer stats). Layer-identity memoized.
  */
+/**
+ * The keys bound directly within one value scope, across BOTH presentations.
+ *
+ * A key is the data layer, which the two device trees share: the projection
+ * (`walkUniqueRootKeyedFields`) folds root-scope fields from pc and mobile into
+ * ONE inventory deduped by key. Checking uniqueness per device would let a
+ * rename land on a key the other device binds to a different field, silently
+ * merging the two.
+ */
+function collectScopeKeysAcrossDevices(schema: FormSchema, scope: ScopePath): Set<string> {
+  const keys = collectScopeKeys(schema.presentations.pc, scope);
+
+  if (schema.presentations.mobile !== undefined) {
+    for (const key of collectScopeKeys(schema.presentations.mobile, scope)) {
+      keys.add(key);
+    }
+  }
+
+  return keys;
+}
+
+/**
+ * The field bound to `key` at exactly `scope` in `layer` — the other device's
+ * counterpart of a field being renamed, when it carries one.
+ */
+function findFieldByKeyInScope(layer: PresentationLayer, scope: ScopePath, key: string): FormField | undefined {
+  const scopeId = scope.join("/");
+  let found: FormField | undefined;
+
+  walkFields(layer, (field, fieldScope) => {
+    if (found === undefined && fieldScope.join("/") === scopeId && isKeyedField(field) && field.key === key) {
+      found = field;
+    }
+  });
+
+  return found;
+}
+
 export function selectFieldCount(state: FormEditorStoreState): number {
   return fieldCountOfLayer(currentLayer(state.schema, state.device));
 }

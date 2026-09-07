@@ -40,6 +40,13 @@ function keyOf(schema: FormSchema, fieldId: string): string | undefined {
   return field && "key" in field ? field.key : undefined;
 }
 
+function mobileKeyOf(schema: FormSchema, fieldId: string): string | undefined {
+  const layer = schema.presentations.mobile;
+  const field = layer === undefined ? undefined : findNode(layer, fieldId);
+
+  return field && "key" in field ? field.key : undefined;
+}
+
 function tf(id: string, key: string, extra: Partial<TextfieldField> = {}): TextfieldField {
   return {
     id,
@@ -1072,7 +1079,11 @@ describe("form store", () => {
       expect(api.getState().schema.linkage?.rules?.[0]?.actions[0]).toMatchObject({ targetKey: "total" });
     });
 
-    it("does not touch the form linkage when a mobile key is renamed", () => {
+    it("renames the same field on both devices", () => {
+      // The two trees are designed independently but the DATA layer is shared:
+      // the projection folds root-scope fields from both into one inventory
+      // deduped by key. Letting a rename apply to one device only would project
+      // the field twice and hand the backend a phantom.
       const api = setup();
       const formLinkage = { rules: [conditionRule("form-r1", "amount")] };
       act(() => api.getState().setSchema({
@@ -1088,9 +1099,56 @@ describe("form store", () => {
 
       act(() => api.getState().setFieldKey({ fieldId: "m1", key: "price" }));
 
-      // The form linkage resolves against the PC root scope — the mobile tree
-      // is a separate key namespace and never reconciles it.
+      expect(mobileKeyOf(api.getState().schema, "m1")).toBe("price");
+      expect(keyOf(api.getState().schema, "fa")).toBe("price");
+      // The PC root-scope key changed, so the form linkage follows it even
+      // though the rename started on mobile.
+      expect(api.getState().schema.linkage?.rules?.[0]?.trigger).toMatchObject({
+        condition: { sourceKey: "price" }
+      });
+    });
+
+    it("leaves the other device alone when it does not carry the field", () => {
+      // A field present on one device only is a legitimate design difference,
+      // not a fork of a shared one.
+      const api = setup();
+      const formLinkage = { rules: [conditionRule("form-r1", "amount")] };
+      act(() => api.getState().setSchema({
+        id: "Form_1",
+        version: 2,
+        linkage: formLinkage,
+        presentations: {
+          pc: { children: [tf("fa", "amount")] },
+          mobile: { children: [tf("m1", "note")] }
+        }
+      }));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().setFieldKey({ fieldId: "m1", key: "remark" }));
+
+      expect(mobileKeyOf(api.getState().schema, "m1")).toBe("remark");
+      expect(keyOf(api.getState().schema, "fa")).toBe("amount");
       expect(api.getState().schema.linkage).toBe(formLinkage);
+    });
+
+    it("does not rename onto a key the other device binds to a different field", () => {
+      // Uniqueness spans both trees: `amount` on pc and `note` on mobile are
+      // two fields, and merging them under one key would make the projection
+      // emit one entry for two different bindings.
+      const api = setup();
+      act(() => api.getState().setSchema({
+        id: "Form_1",
+        version: 2,
+        presentations: {
+          pc: { children: [tf("fa", "amount")] },
+          mobile: { children: [tf("m1", "note")] }
+        }
+      }));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().setFieldKey({ fieldId: "m1", key: "amount" }));
+
+      expect(mobileKeyOf(api.getState().schema, "m1")).toBe("amount_2");
       expect(keyOf(api.getState().schema, "fa")).toBe("amount");
     });
   });
