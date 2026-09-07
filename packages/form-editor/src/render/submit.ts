@@ -321,14 +321,15 @@ export function validateKeyedFieldValue(field: KeyedFormField, required: boolean
 }
 
 /**
- * Whether a keyed field is currently required — its static `validate.required`
- * (read through the `Validatable` shape, no cast) or a runtime `require`
- * linkage outcome.
+ * Whether a keyed field is currently required. The runtime state is the whole
+ * answer: `evaluateLinkageResolved` seeds the fold with the field's static
+ * `validate.required` and the permission clamp trims it, so a fired `optional`
+ * relaxes a statically-required field and a non-writable clamp zeroes it.
+ * Re-reading `validate.required` here would put the static flag back on top of
+ * both.
  */
-export function isRuntimeRequired(field: KeyedFormField, runtimeState: RuntimeFieldState): boolean {
-  const staticRequired = isValidatableField(field) && field.validate?.required === true;
-
-  return staticRequired || runtimeState.required;
+export function isRuntimeRequired(_field: KeyedFormField, runtimeState: RuntimeFieldState): boolean {
+  return runtimeState.required;
 }
 
 /**

@@ -469,6 +469,155 @@ describe("FormRenderer", () => {
     });
   });
 
+  it("re-applies an assign after a reset clears the computed field", async () => {
+    // The applied-value record was never cleared when the rule stopped
+    // asserting, so after a reset the next rising edge with the SAME computed
+    // value was skipped — the computed field stayed blank until the computed
+    // value itself changed.
+    const user = userEvent.setup();
+    const resetButton: ButtonField = {
+      id: "Field_reset",
+      type: "button",
+      label: "重置",
+      action: "reset"
+    };
+    const schema = stack(
+      makeField("qty"),
+      makeField("total", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_total",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "qty",
+                  operator: "eq",
+                  value: "5"
+                }
+              },
+              actions: [
+                {
+                  id: "Action_total",
+                  type: "assign",
+                  value: { kind: "literal", value: "500" }
+                }
+              ]
+            }
+          ]
+        }
+      }),
+      resetButton
+    );
+
+    renderRuntime(<FormRenderer schema={schema} />);
+
+    const qty = screen.getByRole("textbox", { name: "qty" });
+    const total = (): HTMLInputElement => screen.getByRole("textbox", { name: "total" });
+
+    await user.type(qty, "5");
+    await waitFor(() => expect(total().value).toBe("500"));
+
+    await user.click(screen.getByRole("button", { name: "重置" }));
+    await waitFor(() => expect(total().value).toBe(""));
+
+    await user.type(screen.getByRole("textbox", { name: "qty" }), "5");
+    await waitFor(() => expect(total().value).toBe("500"));
+  });
+
+  it("delivers a beforeSubmit set_field write in the payload", async () => {
+    // form-core hands `onSubmit` the values snapshot it captured for
+    // validation, and `writeFieldValue` mints a NEW values object — so the
+    // write used to be visible in the UI and absent from the wire, which is the
+    // one thing a `set_field` at this trigger exists to do.
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema: FormSchema = {
+      ...stack(makeField("name"), makeField("stamp"), submitButton()),
+      linkage: {
+        rules: [
+          {
+            id: "Rule_stamp",
+            trigger: { kind: "beforeSubmit" },
+            actions: [
+              {
+                id: "Action_stamp",
+                type: "set_field",
+                targetKey: "stamp",
+                value: { kind: "literal", value: "STAMPED" }
+              }
+            ]
+          }
+        ]
+      }
+    };
+
+    renderRuntime(<FormRenderer schema={schema} onSubmit={onSubmit} />);
+
+    await user.type(screen.getByRole("textbox", { name: "name" }), "n");
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({ name: "n", stamp: "STAMPED" });
+    });
+  });
+
+  it("lets a fired optional rule relax a statically required field", async () => {
+    // The static flag SEEDS the fold instead of being OR-ed onto its result, so
+    // "mark it required, then relax it under a condition" — the natural
+    // authoring order — actually works. Or-ing afterwards made 取消必填 a
+    // silent no-op on exactly the fields a designer would use it on.
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema = stack(
+      makeField("type"),
+      makeField("note", {
+        validate: { required: true },
+        linkage: {
+          rules: [
+            {
+              id: "Rule_optional",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "type",
+                  operator: "eq",
+                  value: "x"
+                }
+              },
+              actions: [{ id: "Action_optional", type: "optional" }]
+            }
+          ]
+        }
+      }),
+      submitButton()
+    );
+
+    renderRuntime(<FormRenderer schema={schema} onSubmit={onSubmit} />);
+
+    await user.type(screen.getByRole("textbox", { name: "type" }), "x");
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({ type: "x", note: "" });
+    });
+  });
+
+  it("still blocks submission on a statically required field with no relaxing rule", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema = stack(makeField("note", { validate: { required: true } }), submitButton());
+
+    renderRuntime(<FormRenderer schema={schema} onSubmit={onSubmit} />);
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("此项为必填");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("validates dynamic required rules on submit", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

@@ -12,7 +12,7 @@ import type {
 } from "../../types";
 
 import { exhaustive } from "../assert-never";
-import { isKeyedField, isKeyedNode } from "../keys";
+import { isKeyedField, isKeyedNode, isValidatableField } from "../keys";
 import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
 import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
@@ -39,6 +39,16 @@ export const emptyRuntimeState: RuntimeFieldState = Object.freeze({
   hidden: false,
   disabled: false,
   required: false,
+  assigned: false
+});
+
+// The rule-less counterpart for a statically-required field. A second frozen
+// singleton rather than a fresh object per call: the rule-less path is the
+// common one, and `stabilizeStateMap` compares by reference first.
+const staticRequiredRuntimeState: RuntimeFieldState = Object.freeze({
+  hidden: false,
+  disabled: false,
+  required: true,
   assigned: false
 });
 
@@ -167,16 +177,22 @@ function evaluateLinkageResolved(
   evaluationContext: EvaluationContext | undefined
 ): RuntimeFieldState {
   const { linkage } = node;
+  // The static `validate.required` SEEDS the fold rather than being OR-ed onto
+  // its result, so a fired `optional` / a `script` returning `{ required: false }`
+  // can relax it. Or-ing afterwards made both a no-op on any field the designer
+  // had marked required — with no way for the user to tell, since the action is
+  // labelled 取消必填 in the designer.
+  const staticRequired = isLeafField(node) && isValidatableField(node) && node.validate?.required === true;
 
   if (!linkage) {
-    return emptyRuntimeState;
+    return staticRequired ? staticRequiredRuntimeState : emptyRuntimeState;
   }
 
   const state: RuntimeFieldState = {
     ...emptyRuntimeState,
     hidden: linkage.defaults?.hidden === true,
     disabled: linkage.defaults?.disabled === true,
-    required: linkage.defaults?.required === true
+    required: staticRequired || linkage.defaults?.required === true
   };
 
   for (const rule of linkageRules(linkage)) {

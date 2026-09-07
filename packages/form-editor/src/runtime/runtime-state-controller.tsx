@@ -241,7 +241,10 @@ export function SubformRowController({
  * `appliedAssignedValues` records the last applied value per field id, and a
  * field is written only when its rule's computed value differs from that record
  * — so a user's manual override sticks while unrelated runtime states flip, and
- * is replaced exactly when the computed value itself changes. The `Object.is`
+ * is replaced exactly when the computed value itself changes. The record is
+ * dropped as soon as the rule stops asserting, so the override semantic lasts
+ * only as long as the assertion that produced it: a reset (or any out-of-band
+ * write) is followed by a fresh application on the next rising edge. The `Object.is`
  * compare is sound for recomputed-but-equal objects because `stabilizeStateMap`
  * preserves the previous state entry (and so the previous `assignedValue`
  * reference) whenever an evaluation is deeply equal.
@@ -270,6 +273,13 @@ function applyScopedAssignments(args: {
     const runtimeState = args.stateMap[field.id];
 
     if (!runtimeState?.assigned) {
+      // The rule is no longer asserting a value, so nothing is "already
+      // applied" any more: forget the record, and let the next rising edge
+      // compute afresh. Keeping it would make a reset permanent — the field
+      // clears, the rule fires again with the same computed value, and the
+      // stale record skips the write.
+      args.appliedAssignedValues.delete(field.id);
+
       return;
     }
 

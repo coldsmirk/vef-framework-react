@@ -298,12 +298,21 @@ function useRuntimeForm(
         });
       }
 
+      // Read the values AFTER the beforeSubmit effects, not the snapshot
+      // form-core captured for validation: `writeFieldValue` allocates a new
+      // values object, so a `set_field` at this trigger would otherwise land in
+      // the UI and never on the wire — and `getSubmitValues`, which reads the
+      // store live, would disagree with the pipeline it documents itself as
+      // mirroring. `value` stays the validation snapshot, which is correct:
+      // validation genuinely runs before these effects.
+      const submitted = args.formRef.current?.store.state.values ?? value;
+
       await args.onSubmit?.(filterSubmitValues({
         blocks: args.runtimeSchema.children,
         evaluators: args.evaluators,
         evaluationContext: args.evaluationContext,
         fieldPermissions: args.fieldPermissions,
-        values: value
+        values: submitted
       }));
 
       if (form) {

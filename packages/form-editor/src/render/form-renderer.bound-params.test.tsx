@@ -162,12 +162,11 @@ describe("FormRenderer bound data-source params", () => {
     await user.type(inputs[0] as HTMLElement, "D1");
     await user.type(inputs[1] as HTMLElement, "D2");
 
-    await waitFor(() => {
-      const seen = resolve.mock.calls.map(call => (call[0] as { params?: Record<string, unknown> }).params?.departmentId);
+    const boundDepartments = (): unknown[] => resolve.mock.calls.map(call => (call[0] as { params?: Record<string, unknown> }).params?.departmentId);
 
-      expect(seen).toContain("D1");
+    await waitFor(() => {
+      expect(boundDepartments()).toEqual(expect.arrayContaining(["D1", "D2"]));
     });
-    expect(seen).toContain("D2");
   });
 
   it("全固定参数的表单不会因无关输入重新解析", async () => {
