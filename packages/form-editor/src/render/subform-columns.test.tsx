@@ -1,6 +1,52 @@
-import type { Block } from "../types";
+import type { Block, FormSchema } from "../types";
 
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import { createDefaultRegistry } from "../engine/registry/defaults";
+import { RegistryProvider } from "../store/engine-provider";
+import { FormRenderer } from "./form-renderer";
 import { buildSubformColumns } from "./subform-columns";
+
+/**
+ * A table subform whose single column is a searchable select — the runtime
+ * surface behind the `select` case of {@link buildSubformColumns}.
+ */
+function selectColumnSchema(): FormSchema {
+  return {
+    id: "Form_1",
+    version: 2,
+    presentations: {
+      pc: {
+        children: [
+          {
+            id: "Subform_lines",
+            type: "subform",
+            variant: "table",
+            key: "lines",
+            label: "明细",
+            template: [
+              {
+                id: "Field_city",
+                type: "select",
+                key: "city",
+                label: "城市",
+                showSearch: true,
+                dataSource: {
+                  kind: "static",
+                  options: [
+                    { label: "北京", value: "bj" },
+                    { label: "上海", value: "sh" }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  };
+}
 
 describe("buildSubformColumns", () => {
   it("maps keyed leaf fields to columns in document order", () => {
@@ -143,5 +189,27 @@ describe("buildSubformColumns", () => {
     ]);
 
     expect(columns[0]?.width).toBeUndefined();
+  });
+});
+
+describe("subform table select column", () => {
+  it("filters the cell dropdown by the option label", async () => {
+    const user = userEvent.setup();
+    const registry = createDefaultRegistry();
+
+    render(
+      <RegistryProvider registries={{ pc: registry, mobile: registry }}>
+        <FormRenderer schema={selectColumnSchema()} />
+      </RegistryProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: /新增记录/ }));
+
+    const combobox = screen.getByRole("combobox");
+    await user.click(combobox);
+    await user.type(combobox, "北京");
+
+    expect(await screen.findByRole("option", { name: "北京" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "上海" })).not.toBeInTheDocument();
   });
 });

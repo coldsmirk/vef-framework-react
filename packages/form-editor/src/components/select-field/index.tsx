@@ -6,6 +6,7 @@ import { Select } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { filterOptionByLabel } from "../../render/parts/option-filter";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, columnTypeEntry, requiredEntry, sizeEntry } from "../field-entries";
 
@@ -39,6 +40,7 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
       <Select
         allowClear={field.allowClear}
         disabled={disabled}
+        filterOption={filterOptionByLabel}
         id={domId}
         loading={loading}
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}

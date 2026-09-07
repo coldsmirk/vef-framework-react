@@ -7,6 +7,7 @@ import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-rea
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
 import { isContainerNode } from "../engine/schema/walk";
+import { filterOptionByLabel } from "./parts/option-filter";
 import { validateKeyedFieldValue } from "./submit";
 
 /**
@@ -110,6 +111,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
           <f.Select
             noWrapper
             allowClear={field.allowClear}
+            filterOption={filterOptionByLabel}
             options={staticOptions(field.dataSource)}
             placeholder={field.placeholder}
             showSearch={field.showSearch}

@@ -73,6 +73,43 @@ describe("select field", () => {
     expect(combobox).not.toHaveAttribute("readonly");
   });
 
+  it("filters the dropdown by the option label", async () => {
+    const user = userEvent.setup();
+    const { Component } = selectFieldDefinition;
+
+    if (!Component) {
+      throw new Error("select field is missing a Component");
+    }
+
+    render(<Component domId="field-s" field={makeField({ showSearch: true })} value="" onChange={vi.fn()} />);
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+    await user.type(combobox, "北京");
+
+    expect(await screen.findByRole("option", { name: "北京" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "上海" })).not.toBeInTheDocument();
+  });
+
+  it("does not filter the dropdown by the option value", async () => {
+    const user = userEvent.setup();
+    const { Component } = selectFieldDefinition;
+
+    if (!Component) {
+      throw new Error("select field is missing a Component");
+    }
+
+    render(<Component domId="field-s" field={makeField({ showSearch: true })} value="" onChange={vi.fn()} />);
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+    // "bj" is 北京's stored code — antd's default filter would match it, which
+    // is exactly the behavior a user typing visible text never sees.
+    await user.type(combobox, "bj");
+
+    expect(screen.queryByRole("option", { name: "北京" })).not.toBeInTheDocument();
+  });
+
   it("leaves the combobox read-only when showSearch is off", () => {
     const { Component } = selectFieldDefinition;
 
