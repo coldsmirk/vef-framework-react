@@ -6,7 +6,7 @@ import type { ApiResult, BodyEncoding, HttpClientOptions, HttpFileResponse, Requ
 import { encodeQueryString, isArray, isFunction, isNullish, isNumber, isString } from "@vef-framework-react/shared";
 import axios, { CanceledError } from "axios";
 
-import { encodeRequestBody } from "./body-encoding";
+import { encodeRequestBody, ProtectedBodyCodec } from "./body-encoding";
 import {
   BODY_ENCODING_HEADER,
   CONTENT_DISPOSITION_FILENAME_REGEX,
@@ -70,6 +70,36 @@ function isArrayBuffer(value: unknown): value is ArrayBuffer {
   return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
 }
 
+function readHeader(headers: AxiosResponse<unknown>["headers"], name: string): unknown {
+  const get = Reflect.get(headers, "get");
+
+  if (isFunction(get)) {
+    return Reflect.apply(get, headers, [name]);
+  }
+
+  return Reflect.get(headers, name) ?? Reflect.get(headers, name.toLowerCase());
+}
+
+function responseBodyToText(data: unknown): Promise<string> {
+  if (isString(data)) {
+    return Promise.resolve(data);
+  }
+
+  if (data instanceof Blob) {
+    return data.text();
+  }
+
+  if (isArrayBuffer(data)) {
+    return Promise.resolve(new TextDecoder().decode(data));
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return Promise.resolve(new TextDecoder().decode(data));
+  }
+
+  return Promise.reject(new TypeError("Invalid protected response body"));
+}
+
 /**
  * Whether a request body is a JSON payload the client may transport-encode;
  * binary and multipart bodies are always sent as-is.
@@ -98,6 +128,10 @@ export class HttpClient {
    * The http client options.
    */
   readonly #options: HttpClientOptions;
+  /**
+   * Client-wide authenticated body codec, when protected transport is enabled.
+   */
+  readonly #protectedBodyCodec?: ProtectedBodyCodec;
 
   /**
    * The shared token refresh operation, when one is in progress.
@@ -110,6 +144,9 @@ export class HttpClient {
 
   constructor(options: HttpClientOptions) {
     this.#options = options;
+    this.#protectedBodyCodec = options.protectedBodyEncoding
+      ? new ProtectedBodyCodec(options.protectedBodyEncoding)
+      : undefined;
 
     const { baseUrl, timeout = DEFAULT_TIMEOUT } = options;
 
@@ -198,7 +235,11 @@ export class HttpClient {
   /**
    * Handle the response interceptor.
    */
-  private handleResponse(response: AxiosResponse<unknown>): AxiosResponse<unknown> {
+  private async handleResponse(response: AxiosResponse<unknown>): Promise<AxiosResponse<unknown>> {
+    if (this.#protectedBodyCodec || readHeader(response.headers, BODY_ENCODING_HEADER)) {
+      await this.decodeProtectedResponse(response);
+    }
+
     if (this.getResponseMode(response.config) === "raw") {
       return response;
     }
@@ -229,6 +270,10 @@ export class HttpClient {
     if (!response) {
       this.logError(`请求失败: ${error.message || "未知错误"}`);
       throw error;
+    }
+
+    if (this.#protectedBodyCodec || readHeader(response.headers, BODY_ENCODING_HEADER)) {
+      await this.decodeProtectedResponse(response);
     }
 
     const {
@@ -596,6 +641,51 @@ export class HttpClient {
   }
 
   /**
+   * Decode a response carrying the configured protected-body marker. Envelope
+   * responses require that marker while protected transport is configured, so
+   * a server or intermediary cannot silently downgrade them to plaintext.
+   */
+  private async decodeProtectedResponse(response: AxiosResponse<unknown>): Promise<void> {
+    const marker = readHeader(response.headers, BODY_ENCODING_HEADER);
+    const encoding = isString(marker) ? marker.trim() : "";
+    const mode = this.getResponseMode(response.config);
+
+    if (!encoding) {
+      const contentType = readHeader(response.headers, "Content-Type");
+      const isJson = isString(contentType) && contentType.toLowerCase().startsWith("application/json");
+
+      if (this.#protectedBodyCodec && (mode === "envelope" || isJson)) {
+        throw new TypeError(`Missing ${BODY_ENCODING_HEADER} on protected API response`);
+      }
+
+      return;
+    }
+
+    if (!this.#protectedBodyCodec) {
+      throw new TypeError(`Cannot decode ${encoding} response without protectedBodyEncoding`);
+    }
+
+    if (encoding !== this.#protectedBodyCodec.encoding) {
+      throw new TypeError(`Unsupported protected response body encoding: ${encoding}`);
+    }
+
+    const plaintext = await this.#protectedBodyCodec.decode(await responseBodyToText(response.data));
+
+    if (mode === "raw") {
+      // eslint-disable-next-line require-atomic-updates -- This interceptor exclusively owns the response while it awaits the codec.
+      response.data = new TextEncoder().encode(plaintext).buffer;
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line require-atomic-updates -- This interceptor exclusively owns the response while it awaits the codec.
+      response.data = JSON.parse(plaintext) as unknown;
+    } catch {
+      throw new TypeError("Protected API response is not valid JSON");
+    }
+  }
+
+  /**
    * Check whether a value is an API response envelope.
    */
   private isApiResult(value: unknown): value is ApiResult {
@@ -747,6 +837,22 @@ export class HttpClient {
     bodyEncoding: BodyEncoding | undefined,
     options: O
   ): Promise<{ data: unknown; options: O | EncodedBodyOptions<O> }> {
+    if (this.#protectedBodyCodec && isEncodableBody(data)) {
+      const payload = isString(data) ? data : JSON.stringify(data);
+
+      return {
+        data: await this.#protectedBodyCodec.encode(payload),
+        options: {
+          ...options,
+          transformRequest: KEEP_BODY_VERBATIM,
+          headers: {
+            ...options.headers,
+            [BODY_ENCODING_HEADER]: this.#protectedBodyCodec.encoding
+          }
+        }
+      };
+    }
+
     const encoding = bodyEncoding ?? this.#options.defaultBodyEncoding ?? "none";
 
     if (encoding === "none" || !isEncodableBody(data)) {
@@ -897,13 +1003,20 @@ export class HttpClient {
       responseEncoding: "binary",
       onDownloadProgress: isFunction(onProgress) ? onProgress : undefined
     };
+    let response: AxiosResponse<unknown>;
+
+    if (method === "post") {
+      const request = await this.encodeRequestData(requestData, "none", requestConfig);
+      response = await this.#axiosInstance.post<unknown>(url, request.data, request.options);
+    } else {
+      response = await this.#axiosInstance.get<unknown>(url, requestConfig);
+    }
+
     const {
       config,
       data,
       headers
-    } = method === "post"
-      ? await this.#axiosInstance.post<unknown>(url, requestData, requestConfig)
-      : await this.#axiosInstance.get<unknown>(url, requestConfig);
+    } = response;
     const blob = this.toBlob(data, headers["content-type"]);
 
     const errorResult = await this.readApiResult(blob);

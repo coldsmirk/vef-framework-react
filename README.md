@@ -64,6 +64,22 @@ pnpm add @vef-framework-react/core @vef-framework-react/components @vef-framewor
 
 Wrap your app in the framework providers, then compose API resources, forms, and views on top. See the [documentation site](https://coldsmirk.github.io/vef-framework-react-docs/) for the full setup guide and examples.
 
+## Protected API Bodies
+
+Configure the core HTTP client to exchange authenticated, non-plaintext JSON bodies with VEF Framework Go:
+
+```ts
+const http = createHttpClient({
+  baseUrl: "/api",
+  protectedBodyEncoding: {
+    encoding: "aes-gcm+base64",
+    key: "<standard-base64-key>"
+  }
+});
+```
+
+The key must decode to 16, 24, or 32 bytes. Requests and responses use `X-Body-Encoding: aes-gcm+base64` with a raw `Base64(12-byte random nonce || ciphertext || 16-byte tag)` body. Multipart and binary bodies remain unchanged. The Go backend also supports `sm4-gcm+base64`; the browser client intentionally uses native Web Crypto AES-GCM only. Keep HTTPS enabled because a symmetric key shipped to browser code is extractable.
+
 ## Development
 
 This repository is a pnpm workspace and requires Node 22+ and pnpm.

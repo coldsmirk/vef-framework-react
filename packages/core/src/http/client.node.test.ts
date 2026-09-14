@@ -5,8 +5,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { HttpClient } from "./client";
 import type { AuthTokens } from "./types";
 
+import { createCipheriv, createDecipheriv } from "node:crypto";
 import { createServer } from "node:http";
 import { gunzipSync } from "node:zlib";
+
+import { BODY_ENCODING_HEADER } from "./constants";
 
 interface TestServer {
   baseUrl: string;
@@ -45,6 +48,27 @@ async function startServer(
       });
     })
   };
+}
+
+function encryptAesGcmBody(payload: string, key: Buffer): string {
+  const nonce = Buffer.alloc(12, 7);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  const ciphertext = Buffer.concat([cipher.update(payload, "utf-8"), cipher.final()]);
+
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Buffer is the native Node HTTP/crypto representation used by this adapter test.
+  return Buffer.concat([nonce, ciphertext, cipher.getAuthTag()]).toString("base64");
+}
+
+function decryptAesGcmBody(payload: string, key: Buffer): string {
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Buffer is the native Node HTTP/crypto representation used by this adapter test.
+  const protectedBytes = Buffer.from(payload, "base64");
+  const nonce = protectedBytes.subarray(0, 12);
+  const ciphertext = protectedBytes.subarray(12, -16);
+  const tag = protectedBytes.subarray(-16);
+  const decipher = createDecipheriv("aes-256-gcm", key, nonce);
+  decipher.setAuthTag(tag);
+
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf-8");
 }
 
 let HttpClientConstructor: typeof HttpClient;
@@ -181,6 +205,59 @@ describe("http/HttpClient Node adapter", () => {
         : compressed.toString("utf-8");
 
       expect(JSON.parse(inflated)).toEqual(payload);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("interoperates with Node AES-GCM for protected request and response bodies", async () => {
+    const key = Buffer.alloc(32, 3);
+    // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Buffer is the native Node key representation used by this adapter test.
+    const keyBase64 = key.toString("base64");
+    const payload = {
+      resource: "system/user",
+      action: "create",
+      params: { name: "alice ✓" }
+    };
+    let decryptedRequest = "";
+    let requestEncoding: string | undefined;
+    const server = await startServer((request, response) => {
+      requestEncoding = request.headers["x-body-encoding"] as string | undefined;
+      const chunks: Buffer[] = [];
+
+      request.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      request.on("end", () => {
+        decryptedRequest = decryptAesGcmBody(Buffer.concat(chunks).toString("utf-8"), key);
+        const result = JSON.stringify({
+          code: 0,
+          message: "ok",
+          data: { id: 7 }
+        });
+
+        response.writeHead(200, {
+          "Content-Type": "application/json",
+          [BODY_ENCODING_HEADER]: "aes-gcm+base64"
+        });
+        response.end(encryptAesGcmBody(result, key));
+      });
+    });
+
+    try {
+      const client = new HttpClientConstructor({
+        baseUrl: server.baseUrl,
+        protectedBodyEncoding: {
+          encoding: "aes-gcm+base64",
+          key: keyBase64
+        }
+      });
+
+      const result = await client.post<{ id: number }>("/api", { data: payload });
+
+      expect(requestEncoding).toBe("aes-gcm+base64");
+      expect(decryptedRequest).toBe(JSON.stringify(payload));
+      expect(result.data).toEqual({ id: 7 });
     } finally {
       await server.close();
     }

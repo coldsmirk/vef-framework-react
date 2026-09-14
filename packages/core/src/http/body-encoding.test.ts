@@ -1,4 +1,4 @@
-import { encodeRequestBody } from "./body-encoding";
+import { encodeRequestBody, ProtectedBodyCodec } from "./body-encoding";
 
 async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   const stream = new DecompressionStream("gzip");
@@ -27,6 +27,11 @@ function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
+}
+
+function zeroKey(byteLength: number): string {
+  // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Keep this test runnable on every Node version supported by the package.
+  return btoa(String.fromCodePoint(...new Uint8Array(byteLength)));
 }
 
 describe("http/encodeRequestBody", () => {
@@ -97,5 +102,60 @@ describe("http/encodeRequestBody", () => {
 
       expect(decodeUtf8(base64ToBytes(body))).toBe(payload);
     });
+  });
+});
+
+describe("http/ProtectedBodyCodec", () => {
+  it("round-trips UTF-8 JSON with the Go-compatible AES-GCM layout", async () => {
+    const codec = new ProtectedBodyCodec({
+      encoding: "aes-gcm+base64",
+      key: zeroKey(32)
+    });
+    const payload = JSON.stringify({
+      code: 0,
+      message: "success ✓",
+      data: { id: 1 }
+    });
+
+    const encoded = await codec.encode(payload);
+    const wire = base64ToBytes(encoded);
+
+    expect(wire.byteLength).toBe(12 + new TextEncoder().encode(payload).byteLength + 16);
+    await expect(codec.decode(encoded)).resolves.toBe(payload);
+  });
+
+  it("uses a fresh nonce for each body", async () => {
+    const codec = new ProtectedBodyCodec({
+      encoding: "aes-gcm+base64",
+      key: zeroKey(16)
+    });
+
+    const first = await codec.encode("same payload");
+    const second = await codec.encode("same payload");
+
+    expect(first).not.toBe(second);
+  });
+
+  it("rejects a tampered authenticated body", async () => {
+    const codec = new ProtectedBodyCodec({
+      encoding: "aes-gcm+base64",
+      key: zeroKey(24)
+    });
+    const wire = base64ToBytes(await codec.encode("sensitive"));
+    wire[wire.length - 1] = wire.at(-1)! ^ 1;
+
+    // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array#toBase64 is still not universal.
+    const tampered = btoa(String.fromCodePoint(...wire));
+
+    await expect(codec.decode(tampered)).rejects.toThrow();
+  });
+
+  it("rejects malformed and incorrectly sized keys", () => {
+    expect(() => new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key: "not-base64" })).toThrow(
+      "standard padded base64"
+    );
+    expect(() => new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key: zeroKey(15) })).toThrow(
+      "16, 24, or 32 bytes"
+    );
   });
 });

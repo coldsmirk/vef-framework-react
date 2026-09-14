@@ -7,7 +7,10 @@ import { useAppStore } from "../stores";
 import { emitAccessDenied, emitUnauthenticated } from "./event";
 
 export interface ApiClientOptions {
-  http: Pick<HttpClientOptions, "baseUrl" | "timeout" | "okCode" | "tokenExpiredCode" | "refreshToken">;
+  http: Pick<
+    HttpClientOptions,
+    "baseUrl" | "timeout" | "okCode" | "tokenExpiredCode" | "refreshToken" | "protectedBodyEncoding"
+  >;
   query?: Pick<QueryClientOptions, "gcTime" | "staleTime">;
 }
 

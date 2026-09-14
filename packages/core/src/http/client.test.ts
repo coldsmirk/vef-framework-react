@@ -7,14 +7,14 @@ import type {
 } from "axios";
 import type * as AxiosModule from "axios";
 
-import type { ApiResult, AuthTokens, HttpClientOptions } from "./types";
+import type { ApiResult, AuthTokens, HttpClientOptions, ProtectedBodyEncodingOptions } from "./types";
 
 import { AxiosHeaders, CanceledError } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ProtectedBodyCodec } from "./body-encoding";
 import { HttpClient } from "./client";
 import { BODY_ENCODING_HEADER, SKIP_AUTH_HEADER, SKIP_AUTH_VALUE } from "./constants";
-import { BusinessError } from "./errors";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Module-level mock infrastructure
@@ -135,9 +135,17 @@ function base64Utf8(text: string): string {
   return btoa(binary);
 }
 
+function protectedBodyOptions(): ProtectedBodyEncodingOptions {
+  return {
+    encoding: "aes-gcm+base64",
+    // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Keep this test runnable on every Node version supported by the package.
+    key: btoa(String.fromCodePoint(...new Uint8Array(32)))
+  };
+}
+
 type RequestHandler = (config: InternalAxiosRequestConfig) => Promise<InternalAxiosRequestConfig>;
 
-type ResponseHandler = (response: AxiosResponse<unknown>) => AxiosResponse<unknown>;
+type ResponseHandler = (response: AxiosResponse<unknown>) => Promise<AxiosResponse<unknown>>;
 
 type ResponseErrorHandler = (error: AxiosError<unknown>) => Promise<unknown>;
 
@@ -456,45 +464,68 @@ describe("http/HttpClient", () => {
   });
 
   describe("response interceptor (business code)", () => {
-    it("returns the response when the business code matches the default okCode (0)", () => {
+    it("returns the response when the business code matches the default okCode (0)", async () => {
       const { handlers } = buildHttpClient();
       const response = makeOkResponse({ id: 1 });
 
-      const result = handlers.responseSuccess(response);
+      const result = await handlers.responseSuccess(response);
 
       expect(result).toBe(response);
     });
 
-    it("throws BusinessError when the business code does not match okCode", () => {
+    it("throws BusinessError when the business code does not match okCode", async () => {
       silenceConsole("warn");
       const { handlers } = buildHttpClient();
       const response = makeOkResponse(null, 1001, "validation failed");
 
-      function trigger() {
-        handlers.responseSuccess(response);
-      }
-
-      expect(trigger).toThrow(BusinessError);
-      expect(trigger).toThrow("validation failed");
+      await expect(handlers.responseSuccess(response)).rejects.toEqual(
+        expect.objectContaining({ message: "validation failed" })
+      );
     });
 
-    it("accepts an array of okCodes", () => {
+    it("accepts an array of okCodes", async () => {
       const { handlers } = buildHttpClient({ okCode: [0, 200] });
 
       const responseA = makeOkResponse(null, 0);
       const responseB = makeOkResponse(null, 200);
 
-      expect(handlers.responseSuccess(responseA)).toBe(responseA);
-      expect(handlers.responseSuccess(responseB)).toBe(responseB);
+      await expect(handlers.responseSuccess(responseA)).resolves.toBe(responseA);
+      await expect(handlers.responseSuccess(responseB)).resolves.toBe(responseB);
     });
 
-    it("returns raw blob responses without applying business-code handling", () => {
+    it("returns raw blob responses without applying business-code handling", async () => {
       const { handlers } = buildHttpClient();
       const config = makeConfig({ responseType: "blob" });
       Reflect.set(config, "__vefResponseMode", "raw");
       const response = makeResponse(new Blob(["file"]), config);
 
-      expect(handlers.responseSuccess(response)).toBe(response);
+      await expect(handlers.responseSuccess(response)).resolves.toBe(response);
+    });
+
+    it("decrypts and parses a protected API response before business-code handling", async () => {
+      const options = protectedBodyOptions();
+      const codec = new ProtectedBodyCodec(options);
+      const { handlers } = buildHttpClient({ protectedBodyEncoding: options });
+      const body = {
+        code: 0,
+        message: "ok",
+        data: { id: 7 }
+      };
+      const response = makeResponse(await codec.encode(JSON.stringify(body)), makeConfig(), {
+        [BODY_ENCODING_HEADER]: options.encoding
+      });
+
+      const result = await handlers.responseSuccess(response);
+
+      expect(result.data).toEqual(body);
+    });
+
+    it("rejects a plaintext response while protected transport is configured", async () => {
+      const { handlers } = buildHttpClient({ protectedBodyEncoding: protectedBodyOptions() });
+
+      await expect(handlers.responseSuccess(makeOkResponse(null))).rejects.toThrow(
+        `Missing ${BODY_ENCODING_HEADER}`
+      );
     });
   });
 
@@ -539,6 +570,22 @@ describe("http/HttpClient", () => {
       } as AxiosError<ApiResult>;
 
       await expect(handlers.responseError(error)).rejects.toBe(error);
+    });
+
+    it("decrypts a protected HTTP error before reporting its API message", async () => {
+      const options = protectedBodyOptions();
+      const codec = new ProtectedBodyCodec(options);
+      const showWarningMessage = vi.fn();
+      const { handlers } = buildHttpClient({ protectedBodyEncoding: options, showWarningMessage });
+      const error = makeAxiosError(400, await codec.encode(JSON.stringify({
+        code: 1400,
+        message: "invalid protected request",
+        data: null
+      })));
+      error.response!.headers = { [BODY_ENCODING_HEADER]: options.encoding };
+
+      await expect(handlers.responseError(error)).rejects.toBe(error);
+      expect(showWarningMessage).toHaveBeenCalledWith("invalid protected request");
     });
   });
 
@@ -873,6 +920,32 @@ describe("http/HttpClient", () => {
 
     it("does not encode a multipart body", async () => {
       const { client } = buildHttpClient({ defaultBodyEncoding: "base64" });
+      const form = new FormData();
+      form.append("field", "value");
+
+      await client.post("/api", { data: form });
+
+      expect(mocks.instance.post).toHaveBeenCalledWith("/api", form, {});
+    });
+
+    it("protects JSON bodies and cannot be downgraded by a per-request encoding", async () => {
+      const options = protectedBodyOptions();
+      const codec = new ProtectedBodyCodec(options);
+      const { client } = buildHttpClient({ protectedBodyEncoding: options });
+      const payload = { resource: "system/user", action: "create" };
+
+      await client.post("/api", { data: payload, bodyEncoding: "none" });
+
+      const call = mocks.instance.post.mock.calls.at(-1);
+      expect(call?.[0]).toBe("/api");
+      expect(call?.[2]).toEqual(expect.objectContaining({
+        headers: { [BODY_ENCODING_HEADER]: "aes-gcm+base64" }
+      }));
+      await expect(codec.decode(call?.[1] as string)).resolves.toBe(JSON.stringify(payload));
+    });
+
+    it("leaves multipart bodies unchanged in protected mode", async () => {
+      const { client } = buildHttpClient({ protectedBodyEncoding: protectedBodyOptions() });
       const form = new FormData();
       form.append("field", "value");
 

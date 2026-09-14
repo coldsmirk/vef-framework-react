@@ -35,6 +35,23 @@ export interface ApiResult<T = unknown> {
 export type BodyEncoding = "none" | "base64" | "gzip+base64";
 
 /**
+ * The authenticated encoding used for bidirectional protected JSON bodies.
+ * The browser implementation intentionally uses the native Web Crypto API and
+ * therefore currently supports AES-GCM only.
+ */
+export type ProtectedBodyEncoding = "aes-gcm+base64";
+
+/**
+ * Client-wide protected JSON body transport. The key is standard base64
+ * containing 16, 24, or 32 bytes. The wire body is standard base64 containing
+ * a random 12-byte nonce followed by AES-GCM ciphertext and its 16-byte tag.
+ */
+export interface ProtectedBodyEncodingOptions {
+  encoding: ProtectedBodyEncoding;
+  key: string;
+}
+
+/**
  * The authenticated tokens.
  */
 export interface AuthTokens {
@@ -110,6 +127,13 @@ export interface HttpClientOptions {
    * is sent verbatim.
    */
   defaultBodyEncoding?: BodyEncoding;
+  /**
+   * Enables mandatory bidirectional protected JSON bodies. When configured,
+   * this takes precedence over legacy per-request body encodings and cannot be
+   * opted out with `bodyEncoding: "none"`. Multipart and binary bodies remain
+   * unchanged.
+   */
+  protectedBodyEncoding?: ProtectedBodyEncodingOptions;
 }
 
 /**

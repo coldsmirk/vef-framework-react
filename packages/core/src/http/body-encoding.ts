@@ -1,4 +1,4 @@
-import type { BodyEncoding } from "./types";
+import type { BodyEncoding, ProtectedBodyEncodingOptions } from "./types";
 
 /**
  * The transport encoding actually applied to a request body, paired with the
@@ -15,6 +15,9 @@ export interface EncodedRequestBody {
  * limit so encoding a large body cannot overflow the call stack.
  */
 const BASE64_CHUNK_SIZE = 0x80_00;
+const AES_GCM_NONCE_BYTES = 12;
+const AES_GCM_TAG_BYTES = 16;
+const STANDARD_BASE64_PATTERN = /^(?:[A-Z\d+/]{4})*(?:[A-Z\d+/]{2}==|[A-Z\d+/]{3}=)?$/i;
 
 /**
  * Encode raw bytes to standard base64, preferring the native `Uint8Array`
@@ -34,6 +37,98 @@ function bytesToBase64(bytes: Uint8Array): string {
 
   // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array#toBase64 is still not universal.
   return btoa(binary);
+}
+
+function base64ToBytes(value: string, label: string): Uint8Array<ArrayBuffer> {
+  if (value.length === 0 || value.length % 4 !== 0 || !STANDARD_BASE64_PATTERN.test(value)) {
+    throw new TypeError(`${label} must be standard padded base64`);
+  }
+
+  let binary: string;
+
+  try {
+    // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Browser support for Uint8Array.fromBase64 is still not universal.
+    binary = atob(value);
+  } catch {
+    throw new TypeError(`${label} must be standard padded base64`);
+  }
+
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.codePointAt(index)!;
+  }
+
+  return bytes;
+}
+
+function joinBytes(prefix: Uint8Array, suffix: ArrayBuffer): Uint8Array<ArrayBuffer> {
+  const joined = new Uint8Array(prefix.byteLength + suffix.byteLength);
+  joined.set(prefix);
+  joined.set(new Uint8Array(suffix), prefix.byteLength);
+  return joined;
+}
+
+/**
+ * Native Web Crypto codec matching the Go framework's AES-GCM wire layout.
+ */
+export class ProtectedBodyCodec {
+  readonly #keyBytes: Uint8Array<ArrayBuffer>;
+  #key?: Promise<CryptoKey>;
+  readonly encoding: ProtectedBodyEncodingOptions["encoding"];
+
+  constructor(options: ProtectedBodyEncodingOptions) {
+    if (options.encoding !== "aes-gcm+base64") {
+      throw new TypeError(`Unsupported protected body encoding: ${String(options.encoding)}`);
+    }
+
+    const key = base64ToBytes(options.key, "Protected body key");
+
+    if (key.byteLength !== 16 && key.byteLength !== 24 && key.byteLength !== 32) {
+      throw new TypeError("Protected body AES-GCM key must contain 16, 24, or 32 bytes");
+    }
+
+    if (!globalThis.crypto?.subtle) {
+      throw new TypeError("Protected body encoding requires the Web Crypto API");
+    }
+
+    this.encoding = options.encoding;
+    this.#keyBytes = key;
+  }
+
+  private getKey(): Promise<CryptoKey> {
+    this.#key ??= crypto.subtle.importKey("raw", this.#keyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+    return this.#key;
+  }
+
+  async encode(payload: string): Promise<string> {
+    const nonce = crypto.getRandomValues(new Uint8Array(AES_GCM_NONCE_BYTES));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: nonce },
+      await this.getKey(),
+      new TextEncoder().encode(payload)
+    );
+
+    return bytesToBase64(joinBytes(nonce, ciphertext));
+  }
+
+  async decode(payload: string): Promise<string> {
+    const protectedBytes = base64ToBytes(payload.trim(), "Protected body");
+
+    if (protectedBytes.byteLength < AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES) {
+      throw new TypeError("Protected body is too short");
+    }
+
+    const nonce = protectedBytes.slice(0, AES_GCM_NONCE_BYTES);
+    const ciphertext = protectedBytes.slice(AES_GCM_NONCE_BYTES);
+    const plaintext = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: nonce },
+      await this.getKey(),
+      ciphertext
+    );
+
+    return new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
+  }
 }
 
 /**

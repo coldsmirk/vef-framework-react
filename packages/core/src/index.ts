@@ -109,6 +109,8 @@ export type {
   HttpClientOptions,
   HttpFileResponse,
   ProgressEvent,
+  ProtectedBodyEncoding,
+  ProtectedBodyEncodingOptions,
   RequestOptions
 } from "./http";
 export { BusinessError, isBusinessError, skipAuthenticationHeader, skipAuthenticationValue } from "./http";
