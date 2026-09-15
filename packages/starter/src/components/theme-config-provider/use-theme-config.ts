@@ -1,10 +1,8 @@
 import type { ThemeConfig } from "@vef-framework-react/components";
 
-import { useShallow } from "@vef-framework-react/core";
 import { useEffect, useMemo, useState } from "react";
 
-import { useThemeStore } from "../../stores";
-import { globalStyle } from "./global-style";
+import { useEffectiveColorScheme, useEffectiveThemeColors } from "./default-theme";
 
 const prefersDarkModeQuery = "(prefers-color-scheme: dark)";
 
@@ -17,8 +15,8 @@ function getSystemDarkMode(): boolean {
 }
 
 export function useThemeConfig(): ThemeConfig {
-  const colors = useThemeStore(useShallow(state => state.colors));
-  const colorScheme = useThemeStore(state => state.colorScheme);
+  const colors = useEffectiveThemeColors();
+  const colorScheme = useEffectiveColorScheme();
 
   // Initialize with safe default, will be corrected in useEffect
   const [isDark, setIsDark] = useState(() => {
@@ -42,8 +40,7 @@ export function useThemeConfig(): ThemeConfig {
   const theme = useMemo<ThemeConfig>(() => {
     return {
       isDarkMode,
-      colors,
-      globalStyle
+      colors
     };
   }, [isDarkMode, colors]);
 

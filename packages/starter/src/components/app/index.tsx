@@ -30,6 +30,8 @@ export function App<
   apiClient,
   appContext,
   appVersionNotification,
+  components,
+  defaultTheme,
   router
 }: AppProps<TRouter, TDehydrated>): ReactElement {
   useEffect(() => {
@@ -54,7 +56,7 @@ export function App<
     <AppContextProvider value={appContext}>
       <ApiClientProvider value={apiClient}>
         <MotionProvider>
-          <ThemeConfigProvider>
+          <ThemeConfigProvider components={components} defaultTheme={defaultTheme}>
             <NProgress />
             <RouterProvider router={router} />
           </ThemeConfigProvider>

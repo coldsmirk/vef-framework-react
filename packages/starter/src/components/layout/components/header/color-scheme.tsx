@@ -3,7 +3,7 @@ import type { JSX, MouseEvent } from "react";
 import { IconButton } from "@vef-framework-react/components";
 import { MoonIcon, SunIcon, SunMoon } from "lucide-react";
 
-import { useThemeStore } from "../../../../stores";
+import { useEffectiveColorScheme } from "../../../theme-config-provider";
 import { useColorSchemeUpdater } from "../../hooks";
 
 interface ColorSchemeProps {
@@ -23,7 +23,7 @@ const colorSchemeTips = {
 };
 
 export function ColorScheme({ className }: ColorSchemeProps): JSX.Element {
-  const colorScheme = useThemeStore(state => state.colorScheme);
+  const colorScheme = useEffectiveColorScheme();
   const { getNextColorScheme, updateColorScheme } = useColorSchemeUpdater();
 
   function handleClick(event: MouseEvent): void {

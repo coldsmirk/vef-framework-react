@@ -1,8 +1,8 @@
-import type { CSSInterpolation } from "@emotion/serialize";
 import type { LiteralUnion } from "@vef-framework-react/shared";
 import type { PropsWithChildren } from "react";
 
 import type { PresetColor, SemanticColor } from "../_base";
+import type { ComponentDefaults } from "./component-defaults";
 
 /**
  * The theme config
@@ -16,14 +16,6 @@ export interface ThemeConfig {
    * The colors config
    */
   colors?: Partial<Record<SemanticColor, LiteralUnion<PresetColor, string>>>;
-  /**
-   * The global css variables
-   */
-  globalCssVars?: Record<`--vef-${string}`, string | number>;
-  /**
-   * The global style
-   */
-  globalStyle?: CSSInterpolation;
 }
 
 /**
@@ -34,4 +26,9 @@ export interface ConfigProviderProps extends PropsWithChildren {
    * The theme config
    */
   theme?: ThemeConfig;
+  /**
+   * Application-wide default props for framework components. Only the props the
+   * framework whitelists per component are honored; see `ComponentDefaults`.
+   */
+  components?: ComponentDefaults;
 }

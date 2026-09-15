@@ -17,8 +17,17 @@ export type MenuLayoutMode = Orientation | "mixed";
 
 export interface ThemeState {
   isThemeConfigVisible: boolean;
-  colorScheme: ColorScheme;
-  colors: ThemeColors;
+  /**
+   * The color scheme the user picked. Unset follows the application's default
+   * theme, so only an explicit choice is persisted and a changed application
+   * default reaches every user who never picked one.
+   */
+  colorScheme?: ColorScheme;
+  /**
+   * The semantic colors the user picked; a missing entry follows the
+   * application's default theme.
+   */
+  colors: Partial<ThemeColors>;
   isGrayscaleMode: boolean;
   isColorBlindMode: boolean;
   isMenuAccordionMode: boolean;
@@ -34,14 +43,7 @@ export interface ThemeState {
 }
 
 const DEFAULT_THEME_STATE: Omit<ThemeState, "isThemeConfigVisible"> = {
-  colorScheme: "system",
-  colors: {
-    primary: "#155dfc",
-    success: "#00c951",
-    info: "#00a6f4",
-    warning: "#ff6900",
-    error: "#fb2c36"
-  },
+  colors: {},
   isGrayscaleMode: false,
   isColorBlindMode: false,
   isMenuAccordionMode: true,

@@ -4,6 +4,8 @@ import type { TablePaginationConfig } from ".";
 
 import { useMemo } from "react";
 
+import { useComponentDefaults } from "../config-provider/component-defaults";
+
 interface UsePaginationPropsOptions {
   paginationParams: PaginationParams;
   total: number;
@@ -42,10 +44,15 @@ export function usePaginationProps({
   total,
   paginationParams
 }: UsePaginationPropsOptions): TablePaginationConfig {
+  // Framework tables always offer the page-size changer unless the application
+  // defaults it otherwise. The value is passed explicitly, which would shadow the
+  // antd-level default, so the application's entry is resolved here as well.
+  const showSizeChanger = useComponentDefaults("Pagination")?.showSizeChanger ?? true;
+
   return useMemo(() => {
     return {
       size: "medium",
-      showSizeChanger: true,
+      showSizeChanger,
       showTotal: renderTotal,
       pageSizeOptions,
       current: paginationParams.page ?? DEFAULT_PAGE,
@@ -53,5 +60,5 @@ export function usePaginationProps({
       total,
       placement: ["bottomEnd"]
     };
-  }, [paginationParams.page, paginationParams.size, total]);
+  }, [paginationParams.page, paginationParams.size, showSizeChanger, total]);
 }

@@ -5,6 +5,7 @@ import type { ColorScheme } from "../../../stores";
 import { useColorScheme, useReducedMotion } from "@vef-framework-react/hooks";
 
 import { useThemeStore } from "../../../stores";
+import { useEffectiveColorScheme } from "../../theme-config-provider";
 
 function getNextColorScheme(colorScheme: ColorScheme): ColorScheme {
   switch (colorScheme) {
@@ -26,25 +27,25 @@ function removeColorSchemeTransitionClass() {
   document.documentElement.classList.remove("color-scheme-transition");
 }
 
+function updateColorSchemeInternal(colorScheme: ColorScheme) {
+  useThemeStore.setState(state => {
+    state.colorScheme = colorScheme;
+  });
+}
+
 /**
  * A hook to update the color scheme of the application.
  *
  * @returns A function to update the color scheme of the application.
  */
 export function useColorSchemeUpdater() {
-  const currentColorScheme = useThemeStore(state => state.colorScheme);
+  const currentColorScheme = useEffectiveColorScheme();
   const reducedMotion = useReducedMotion(false, {
     getInitialValueInEffect: false
   });
   const systemColorScheme = useColorScheme("light", {
     getInitialValueInEffect: false
   });
-
-  function updateColorSchemeInternal(colorScheme: ColorScheme) {
-    useThemeStore.setState(state => {
-      state.colorScheme = colorScheme;
-    });
-  }
 
   function updateColorScheme(nextColorScheme: ColorScheme, position: Position, isLoop = false) {
     if (reducedMotion) {

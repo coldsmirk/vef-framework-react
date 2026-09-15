@@ -8,7 +8,7 @@ import { Center, globalCssVars, Icon, Segmented } from "@vef-framework-react/com
 import { MoonIcon, SunIcon, SunMoon } from "lucide-react";
 import { useRef } from "react";
 
-import { useThemeStore } from "../../../../stores";
+import { useEffectiveColorScheme } from "../../../theme-config-provider";
 import { useColorSchemeUpdater } from "../../hooks";
 
 const itemStyle = css({
@@ -44,7 +44,7 @@ const options: SegmentedOption[] = [
 ];
 
 export function ColorSchemeSwitcher(): JSX.Element {
-  const colorScheme = useThemeStore(state => state.colorScheme);
+  const colorScheme = useEffectiveColorScheme();
   const { updateColorScheme } = useColorSchemeUpdater();
   const positionRef = useRef<Position>({
     x: window.innerWidth / 2,

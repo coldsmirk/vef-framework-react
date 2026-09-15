@@ -129,6 +129,80 @@ describe("pro-table/ProTable", () => {
     });
   });
 
+  describe("application defaults", () => {
+    it("hides the sequence column when the application default turns it off", () => {
+      const queryFn = apiClient.createQueryFn<PaginationResult<Row>>("rows/page", pageFactory);
+
+      render(
+        <ProTable<Row, Record<string, never>>
+          columns={TABLE_COLUMNS}
+          queryFn={queryFn as never}
+          rowKey="id"
+        />,
+        {
+          apiClient,
+          configProviderProps: { components: { ProTable: { showSequenceColumn: false } } }
+        }
+      );
+
+      expect(screen.queryByRole("columnheader", { name: "序号" })).not.toBeInTheDocument();
+    });
+
+    it("lets an explicit showSequenceColumn override the application default", () => {
+      const queryFn = apiClient.createQueryFn<PaginationResult<Row>>("rows/page", pageFactory);
+
+      render(
+        <ProTable<Row, Record<string, never>>
+          showSequenceColumn
+          columns={TABLE_COLUMNS}
+          queryFn={queryFn as never}
+          rowKey="id"
+        />,
+        {
+          apiClient,
+          configProviderProps: { components: { ProTable: { showSequenceColumn: false } } }
+        }
+      );
+
+      expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    });
+
+    it("offers the page-size changer when the application sets no pagination default", async () => {
+      const queryFn = apiClient.createQueryFn<PaginationResult<Row>>("rows/page", pageFactory);
+
+      render(
+        <ProTable<Row, Record<string, never>>
+          columns={TABLE_COLUMNS}
+          queryFn={queryFn as never}
+          rowKey="id"
+        />,
+        { apiClient }
+      );
+
+      await screen.findByRole("cell", { name: "Alice" });
+      expect(screen.getByRole("combobox")).toBeInTheDocument();
+    });
+
+    it("hides the page-size changer when the application default turns it off", async () => {
+      const queryFn = apiClient.createQueryFn<PaginationResult<Row>>("rows/page", pageFactory);
+
+      render(
+        <ProTable<Row, Record<string, never>>
+          columns={TABLE_COLUMNS}
+          queryFn={queryFn as never}
+          rowKey="id"
+        />,
+        {
+          apiClient,
+          configProviderProps: { components: { Pagination: { showSizeChanger: false } } }
+        }
+      );
+
+      await screen.findByRole("cell", { name: "Alice" });
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+  });
+
   describe("non-paginated rendering", () => {
     it("renders the full list returned by queryFn without pagination", async () => {
       const queryFn = apiClient.createQueryFn<Row[]>("rows/all", listFactory);

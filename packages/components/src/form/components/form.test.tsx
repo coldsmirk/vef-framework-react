@@ -33,7 +33,39 @@ function TestForm(props: { onSubmit?: (values: TestFormValues) => void | Promise
   );
 }
 
+function FieldWithoutForm() {
+  const form = useForm({
+    defaultValues: { name: "" } as TestFormValues
+  });
+
+  return (
+    <form.AppForm>
+      <form.AppField name="name">
+        {field => <field.Input label="名称" />}
+      </form.AppField>
+    </form.AppForm>
+  );
+}
+
 describe("form/Form", () => {
+  describe("application defaults", () => {
+    it("lays out its fields with the application's default label width", () => {
+      render(<TestForm />, {
+        configProviderProps: { components: { Form: { labelWidth: 80 } } }
+      });
+
+      expect(screen.getByText("名称").closest(".vef-form-item-label")).toHaveStyle({ flex: "0 0 80px" });
+    });
+
+    it("applies the application's default label width to a field outside any Form", () => {
+      render(<FieldWithoutForm />, {
+        configProviderProps: { components: { Form: { labelWidth: 80 } } }
+      });
+
+      expect(screen.getByText("名称").closest(".vef-form-item-label")).toHaveStyle({ flex: "0 0 80px" });
+    });
+  });
+
   describe("native submit", () => {
     it("runs the form's onSubmit handler when the form is submitted", async () => {
       const onSubmit = vi.fn();

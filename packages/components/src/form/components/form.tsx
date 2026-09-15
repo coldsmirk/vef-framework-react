@@ -6,6 +6,7 @@ import type { FormItemProps } from "../types";
 import { DisabledProvider } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
+import { useDefaultProps } from "../../config-provider/component-defaults";
 import { defaultFormLayout, FormLayoutProvider, useFormContext } from "../contexts";
 
 interface FormOwnProps extends Pick<FormItemProps, "layout" | "labelAlign" | "labelWidth"> {
@@ -26,15 +27,16 @@ export type FormProps<TComponent extends ElementType = "form">
     & { component?: TComponent }
     & Omit<ComponentPropsWithoutRef<TComponent>, keyof FormOwnProps | "component" | "onSubmit" | "onSubmitCapture">;
 
-export function Form<TComponent extends ElementType = "form">({
-  layout = defaultFormLayout.layout,
-  labelAlign = defaultFormLayout.labelAlign,
-  labelWidth = defaultFormLayout.labelWidth,
-  disabled = false,
-  component,
-  children,
-  ...props
-}: FormProps<TComponent>) {
+export function Form<TComponent extends ElementType = "form">(props: FormProps<TComponent>) {
+  const {
+    layout = defaultFormLayout.layout,
+    labelAlign = defaultFormLayout.labelAlign,
+    labelWidth = defaultFormLayout.labelWidth,
+    disabled = false,
+    component,
+    children,
+    ...restProps
+  } = useDefaultProps("Form", props);
   const Component = component ?? "form";
   const { handleSubmit, reset } = useFormContext();
 
@@ -53,7 +55,7 @@ export function Form<TComponent extends ElementType = "form">({
 
   return (
     <Component
-      {...props}
+      {...restProps}
       {...(isNativeForm && {
         onReset: (event: SyntheticEvent<HTMLFormElement>) => {
           event.preventDefault();

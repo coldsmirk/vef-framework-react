@@ -12,7 +12,7 @@ import { ConfigProvider } from "./src";
 interface ProviderOverrides {
   /**
    * Props forwarded to the `ConfigProvider` wrapper. Omit unless the test
-   * needs to customize theme, locale, or other antd-level config.
+   * needs a custom theme or application component defaults.
    */
   configProviderProps?: ConfigProviderProps;
   /**

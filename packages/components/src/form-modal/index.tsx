@@ -9,6 +9,7 @@ import { isFunction } from "@vef-framework-react/shared";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Center } from "../center";
+import { useDefaultProps } from "../config-provider/component-defaults";
 import { Empty } from "../empty";
 import { DefaultResetButton, DefaultSubmitButton, FormActions, useForm } from "../form";
 import { Modal } from "../modal";
@@ -30,27 +31,29 @@ function renderFormContent<TValues extends object>(
   return children || emptyContent;
 }
 
-export const FormModal = memo(<TValues extends object, TData = unknown>({
-  open = false,
-  title,
-  width,
-  draggable = true,
-  submitButtonProps,
-  resetButtonProps,
-  defaultValues,
-  disabled = false,
-  formComponent,
-  formLayout,
-  renderActions,
-  mutationFn,
-  mutationMeta,
-  children,
-  beforeSubmit,
-  afterSubmit,
-  onClose,
-  onSubmit,
-  onReset
-}: FormModalProps<TValues, TData>) => {
+export const FormModal = memo(<TValues extends object, TData = unknown>(props: FormModalProps<TValues, TData>) => {
+  const {
+    open = false,
+    title,
+    width,
+    draggable = true,
+    submitButtonProps,
+    resetButtonProps,
+    defaultValues,
+    disabled = false,
+    formComponent,
+    formLayout,
+    renderActions,
+    mutationFn,
+    mutationMeta,
+    children,
+    beforeSubmit,
+    afterSubmit,
+    onClose,
+    onSubmit,
+    onReset
+  } = useDefaultProps("FormModal", props);
+
   const formApi = useForm({
     defaultValues,
     onSubmit: async ({ value }) => {

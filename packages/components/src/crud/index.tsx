@@ -4,6 +4,7 @@ import type { CrudProps } from "./props";
 
 import { useMemo } from "react";
 
+import { useDefaultProps } from "../config-provider/component-defaults";
 import { Main, MutationHolder, SceneForm } from "./components";
 import { CrudStoreProvider } from "./store";
 
@@ -28,9 +29,12 @@ export function Crud<
   deleteManyMutationFn,
   mutationMeta,
   rowSelection,
-  rowKey,
+  rowKey: rowKeyProp,
   ...bodyProps
 }: CrudProps<TRow, TSearchValues, TSceneFormValues, TParams>) {
+  // The table and the delete bookkeeping must agree on row identity, so the
+  // application's ProTable default is resolved once here and handed to both.
+  const { rowKey } = useDefaultProps("ProTable", { rowKey: rowKeyProp });
   const initialState = useMemo(() => {
     const defaultSelectedRowKeys = rowSelection === true
       ? []

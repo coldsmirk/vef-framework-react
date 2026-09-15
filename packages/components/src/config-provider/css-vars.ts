@@ -1,3 +1,4 @@
+import type { CSSObject } from "@emotion/react";
 import type { LiteralUnion } from "@vef-framework-react/shared";
 
 import type { PresetColor, SemanticColor } from "../_base";
@@ -78,8 +79,8 @@ const animationVars = {
  */
 export function buildColorCssVars(
   colors: Record<SemanticColor, LiteralUnion<PresetColor, string>>
-): Record<string, unknown> {
-  const vars: Record<string, unknown> = {
+): CSSObject {
+  const vars: CSSObject = {
     "--vef-color-inverted": "#0f172a",
     ...spacingVars,
     ...shadowVars,

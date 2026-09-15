@@ -81,7 +81,7 @@ export { Col, type ColProps } from "./col";
 export { Collapse, type CollapseItem, type CollapseProps } from "./collapse";
 export { ColorPicker, type ColorPickerProps } from "./color-picker";
 export { Compact, type CompactProps } from "./compact";
-export { ConfigProvider, useIsDarkMode, type ConfigProviderProps, type ThemeConfig } from "./config-provider";
+export { ConfigProvider, useIsDarkMode, type ComponentDefaults, type ConfigProviderProps, type ThemeConfig } from "./config-provider";
 // Migrated from starter package
 export {
   createCrudKit,

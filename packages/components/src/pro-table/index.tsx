@@ -8,6 +8,7 @@ import type { ColumnSettingsProp, ProTableRef } from "./types";
 import { css } from "@emotion/react";
 import { memo } from "react";
 
+import { useDefaultProps } from "../config-provider/component-defaults";
 import { Stack } from "../stack";
 import { NonPaginatedTable, PaginatedTable, ProTableRefHolder } from "./components";
 import { ColumnSettingsStorageKeyProvider } from "./context";
@@ -36,28 +37,32 @@ function ProTableContent({ columnSettings, children }: ProTableContentProps) {
   );
 }
 
-export const ProTable = memo(<TRow extends AnyObject, TParams extends AnyObject>({
-  className,
-  style,
-  size,
-  columns,
-  columnSettings = defaultColumnSettings,
-  rowKey,
-  rowSelection,
-  queryEnabled,
-  queryParams,
-  showSequenceColumn,
-  operationColumn,
-  selectedRowKeys,
-  striped,
-  virtual,
-  ref,
-  header,
-  footer,
-  onRowClick,
-  onSelectedRowKeysChange,
-  ...restProps
-}: PropsWithRef<ProTableRef, ProTableProps<TRow, TParams>>) => {
+export const ProTable = memo(<TRow extends AnyObject, TParams extends AnyObject>(
+  props: PropsWithRef<ProTableRef, ProTableProps<TRow, TParams>>
+) => {
+  const {
+    className,
+    style,
+    size,
+    columns,
+    columnSettings = defaultColumnSettings,
+    rowKey,
+    rowSelection,
+    queryEnabled,
+    queryParams,
+    showSequenceColumn,
+    operationColumn,
+    selectedRowKeys,
+    striped,
+    virtual,
+    ref,
+    header,
+    footer,
+    onRowClick,
+    onSelectedRowKeysChange,
+    ...restProps
+  } = useDefaultProps("ProTable", props);
+
   const tableProps = {
     className,
     columns,

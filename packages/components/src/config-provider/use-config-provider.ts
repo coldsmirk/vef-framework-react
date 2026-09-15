@@ -21,8 +21,7 @@ interface ConfigProviderResult {
 export function useConfigProvider(theme: ThemeConfig = {}): ConfigProviderResult {
   const {
     isDarkMode = false,
-    colors = {},
-    globalCssVars = {}
+    colors = {}
   } = theme;
 
   const mergedColors = useMemo(() => mergeProps(colors, defaultColors), [colors]);
@@ -33,17 +32,13 @@ export function useConfigProvider(theme: ThemeConfig = {}): ConfigProviderResult
     [isDarkMode, mergedColors, isMotionEnabled]
   );
 
-  const mergedGlobalCssVars = useMemo(() => {
-    const cssVars = buildColorCssVars(mergedColors);
-
-    return css({
-      ":root": { ...cssVars, ...globalCssVars }
-    });
-  }, [globalCssVars, mergedColors]);
+  const colorCssVars = useMemo(() => css({
+    ":root": buildColorCssVars(mergedColors)
+  }), [mergedColors]);
 
   return {
     themeConfig,
-    globalCssVars: mergedGlobalCssVars,
+    globalCssVars: colorCssVars,
     isDarkMode
   };
 }
