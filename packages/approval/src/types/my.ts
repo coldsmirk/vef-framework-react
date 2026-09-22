@@ -2,7 +2,7 @@ import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FormData, UserInfo } from "./base";
 import type { InstanceFlowGraph, TimelineEntry } from "./detail";
-import type { AddAssigneeType, FieldPermission, InstanceAction, InstanceStatus } from "./enums";
+import type { AddAssigneeType, FieldPermission, InstanceAction, InstanceStatus, TaskStatus } from "./enums";
 
 /**
  * A flow the current user is allowed to initiate, mirroring
@@ -206,11 +206,47 @@ export interface InitiatedInstanceSearch {
 }
 
 /**
- * Search parameters for `approval/my.find_pending_tasks` and
- * `approval/my.find_completed_tasks`.
+ * Search parameters shared by `approval/my.find_pending_tasks` and
+ * `approval/my.find_completed_tasks`. Every filter is optional, and set
+ * filters AND together.
  */
 export interface MyTaskSearch {
   tenantId?: string;
+  /**
+   * Matches the instance title by substring.
+   */
+  keyword?: string;
+  /**
+   * Matches the applicant exactly — the value a user picker yields.
+   */
+  applicantId?: string;
+  /**
+   * Matches the applicant's name by substring, for free-text input.
+   */
+  applicantName?: string;
+  flowId?: string;
+}
+
+/**
+ * Search parameters for `approval/my.find_pending_tasks`. The arrival-time
+ * bounds are inclusive `YYYY-MM-DD HH:mm:ss` timestamps.
+ */
+export interface PendingTaskSearch extends MyTaskSearch {
+  isTimeout?: boolean;
+  createdAtFrom?: string;
+  createdAtTo?: string;
+}
+
+/**
+ * Search parameters for `approval/my.find_completed_tasks`. `status` is how
+ * the caller finished the task, narrowing within the completed statuses; the
+ * finish-time bounds are inclusive `YYYY-MM-DD HH:mm:ss` timestamps.
+ */
+export interface CompletedTaskSearch extends MyTaskSearch {
+  status?: TaskStatus;
+  instanceStatus?: InstanceStatus;
+  finishedAtFrom?: string;
+  finishedAtTo?: string;
 }
 
 /**

@@ -5,14 +5,15 @@ import type {
   AvailableFlow,
   AvailableFlowSearch,
   CompletedTask,
+  CompletedTaskSearch,
   InitiatedInstance,
   InitiatedInstanceSearch,
   MyCCRecord,
   MyCCRecordSearch,
   MyInstanceDetail,
-  MyTaskSearch,
   PendingCounts,
   PendingTask,
+  PendingTaskSearch,
   StartForm
 } from "../types";
 
@@ -32,8 +33,8 @@ export interface MyApprovalApi {
   findAvailableFlows: QueryFunction<PaginationResult<AvailableFlow>, PaginatedQueryParams<AvailableFlowSearch>>;
   getStartForm: QueryFunction<StartForm, { tenantId: string; flowCode: string }>;
   findInitiated: QueryFunction<PaginationResult<InitiatedInstance>, PaginatedQueryParams<InitiatedInstanceSearch>>;
-  findPendingTasks: QueryFunction<PaginationResult<PendingTask>, PaginatedQueryParams<MyTaskSearch>>;
-  findCompletedTasks: QueryFunction<PaginationResult<CompletedTask>, PaginatedQueryParams<MyTaskSearch>>;
+  findPendingTasks: QueryFunction<PaginationResult<PendingTask>, PaginatedQueryParams<PendingTaskSearch>>;
+  findCompletedTasks: QueryFunction<PaginationResult<CompletedTask>, PaginatedQueryParams<CompletedTaskSearch>>;
   findCCRecords: QueryFunction<PaginationResult<MyCCRecord>, PaginatedQueryParams<MyCCRecordSearch>>;
   getPendingCounts: QueryFunction<PendingCounts, { tenantId?: string }>;
   getInstanceDetail: QueryFunction<MyInstanceDetail, { instanceId: string }>;
@@ -77,8 +78,8 @@ export function useMyApprovalApi(): MyApprovalApi {
         findAvailableFlows: pagedQuery<AvailableFlow, AvailableFlowSearch>("find_available_flows"),
         getStartForm: detailQuery<StartForm, { tenantId: string; flowCode: string }>("get_start_form"),
         findInitiated: pagedQuery<InitiatedInstance, InitiatedInstanceSearch>("find_initiated"),
-        findPendingTasks: pagedQuery<PendingTask, MyTaskSearch>("find_pending_tasks"),
-        findCompletedTasks: pagedQuery<CompletedTask, MyTaskSearch>("find_completed_tasks"),
+        findPendingTasks: pagedQuery<PendingTask, PendingTaskSearch>("find_pending_tasks"),
+        findCompletedTasks: pagedQuery<CompletedTask, CompletedTaskSearch>("find_completed_tasks"),
         findCCRecords: pagedQuery<MyCCRecord, MyCCRecordSearch>("find_cc_records"),
         getPendingCounts: detailQuery<PendingCounts, { tenantId?: string }>("get_pending_counts"),
         getInstanceDetail: detailQuery<MyInstanceDetail, { instanceId: string }>("get_instance_detail")

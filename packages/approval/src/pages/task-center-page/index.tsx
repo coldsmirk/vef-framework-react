@@ -2,7 +2,7 @@ import type { CrudBasicSceneFormValues, TableColumn } from "@vef-framework-react
 import type { EmptyObject } from "@vef-framework-react/shared";
 import type { ReactNode } from "react";
 
-import type { CompletedTask, MyTaskSearch, PendingTask } from "../../types";
+import type { CompletedTask, CompletedTaskSearch, PendingTask, PendingTaskSearch } from "../../types";
 
 import { css } from "@emotion/react";
 import { Badge, Crud, Flex, FlexTabs, globalCssVars, OperationButton, Page, Tag, Text, Title } from "@vef-framework-react/components";
@@ -12,6 +12,12 @@ import { useState } from "react";
 import { useMyApprovalApi } from "../../api";
 import { formatTimestamp, InstanceDetailDrawer, TaskStatusTag, UserLabel } from "../../components";
 import { FlowIcon } from "../../components/icon";
+import {
+  CompletedTaskAdvancedSearchFields,
+  CompletedTaskSearchFields,
+  PendingTaskAdvancedSearchFields,
+  PendingTaskSearchFields
+} from "./search";
 
 type TaskSceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
 
@@ -141,8 +147,10 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
   }
 
   const pendingList = (
-    <Crud<PendingTask, MyTaskSearch, TaskSceneValues>
+    <Crud<PendingTask, PendingTaskSearch, TaskSceneValues>
       key={`pending-${refreshToken}`}
+      advancedSearch={<PendingTaskAdvancedSearchFields />}
+      basicSearch={<PendingTaskSearchFields />}
       columnSettings={false}
       defaultSearchValues={{ tenantId }}
       queryFn={api.findPendingTasks}
@@ -163,8 +171,10 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
   );
 
   const completedList = (
-    <Crud<CompletedTask, MyTaskSearch, TaskSceneValues>
+    <Crud<CompletedTask, CompletedTaskSearch, TaskSceneValues>
       key={`completed-${refreshToken}`}
+      advancedSearch={<CompletedTaskAdvancedSearchFields />}
+      basicSearch={<CompletedTaskSearchFields />}
       columnSettings={false}
       defaultSearchValues={{ tenantId }}
       queryFn={api.findCompletedTasks}
