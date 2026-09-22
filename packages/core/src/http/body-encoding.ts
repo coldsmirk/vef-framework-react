@@ -1,4 +1,8 @@
+import type { Awaitable } from "@vef-framework-react/shared";
+
 import type { BodyEncoding, ProtectedBodyEncodingOptions } from "./types";
+
+import { gcm } from "@noble/ciphers/aes.js";
 
 /**
  * The transport encoding actually applied to a request body, paired with the
@@ -62,19 +66,59 @@ function base64ToBytes(value: string, label: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-function joinBytes(prefix: Uint8Array, suffix: ArrayBuffer): Uint8Array<ArrayBuffer> {
+function joinBytes(prefix: Uint8Array, suffix: Uint8Array): Uint8Array<ArrayBuffer> {
   const joined = new Uint8Array(prefix.byteLength + suffix.byteLength);
   joined.set(prefix);
-  joined.set(new Uint8Array(suffix), prefix.byteLength);
+  joined.set(suffix, prefix.byteLength);
   return joined;
 }
 
 /**
- * Native Web Crypto codec matching the Go framework's AES-GCM wire layout.
+ * An AES-GCM primitive: sealing yields the ciphertext with its 16-byte tag
+ * appended, and opening verifies and strips that tag. Web Crypto answers
+ * asynchronously and the portable cipher synchronously, so callers await both.
+ */
+interface AesGcmCipher {
+  seal: (nonce: Uint8Array<ArrayBuffer>, plaintext: Uint8Array<ArrayBuffer>) => Awaitable<Uint8Array>;
+  open: (nonce: Uint8Array<ArrayBuffer>, sealed: Uint8Array<ArrayBuffer>) => Awaitable<Uint8Array>;
+}
+
+/**
+ * Native Web Crypto AES-GCM — hardware-accelerated and off the main thread, but
+ * exposed by browsers only in secure contexts (HTTPS, localhost).
+ */
+function createWebCryptoCipher(subtle: SubtleCrypto, keyBytes: Uint8Array<ArrayBuffer>): AesGcmCipher {
+  let key: Promise<CryptoKey> | undefined;
+
+  function getKey(): Promise<CryptoKey> {
+    key ??= subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+    return key;
+  }
+
+  return {
+    seal: async (iv, plaintext) => new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, await getKey(), plaintext)),
+    open: async (iv, sealed) => new Uint8Array(await subtle.decrypt({ name: "AES-GCM", iv }, await getKey(), sealed))
+  };
+}
+
+/**
+ * Pure-JavaScript AES-GCM for insecure contexts (plain HTTP), where browsers
+ * hide `crypto.subtle`. It produces byte-for-byte the same output as Web Crypto.
+ */
+function createPortableCipher(keyBytes: Uint8Array<ArrayBuffer>): AesGcmCipher {
+  return {
+    seal: (nonce, plaintext) => gcm(keyBytes, nonce).encrypt(plaintext),
+    open: (nonce, sealed) => gcm(keyBytes, nonce).decrypt(sealed)
+  };
+}
+
+/**
+ * Codec matching the Go framework's AES-GCM wire layout, running on Web Crypto
+ * where the runtime exposes it and on a portable implementation elsewhere, so
+ * protected bodies work over plain HTTP as well as HTTPS.
  */
 export class ProtectedBodyCodec {
-  readonly #keyBytes: Uint8Array<ArrayBuffer>;
-  #key?: Promise<CryptoKey>;
+  readonly #cipher: AesGcmCipher;
   readonly encoding: ProtectedBodyEncodingOptions["encoding"];
 
   constructor(options: ProtectedBodyEncodingOptions) {
@@ -88,28 +132,18 @@ export class ProtectedBodyCodec {
       throw new TypeError("Protected body AES-GCM key must contain 16, 24, or 32 bytes");
     }
 
-    if (!globalThis.crypto?.subtle) {
-      throw new TypeError("Protected body encoding requires the Web Crypto API");
-    }
+    const subtle = globalThis.crypto?.subtle;
 
     this.encoding = options.encoding;
-    this.#keyBytes = key;
-  }
-
-  private getKey(): Promise<CryptoKey> {
-    this.#key ??= crypto.subtle.importKey("raw", this.#keyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
-    return this.#key;
+    this.#cipher = subtle ? createWebCryptoCipher(subtle, key) : createPortableCipher(key);
   }
 
   async encode(payload: string): Promise<string> {
+    // Unlike `crypto.subtle`, `getRandomValues` is available in insecure contexts too.
     const nonce = crypto.getRandomValues(new Uint8Array(AES_GCM_NONCE_BYTES));
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv: nonce },
-      await this.getKey(),
-      new TextEncoder().encode(payload)
-    );
+    const sealed = await this.#cipher.seal(nonce, new TextEncoder().encode(payload));
 
-    return bytesToBase64(joinBytes(nonce, ciphertext));
+    return bytesToBase64(joinBytes(nonce, sealed));
   }
 
   async decode(payload: string): Promise<string> {
@@ -120,12 +154,8 @@ export class ProtectedBodyCodec {
     }
 
     const nonce = protectedBytes.slice(0, AES_GCM_NONCE_BYTES);
-    const ciphertext = protectedBytes.slice(AES_GCM_NONCE_BYTES);
-    const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: nonce },
-      await this.getKey(),
-      ciphertext
-    );
+    const sealed = protectedBytes.slice(AES_GCM_NONCE_BYTES);
+    const plaintext = await this.#cipher.open(nonce, sealed);
 
     return new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
   }

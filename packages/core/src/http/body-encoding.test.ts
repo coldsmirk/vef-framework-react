@@ -29,9 +29,43 @@ function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
-function zeroKey(byteLength: number): string {
+function bytesToBase64(bytes: Uint8Array): string {
   // eslint-disable-next-line unicorn/prefer-uint8array-base64 -- Keep this test runnable on every Node version supported by the package.
-  return btoa(String.fromCodePoint(...new Uint8Array(byteLength)));
+  return btoa(String.fromCodePoint(...bytes));
+}
+
+function zeroKey(byteLength: number): string {
+  return bytesToBase64(new Uint8Array(byteLength));
+}
+
+// Captured before any spec hides `crypto.subtle`, so Web Crypto stays available
+// as an independent reference for the portable cipher.
+const nativeCrypto = crypto;
+
+function importReferenceKey(key: string): Promise<CryptoKey> {
+  return nativeCrypto.subtle.importKey("raw", base64ToBytes(key), "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+async function referenceEncrypt(payload: string, key: string): Promise<string> {
+  const nonce = nativeCrypto.getRandomValues(new Uint8Array(12));
+  const sealed = await nativeCrypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce },
+    await importReferenceKey(key),
+    new TextEncoder().encode(payload)
+  );
+
+  return bytesToBase64(new Uint8Array([...nonce, ...new Uint8Array(sealed)]));
+}
+
+async function referenceDecrypt(encoded: string, key: string): Promise<string> {
+  const wire = base64ToBytes(encoded);
+  const plaintext = await nativeCrypto.subtle.decrypt(
+    { name: "AES-GCM", iv: wire.slice(0, 12) },
+    await importReferenceKey(key),
+    wire.slice(12)
+  );
+
+  return decodeUtf8(new Uint8Array(plaintext));
 }
 
 describe("http/encodeRequestBody", () => {
@@ -157,5 +191,48 @@ describe("http/ProtectedBodyCodec", () => {
     expect(() => new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key: zeroKey(15) })).toThrow(
       "16, 24, or 32 bytes"
     );
+  });
+
+  // Browsers expose `crypto.subtle` only in secure contexts, so a page served
+  // over plain HTTP sees `getRandomValues` alone.
+  describe("when the runtime hides crypto.subtle", () => {
+    const key = zeroKey(32);
+    const payload = JSON.stringify({
+      code: 0,
+      message: "success ✓",
+      data: { id: 1 }
+    });
+
+    beforeEach(() => {
+      vi.stubGlobal("crypto", { getRandomValues: nativeCrypto.getRandomValues.bind(nativeCrypto) });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("encodes bodies that Web Crypto decrypts", async () => {
+      const codec = new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key });
+
+      const encoded = await codec.encode(payload);
+
+      await expect(referenceDecrypt(encoded, key)).resolves.toBe(payload);
+    });
+
+    it("decodes bodies that Web Crypto encrypted", async () => {
+      const codec = new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key });
+
+      const encoded = await referenceEncrypt(payload, key);
+
+      await expect(codec.decode(encoded)).resolves.toBe(payload);
+    });
+
+    it("rejects a tampered authenticated body", async () => {
+      const codec = new ProtectedBodyCodec({ encoding: "aes-gcm+base64", key });
+      const wire = base64ToBytes(await codec.encode(payload));
+      wire[wire.length - 1] = wire.at(-1)! ^ 1;
+
+      await expect(codec.decode(bytesToBase64(wire))).rejects.toThrow();
+    });
   });
 });
