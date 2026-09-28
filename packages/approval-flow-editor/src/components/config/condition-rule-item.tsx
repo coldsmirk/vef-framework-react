@@ -91,33 +91,44 @@ function asNumberValue(value: unknown): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+/**
+ * One non-wrapping row: subject, [aggregate, column,] operator, value, remove.
+ * The fixed-width selectors hold short vocabularies; the subject, column and
+ * value share what they leave (3 : 2 : 4), so rules in a group line their
+ * columns up and a long label ellipsizes instead of pushing the row wider.
+ */
 const ruleRowStyle = css({
   display: "flex",
   gap: 6,
   alignItems: "flex-start"
 });
 
-const ruleFieldsStyle = css({
-  flex: 1,
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-  gap: 6
+const subjectSelectStyle = css({
+  flex: "3 1 0",
+  minWidth: 0
 });
 
-const ruleSelectRowStyle = css({
-  display: "flex",
-  gap: 6
+const aggregateSelectStyle = css({
+  flex: "0 0 96px"
 });
 
-const fieldSelectStyle = css({
-  flex: 5,
+const columnSelectStyle = css({
+  flex: "2 1 0",
   minWidth: 0
 });
 
 const operatorSelectStyle = css({
-  flex: 4,
-  minWidth: 0
+  flex: "0 0 112px"
+});
+
+// A column flex container stretches whatever editor lands here — an inline
+// Select as much as a host picker — to the slot's full width. The slot stays
+// mounted while empty, so choosing an operator never shifts the row.
+const valueSlotStyle = css({
+  flex: "4 1 0",
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column"
 });
 
 const deleteButtonStyle = css({
@@ -267,10 +278,13 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
 
     const { kind } = selectedField;
 
+    // Multi-value lists collapse overflowing tags into "+N" so the value slot
+    // keeps the row's single-line height.
     if (isMultiValue && kind === "select" && selectedField.options) {
       return (
         <Select
           disabled={readonly}
+          maxTagCount="responsive"
           mode="multiple"
           options={selectedField.options.map(o => { return { label: o.label, value: asSelectValue(o.value) }; })}
           placeholder="请选择"
@@ -284,6 +298,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       return (
         <Select
           disabled={readonly}
+          maxTagCount="responsive"
           mode="tags"
           placeholder="输入后回车添加"
           value={Array.isArray(condition.value) ? condition.value : []}
@@ -340,51 +355,54 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
 
   return (
     <div css={ruleRowStyle}>
-      <div css={ruleFieldsStyle}>
-        <div css={ruleSelectRowStyle}>
-          <Select
-            css={fieldSelectStyle}
-            disabled={readonly}
-            options={subjectFields.map(f => { return { label: f.label, value: f.key }; })}
-            placeholder="选择字段"
-            value={condition.subject || undefined}
-            onChange={handleFieldChange}
-          />
+      <Select
+        aria-label="条件字段"
+        css={subjectSelectStyle}
+        disabled={readonly}
+        options={subjectFields.map(f => { return { label: f.label, value: f.key }; })}
+        placeholder="选择字段"
+        value={condition.subject || undefined}
+        onChange={handleFieldChange}
+      />
 
-          {isTableSubject && (
-            <Select
-              css={operatorSelectStyle}
-              disabled={readonly}
-              options={AGGREGATE_KINDS.map(kind => { return { label: AGGREGATE_LABELS[kind], value: kind }; })}
-              placeholder="聚合"
-              value={condition.aggregate}
-              onChange={handleAggregateChange}
-            />
-          )}
+      {isTableSubject && (
+        <Select
+          aria-label="聚合方式"
+          css={aggregateSelectStyle}
+          disabled={readonly}
+          options={AGGREGATE_KINDS.map(kind => { return { label: AGGREGATE_LABELS[kind], value: kind }; })}
+          placeholder="聚合"
+          value={condition.aggregate}
+          onChange={handleAggregateChange}
+        />
+      )}
 
-          {needsColumn && (
-            <Select
-              css={operatorSelectStyle}
-              disabled={readonly}
-              options={numericColumns.map(column => { return { label: column.label, value: column.key }; })}
-              placeholder="选择列"
-              value={condition.column || undefined}
-              onChange={column => onChange({ ...condition, column })}
-            />
-          )}
+      {needsColumn && (
+        <Select
+          aria-label="聚合列"
+          css={columnSelectStyle}
+          disabled={readonly}
+          options={numericColumns.map(column => { return { label: column.label, value: column.key }; })}
+          placeholder="选择列"
+          value={condition.column || undefined}
+          onChange={column => onChange({ ...condition, column })}
+        />
+      )}
 
-          {selectedField && (
-            <Select
-              css={operatorSelectStyle}
-              disabled={readonly}
-              options={operators.map(op => { return { label: OPERATOR_LABELS[op] ?? op, value: op }; })}
-              placeholder="运算符"
-              value={condition.operator || undefined}
-              onChange={handleOperatorChange}
-            />
-          )}
-        </div>
+      {/* Holds its slot before a subject resolves: without one there is no
+          operator set to offer, so it stays disabled and empty rather than
+          showing a stored operator the rule can no longer interpret. */}
+      <Select
+        aria-label="运算符"
+        css={operatorSelectStyle}
+        disabled={readonly || !selectedField}
+        options={operators.map(op => { return { label: OPERATOR_LABELS[op] ?? op, value: op }; })}
+        placeholder="运算符"
+        value={selectedField && condition.operator ? condition.operator : undefined}
+        onChange={handleOperatorChange}
+      />
 
+      <div css={valueSlotStyle}>
         {valueInput}
       </div>
 

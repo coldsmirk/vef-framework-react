@@ -19,6 +19,11 @@ const MODE_OPTIONS: DataOption[] = [
 
 type EditorMode = "visual" | "expression";
 
+// Wide enough for the widest rule (subject · aggregate · column · operator ·
+// value) to stay on one row. antd caps a modal at the viewport width minus its
+// margins, so on a narrow screen the rows shrink proportionally instead.
+const MODAL_WIDTH = 880;
+
 // The expression is the Go engine's own syntax — no CodeMirror language pack
 // can highlight it, and completion would only offer JS noise, so both stay off.
 const EXPRESSION_EDITOR_SETUP = { autocompletion: false } as const;
@@ -333,7 +338,7 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
     <Modal
       open={open}
       title="编辑条件"
-      width={600}
+      width={MODAL_WIDTH}
       footer={readonly
         ? <Button onClick={onCancel}>关闭</Button>
         : (

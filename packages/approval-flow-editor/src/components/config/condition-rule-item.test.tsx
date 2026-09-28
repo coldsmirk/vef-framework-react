@@ -58,6 +58,29 @@ const DEPARTMENT_PLUGINS: EditorPlugins = {
   pickers: { department: stubPicker(["d1", "d2"]) }
 };
 
+describe("ConditionRuleItem operator slot", () => {
+  it("keeps the operator disabled until a subject is chosen", () => {
+    renderRule({ condition: condition({ subject: "", operator: "" }) });
+
+    expect(screen.getByRole("combobox", { name: "运算符" }), "a rule without a subject has no operator set to offer")
+      .toBeDisabled();
+  });
+
+  it("keeps the operator disabled while the subject no longer resolves", () => {
+    renderRule({ condition: condition({ subject: "removedField", operator: "gt" }) });
+
+    expect(screen.getByRole("combobox", { name: "运算符" }), "a stale subject cannot interpret its stored operator")
+      .toBeDisabled();
+  });
+
+  it("enables the operator once the subject resolves", () => {
+    renderRule({ condition: condition({ operator: "" }) });
+
+    expect(screen.getByRole("combobox", { name: "运算符" }), "a built-in subject offers its operator set")
+      .toBeEnabled();
+  });
+});
+
 describe("ConditionRuleItem built-in subject values", () => {
   it("supplies a built-in subject's value from the host picker", async () => {
     const onChange = vi.fn();
