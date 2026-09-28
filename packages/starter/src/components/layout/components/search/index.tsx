@@ -16,24 +16,26 @@ const modalStyle = css({
   "&.vef-modal .vef-modal-container": {
     "--vef-modal-content-padding": "0",
 
-    ".vef-modal-header": {
-      borderBlockEnd: `${globalCssVars.lineWidth} ${globalCssVars.lineType} ${globalCssVars.colorSplit}`,
-
-      ".vef-modal-title": {
-        paddingBlock: globalCssVars.spacingSm,
-        paddingInline: globalCssVars.spacingXs
-      }
-    },
-
     ".vef-modal-body": {
-      paddingInline: globalCssVars.spacingXxs,
-      paddingBlock: globalCssVars.spacingXs
+      padding: 0
     },
 
     ".vef-modal-footer": {
       borderBlockStart: `${globalCssVars.lineWidth} ${globalCssVars.lineType} ${globalCssVars.colorSplit}`
     }
   }
+});
+
+const searchBarStyle = css({
+  paddingBlock: globalCssVars.spacingSm,
+  paddingInline: globalCssVars.spacingXs,
+  marginBlockEnd: globalCssVars.spacingMd,
+  borderBlockEnd: `${globalCssVars.lineWidth} ${globalCssVars.lineType} ${globalCssVars.colorSplit}`
+});
+
+const resultAreaStyle = css({
+  paddingInline: globalCssVars.spacingXxs,
+  paddingBlock: globalCssVars.spacingXs
 });
 
 const contentStyle = css({
@@ -50,10 +52,57 @@ const iconStyle = css({
 
 const maskClosable = { closable: true } as const;
 
-export function Search() {
-  const { isSearchVisible, setIsSearchVisible } = useLayoutStore();
+/**
+ * The keyword input and its results. The keyword lives here, not beside the
+ * Modal, so typing re-renders this panel alone: a Modal re-rendered per
+ * keystroke re-runs its portal's dependency-less container effect
+ * (@rc-component/portal), which fast typing can stack past React's
+ * nested-update limit. destroyOnHidden remounts the panel per opening, which
+ * is what clears the keyword.
+ */
+function SearchPanel() {
   const [keyword, setKeyword] = useState("");
   const deferredKeyword = useDeferredValue(keyword);
+
+  return (
+    <>
+      <div css={searchBarStyle}>
+        <Input
+          allowClear
+          data-autofocus
+          placeholder="关键词"
+          prefix={<Icon component={SearchIcon} css={iconStyle} />}
+          value={keyword}
+          variant="borderless"
+          onChange={event => setKeyword(event.currentTarget.value)}
+          onKeyDown={event => {
+            // Prevent arrow keys from moving cursor in the input field
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+              event.preventDefault();
+            }
+          }}
+        />
+      </div>
+
+      <div css={resultAreaStyle}>
+        <ClassNames>
+          {({ css }) => (
+            <ScrollArea
+              className={css(contentStyle)}
+              type="scroll"
+              viewportClassName={css(resultContainerStyle)}
+            >
+              <SearchResult keyword={deferredKeyword} />
+            </ScrollArea>
+          )}
+        </ClassNames>
+      </div>
+    </>
+  );
+}
+
+export function Search() {
+  const { isSearchVisible, setIsSearchVisible } = useLayoutStore();
   const panelRef = useFocusTrap(true);
 
   return (
@@ -62,48 +111,18 @@ export function Search() {
         <Modal
           centered
           destroyOnHidden
-          afterClose={() => setKeyword("")}
           closable={false}
           css={modalStyle}
+          footer={<KeyboardHelp />}
           keyboard={false}
           mask={maskClosable}
           open={isSearchVisible}
           panelRef={panelRef}
           width={600}
           wrapClassName={css(wrapperStyle)}
-          footer={
-            <KeyboardHelp />
-          }
-          title={(
-            <Input
-              allowClear
-              data-autofocus
-              placeholder="关键词"
-              prefix={<Icon component={SearchIcon} css={iconStyle} />}
-              value={keyword}
-              variant="borderless"
-              onChange={event => setKeyword(event.currentTarget.value)}
-              onKeyDown={event => {
-                // Prevent arrow keys from moving cursor in the input field
-                if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                  event.preventDefault();
-                }
-              }}
-            />
-          )}
           onCancel={() => setIsSearchVisible(false)}
         >
-          <ClassNames>
-            {({ css }) => (
-              <ScrollArea
-                className={css(contentStyle)}
-                type="scroll"
-                viewportClassName={css(resultContainerStyle)}
-              >
-                <SearchResult keyword={deferredKeyword} />
-              </ScrollArea>
-            )}
-          </ClassNames>
+          <SearchPanel />
         </Modal>
       )}
     </ClassNames>
