@@ -27,6 +27,7 @@ export interface IntegrationConsolePageProps {
     dryRunInbound?: string;
     diagnoseRoutes?: string;
     logQuery?: string;
+    logReplay?: string;
     statsView?: string;
   };
   /**
@@ -44,6 +45,7 @@ export function IntegrationConsolePage({ permissions, title }: IntegrationConsol
     dryRunInbound: permissions?.dryRunInbound ?? INTEGRATION_PERMISSIONS.ops.dryRunInbound,
     diagnoseRoutes: permissions?.diagnoseRoutes ?? INTEGRATION_PERMISSIONS.ops.diagnoseRoutes,
     logQuery: permissions?.logQuery ?? INTEGRATION_PERMISSIONS.log.query,
+    logReplay: permissions?.logReplay ?? INTEGRATION_PERMISSIONS.log.replay,
     statsView: permissions?.statsView ?? INTEGRATION_PERMISSIONS.log.query
   };
 
@@ -76,7 +78,7 @@ export function IntegrationConsolePage({ permissions, title }: IntegrationConsol
     items.push({
       key: "log",
       label: "调用日志",
-      children: <LogPanel />
+      children: <LogPanel replayPermission={perms.logReplay} />
     });
   }
 

@@ -6,7 +6,7 @@ export type { Contract, ContractParams, ContractSearch, JsonSchema } from "./con
 export type { RouteDiagnostics, RouteFinding } from "./diagnostics";
 export * from "./enums";
 export type { JsonObject, JsonValue } from "./json";
-export type { HttpExchange, InvocationLog, LogSearch } from "./log";
+export type { HttpExchange, InvocationLog, InvocationOutcome, LogSearch, ReplayParams, ReplayResult } from "./log";
 export type {
   ConnectionCheck,
   DatabaseProbe,

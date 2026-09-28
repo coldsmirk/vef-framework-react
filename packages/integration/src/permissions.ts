@@ -39,7 +39,8 @@ export const INTEGRATION_PERMISSIONS = {
     delete: "integration.code_map.delete"
   },
   log: {
-    query: "integration.log.query"
+    query: "integration.log.query",
+    replay: "integration.log.replay"
   },
   ops: {
     dryRun: "integration.ops.dry_run",

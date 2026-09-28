@@ -73,6 +73,7 @@ function ExchangeSummary({ exchange }: { exchange: HttpExchange }) {
       <Tag>{exchange.method}</Tag>
       <Text code style={{ fontSize: globalCssVars.fontSizeSm }}>{exchange.url}</Text>
       {exchange.status ? <Tag color={isExchangeFailed(exchange) ? "error" : "success"}>{exchange.status}</Tag> : null}
+      {exchange.clientAddr ? <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">{`来自 ${exchange.clientAddr}`}</Text> : null}
 
       <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
         {exchange.durationMs}

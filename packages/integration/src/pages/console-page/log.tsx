@@ -18,6 +18,7 @@ import {
   WireTraceTimeline
 } from "../../components";
 import { FAILURE_KINDS } from "../../types";
+import { ReplayPanel } from "./replay";
 
 type LogSceneValues = CrudBasicSceneFormValues<Record<string, never>, Record<string, never>>;
 
@@ -164,7 +165,14 @@ function detailItems(log: InvocationLog): DescriptionsItem[] {
   ];
 }
 
-function LogDetail({ log }: { log: InvocationLog }) {
+interface LogDetailProps {
+  log: InvocationLog;
+  replayPermission: string;
+}
+
+function LogDetail({ log, replayPermission }: LogDetailProps) {
+  const api = useLogApi();
+
   return (
     <Stack gap="middle">
       <Descriptions bordered column={2} items={detailItems(log)} size="small" styles={{ label: { width: 90 } }} />
@@ -185,14 +193,26 @@ function LogDetail({ log }: { log: InvocationLog }) {
             </Labeled>
           )
         : null}
+
+      <Labeled label="重放">
+        <ReplayPanel log={log} permission={replayPermission} replay={api.replay} />
+      </Labeled>
     </Stack>
   );
 }
 
+export interface LogPanelProps {
+  /**
+   * Permission code gating the replay action in the detail drawer.
+   */
+  replayPermission: string;
+}
+
 /**
- * The invocation-log browser: a filtered list with a full-capture detail drawer.
+ * The invocation-log browser: a filtered list with a full-capture detail
+ * drawer that can replay the invocation.
  */
-export function LogPanel() {
+export function LogPanel({ replayPermission }: LogPanelProps) {
   const api = useLogApi();
   const [detail, setDetail] = useState<InvocationLog | null>(null);
 
@@ -206,8 +226,9 @@ export function LogPanel() {
         tableColumns={logColumns}
       />
 
-      <Drawer open={detail !== null} size={760} title="调用详情" onClose={() => setDetail(null)}>
-        {detail ? <LogDetail log={detail} /> : null}
+      {/* Wide enough for the side-by-side replay comparison. */}
+      <Drawer open={detail !== null} size={960} title="调用详情" onClose={() => setDetail(null)}>
+        {detail ? <LogDetail key={detail.id} log={detail} replayPermission={replayPermission} /> : null}
       </Drawer>
     </>
   );

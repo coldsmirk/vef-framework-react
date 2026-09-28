@@ -1,7 +1,7 @@
 import type { PaginatedQueryParams } from "@vef-framework-react/components";
-import type { PaginationResult, QueryFunction } from "@vef-framework-react/core";
+import type { MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
 
-import type { InvocationLog, LogSearch } from "../types";
+import type { InvocationLog, LogSearch, ReplayParams, ReplayResult } from "../types";
 
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
 import { useMemo } from "react";
@@ -9,14 +9,16 @@ import { useMemo } from "react";
 import { API_PATH, splitQueryParams } from "./query";
 
 /**
- * The read-only query functions for the invocation log resource.
+ * The invocation log resource: the page query plus replay, a mutation because
+ * it is triggered imperatively and an outbound replay's calls are real.
  */
 export interface LogApi {
   findPage: QueryFunction<PaginationResult<InvocationLog>, PaginatedQueryParams<LogSearch>>;
+  replay: MutationFunction<ReplayResult, ReplayParams>;
 }
 
-// Query API for the invocation log. Rows carry the full captures, so the
-// detail view reads from the row rather than a separate fetch.
+// API for the invocation log. Rows carry the full captures, so the detail
+// view reads from the row rather than a separate fetch.
 export function useLogApi(): LogApi {
   const apiClient = useApiClient();
 
@@ -29,6 +31,17 @@ export function useLogApi(): LogApi {
             const { params, pagination } = splitQueryParams(queryParams);
             const result = await post<PaginationResult<InvocationLog>>(API_PATH, {
               data: createApiRequest("integration/log", "find_page", params, pagination)
+            });
+
+            return result.data;
+          }
+        ),
+        replay: apiClient.createMutationFn<ReplayResult, ReplayParams>(
+          "integration_log_replay",
+          ({ post }) => async params => {
+            const result = await post<ReplayResult>(API_PATH, {
+              data: createApiRequest("integration/log", "replay", params),
+              bodyEncoding: "gzip+base64"
             });
 
             return result.data;
