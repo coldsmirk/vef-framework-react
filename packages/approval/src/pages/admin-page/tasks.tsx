@@ -7,7 +7,6 @@ import {
   Crud,
   Input,
   Labeled,
-  Modal,
   OperationButton,
   showSuccessMessage,
   Stack,
@@ -15,10 +14,11 @@ import {
   useFormContext
 } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
 import { formatTimestamp, PrincipalSelect, TaskStatusTag, UserLabel } from "../../components";
+import { ActionDialog, ActionFooter, useConfirm } from "../../components/action-dialog";
 import { TASK_STATUS_OPTIONS } from "../../components/status/labels";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
@@ -93,58 +93,20 @@ function TaskSearchFields() {
   );
 }
 
-/**
- * Reassign a pending task to a different user.
- */
-function ReassignModal({
-  open,
-  onClose,
-  onConfirm
-}: {
+interface ReassignModalProps {
   open: boolean;
   onClose: () => void;
   onConfirm: (newAssigneeId: string, reason: string) => Promise<void>;
-}) {
+}
+
+function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) {
   const [userIds, setUserIds] = useState<string[]>([]);
   const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setUserIds([]);
-    setReason("");
-  }, [open]);
-
+  const { submitting, run } = useConfirm(onClose);
   const newAssigneeId = userIds[0];
 
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: newAssigneeId === undefined }}
-      okText="改派"
-      open={open}
-      title="改派任务"
-      onCancel={onClose}
-      onOk={async () => {
-        if (newAssigneeId === undefined) {
-          return;
-        }
-
-        setSubmitting(true);
-
-        try {
-          await onConfirm(newAssigneeId, reason);
-          onClose();
-        } catch {
-          /* surfaced by the http client */
-        } finally {
-          setSubmitting(false);
-        }
-      }}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="改派给">
           <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
@@ -160,7 +122,30 @@ function ReassignModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        disabled={newAssigneeId === undefined}
+        okText="改派"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => newAssigneeId !== undefined && void run(() => onConfirm(newAssigneeId, reason))}
+      />
+    </>
+  );
+}
+
+/**
+ * Reassign a pending task to a different user.
+ */
+function ReassignModal({
+  open,
+  onClose,
+  onConfirm
+}: ReassignModalProps) {
+  return (
+    <ActionDialog open={open} title="改派任务" onClose={onClose}>
+      <ReassignForm onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 

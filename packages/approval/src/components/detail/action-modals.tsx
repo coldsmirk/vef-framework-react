@@ -1,8 +1,9 @@
 import type { AddAssigneeType, RemovableAssignee, RollbackTarget } from "../../types";
 
-import { Input, Labeled, Modal, Radio, Select, Stack } from "@vef-framework-react/components";
-import { useEffect, useState } from "react";
+import { Input, Labeled, Radio, Select, Stack } from "@vef-framework-react/components";
+import { useState } from "react";
 
+import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
 import { PrincipalSelect } from "../principal";
 import { isTaskStatus } from "../status";
 import { TASK_STATUS_LABELS } from "../status/labels";
@@ -21,67 +22,21 @@ interface ActionModalProps {
   onClose: () => void;
 }
 
-/**
- * Drives one confirm-style dialog: local `submitting` while the async confirm
- * runs, closing only on success (errors are surfaced by the mutation layer
- * and keep the dialog open for retry).
- */
-function useConfirm(onClose: () => void) {
-  const [submitting, setSubmitting] = useState(false);
-
-  async function run(action: () => Promise<void>): Promise<void> {
-    setSubmitting(true);
-
-    try {
-      await action();
-      onClose();
-    } catch {
-      /* surfaced by the mutation */
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return { submitting, run };
-}
+// Each modal below is a thin ActionDialog shell around a form that owns the
+// draft; see ActionDialog for why the draft must not live beside the Modal.
 
 export interface TransferModalProps extends ActionModalProps {
   onConfirm: (transferToId: string, opinion: string) => Promise<void>;
 }
 
-/**
- * Transfer the pending task to another user.
- */
-export function TransferModal({
-  open,
-  onClose,
-  onConfirm
-}: TransferModalProps) {
+function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) {
   const [userIds, setUserIds] = useState<string[]>([]);
   const [opinion, setOpinion] = useState("");
   const { submitting, run } = useConfirm(onClose);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setUserIds([]);
-    setOpinion("");
-  }, [open]);
-
   const transferToId = userIds[0];
 
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: transferToId === undefined }}
-      okText="转办"
-      open={open}
-      title="转办"
-      onCancel={onClose}
-      onOk={() => transferToId !== undefined && run(() => onConfirm(transferToId, opinion))}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="转办给">
           <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
@@ -97,7 +52,30 @@ export function TransferModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        disabled={transferToId === undefined}
+        okText="转办"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => transferToId !== undefined && void run(() => onConfirm(transferToId, opinion))}
+      />
+    </>
+  );
+}
+
+/**
+ * Transfer the pending task to another user.
+ */
+export function TransferModal({
+  open,
+  onClose,
+  onConfirm
+}: TransferModalProps) {
+  return (
+    <ActionDialog open={open} title="转办" onClose={onClose}>
+      <TransferForm onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
@@ -106,39 +84,17 @@ export interface RollbackModalProps extends ActionModalProps {
   onConfirm: (targetNodeId: string, opinion: string) => Promise<void>;
 }
 
-/**
- * Send the instance back to a previously traversed node. Targets are resolved
- * server-side — exactly the set the engine will accept.
- */
-export function RollbackModal({
-  open,
-  onClose,
+function RollbackForm({
   targets,
+  onClose,
   onConfirm
-}: RollbackModalProps) {
-  const [targetNodeId, setTargetNodeId] = useState<string>();
+}: Omit<RollbackModalProps, "open">) {
+  const [targetNodeId, setTargetNodeId] = useState(() => targets.length === 1 ? targets[0]?.nodeId : undefined);
   const [opinion, setOpinion] = useState("");
   const { submitting, run } = useConfirm(onClose);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setTargetNodeId(targets.length === 1 ? targets[0]?.nodeId : undefined);
-    setOpinion("");
-  }, [open, targets]);
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: targetNodeId === undefined }}
-      okText="回退"
-      open={open}
-      title="回退"
-      onCancel={onClose}
-      onOk={() => targetNodeId !== undefined && run(() => onConfirm(targetNodeId, opinion))}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="回退至">
           <Select
@@ -162,7 +118,32 @@ export function RollbackModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        disabled={targetNodeId === undefined}
+        okText="回退"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => targetNodeId !== undefined && void run(() => onConfirm(targetNodeId, opinion))}
+      />
+    </>
+  );
+}
+
+/**
+ * Send the instance back to a previously traversed node. Targets are resolved
+ * server-side — exactly the set the engine will accept.
+ */
+export function RollbackModal({
+  open,
+  onClose,
+  targets,
+  onConfirm
+}: RollbackModalProps) {
+  return (
+    <ActionDialog open={open} title="回退" onClose={onClose}>
+      <RollbackForm targets={targets} onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
@@ -174,44 +155,17 @@ export interface AddAssigneeModalProps extends ActionModalProps {
   onConfirm: (userIds: string[], addType: AddAssigneeType) => Promise<void>;
 }
 
-/**
- * Dynamically add assignees around the pending task.
- */
-export function AddAssigneeModal({
-  open,
-  onClose,
+function AddAssigneeForm({
   allowedTypes,
+  onClose,
   onConfirm
-}: AddAssigneeModalProps) {
+}: Omit<AddAssigneeModalProps, "open">) {
   const [userIds, setUserIds] = useState<string[]>([]);
-  const [addType, setAddType] = useState<AddAssigneeType>();
+  const [addType, setAddType] = useState(() => allowedTypes.length === 1 ? allowedTypes[0] : undefined);
   const { submitting, run } = useConfirm(onClose);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setUserIds([]);
-    setAddType(allowedTypes.length === 1 ? allowedTypes[0] : undefined);
-  }, [open, allowedTypes]);
-
-  const ready = userIds.length > 0 && addType !== undefined;
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: !ready }}
-      okText="加签"
-      open={open}
-      title="加签"
-      onCancel={onClose}
-      onOk={() => {
-        if (userIds.length > 0 && addType !== undefined) {
-          void run(() => onConfirm(userIds, addType));
-        }
-      }}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="加签人员">
           <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
@@ -233,7 +187,35 @@ export function AddAssigneeModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        disabled={userIds.length === 0 || addType === undefined}
+        okText="加签"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => {
+          if (userIds.length > 0 && addType !== undefined) {
+            void run(() => onConfirm(userIds, addType));
+          }
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * Dynamically add assignees around the pending task.
+ */
+export function AddAssigneeModal({
+  open,
+  onClose,
+  allowedTypes,
+  onConfirm
+}: AddAssigneeModalProps) {
+  return (
+    <ActionDialog open={open} title="加签" onClose={onClose}>
+      <AddAssigneeForm allowedTypes={allowedTypes} onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
@@ -246,36 +228,16 @@ export interface RemoveAssigneeModalProps extends ActionModalProps {
   onConfirm: (taskId: string) => Promise<void>;
 }
 
-/**
- * Remove a peer assignee from the current node by canceling their task.
- */
-export function RemoveAssigneeModal({
-  open,
-  onClose,
+function RemoveAssigneeForm({
   targets,
+  onClose,
   onConfirm
-}: RemoveAssigneeModalProps) {
-  const [taskId, setTaskId] = useState<string>();
+}: Omit<RemoveAssigneeModalProps, "open">) {
+  const [taskId, setTaskId] = useState(() => targets.length === 1 ? targets[0]?.taskId : undefined);
   const { submitting, run } = useConfirm(onClose);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setTaskId(targets.length === 1 ? targets[0]?.taskId : undefined);
-  }, [open, targets]);
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ danger: true, disabled: taskId === undefined }}
-      okText="减签"
-      open={open}
-      title="减签"
-      onCancel={onClose}
-      onOk={() => taskId !== undefined && run(() => onConfirm(taskId))}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled hint="移除后该审批人不再参与本节点审批。" label="移除审批人">
           <Select
@@ -294,12 +256,60 @@ export function RemoveAssigneeModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        danger
+        disabled={taskId === undefined}
+        okText="减签"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => taskId !== undefined && void run(() => onConfirm(taskId))}
+      />
+    </>
+  );
+}
+
+/**
+ * Remove a peer assignee from the current node by canceling their task.
+ */
+export function RemoveAssigneeModal({
+  open,
+  onClose,
+  targets,
+  onConfirm
+}: RemoveAssigneeModalProps) {
+  return (
+    <ActionDialog open={open} title="减签" onClose={onClose}>
+      <RemoveAssigneeForm targets={targets} onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
 export interface CCModalProps extends ActionModalProps {
   onConfirm: (ccUserIds: string[]) => Promise<void>;
+}
+
+function CCForm({ onClose, onConfirm }: Omit<CCModalProps, "open">) {
+  const [userIds, setUserIds] = useState<string[]>([]);
+  const { submitting, run } = useConfirm(onClose);
+
+  return (
+    <>
+      <Stack gap={4} style={{ paddingBlock: 8 }}>
+        <Labeled label="抄送给">
+          <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
+        </Labeled>
+      </Stack>
+
+      <ActionFooter
+        disabled={userIds.length === 0}
+        okText="抄送"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => userIds.length > 0 && void run(() => onConfirm(userIds))}
+      />
+    </>
+  );
 }
 
 /**
@@ -310,31 +320,10 @@ export function CCModal({
   onClose,
   onConfirm
 }: CCModalProps) {
-  const [userIds, setUserIds] = useState<string[]>([]);
-  const { submitting, run } = useConfirm(onClose);
-
-  useEffect(() => {
-    if (open) {
-      setUserIds([]);
-    }
-  }, [open]);
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: userIds.length === 0 }}
-      okText="抄送"
-      open={open}
-      title="抄送"
-      onCancel={onClose}
-      onOk={() => userIds.length > 0 && run(() => onConfirm(userIds))}
-    >
-      <Stack gap={4} style={{ paddingBlock: 8 }}>
-        <Labeled label="抄送给">
-          <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
-        </Labeled>
-      </Stack>
-    </Modal>
+    <ActionDialog open={open} title="抄送" onClose={onClose}>
+      <CCForm onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
@@ -352,38 +341,17 @@ export interface UrgeModalProps extends ActionModalProps {
   onConfirm: (taskId: string, message: string) => Promise<void>;
 }
 
-/**
- * Send an urge notification to a pending assignee.
- */
-export function UrgeModal({
-  open,
-  onClose,
+function UrgeForm({
   targets,
+  onClose,
   onConfirm
-}: UrgeModalProps) {
-  const [taskId, setTaskId] = useState<string>();
+}: Omit<UrgeModalProps, "open">) {
+  const [taskId, setTaskId] = useState(() => targets.length === 1 ? targets[0]?.taskId : undefined);
   const [message, setMessage] = useState("");
   const { submitting, run } = useConfirm(onClose);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setTaskId(targets.length === 1 ? targets[0]?.taskId : undefined);
-    setMessage("");
-  }, [open, targets]);
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={{ disabled: taskId === undefined }}
-      okText="催办"
-      open={open}
-      title="催办"
-      onCancel={onClose}
-      onOk={() => taskId !== undefined && run(() => onConfirm(taskId, message))}
-    >
+    <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="催办对象">
           <Select
@@ -407,7 +375,31 @@ export function UrgeModal({
           />
         </Labeled>
       </Stack>
-    </Modal>
+
+      <ActionFooter
+        disabled={taskId === undefined}
+        okText="催办"
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => taskId !== undefined && void run(() => onConfirm(taskId, message))}
+      />
+    </>
+  );
+}
+
+/**
+ * Send an urge notification to a pending assignee.
+ */
+export function UrgeModal({
+  open,
+  onClose,
+  targets,
+  onConfirm
+}: UrgeModalProps) {
+  return (
+    <ActionDialog open={open} title="催办" onClose={onClose}>
+      <UrgeForm targets={targets} onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
 
@@ -422,6 +414,39 @@ export interface ReasonModalProps extends ActionModalProps {
   onConfirm: (reason: string) => Promise<void>;
 }
 
+function ReasonForm({
+  okText,
+  danger,
+  placeholder,
+  onClose,
+  onConfirm
+}: Omit<ReasonModalProps, "open" | "title">) {
+  const [reason, setReason] = useState("");
+  const { submitting, run } = useConfirm(onClose);
+
+  return (
+    <>
+      <Stack gap={4} style={{ paddingBlock: 8 }}>
+        <Input.TextArea
+          maxLength={2000}
+          placeholder={placeholder ?? "请输入原因（可选）"}
+          rows={3}
+          value={reason}
+          onChange={event => setReason(event.target.value)}
+        />
+      </Stack>
+
+      <ActionFooter
+        danger={danger}
+        okText={okText}
+        submitting={submitting}
+        onCancel={onClose}
+        onOk={() => void run(() => onConfirm(reason))}
+      />
+    </>
+  );
+}
+
 /**
  * A single reason input, shared by withdraw / terminate style actions.
  */
@@ -434,34 +459,9 @@ export function ReasonModal({
   placeholder,
   onConfirm
 }: ReasonModalProps) {
-  const [reason, setReason] = useState("");
-  const { submitting, run } = useConfirm(onClose);
-
-  useEffect(() => {
-    if (open) {
-      setReason("");
-    }
-  }, [open]);
-
   return (
-    <Modal
-      confirmLoading={submitting}
-      okButtonProps={danger ? { danger: true } : undefined}
-      okText={okText}
-      open={open}
-      title={title}
-      onCancel={onClose}
-      onOk={() => run(() => onConfirm(reason))}
-    >
-      <Stack gap={4} style={{ paddingBlock: 8 }}>
-        <Input.TextArea
-          maxLength={2000}
-          placeholder={placeholder ?? "请输入原因（可选）"}
-          rows={3}
-          value={reason}
-          onChange={event => setReason(event.target.value)}
-        />
-      </Stack>
-    </Modal>
+    <ActionDialog open={open} title={title} onClose={onClose}>
+      <ReasonForm danger={danger} okText={okText} placeholder={placeholder} onClose={onClose} onConfirm={onConfirm} />
+    </ActionDialog>
   );
 }
