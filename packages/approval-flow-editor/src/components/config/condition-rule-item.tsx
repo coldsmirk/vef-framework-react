@@ -131,6 +131,15 @@ const valueSlotStyle = css({
   flexDirection: "column"
 });
 
+const expressionInputStyle = css({
+  flex: 1,
+  minWidth: 0
+});
+
+const expressionPrefixStyle = css({
+  color: globalCssVars.colorTextTertiary
+});
+
 const deleteButtonStyle = css({
   flexShrink: 0,
   width: 32,
@@ -163,6 +172,40 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   onRemove
 }) => {
   const { formFields = [], globalSubjects = [] } = useEditorPlugins();
+
+  const removeButton = (
+    <Button
+      aria-label="删除条件"
+      css={deleteButtonStyle}
+      disabled={readonly}
+      type="text"
+      onClick={onRemove}
+    >
+      <XIcon size={14} />
+    </Button>
+  );
+
+  // A group may mix field and expression conditions — the engine evaluates
+  // both and the wire format allows it — so an expression rule is edited in
+  // place as its source rather than misread as an unfilled field rule.
+  if (condition.kind === "expression") {
+    return (
+      <div css={ruleRowStyle}>
+        <Input
+          aria-label="条件表达式"
+          css={expressionInputStyle}
+          disabled={readonly}
+          placeholder="请输入条件表达式"
+          prefix={<span css={expressionPrefixStyle}>表达式</span>}
+          value={condition.expression}
+          onChange={event => onChange({ ...condition, expression: event.currentTarget.value })}
+        />
+
+        {removeButton}
+      </div>
+    );
+  }
+
   // Resolution order mirrors the engine: built-in applicant subjects, then
   // host-supplied globals, then form data. A key colliding with an earlier
   // layer is shadowed at runtime, so the duplicate is dropped here instead of
@@ -406,14 +449,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
         {valueInput}
       </div>
 
-      <Button
-        css={deleteButtonStyle}
-        disabled={readonly}
-        type="text"
-        onClick={onRemove}
-      >
-        <XIcon size={14} />
-      </Button>
+      {removeButton}
     </div>
   );
 };

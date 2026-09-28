@@ -8,7 +8,7 @@ import { Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { useEditorStore } from "../../store";
-import { ConditionEditorModal } from "./condition-editor-modal";
+import { ConditionEditorModal, detectMode } from "./condition-editor-modal";
 import { ConfigSection, FormField } from "./shared";
 
 const branchListStyle = css({
@@ -91,18 +91,14 @@ const conditionEditRowStyle = css({
   justifyContent: "space-between"
 });
 
+// Summarized by the mode the editor opens in, so a set mixing expression and
+// field rules reads as the groups it is edited as.
 function getConditionSummary(groups?: ConditionGroup[]): string {
   if (!groups || groups.length === 0) {
     return "未设置";
   }
 
-  const hasExpression = groups.some(g => g.conditions.some(c => c.kind === "expression"));
-
-  if (hasExpression) {
-    return "表达式条件";
-  }
-
-  return `${groups.length} 组条件`;
+  return detectMode(groups) === "expression" ? "表达式条件" : `${groups.length} 组条件`;
 }
 
 export const ConditionConfig: FC<ConditionConfigProps> = ({ nodeId }) => {

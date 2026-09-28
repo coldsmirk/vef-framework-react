@@ -163,3 +163,37 @@ describe("ConditionRuleItem built-in subject values", () => {
       .toBeInTheDocument();
   });
 });
+
+describe("ConditionRuleItem expression rules", () => {
+  it("shows an expression condition as its source instead of an unfilled field rule", () => {
+    renderRule({
+      condition: condition({
+        kind: "expression",
+        subject: "",
+        operator: "",
+        expression: "formData.amount > 1000"
+      })
+    });
+
+    expect(screen.getByRole("textbox", { name: "条件表达式" })).toHaveValue("formData.amount > 1000");
+    expect(screen.queryByRole("combobox", { name: "条件字段" })).not.toBeInTheDocument();
+  });
+
+  it("edits the expression in place", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    renderRule({
+      condition: condition({
+        kind: "expression",
+        subject: "",
+        operator: "",
+        expression: ""
+      }),
+      onChange
+    });
+    await user.type(screen.getByRole("textbox", { name: "条件表达式" }), "x");
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "expression", expression: "x" }));
+  });
+});

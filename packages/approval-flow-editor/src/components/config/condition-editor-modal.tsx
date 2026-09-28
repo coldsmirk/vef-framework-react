@@ -133,7 +133,12 @@ interface ConditionEditorModalProps {
   onCancel: () => void;
 }
 
-function detectMode(groups: ConditionGroup[]): EditorMode {
+/**
+ * The editor mode a stored condition set opens in: a lone expression condition
+ * is the expression mode's shape; everything else — mixed groups included — is
+ * edited visually.
+ */
+export function detectMode(groups: ConditionGroup[]): EditorMode {
   const [firstGroup] = groups;
 
   if (
