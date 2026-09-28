@@ -77,6 +77,31 @@ describe("validateFlowDefinition node config rules", () => {
       .toEqual([]);
   });
 
+  it("rejects a fixed-count pass rule without a positive whole count", () => {
+    expect(codesOf(flowWith({ data: { name: "审批", passRule: "fixed_count" } })))
+      .toContain("pass_count_range");
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        passRule: "fixed_count",
+        passCount: 2.5
+      }
+    })))
+      .toContain("pass_count_range");
+  });
+
+  it("accepts a fixed count above any panel size", () => {
+    // Assignees resolve at run time; the engine caps the count by them.
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        passRule: "fixed_count",
+        passCount: 100
+      }
+    })))
+      .toEqual([]);
+  });
+
   it("rejects out-of-vocabulary enum values", () => {
     expect(codesOf(flowWith({ data: { name: "审批", executionType: "auto" as never } })))
       .toContain("invalid_execution_type");

@@ -34,6 +34,7 @@ export const APPROVAL_NODE_DEFAULTS = {
   // Stored as a percentage in (0, 100] — the single convention shared with
   // the backend engine, which consumes the value verbatim.
   passRatio: 100,
+  passCount: 1,
   sameApplicantAction: "self_approve",
   consecutiveApproverAction: "none",
   rollbackType: "previous",

@@ -12,6 +12,7 @@ describe("normalizeNodeData", () => {
     expect(normalized.approvalMethod).toBe("parallel");
     expect(normalized.passRule).toBe("all");
     expect(normalized.passRatio).toBe(100);
+    expect(normalized.passCount).toBe(1);
     expect(normalized.executionType).toBe("manual");
     expect(normalized.emptyAssigneeAction).toBe("auto_pass");
     expect(normalized.sameApplicantAction).toBe("self_approve");

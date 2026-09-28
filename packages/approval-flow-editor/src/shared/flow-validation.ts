@@ -88,6 +88,7 @@ export type FlowValidationCode
     | "fallback_users_required"
     | "admin_users_required"
     | "pass_ratio_range"
+    | "pass_count_range"
     | "rollback_targets_required"
     | "rollback_target_unknown"
     | "rollback_target_self"
@@ -176,7 +177,8 @@ const APPROVAL_METHODS = enumSet<ApprovalMethod>({ sequential: null, parallel: n
 const PASS_RULES = enumSet<PassRule>({
   all: null,
   any: null,
-  ratio: null
+  ratio: null,
+  fixed_count: null
 });
 const SAME_APPLICANT_ACTIONS = enumSet<SameApplicantAction>({
   auto_pass: null,
@@ -707,6 +709,20 @@ function validateApprovalNodeConfig(
       errors.push({
         code: "pass_ratio_range",
         message: "按比例通过时必须设置 (0, 100] 范围内的通过比例（百分比）",
+        nodeId
+      });
+    }
+  }
+
+  // No upper bound: assignees resolve at run time, and the engine caps the
+  // count by the number of participating assignees.
+  if (data?.passRule === "fixed_count") {
+    const count = data.passCount ?? 0;
+
+    if (!Number.isSafeInteger(count) || count < 1) {
+      errors.push({
+        code: "pass_count_range",
+        message: "固定人数通过时必须设置不小于 1 的整数通过人数",
         nodeId
       });
     }

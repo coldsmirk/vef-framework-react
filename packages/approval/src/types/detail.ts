@@ -78,6 +78,10 @@ export interface TimelineEntry {
    * Percentage in `(0, 100]`, serialized as a decimal string.
    */
   passRatio?: string;
+  /**
+   * Approvals the `fixed_count` rule requires; present only under that rule.
+   */
+  passCount?: number;
   participants?: NodeParticipant[];
   ccRecipients?: CCRecipient[];
   activities?: Activity[];
@@ -113,6 +117,10 @@ export interface FlowGraphNodeData {
    * Percentage in `(0, 100]`, serialized as a decimal string.
    */
   passRatio?: string;
+  /**
+   * Approvals the `fixed_count` rule requires; present only under that rule.
+   */
+  passCount?: number;
   participants?: NodeParticipant[];
   ccRecipients?: CCRecipient[];
   activities?: Activity[];

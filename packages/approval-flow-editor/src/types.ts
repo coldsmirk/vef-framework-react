@@ -70,9 +70,11 @@ export type ApprovalMethod = "sequential" | "parallel";
 
 /**
  * Pass rule for parallel approval. "all" implies veto power — any single
- * rejection fails the node.
+ * rejection fails the node. "fixed_count" passes once `passCount` assignees
+ * approve — every assignee when fewer take part — and rejects once that count
+ * is out of reach.
  */
-export type PassRule = "all" | "any" | "ratio";
+export type PassRule = "all" | "any" | "ratio" | "fixed_count";
 
 /**
  * Action when a task node resolves no assignee, aligned with backend
@@ -412,6 +414,11 @@ export interface ApprovalNodeData extends TaskNodeData {
   approvalMethod?: ApprovalMethod;
   passRule?: PassRule;
   passRatio?: number;
+  /**
+   * Approvals the `fixed_count` rule requires — a positive integer, capped at
+   * run time by the number of participating assignees.
+   */
+  passCount?: number;
   sameApplicantAction?: SameApplicantAction;
   consecutiveApproverAction?: ConsecutiveApproverAction;
   rollbackType?: RollbackType;

@@ -41,7 +41,8 @@ const APPROVAL_METHOD_OPTIONS: Array<{ label: string; value: ApprovalMethod }> =
 const PASS_RULE_OPTIONS: Array<{ label: string; value: PassRule }> = [
   { label: "全部通过（一票否决）", value: "all" },
   { label: "任一人通过", value: "any" },
-  { label: "按比例通过", value: "ratio" }
+  { label: "按比例通过", value: "ratio" },
+  { label: "固定人数通过", value: "fixed_count" }
 ];
 
 const EMPTY_HANDLER_OPTIONS: Array<{ label: string; value: EmptyAssigneeAction }> = [
@@ -193,7 +194,7 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
             options={APPROVAL_METHOD_OPTIONS}
             value={data.approvalMethod ?? "parallel"}
             onChange={(value: string | number) => {
-              // Dependent fields (passRule / passRatio) are retained, not
+              // Dependent fields (passRule / passRatio / passCount) are retained, not
               // cleared — the uniform policy across this panel: hidden config
               // survives toggling so the user never loses work, and the backend
               // reads only the fields relevant to the selected method.
@@ -225,6 +226,19 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
                   style={FULL_WIDTH_STYLE}
                   value={data.passRatio ?? 100}
                   onChange={value => update({ passRatio: value ?? 100 })}
+                />
+              </FormField>
+            )}
+
+            {data.passRule === "fixed_count" && (
+              <FormField label="通过人数（审批人不足时需全部通过）">
+                <InputNumber
+                  disabled={readonly}
+                  min={1}
+                  precision={0}
+                  style={FULL_WIDTH_STYLE}
+                  value={data.passCount ?? 1}
+                  onChange={value => update({ passCount: value ?? 1 })}
                 />
               </FormField>
             )}
