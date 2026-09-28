@@ -6,7 +6,7 @@ import type { ConditionDefinition, ConditionGroup } from "../../types";
 import { css } from "@emotion/react";
 import { Button, CodeEditor, globalCssVars, Modal, Segmented, showConfirm } from "@vef-framework-react/components";
 import { PlusIcon } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useRowKeys } from "../../hooks/use-row-keys";
 import { useEditorPlugins } from "../../plugins";
@@ -103,6 +103,13 @@ const addConditionButtonStyle = css({
 const addGroupButtonStyle = css({
   height: 32,
   flexShrink: 0
+});
+
+const footerStyle = css({
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 8,
+  marginTop: 12
 });
 
 const expressionHintStyle = css({
@@ -214,8 +221,19 @@ const ConditionGroupCard: FC<ConditionGroupCardProps> = ({
   );
 };
 
-export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
-  open,
+interface ConditionEditorContentProps {
+  conditionGroups: ConditionGroup[];
+  readonly: boolean;
+  onOk: (conditionGroups: ConditionGroup[]) => void;
+  onCancel: () => void;
+}
+
+/**
+ * The editor's draft and everything that reads it — body and footer alike —
+ * mounted fresh on each opening, so the draft seeds from the stored
+ * conditions once and later parent re-renders cannot wipe it.
+ */
+const ConditionEditorContent: FC<ConditionEditorContentProps> = ({
   conditionGroups,
   readonly,
   onOk,
@@ -226,37 +244,12 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
   // (built-ins and host-supplied globals) as a top-level variable — list them
   // so the author doesn't have to guess the vocabulary.
   const expressionVariables = ["formData.字段key", "applicantId", "applicantDepartmentId", ...globalSubjects.map(subject => subject.key)].join("、");
-  const [groups, setGroups] = useState<ConditionGroup[]>([]);
-  const [mode, setMode] = useState<EditorMode>("visual");
-  const [expressionText, setExpressionText] = useState("");
+  const [groups, setGroups] = useState(conditionGroups);
+  const [mode, setMode] = useState(() => detectMode(conditionGroups));
+  const [expressionText, setExpressionText] = useState(() => mode === "expression" ? conditionGroups[0]?.conditions[0]?.expression ?? "" : "");
   // Stable keys for the (removable) group cards; each card tracks its own
   // condition row keys internally.
   const groupKeys = useRowKeys(groups.length);
-
-  // Seed the draft state only on the closed -> open transition. Depending on
-  // `conditionGroups` would re-seed (wiping in-progress edits) on every parent
-  // re-render, because the parent passes a fresh `?? []` array identity each
-  // time. The latest groups are read from a ref, so there is no stale closure.
-  const conditionGroupsRef = useRef(conditionGroups);
-  conditionGroupsRef.current = conditionGroups;
-  const prevOpenRef = useRef(false);
-
-  useEffect(() => {
-    if (open && !prevOpenRef.current) {
-      const seed = conditionGroupsRef.current;
-      setGroups(seed);
-      const detected = detectMode(seed);
-      setMode(detected);
-
-      if (detected === "expression" && seed.length === 1 && seed[0]) {
-        setExpressionText(seed[0].conditions[0]?.expression ?? "");
-      } else {
-        setExpressionText("");
-      }
-    }
-
-    prevOpenRef.current = open;
-  }, [open]);
 
   const handleModeChange = (nextMode: string | number) => {
     if (nextMode !== "visual" && nextMode !== "expression") {
@@ -340,20 +333,7 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
   };
 
   return (
-    <Modal
-      open={open}
-      title="编辑条件"
-      width={MODAL_WIDTH}
-      footer={readonly
-        ? <Button onClick={onCancel}>关闭</Button>
-        : (
-            <>
-              <Button onClick={onCancel}>取消</Button>
-              <Button type="primary" onClick={handleOk}>确定</Button>
-            </>
-          )}
-      onCancel={onCancel}
-    >
+    <>
       <div css={modalBodyStyle}>
         <div css={segmentedWrapperStyle}>
           <Segmented
@@ -424,6 +404,45 @@ export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
               </>
             )}
       </div>
-    </Modal>
+
+      <div css={footerStyle}>
+        {readonly
+          ? <Button onClick={onCancel}>关闭</Button>
+          : (
+              <>
+                <Button onClick={onCancel}>取消</Button>
+                <Button type="primary" onClick={handleOk}>确定</Button>
+              </>
+            )}
+      </div>
+    </>
   );
 };
+
+/**
+ * The branch condition editor. The draft lives in ConditionEditorContent, not
+ * here, so a keystroke re-renders the content alone and never the Modal around
+ * it: re-rendering the Modal re-runs its portal's dependency-less container
+ * effect (@rc-component/portal), whose no-op state update React cannot always
+ * skip, and fast typing then stacks those updates past React's nested-update
+ * limit ("Maximum update depth exceeded"). destroyOnHidden remounts the
+ * content on every opening, which is also what seeds the draft.
+ */
+export const ConditionEditorModal: FC<ConditionEditorModalProps> = ({
+  open,
+  conditionGroups,
+  readonly,
+  onOk,
+  onCancel
+}) => (
+  <Modal
+    destroyOnHidden
+    footer={null}
+    open={open}
+    title="编辑条件"
+    width={MODAL_WIDTH}
+    onCancel={onCancel}
+  >
+    <ConditionEditorContent conditionGroups={conditionGroups} readonly={readonly} onCancel={onCancel} onOk={onOk} />
+  </Modal>
+);
