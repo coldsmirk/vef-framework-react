@@ -5,7 +5,7 @@ import type { ConnectionCheck, DatabaseProbe, HttpProbe, System } from "../../ty
 import { Button, Descriptions, Drawer, Empty, Flex, Icon, Input, Labeled, Stack, Tag, Text } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { ActivityIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useOpsApi } from "../../api";
 
@@ -112,35 +112,25 @@ export interface TestConnectionDrawerProps {
 }
 
 /**
- * A drawer that probes a saved system's configured transports (HTTP and
- * database) and shows what each probe found. The HTTP method/path inputs only
- * render when the system actually has a Base URL to probe.
+ * The probe inputs and result for one system. Mounted per system (keyed by
+ * its code), so a previous system's inputs and result never linger under a new
+ * system's title, and typing re-renders the panel alone rather than the Drawer
+ * around it — a Drawer re-rendered per keystroke re-runs its portal's
+ * dependency-less container effect (@rc-component/portal), which fast typing
+ * can stack past React's nested-update limit.
  */
-export function TestConnectionDrawer({
-  open,
-  system,
-  onClose
-}: TestConnectionDrawerProps) {
+function ProbePanel({ system }: { system: System | null }) {
   const { testConnection } = useOpsApi();
   const {
     mutate,
     data,
-    isPending,
-    reset
+    isPending
   } = useMutation({ mutationFn: testConnection });
   const [method, setMethod] = useState("GET");
   const [path, setPath] = useState("/");
   const systemCode = system?.code ?? "";
   const hasHttp = Boolean(system?.baseUrl);
   const hasDatabase = Boolean(system?.dataSource);
-
-  // Reset the probe and inputs when the drawer targets a different system, so
-  // a previous system's result never lingers under a new system's title.
-  useEffect(() => {
-    reset();
-    setMethod("GET");
-    setPath("/");
-  }, [systemCode, reset]);
 
   const probeButton = (
     <Button
@@ -159,38 +149,55 @@ export function TestConnectionDrawer({
   );
 
   return (
-    <Drawer open={open} size={640} title={`测试连接 · ${systemCode}`} onClose={onClose}>
-      <Stack gap="middle">
-        {hasHttp
-          ? (
-              <Flex align="flex-end" gap="small">
-                <Labeled label="探测方法">
-                  <Input aria-label="探测方法" placeholder="GET" style={{ width: 100 }} value={method} onChange={event => setMethod(event.target.value)} />
+    <Stack gap="middle">
+      {hasHttp
+        ? (
+            <Flex align="flex-end" gap="small">
+              <Labeled label="探测方法">
+                <Input aria-label="探测方法" placeholder="GET" style={{ width: 100 }} value={method} onChange={event => setMethod(event.target.value)} />
+              </Labeled>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Labeled label="探测路径">
+                  <Input aria-label="探测路径" placeholder="如 /health" value={path} onChange={event => setPath(event.target.value)} />
                 </Labeled>
+              </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Labeled label="探测路径">
-                    <Input aria-label="探测路径" placeholder="如 /health" value={path} onChange={event => setPath(event.target.value)} />
-                  </Labeled>
-                </div>
+              {probeButton}
+            </Flex>
+          )
+        : (
+            <Flex align="center" gap="small" justify="space-between">
+              <Text type="secondary">
+                {hasDatabase ? "该系统仅配置了直连数据源，将探测数据库连通性。" : "该系统未配置可探测的连接。"}
+              </Text>
 
-                {probeButton}
-              </Flex>
-            )
-          : (
-              <Flex align="center" gap="small" justify="space-between">
-                <Text type="secondary">
-                  {hasDatabase ? "该系统仅配置了直连数据源，将探测数据库连通性。" : "该系统未配置可探测的连接。"}
-                </Text>
+              {probeButton}
+            </Flex>
+          )}
 
-                {probeButton}
-              </Flex>
-            )}
+      {data
+        ? <ProbeResult check={data} />
+        : <Empty description="开始探测后在此查看结果" style={{ padding: "32px 0" }} />}
+    </Stack>
+  );
+}
 
-        {data
-          ? <ProbeResult check={data} />
-          : <Empty description="开始探测后在此查看结果" style={{ padding: "32px 0" }} />}
-      </Stack>
+/**
+ * A drawer that probes a saved system's configured transports (HTTP and
+ * database) and shows what each probe found. The HTTP method/path inputs only
+ * render when the system actually has a Base URL to probe.
+ */
+export function TestConnectionDrawer({
+  open,
+  system,
+  onClose
+}: TestConnectionDrawerProps) {
+  const systemCode = system?.code ?? "";
+
+  return (
+    <Drawer open={open} size={640} title={`测试连接 · ${systemCode}`} onClose={onClose}>
+      <ProbePanel key={systemCode} system={system} />
     </Drawer>
   );
 }
