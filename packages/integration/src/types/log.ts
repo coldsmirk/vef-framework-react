@@ -64,7 +64,7 @@ export interface ReplayParams {
 /**
  * The outcome of re-running a recorded invocation against the current
  * definitions, shaped like the log entry it is compared with. Mirrors the Go
- * `exec.ReplayResult`.
+ * `integration.ReplayResult`.
  */
 export interface ReplayResult extends InvocationOutcome {
   /**
