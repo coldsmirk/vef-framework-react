@@ -70,7 +70,7 @@ export { Breadcrumb, type BreadcrumbItem, type BreadcrumbItemType, type Breadcru
 export { Button, type ButtonProps } from "./button";
 export { Calendar, type CalendarProps } from "./calendar";
 export { Card, type CardGridProps, type CardMetaProps, type CardProps } from "./card";
-export { Carousel, type CarouselDotPlacement, type CarouselEffect, type CarouselRef } from "./carousel";
+export { Carousel, type CarouselDotPlacement, type CarouselEffect, type CarouselProps, type CarouselRef } from "./carousel";
 export { Cascader, type CascaderOption, type CascaderProps } from "./cascader";
 export { Center, type CenterProps } from "./center";
 export { Chart, connectCharts, disconnectCharts, useChart, type ChartInstance, type ChartOption, type ChartProps, type UseChartOptions } from "./charts";
@@ -100,12 +100,12 @@ export {
 } from "./crud";
 export type { PaginatedQueryParams, QueryParams } from "./crud";
 export { CrudPage, type CrudPageProps } from "./crud-page";
-export { DatePicker, type DatePickerProps, type DateRangePickerProps } from "./date-picker";
+export { DatePicker, type DatePickerProps, type DateRangePickerProps, type MonthPickerProps, type WeekPickerProps } from "./date-picker";
 export { Descriptions, type DescriptionsItem, type DescriptionsProps } from "./descriptions";
 export { Divider, type DividerProps } from "./divider";
 export { Drawer, type DrawerProps } from "./drawer";
 export { Dropdown, type DropdownButtonProps, type DropdownButtonType, type DropdownMenuItem, type DropdownMenuProps, type DropdownProps } from "./dropdown";
-export { DynamicIcon, type DynamicIconName, type DynamicIconProps } from "./dynamic-icon";
+export { DynamicIcon, dynamicIconNames, type DynamicIconName, type DynamicIconProps } from "./dynamic-icon";
 export {
   createEditableColumn,
   EditableTable,
