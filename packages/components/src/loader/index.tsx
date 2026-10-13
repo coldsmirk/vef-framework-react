@@ -11,7 +11,7 @@ import { FlipText } from "../flip-text";
 import { Spin } from "../spin";
 
 export function Loader({
-  size = "default",
+  size = "medium",
   description,
   descriptionSize
 }: LoaderProps) {
@@ -21,7 +21,7 @@ export function Loader({
         style: {
           "--vef-spin-dot-size": `${size}px`
         } as CSSProperties,
-        size: "default" as const
+        size: "medium" as const
       };
     }
 
