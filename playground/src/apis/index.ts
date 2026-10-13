@@ -2,6 +2,7 @@ export * from "./auth/auth";
 export * from "./auth/menu";
 export * from "./auth/role";
 export * from "./auth/user";
+export * from "./form/data-sources";
 export * from "./md/department";
 export * from "./md/district";
 export * from "./md/id-mapping";

@@ -4,8 +4,8 @@ import type { FormSchema } from "@vef-framework-react/form-editor";
  * Default schema the form-editor playground route boots with, so the designer
  * always opens onto a small form that exercises validation and a few linkages
  * (condition → alert on the age field, condition → show/require on the bio
- * field, `$user`-rooted condition → show on the finance-note field, driven by
- * the route's `evaluationContext`). Handy for manually testing the editor
+ * field, `$applicant`-rooted condition → show on the finance-note field,
+ * driven by the route's `evaluationContext`). Handy for manually testing the editor
  * without rebuilding a form each time.
  */
 export const DEMO_SCHEMA: FormSchema = {
@@ -156,7 +156,7 @@ export const DEMO_SCHEMA: FormSchema = {
           id: "Field_finance_note_demo",
           key: "financeNote",
           placeholder: "仅财务部发起人可见",
-          helperText: "由 $user.departmentName 全局上下文条件控制显示",
+          helperText: "由系统变量 $applicant.departmentName 条件控制显示",
           linkage: {
             defaults: {
               hidden: true
@@ -174,7 +174,7 @@ export const DEMO_SCHEMA: FormSchema = {
                       {
                         kind: "leaf",
                         id: "Condition_finance_leaf_demo",
-                        sourceKey: "$user.departmentName",
+                        sourceKey: "$applicant.departmentName",
                         operator: "eq",
                         value: "财务部"
                       }

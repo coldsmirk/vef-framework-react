@@ -4,6 +4,7 @@ import type { FC, ReactNode } from "react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { ApprovalProvider } from "@vef-framework-react/approval";
 import { Select } from "@vef-framework-react/components";
+import { FORM_DATA_SOURCE_APIS, formDataSourceResolver } from "~apis";
 
 interface MockOption {
   label: string;
@@ -56,16 +57,19 @@ function createMockPicker(kind: PrincipalKind): FC<PickerProps> {
 }
 
 /**
- * Mock user / role / department pickers for the playground. A real host
- * supplies its own components satisfying `PickerProps`, resolving against its
- * organization structure.
+ * Mock user / role / department pickers for the playground, plus the option
+ * API catalog its form designer offers and the resolver that serves it. A real
+ * host supplies its own components satisfying `PickerProps`, resolving against
+ * its organization structure.
  */
 const APPROVAL_PLUGINS: ApprovalPlugins = {
   pickers: {
     user: createMockPicker("user"),
     role: createMockPicker("role"),
     department: createMockPicker("department")
-  }
+  },
+  dataSourceApis: FORM_DATA_SOURCE_APIS,
+  dataSourceResolver: formDataSourceResolver
 };
 
 export const Route = createFileRoute("/_layout/approval")({
