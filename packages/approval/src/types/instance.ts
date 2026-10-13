@@ -6,7 +6,12 @@ import type { AddAssigneeType, ProcessTaskAction } from "./enums";
  * derived field list.
  */
 export interface StartInstanceParams {
-  tenantId: string;
+  /**
+   * The tenant the instance runs in. Only a super-admin's choice counts —
+   * omitted, their own tenant; everyone else always starts in their own
+   * tenant, from its own flows or the shared ones.
+   */
+  tenantId?: string;
   flowCode: string;
   /**
    * Opaque reference to the bound business record; required by convention for

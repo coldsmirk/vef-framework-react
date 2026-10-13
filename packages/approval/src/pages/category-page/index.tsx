@@ -166,23 +166,28 @@ export function ApprovalCategoryPage({
 
 /**
  * The form body wired to the live tree data, so the parent selector excludes
- * the node being edited (a category can never become its own descendant).
- * The edited id is read through a headless `AppField` subscription.
+ * the node being edited (a category can never become its own descendant) and
+ * offers only the category's own tenant — a tree never spans tenants. The
+ * edited id and tenant are read through headless `AppField` subscriptions.
  */
 function CategoryFormWithTree() {
   const { AppField } = useFormContext<CategoryParams>();
 
   return (
-    <AppField name="id">
-      {field => <CategoryFormLoader editedId={field.state.value} />}
+    <AppField name="tenantId">
+      {tenantField => (
+        <AppField name="id">
+          {field => <CategoryFormLoader editedId={field.state.value} tenantId={tenantField.state.value} />}
+        </AppField>
+      )}
     </AppField>
   );
 }
 
-function CategoryFormLoader({ editedId }: { editedId?: string }) {
+function CategoryFormLoader({ editedId, tenantId }: { editedId?: string; tenantId: string }) {
   const api = useCategoryApi();
 
-  const { data } = useQuery({ queryFn: api.findTree, queryKey: [api.findTree.key, {}] });
+  const { data } = useQuery({ queryFn: api.findTree, queryKey: [api.findTree.key, { tenantId }] });
   const treeOptions = useMemo(() => buildCategoryTreeOptions(data ?? [], editedId), [data, editedId]);
 
   return <CategoryForm treeOptions={treeOptions} />;

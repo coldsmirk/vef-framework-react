@@ -7,6 +7,7 @@ import { Collapse, globalCssVars, Input } from "@vef-framework-react/components"
 
 import { ChevronRightIcon } from "../../icons";
 import { configSectionContentStyle, configSectionStyle, formFieldLabelStyle, formFieldStyle } from "../../styles";
+import { isPrincipalKind } from "../../types";
 import { PrincipalPicker } from "./principal-picker";
 
 /* ── Collapsible Section ───────────────────────────────────────────────── */
@@ -250,4 +251,49 @@ export function principalRowResetFor(selection: SelectionMode | undefined): { id
  */
 export function indexKinds<K extends string>(descriptors: ReadonlyArray<KindDescriptor<K>>): Map<string, KindDescriptor<K>> {
   return new Map(descriptors.map(descriptor => [descriptor.kind, descriptor]));
+}
+
+/**
+ * Whether a flow may pick a kind: every kind, except — in a shared flow — one
+ * picking users, roles or departments, which belong to a single tenant.
+ */
+export function isKindSelectable(selection: SelectionMode, shared: boolean | undefined): boolean {
+  return shared !== true || !isPrincipalKind(selection);
+}
+
+/**
+ * The empty-assignee and timeout actions that hand a task to node admins or
+ * named fallback users.
+ */
+const NAMED_PEOPLE_ACTIONS = new Set<string>(["transfer_admin", "transfer_specified"]);
+
+/**
+ * An action dropdown's options for a shared flow: the actions handing a task
+ * to node admins or named fallback users — people of one tenant — are
+ * disabled, still reading as their label on a loaded definition.
+ */
+export function disableNamedPeopleActions<T extends string>(
+  options: ReadonlyArray<{ label: string; value: T }>
+): Array<{ label: string; value: T; disabled: boolean }> {
+  return options.map(option => {
+    return { ...option, disabled: NAMED_PEOPLE_ACTIONS.has(option.value) };
+  });
+}
+
+/**
+ * The kind dropdown's options. A kind the flow may not pick stays listed but
+ * disabled, so a row a loaded definition still carries reads as its label
+ * while validation flags it.
+ */
+export function kindSelectOptions<K extends string>(
+  descriptors: ReadonlyArray<KindDescriptor<K>>,
+  shared: boolean | undefined
+): Array<{ label: string; value: K; disabled: boolean }> {
+  return descriptors.map(descriptor => {
+    return {
+      label: descriptor.label,
+      value: descriptor.kind,
+      disabled: !isKindSelectable(descriptor.selection, shared)
+    };
+  });
 }

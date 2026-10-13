@@ -47,9 +47,9 @@ const flowGridCss = css({
 
 export interface ApprovalInitiatePageProps {
   /**
-   * The tenant whose flows are offered.
-   *
-   * @default "default"
+   * The tenant to offer and start flows in. Only a super-admin's choice
+   * counts — omitted, their own tenant; everyone else is always offered their
+   * own tenant's flows plus the shared ones (`SHARED_TENANT_ID`).
    */
   tenantId?: string;
   /**
@@ -105,7 +105,7 @@ function FlowCard({ flow, onClick }: { flow: AvailableFlow; onClick: () => void 
  * drawer with the published form.
  */
 export function ApprovalInitiatePage({
-  tenantId = "default",
+  tenantId,
   labels,
   title = "发起审批",
   onStarted

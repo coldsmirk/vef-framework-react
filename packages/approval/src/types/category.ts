@@ -32,9 +32,19 @@ export interface CategoryParams {
 }
 
 /**
- * Search parameters for the category tree.
+ * Search parameters for the category tree, sent as the request's `meta`.
  */
 export interface CategorySearch {
   name?: string;
   isActive?: boolean;
+  /**
+   * Narrows a super-admin's read to one tenant — `SHARED_TENANT_ID` for the
+   * shared categories. Everyone else always reads their own tenant.
+   */
+  tenantId?: string;
+  /**
+   * Adds the shared categories to the tenant's own — what a picker scoping a
+   * delegation needs, since shared flows sit under shared categories.
+   */
+  includeShared?: boolean;
 }

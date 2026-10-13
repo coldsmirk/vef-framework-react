@@ -10,7 +10,17 @@ import { useRowKeys } from "../../hooks/use-row-keys";
 import { useEditorPlugins } from "../../plugins";
 import { fullWidthStyle } from "../../styles";
 import { BUILTIN_CC_KINDS } from "../../types";
-import { FormField, indexKinds, PrincipalKindPicker, principalListItemHeaderStyle, principalListItemIndexStyle, principalListItemStyle, principalRowResetFor } from "./shared";
+import {
+  FormField,
+  indexKinds,
+  isKindSelectable,
+  kindSelectOptions,
+  PrincipalKindPicker,
+  principalListItemHeaderStyle,
+  principalListItemIndexStyle,
+  principalListItemStyle,
+  principalRowResetFor
+} from "./shared";
 
 const CC_TIMING_OPTIONS: Array<{ label: string; value: CcTiming }> = [
   { label: "始终抄送", value: "always" },
@@ -38,17 +48,15 @@ export const CcList: FC<CcListProps> = ({
   showTiming = false
 }) => {
   const rowKeys = useRowKeys(value.length);
-  const { ccKinds } = useEditorPlugins();
+  const { ccKinds, shared } = useEditorPlugins();
   // The application's catalog when the host wires one, the framework built-ins
   // otherwise — mirrors AssigneeList.
   const kinds = ccKinds ?? BUILTIN_CC_KINDS;
   const kindIndex = indexKinds(kinds);
-  const kindOptions = kinds.map(descriptor => {
-    return { label: descriptor.label, value: descriptor.kind };
-  });
+  const kindOptions = kindSelectOptions(kinds, shared);
 
   const addItem = () => {
-    const first = kinds[0];
+    const first = kinds.find(descriptor => isKindSelectable(descriptor.selection, shared));
 
     onChange([...value, { kind: first?.kind ?? "user", ...principalRowResetFor(first?.selection) }]);
   };

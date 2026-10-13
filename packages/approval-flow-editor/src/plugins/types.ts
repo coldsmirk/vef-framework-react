@@ -70,4 +70,13 @@ export interface EditorPlugins {
    * built-in subjects' values.
    */
   globalSubjects?: FormFieldDefinition[];
+  /**
+   * The flow being edited is shared — owned by no tenant and run by every
+   * tenant (the backend's `approval.SharedTenantID`). A shared flow routes no
+   * work to specific people, so the editor disables the assignee / CC kinds
+   * that pick users, roles or departments and the actions handing a task to
+   * node admins or named fallback users, and validation flags any of them a
+   * loaded definition still carries — the backend refuses to deploy them.
+   */
+  shared?: boolean;
 }

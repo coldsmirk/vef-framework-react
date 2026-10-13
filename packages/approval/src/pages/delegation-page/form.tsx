@@ -41,7 +41,12 @@ export function DelegationForm() {
   const { AppField } = useFormContext<DelegationParams>();
   const categoryApi = useCategoryApi();
 
-  const { data: categories } = useQuery({ queryFn: categoryApi.findTree, queryKey: [categoryApi.findTree.key, {}] });
+  // The tenant's own categories plus the shared ones: a shared flow's tasks
+  // reach a delegator too, and its category is a shared one.
+  const { data: categories } = useQuery({
+    queryFn: categoryApi.findTree,
+    queryKey: [categoryApi.findTree.key, { includeShared: true }]
+  });
   const categoryOptions = useMemo(() => buildCategoryTreeOptions(categories ?? []), [categories]);
 
   return (

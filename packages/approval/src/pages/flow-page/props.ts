@@ -10,7 +10,9 @@ export interface ApprovalFlowPageProps {
   permissions?: Partial<FlowPermissionCodes>;
   /**
    * The tenant new flows are created under. Multi-tenant hosts pass the
-   * current tenant; single-tenant deployments keep the backend default.
+   * current tenant; single-tenant deployments keep the backend default. A
+   * super-admin passes `SHARED_TENANT_ID` to create shared flows, offered to
+   * every tenant.
    *
    * @default "default"
    */

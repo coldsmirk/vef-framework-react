@@ -31,7 +31,7 @@ const RESOURCE = "approval/my";
  */
 export interface MyApprovalApi {
   findAvailableFlows: QueryFunction<PaginationResult<AvailableFlow>, PaginatedQueryParams<AvailableFlowSearch>>;
-  getStartForm: QueryFunction<StartForm, { tenantId: string; flowCode: string }>;
+  getStartForm: QueryFunction<StartForm, { tenantId?: string; flowCode: string }>;
   findInitiated: QueryFunction<PaginationResult<InitiatedInstance>, PaginatedQueryParams<InitiatedInstanceSearch>>;
   findPendingTasks: QueryFunction<PaginationResult<PendingTask>, PaginatedQueryParams<PendingTaskSearch>>;
   findCompletedTasks: QueryFunction<PaginationResult<CompletedTask>, PaginatedQueryParams<CompletedTaskSearch>>;
@@ -76,7 +76,7 @@ export function useMyApprovalApi(): MyApprovalApi {
 
       return {
         findAvailableFlows: pagedQuery<AvailableFlow, AvailableFlowSearch>("find_available_flows"),
-        getStartForm: detailQuery<StartForm, { tenantId: string; flowCode: string }>("get_start_form"),
+        getStartForm: detailQuery<StartForm, { tenantId?: string; flowCode: string }>("get_start_form"),
         findInitiated: pagedQuery<InitiatedInstance, InitiatedInstanceSearch>("find_initiated"),
         findPendingTasks: pagedQuery<PendingTask, PendingTaskSearch>("find_pending_tasks"),
         findCompletedTasks: pagedQuery<CompletedTask, CompletedTaskSearch>("find_completed_tasks"),

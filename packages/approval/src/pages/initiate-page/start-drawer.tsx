@@ -14,7 +14,11 @@ export interface StartInstanceDrawerProps {
    * The flow to start; `null` keeps the drawer closed.
    */
   flowCode: string | null;
-  tenantId: string;
+  /**
+   * The tenant to start in. Only a super-admin's choice counts — omitted,
+   * their own tenant; everyone else always starts in their own tenant.
+   */
+  tenantId?: string;
   /**
    * Prefilled business reference for business-bound flows started from a
    * host business page.

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useCategoryApi, useFlowApi } from "../../../api";
 import { toEditorPlugins, useApprovalPlugins } from "../../../plugins";
+import { SHARED_TENANT_ID } from "../../../types";
 import { buildCategoryTreeOptions } from "../../category-page/form";
 import { BasicStep } from "./basic-step";
 import { FlowStep } from "./flow-step";
@@ -61,7 +62,16 @@ function DesignerBody({
   const [publishNow, setPublishNow] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: categories } = useQuery({ queryFn: categoryApi.findTree, queryKey: [categoryApi.findTree.key, {}] });
+  // A flow's tenant never changes, and a flow sits under a category of its own
+  // tenant — a shared flow under a shared category — so the picker offers
+  // exactly those (the server pins everyone but a super-admin to their own
+  // tenant regardless).
+  const flowTenantId = flow?.tenantId ?? tenantId;
+  const isShared = flowTenantId === SHARED_TENANT_ID;
+  const { data: categories } = useQuery({
+    queryFn: categoryApi.findTree,
+    queryKey: [categoryApi.findTree.key, { tenantId: flowTenantId }]
+  });
   const categoryOptions = useMemo(() => buildCategoryTreeOptions(categories ?? []), [categories]);
 
   // Editing seeds from the newest deployment, published or not — deploying
@@ -158,14 +168,19 @@ function DesignerBody({
       ? validateFlowDefinition(draft.flowDefinition, {
           formFields: projection?.formFields ?? [],
           assigneeKinds: kindOptions?.assignees,
-          ccKinds: kindOptions?.ccs
+          ccKinds: kindOptions?.ccs,
+          shared: isShared
         })
       : [],
-    [draft, projection, kindOptions]
+    [draft, projection, kindOptions, isShared]
   );
+  // A shared flow runs in every tenant, so the editor keeps its rules off
+  // specific people — the backend refuses to deploy them.
   const editorPlugins = useMemo(
-    () => toEditorPlugins(plugins, projection?.formFields ?? [], kindOptions),
-    [plugins, projection, kindOptions]
+    () => {
+      return { ...toEditorPlugins(plugins, projection?.formFields ?? [], kindOptions), shared: isShared };
+    },
+    [plugins, projection, kindOptions, isShared]
   );
 
   const handleBasicChange = useCallback((patch: Partial<FlowDraftBasic>) => {

@@ -145,3 +145,62 @@ describe("AssigneeList kind catalog", () => {
     ]);
   });
 });
+
+describe("AssigneeList in a shared flow", () => {
+  it("seeds a new row from the first kind that picks no specific people", async () => {
+    const user = userEvent.setup();
+
+    const onChange = vi.fn();
+    renderList({
+      value: [],
+      plugins: { shared: true },
+      onChange
+    });
+
+    await user.click(screen.getByRole("button", { name: /添加处理人/ }));
+
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        kind: "self",
+        ids: undefined,
+        formField: undefined,
+        sortOrder: 1
+      }
+    ]);
+  });
+
+  it("keeps a loaded people-picking row readable by its label", () => {
+    renderList({
+      value: [
+        {
+          kind: "user",
+          ids: ["user-1"],
+          sortOrder: 1
+        }
+      ],
+      plugins: { shared: true }
+    });
+
+    expect(screen.getByTitle("指定用户")).toBeInTheDocument();
+  });
+
+  it("refuses the kinds that pick specific people", async () => {
+    const user = userEvent.setup();
+
+    const onChange = vi.fn();
+    renderList({
+      value: [{ kind: "self", sortOrder: 1 }],
+      plugins: { shared: true },
+      onChange
+    });
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByTitle("指定角色"));
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    await user.click(screen.getByTitle("直属上级"));
+
+    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ kind: "superior" })]);
+  });
+});
