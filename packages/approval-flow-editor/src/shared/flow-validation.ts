@@ -87,6 +87,7 @@ export type FlowValidationCode
     | "handle_timeout_auto_reject"
     | "fallback_users_required"
     | "admin_users_required"
+    | "timeout_admin_users_required"
     | "pass_ratio_range"
     | "pass_count_range"
     | "rollback_targets_required"
@@ -666,6 +667,16 @@ function validateTaskNodeConfig(
     errors.push({
       code: "admin_users_required",
       message: "无审批人转交管理员时必须选择节点管理员",
+      nodeId
+    });
+  }
+
+  // A node without a deadline never times out, so only a live escalation
+  // needs the admins it hands the task to.
+  if ((data?.timeoutHours ?? 0) > 0 && data?.timeoutAction === "transfer_admin" && !data.adminUserIds?.length) {
+    errors.push({
+      code: "timeout_admin_users_required",
+      message: "超时转交管理员时必须选择节点管理员",
       nodeId
     });
   }

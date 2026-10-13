@@ -448,6 +448,20 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
               />
             </FormField>
 
+            {/* The escalation hands the task to the node admins; they are
+                picked here unless the empty-assignee setting already shows
+                them — both read the one list. */}
+            {data.timeoutAction === "transfer_admin" && data.emptyAssigneeAction !== "transfer_admin" && (
+              <FormField label="节点管理员">
+                <PrincipalPicker
+                  disabled={readonly}
+                  kind="user"
+                  value={data.adminUserIds ?? []}
+                  onChange={ids => update({ adminUserIds: ids })}
+                />
+              </FormField>
+            )}
+
             <FormField label="提前提醒(小时)">
               <InputNumber
                 disabled={readonly}

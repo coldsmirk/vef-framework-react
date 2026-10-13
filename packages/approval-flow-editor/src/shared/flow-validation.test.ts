@@ -256,6 +256,31 @@ describe("validateFlowDefinition node config rules", () => {
     }))).toContain("rollback_target_self");
   });
 
+  it("requires node admins for a live timeout escalation", () => {
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        timeoutHours: 24,
+        timeoutAction: "transfer_admin"
+      }
+    }))).toContain("timeout_admin_users_required");
+  });
+
+  it("accepts a timeout escalation with node admins", () => {
+    expect(codesOf(flowWith({
+      data: {
+        name: "审批",
+        timeoutHours: 24,
+        timeoutAction: "transfer_admin",
+        adminUserIds: ["admin-1"]
+      }
+    }))).toEqual([]);
+  });
+
+  it("ignores a timeout action on a node without a deadline", () => {
+    expect(codesOf(flowWith({ data: { name: "审批", timeoutAction: "transfer_admin" } }))).toEqual([]);
+  });
+
   it("requires fallback users for transfer_specified", () => {
     expect(codesOf(flowWith({ data: { name: "审批", emptyAssigneeAction: "transfer_specified" } })))
       .toContain("fallback_users_required");
