@@ -34,6 +34,16 @@ export interface StartForm {
   versionId: string;
   version: number;
   formSchema?: FormSchema;
+  /**
+   * The snapshot the instance will record if the caller starts it now — the
+   * form's `$applicant`, resolved exactly as starting resolves it.
+   */
+  applicant: UserInfo;
+  /**
+   * The host globals the flow exposes to its form, resolved for the caller —
+   * the form's `$globals`. Absent when the flow exposes none.
+   */
+  globals?: Record<string, unknown>;
 }
 
 /**
@@ -133,6 +143,11 @@ export interface MyInstanceInfo {
   currentNodeName?: string;
   businessRef?: string;
   formData?: FormData;
+  /**
+   * The form-visible part of the instance's globals snapshot — the form's
+   * `$globals`, as resolved at initiation. Absent when the flow exposes none.
+   */
+  globals?: Record<string, unknown>;
   createdAt: string;
   finishedAt?: string;
 }

@@ -108,6 +108,8 @@ function StartDrawerBody({
 
       <InstanceFormPanel
         apiRef={formApiRef}
+        applicant={startForm.applicant}
+        globals={startForm.globals}
         schema={startForm.formSchema}
         onSubmit={values => void submitStart(values)}
       />

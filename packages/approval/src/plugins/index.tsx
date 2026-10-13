@@ -1,8 +1,9 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
-import type { DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
+import type { DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode } from "react";
 
 import type { KindOptions } from "../types";
+import type { FormGlobalDefinition } from "./form-context";
 
 import { createApprovalRegistries } from "@vef-framework-react/approval-form-bridge";
 import { createContext, use, useMemo, useState } from "react";
@@ -39,18 +40,37 @@ export interface ApprovalPlugins {
    */
   globalSubjects?: FormFieldDefinition[];
   /**
+   * The host globals the backend exposes to approval forms (the host's globals
+   * resolver implementing `FormGlobalsExposer`), declared so the form designer
+   * offers them as `$globals.<key>` system variables beside the built-in
+   * `$applicant` attributes. Keep the keys in lockstep with the resolver's
+   * `FormGlobalKeys`, as `globalSubjects` are kept with the keys it resolves:
+   * a key exposed there but not declared here still evaluates at runtime yet is
+   * not offered, and one declared here but not exposed is offered yet always
+   * reads as empty.
+   */
+  formGlobals?: FormGlobalDefinition[];
+  /**
    * Turns a form's remote data-source request into options. Without one, every
    * remote source in an approval form resolves to an empty list — the designer
    * lets you configure the request, but nothing fetches it. Wire the host's
-   * API client here.
+   * API client here; the form designer's preview uses it too.
    */
   dataSourceResolver?: DataSourceResolver;
   /**
+   * The host's catalog of option APIs. The form designer's remote data sources
+   * then lead with a picker ("部门列表") instead of a hand-typed endpoint and
+   * field mapping. A pick is stored as the request itself, so the runtime still
+   * fetches through `dataSourceResolver`, which must serve every endpoint
+   * listed here.
+   */
+  dataSourceApis?: DataSourceApi[];
+  /**
    * Overrides for expression / script evaluation in form linkage and in
    * data-source parameters bound to the form. Optional: the form runtime falls
-   * back to its built-in JavaScript evaluator (`$form` / `$vars` / `$user` /
-   * `$node` in scope), so wire this only to swap in a different expression
-   * language or sandbox.
+   * back to its built-in JavaScript evaluator (`$form` / `$vars` /
+   * `$applicant` / `$globals` in scope), so wire this only to swap in a
+   * different expression language or sandbox.
    */
   evaluators?: LinkageEvaluators;
   /**

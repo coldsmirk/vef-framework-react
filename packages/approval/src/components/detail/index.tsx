@@ -448,9 +448,11 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     <Stack gap={16}>
       <InstanceFormPanel
         apiRef={formApiRef}
+        applicant={instance.applicant}
         disabled={!formWritable}
         fieldPermissions={detail.fieldPermissions}
         formData={instance.formData}
+        globals={instance.globals}
         schema={detail.formSchema}
         onSubmit={onFormSubmit}
       />

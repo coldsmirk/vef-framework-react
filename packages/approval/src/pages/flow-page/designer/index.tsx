@@ -6,7 +6,7 @@ import type { FlowDraft, FlowDraftBasic } from "./types";
 
 import { validateFlowDefinition } from "@vef-framework-react/approval-flow-editor";
 import { projectFormSchema, validateApprovalSchema } from "@vef-framework-react/approval-form-bridge";
-import { Button, Drawer, Flex, showSuccessMessage, Spin, Steps } from "@vef-framework-react/components";
+import { Button, Drawer, Flex, globalCssVars, showSuccessMessage, Spin, Steps, Text } from "@vef-framework-react/components";
 import { useMutation, useQuery } from "@vef-framework-react/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -206,6 +206,17 @@ function DesignerBody({
     true
   ];
   const currentStepValid = stepValid[step] ?? false;
+  const formErrorCount = formGate?.issues.filter(issue => issue.severity === "error").length ?? 0;
+  // Why the current step cannot advance, said next to the button it disables.
+  // The issues themselves live in each editor's own diagnostics, which locate
+  // them, so the step bodies keep their full height.
+  const blockedReasons = [
+    "请先完善流程设置中的必填项",
+    `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
+    `流程存在 ${flowErrors.length} 个问题，可在画布工具栏的问题提示中查看并定位`,
+    undefined
+  ];
+  const blockedReason = currentStepValid ? undefined : blockedReasons[step];
 
   async function submit(): Promise<void> {
     setSubmitting(true);
@@ -289,7 +300,6 @@ function DesignerBody({
     <FormStep
       key="form"
       initialSchema={draft.formSchema ?? undefined}
-      issues={formGate?.issues ?? []}
       registries={plugins.registries}
       storageMode={draft.storageMode}
       onSchemaChange={handleSchemaChange}
@@ -297,7 +307,6 @@ function DesignerBody({
     />,
     <FlowStep
       key="flow"
-      errors={flowErrors}
       plugins={editorPlugins}
       value={draft.flowDefinition}
       onChange={handleDefinitionChange}
@@ -359,17 +368,23 @@ function DesignerBody({
           上一步
         </Button>
 
-        {step < STEP_ITEMS.length - 1
-          ? (
-              <Button disabled={!currentStepValid} type="primary" onClick={() => setStep(prev => prev + 1)}>
-                下一步
-              </Button>
-            )
-          : (
-              <Button loading={submitting} type="primary" onClick={() => void submit()}>
-                {publishNow ? "部署并发布" : "部署为草稿"}
-              </Button>
-            )}
+        <Flex align="center" gap="middle">
+          {blockedReason === undefined
+            ? null
+            : <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="danger">{blockedReason}</Text>}
+
+          {step < STEP_ITEMS.length - 1
+            ? (
+                <Button disabled={!currentStepValid} type="primary" onClick={() => setStep(prev => prev + 1)}>
+                  下一步
+                </Button>
+              )
+            : (
+                <Button loading={submitting} type="primary" onClick={() => void submit()}>
+                  {publishNow ? "部署并发布" : "部署为草稿"}
+                </Button>
+              )}
+        </Flex>
       </Flex>
     </Flex>
   );

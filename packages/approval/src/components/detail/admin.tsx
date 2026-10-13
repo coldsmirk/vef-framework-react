@@ -142,7 +142,15 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
           {
             key: "form",
             label: "审批表单",
-            children: <InstanceFormPanel disabled formData={instance.formData} schema={detail.formSchema} />
+            children: (
+              <InstanceFormPanel
+                disabled
+                applicant={instance.applicant}
+                formData={instance.formData}
+                globals={instance.globals}
+                schema={detail.formSchema}
+              />
+            )
           },
           {
             key: "timeline",

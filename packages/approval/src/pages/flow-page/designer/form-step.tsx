@@ -1,10 +1,14 @@
-import type { ApprovalSchemaIssue } from "@vef-framework-react/approval-form-bridge";
 import type { DeviceRegistries, FormSchema } from "@vef-framework-react/form-editor";
 
 import type { StorageMode } from "../../../types";
 
-import { Alert, Flex, globalCssVars, Segmented, Stack, Text } from "@vef-framework-react/components";
+import { validateApprovalProjection } from "@vef-framework-react/approval-form-bridge";
+import { Flex, globalCssVars, Segmented, Stack, Text } from "@vef-framework-react/components";
 import { FormEditor } from "@vef-framework-react/form-editor";
+import { useMemo } from "react";
+
+import { useApprovalPlugins } from "../../../plugins";
+import { toFormContextSources } from "../../../plugins/form-context";
 
 const STORAGE_OPTIONS: Array<{ label: string; value: StorageMode }> = [
   { label: "JSON 存储", value: "json" },
@@ -28,11 +32,6 @@ export interface FormStepProps {
    */
   initialSchema?: FormSchema;
   /**
-   * Save-gate diagnostics (structural + projection) for the current schema;
-   * errors block the next step, warnings are informational.
-   */
-  issues: ApprovalSchemaIssue[];
-  /**
    * The approval-profile registries, owned by the designer so the editor and
    * the save gate share one instance.
    */
@@ -44,20 +43,29 @@ export interface FormStepProps {
 /**
  * Step 2 — design the form. The rich schema deploys verbatim
  * (`DeployFlowCmd.FormSchema`); the backend derives the flat field list at
- * deploy, and the storage mode decides how that model persists. The
- * approval-form-bridge projection runs on change as a client-side pre-check
- * of the server parser.
+ * deploy, and the storage mode decides how that model persists.
+ *
+ * Every diagnostic — the editor's structural ones and the approval contract's
+ * (the bridge projection, a client-side pre-check of the server parser) —
+ * lives in the editor's own status bar, where each one jumps to its field, so
+ * the canvas keeps its full height; the wizard's footer only says why the step
+ * cannot advance. The applicant attributes and the host's form globals are
+ * offered as system variables.
  */
 export function FormStep({
   storageMode,
   initialSchema,
-  issues,
   registries,
   onStorageModeChange,
   onSchemaChange
 }: FormStepProps) {
-  const errors = issues.filter(issue => issue.severity === "error");
-  const warnings = issues.filter(issue => issue.severity !== "error");
+  const {
+    dataSourceApis,
+    dataSourceResolver,
+    evaluators,
+    formGlobals
+  } = useApprovalPlugins();
+  const contextSources = useMemo(() => toFormContextSources(formGlobals), [formGlobals]);
 
   return (
     <Stack gap={8} style={{ height: "100%", minHeight: 0 }}>
@@ -79,23 +87,6 @@ export function FormStep({
         </Text>
       </Flex>
 
-      {errors.length > 0 && (
-        <Alert
-          showIcon
-          title={`表单校验未通过（${errors.length} 项）`}
-          type="error"
-          description={(
-            <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-              {/* Issues have no identity beyond code+path occurrence. */}
-              {errors.map((issue, index) => <li key={index}>{issue.message}</li>)}
-            </ul>
-          )}
-        />
-      )}
-
-      {errors.length === 0 && warnings.length > 0
-        && <Alert showIcon title={warnings.map(issue => issue.message).join("；")} type="warning" />}
-
       <div
         style={{
           flex: 1,
@@ -105,7 +96,16 @@ export function FormStep({
           overflow: "hidden"
         }}
       >
-        <FormEditor initialSchema={initialSchema} registries={registries} onSchemaChange={onSchemaChange} />
+        <FormEditor
+          contextSources={contextSources}
+          dataSourceApis={dataSourceApis}
+          dataSourceResolver={dataSourceResolver}
+          evaluators={evaluators}
+          initialSchema={initialSchema}
+          registries={registries}
+          validate={validateApprovalProjection}
+          onSchemaChange={onSchemaChange}
+        />
       </div>
     </Stack>
   );

@@ -1,7 +1,7 @@
-import type { EditorPlugins, FlowDefinition, FlowValidationError } from "@vef-framework-react/approval-flow-editor";
+import type { EditorPlugins, FlowDefinition } from "@vef-framework-react/approval-flow-editor";
 
 import { ApprovalFlowEditor } from "@vef-framework-react/approval-flow-editor";
-import { Alert, globalCssVars, Stack } from "@vef-framework-react/components";
+import { globalCssVars } from "@vef-framework-react/components";
 
 export interface FlowStepProps {
   /**
@@ -9,48 +9,32 @@ export interface FlowStepProps {
    */
   value: FlowDefinition;
   plugins: EditorPlugins;
-  errors: FlowValidationError[];
   onChange: (definition: FlowDefinition) => void;
 }
 
 /**
  * Step 3 — design the flow graph. The field-permission and condition
- * surfaces read the fields designed in step 2 via `plugins.formFields`; a
- * structurally invalid graph blocks completion.
+ * surfaces read the fields designed in step 2 via `plugins.formFields`. The
+ * editor's own toolbar indicator lists the deploy-contract problems and
+ * locates each one on the canvas, so the canvas keeps its full height; a
+ * structurally invalid graph blocks completion from the wizard's footer.
  */
 export function FlowStep({
   value,
   plugins,
-  errors,
   onChange
 }: FlowStepProps) {
   return (
-    <Stack gap={8} style={{ height: "100%", minHeight: 0 }}>
-      {errors.length > 0 && (
-        <Alert
-          showIcon
-          title={`流程校验未通过（${errors.length} 项）`}
-          type="error"
-          description={(
-            <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-              {/* Errors have no identity beyond their occurrence order. */}
-              {errors.map((error, index) => <li key={index}>{error.message}</li>)}
-            </ul>
-          )}
-        />
-      )}
-
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          border: `1px solid ${globalCssVars.colorBorderSecondary}`,
-          borderRadius: 8,
-          overflow: "hidden"
-        }}
-      >
-        <ApprovalFlowEditor plugins={plugins} value={value} onChange={onChange} />
-      </div>
-    </Stack>
+    <div
+      style={{
+        height: "100%",
+        minHeight: 0,
+        border: `1px solid ${globalCssVars.colorBorderSecondary}`,
+        borderRadius: 8,
+        overflow: "hidden"
+      }}
+    >
+      <ApprovalFlowEditor plugins={plugins} value={value} onChange={onChange} />
+    </div>
   );
 }
