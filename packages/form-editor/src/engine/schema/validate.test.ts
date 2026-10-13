@@ -1021,11 +1021,29 @@ describe("validateSchema", () => {
       expect(result.issues).toEqual([]);
     });
 
-    it("warns on an inline remote source whose request is not yet filled in", () => {
+    it("warns once on an inline remote source whose request is not yet filled in", () => {
       const result = validate(selectWith({ kind: "remote", request: { resource: "", action: "" } }));
 
       expect(result.valid).toBe(true);
-      expect(codesOf(result.issues)).toEqual(["request_incomplete", "request_incomplete"]);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "request_incomplete",
+          path: "presentations.pc.children[0].dataSource.request",
+          message: "请求尚未配置完整：缺少资源（resource）和动作（action）"
+        })
+      ]);
+    });
+
+    it("names the one part of a request that is still missing", () => {
+      const result = validate(selectWith({ kind: "remote", request: { resource: "sys/user", action: "" } }));
+
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "request_incomplete",
+          path: "presentations.pc.children[0].dataSource.request.action",
+          message: "请求尚未配置完整：缺少动作（action）"
+        })
+      ]);
     });
 
     it("rejects an inline remote source with a non-object request", () => {

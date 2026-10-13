@@ -116,7 +116,7 @@ describe("form data sources panel", () => {
       }
     ]);
 
-    await user.type(screen.getByPlaceholderText("action"), "x");
+    await user.type(screen.getByRole("textbox", { name: "动作" }), "x");
 
     expect(storeSources(api)[0]).toMatchObject({ kind: "remote", request: { resource: "org", action: "x" } });
   });

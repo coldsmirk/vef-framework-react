@@ -1,13 +1,16 @@
 import type { ReactElement } from "react";
 
+import type { SchemaIssue } from "../../engine/validation";
 import type { FormConfigTabId } from "../../store/form-store";
 
 import { css } from "@emotion/react";
-import { globalCssVars, Tooltip } from "@vef-framework-react/components";
+import { globalCssVars, Popover } from "@vef-framework-react/components";
+import { useState } from "react";
 
 import { hasErrorIssues } from "../../engine/validation";
 import { EditorIcon } from "../../icons";
 import { selectFieldCount, selectLinkageRuleCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { useIssueDescriber, useIssueNavigator } from "../issue-location";
 import { IssueList, useSchemaIssues } from "../validation-summary";
 
 const footerCss = css({
@@ -51,13 +54,24 @@ const issuesChipCss = css({
   alignItems: "center",
   gap: 5,
   padding: "3px 9px",
+  border: "none",
   borderRadius: globalCssVars.borderRadiusSm,
   whiteSpace: "nowrap",
   flexShrink: 0,
   fontSize: globalCssVars.fontSizeSm,
-  cursor: "default",
+  cursor: "pointer",
 
-  "& svg": { width: 13, height: 13 }
+  "& svg": { width: 13, height: 13 },
+
+  "&:focus-visible": {
+    outline: `2px solid ${globalCssVars.colorPrimaryBorder}`,
+    outlineOffset: 1
+  }
+});
+
+const issuesPanelCss = css({
+  width: 360,
+  maxWidth: "calc(100vw - 48px)"
 });
 
 // Warning-only issues read as a soft amber hint; any error-severity issue (a
@@ -128,8 +142,6 @@ export function EditorFooter(): ReactElement {
   // as active (a discrete change — re-renders the footer only on tab switches).
   const activeTab = useFormEditorStore(s => s.formConfigTab);
   const storeApi = useFormEditorStoreApi();
-  const issues = useSchemaIssues();
-  const hasErrors = hasErrorIssues(issues);
 
   const pills: CountPill[] = [
     {
@@ -170,22 +182,7 @@ export function EditorFooter(): ReactElement {
         </button>
       ))}
 
-      {issues.length > 0
-        ? (
-            <Tooltip title={<IssueList issues={issues} />}>
-              <span css={[issuesChipCss, hasErrors ? issuesErrorCss : issuesWarningCss]} data-testid="footer-issues">
-                <EditorIcon name={hasErrors ? "circle-alert" : "triangle-alert"} />
-
-                <span>
-                  {issues.length}
-                  {" "}
-                  {hasErrors ? "项问题" : "项提示"}
-                </span>
-              </span>
-            </Tooltip>
-          )
-        : null}
-
+      <IssuesChip />
       <span css={spacerCss} />
 
       <button
@@ -197,5 +194,65 @@ export function EditorFooter(): ReactElement {
         <span>表单配置</span>
       </button>
     </footer>
+  );
+}
+
+/**
+ * The schema's diagnostics — structural and the host's — behind one chip. It
+ * opens the full list, where each locatable issue takes the designer to the
+ * node or form-config tab it is about. Renders nothing while the schema is
+ * clean, so a clean form keeps a quiet footer.
+ */
+function IssuesChip(): ReactElement | null {
+  const issues = useSchemaIssues();
+  const resolveIssue = useIssueNavigator();
+  const describeLocation = useIssueDescriber();
+  const [open, setOpen] = useState(false);
+
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const hasErrors = hasErrorIssues(issues);
+  const summary = `${issues.length} ${hasErrors ? "项问题" : "项提示"}`;
+
+  // Showing an issue moves the designer's focus to it, so the list gets out
+  // of the way.
+  const resolveAction = (issue: SchemaIssue): (() => void) | undefined => {
+    const show = resolveIssue(issue);
+
+    return show === undefined
+      ? undefined
+      : () => {
+          setOpen(false);
+          show();
+        };
+  };
+
+  return (
+    <Popover
+      arrow={false}
+      open={open}
+      placement="topLeft"
+      title={summary}
+      trigger="click"
+      content={(
+        <div css={issuesPanelCss}>
+          <IssueList describeLocation={describeLocation} issues={issues} resolveAction={resolveAction} />
+        </div>
+      )}
+      onOpenChange={setOpen}
+    >
+      <button
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        css={[issuesChipCss, hasErrors ? issuesErrorCss : issuesWarningCss]}
+        data-testid="footer-issues"
+        type="button"
+      >
+        <EditorIcon name={hasErrors ? "circle-alert" : "triangle-alert"} />
+        <span>{summary}</span>
+      </button>
+    </Popover>
   );
 }

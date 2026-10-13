@@ -3,7 +3,7 @@ import type { EvaluationContext, LinkageConditionLeaf, LinkageOperator } from ".
 import { isNullish } from "@vef-framework-react/shared";
 
 import { exhaustive } from "../assert-never";
-import { isRecord } from "../validation";
+import { resolveLeafSourceValue } from "./scope";
 
 /**
  * The full set of supported leaf operators, in display order. Mirrors the
@@ -53,66 +53,6 @@ export function isEmptyRuntimeValue(value: unknown): boolean {
   }
 
   return false;
-}
-
-/**
- * Resolve a leaf's source to its runtime value. A plain key reads the form
- * values; a `$`-rooted path walks the evaluation context — `$user.departmentId`
- * reads `context.user.departmentId`, `$vars.quota` reads a variable, `$form.x`
- * is the explicit spelling of a form value. An unknown root or a broken path
- * resolves to `undefined` (which no positive operator matches), mirroring how
- * an absent form key behaves.
- */
-function resolveLeafSourceValue(
-  sourceKey: string,
-  values: Record<string, unknown>,
-  context: EvaluationContext | undefined
-): unknown {
-  if (!sourceKey.startsWith("$")) {
-    // Own-property guarded, like getFieldPermission: a field keyed
-    // "constructor" would otherwise read the Object constructor off the
-    // prototype and make every `notEmpty` condition on it true forever.
-    return Object.hasOwn(values, sourceKey) ? values[sourceKey] : undefined;
-  }
-
-  const [root, ...path] = sourceKey.split(".");
-  let value: unknown;
-
-  switch (root) {
-    case "$form": {
-      value = values;
-      break;
-    }
-
-    case "$vars": {
-      value = context?.variables;
-      break;
-    }
-
-    case "$user": {
-      value = context?.user;
-      break;
-    }
-
-    case "$node": {
-      value = context?.node;
-      break;
-    }
-
-    default: {
-      return undefined;
-    }
-  }
-
-  for (const segment of path) {
-    if (!isRecord(value)) {
-      return undefined;
-    }
-
-    value = value[segment];
-  }
-
-  return value;
 }
 
 /**

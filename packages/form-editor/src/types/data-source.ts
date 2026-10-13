@@ -52,6 +52,72 @@ export interface RemoteOptionMapping {
 }
 
 /**
+ * One parameter a {@link DataSourceApi} takes. The designer lists it as a
+ * named row the designer binds to a fixed value or an expression, instead of a
+ * name typed by hand.
+ */
+export interface DataSourceApiParam {
+  /**
+   * The parameter's name in the request (`params.<name>`).
+   */
+  name: string;
+  /**
+   * Display name, e.g. `"上级部门"`. Defaults to `name`.
+   */
+  label?: string;
+  /**
+   * One-line explanation shown under the row.
+   */
+  description?: string;
+  /**
+   * Marks the row as one the request needs. The designer flags it while it is
+   * unbound; the request is still sent without it.
+   */
+  required?: boolean;
+  /**
+   * Bound into the request when the API is picked — a literal, or an
+   * expression such as `$applicant.departmentId`.
+   */
+  defaultValue?: DynamicValue;
+}
+
+/**
+ * One endpoint a host offers in the designer's API picker for remote option
+ * sources — "部门列表" instead of a hand-typed resource / action pair. Picking
+ * it copies the endpoint and its mapping into the schema, so a schema stays
+ * self-contained: the runtime resolver and a backend projection read the
+ * stored request and never need this catalog. A stored request is recognized
+ * as an API again by its endpoint (`resource` + `action` + `version`), so a
+ * catalog lists each endpoint once.
+ */
+export interface DataSourceApi {
+  /**
+   * Display name in the picker, e.g. `"部门列表"`.
+   */
+  label: string;
+  /**
+   * One-line explanation shown once the API is picked.
+   */
+  description?: string;
+  /**
+   * Picker group heading for a long catalog, e.g. `"组织架构"`.
+   */
+  group?: string;
+  resource: string;
+  action: string;
+  version?: string;
+  /**
+   * How to read options out of this endpoint's records. Copied into the data
+   * source on pick; omit when the records already carry `label` / `value`.
+   */
+  mapping?: RemoteOptionMapping;
+  /**
+   * The parameters the endpoint takes, in display order.
+   */
+  params?: DataSourceApiParam[];
+}
+
+/**
  * A form-global, reusable option source referenced by fields through their
  * `{ kind: "ref", dataSourceId }`.
  */

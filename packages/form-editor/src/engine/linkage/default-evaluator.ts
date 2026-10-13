@@ -10,9 +10,10 @@ import { lru } from "@vef-framework-react/shared";
  * `return` a state patch.
  *
  * The evaluation scope contains `field` / `$form` (the form values — `field` is
- * the legacy alias), `$vars` (form variables), `$user` / `$node` (host context),
- * and `$now` (the current time as a `Date`). All but `field` / `$form` come
- * from the optional {@link EvaluationContext}.
+ * the legacy alias), `$vars` (form variables), `$user` / `$node` / `$applicant`
+ * / `$globals` (host context), and `$now` (the current time as a `Date`). All
+ * but `field` / `$form` / `$now` come from the optional
+ * {@link EvaluationContext}.
  *
  * Security model: sources run in the host page through `new Function`, so the
  * framework assumes schemas come from a trusted source. Sandboxing remains the
@@ -26,7 +27,20 @@ import { lru } from "@vef-framework-react/shared";
 
 type Scope = Record<string, unknown>;
 
-type CompiledFn<T> = ($form: Scope, $vars: Scope, $user: Scope, $node: Scope, $now: Date) => T;
+/**
+ * One evaluation's bindings, in the order {@link SCOPE_PARAMS} names them.
+ */
+interface EvaluationBindings {
+  form: Scope;
+  vars: Scope;
+  user: Scope;
+  node: Scope;
+  applicant: Scope;
+  globals: Scope;
+  now: Date;
+}
+
+type CompiledFn<T> = (bindings: EvaluationBindings) => T;
 
 type ExpressionFn = CompiledFn<unknown>;
 
@@ -45,25 +59,38 @@ const scriptCache = lru<ScriptFn>(COMPILE_CACHE_SIZE);
 
 // `field` and `$form` both bind the form values (`field` is the legacy alias);
 // strict mode keeps `this === undefined` and disables sloppy-mode escape hatches.
-const SCOPE_PARAMS = ["field", "$form", "$vars", "$user", "$node", "$now"] as const;
+const SCOPE_PARAMS = ["field", "$form", "$vars", "$user", "$node", "$applicant", "$globals", "$now"] as const;
+
+/**
+ * Bind a compiled `new Function` to {@link EvaluationBindings}, passing them
+ * positionally in {@link SCOPE_PARAMS} order.
+ */
+function bindScope<T>(fn: (...args: unknown[]) => T): CompiledFn<T> {
+  return bindings => fn(
+    bindings.form,
+    bindings.form,
+    bindings.vars,
+    bindings.user,
+    bindings.node,
+    bindings.applicant,
+    bindings.globals,
+    bindings.now
+  );
+}
 
 function compileExpression(source: string): ExpressionFn {
   // A condition / assignment source is a single expression evaluated for its
   // value; wrapping it in `return (...)` rejects statement blocks. The newline
   // keeps a trailing line comment from swallowing the closing parenthesis.
   // eslint-disable-next-line no-new-func -- intentional: linkage expressions are trusted schema-supplied JavaScript; hosts that need a sandbox swap in their own LinkageEvaluators.
-  const fn = new Function(...SCOPE_PARAMS, `"use strict"; return (${source}\n);`);
-
-  return (($form, $vars, $user, $node, $now) => fn($form, $form, $vars, $user, $node, $now)) as ExpressionFn;
+  return bindScope(new Function(...SCOPE_PARAMS, `"use strict"; return (${source}\n);`) as (...args: unknown[]) => unknown);
 }
 
 function compileScript(source: string): ScriptFn {
   // Action scripts are statement blocks — the user must `return { ... }`
   // explicitly if they want to patch state. No return is a valid no-op.
   // eslint-disable-next-line no-new-func -- intentional: script actions are trusted schema-supplied statement blocks; hosts that need a sandbox swap in their own LinkageEvaluators.
-  const fn = new Function(...SCOPE_PARAMS, `"use strict"; ${source}`);
-
-  return (($form, $vars, $user, $node, $now) => fn($form, $form, $vars, $user, $node, $now)) as ScriptFn;
+  return bindScope(new Function(...SCOPE_PARAMS, `"use strict"; ${source}`) as (...args: unknown[]) => LinkageScriptResult | void);
 }
 
 /**
@@ -114,13 +141,15 @@ function runCompiled<T>(
   values: Record<string, unknown>,
   context: EvaluationContext | undefined
 ): T {
-  return fn(
-    values,
-    context?.variables ?? EMPTY_SCOPE,
-    context?.user ?? EMPTY_SCOPE,
-    context?.node ?? EMPTY_SCOPE,
-    new Date()
-  );
+  return fn({
+    form: values,
+    vars: context?.variables ?? EMPTY_SCOPE,
+    user: context?.user ?? EMPTY_SCOPE,
+    node: context?.node ?? EMPTY_SCOPE,
+    applicant: context?.applicant ?? EMPTY_SCOPE,
+    globals: context?.globals ?? EMPTY_SCOPE,
+    now: new Date()
+  });
 }
 
 export function defaultEvaluateExpression(

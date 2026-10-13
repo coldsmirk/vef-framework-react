@@ -24,6 +24,7 @@ export {
   type FormEditorProviderProps,
   type FormEditorShellProps
 } from "./editor/form-editor";
+export { type SchemaValidator } from "./editor/host-validation";
 export {
   CheckboxEntry,
   IconEntry,
@@ -74,6 +75,7 @@ export {
   validateLinkageSchema,
   type LinkageValidationResult
 } from "./engine/linkage";
+export { normalizeOptionMapping } from "./engine/option-mapping";
 export {
   createDefaultRegistry,
   registerDefaults
@@ -125,6 +127,7 @@ export {
 } from "./engine/schema/walk";
 export {
   formatIssueMessage,
+  type SchemaIssue,
   type ValidationIssue,
   type ValidationIssueCode,
   type ValidationSeverity

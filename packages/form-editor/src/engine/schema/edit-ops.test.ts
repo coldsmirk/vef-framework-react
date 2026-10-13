@@ -573,6 +573,43 @@ describe("edit-ops", () => {
       });
     });
 
+    it("remaps a $form linkage source key and keeps its spelling", () => {
+      const a = tf("fa", "a");
+      const b = tf("fb", "b");
+
+      b.linkage = {
+        rules: [
+          {
+            id: "Rule_1",
+            trigger: {
+              kind: "condition",
+              condition: {
+                kind: "leaf",
+                sourceKey: "$form.a",
+                operator: "notEmpty"
+              }
+            },
+            actions: [{ type: "hide" }]
+          }
+        ]
+      };
+
+      const section: SectionNode = {
+        id: "s1",
+        type: "section",
+        variant: "card",
+        children: [a, b]
+      };
+
+      const clone = cloneBlock(section, base => `${base}_2`) as SectionNode;
+      const clonedB = clone.children[1] as TextfieldField;
+
+      expect(clonedB.linkage?.rules?.[0]?.trigger).toMatchObject({
+        kind: "condition",
+        condition: { kind: "leaf", sourceKey: "$form.a_2" }
+      });
+    });
+
     it("leaves a linkage reference to a field outside the cloned subtree untouched", () => {
       const b = tf("fb", "b");
 

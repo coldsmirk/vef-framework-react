@@ -18,6 +18,7 @@ import { ROW_COLS } from "../../types";
 import { assertNever } from "../assert-never";
 import { createId, idPrefixForType } from "../ids";
 import { collectScopeKeys, isKeyedNode, nextUniqueKey } from "../keys";
+import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
 import { removeBlock, updateNode } from "./mutate";
 import { containerBodies, mapPreservingIdentity, withContainerBodies } from "./nodes";
 import { rewriteContainerBodies } from "./rewrite";
@@ -662,9 +663,10 @@ function remapConditionKeys(condition: LinkageCondition, keyMap: Map<string, str
     }
 
     case "leaf": {
-      const mapped = keyMap.get(condition.sourceKey);
+      const key = leafSourceFormKey(condition.sourceKey);
+      const mapped = key === undefined ? undefined : keyMap.get(key);
 
-      return mapped === undefined ? condition : { ...condition, sourceKey: mapped };
+      return mapped === undefined ? condition : { ...condition, sourceKey: withLeafSourceFormKey(condition.sourceKey, mapped) };
     }
 
     case "expression": {

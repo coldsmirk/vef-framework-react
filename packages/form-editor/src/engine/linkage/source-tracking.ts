@@ -1,6 +1,7 @@
 import type { FieldLinkage, LinkageCondition } from "../../types";
 
 import { isRecord } from "../validation";
+import { leafSourceFormKey } from "./scope";
 import { isStateAction } from "./taxonomy";
 
 /**
@@ -51,9 +52,9 @@ export function getLinkageSourceKeys(node: LinkageBearer): string[] {
  * A condition's form-value dependencies, plus whether any part of it is opaque
  * — i.e. reads inputs that cannot be enumerated statically.
  *
- * Only an `expression` condition is opaque. A `$`-rooted leaf
- * (`$user.departmentId`) has a perfectly knowable dependency; it just is not a
- * form value, so it contributes no key while leaving the condition
+ * Only an `expression` condition is opaque. A context leaf
+ * (`$applicant.departmentId`) has a perfectly knowable dependency; it just is
+ * not a form value, so it contributes no key while leaving the condition
  * enumerable. Collapsing the two into "empty key set" is what let a context
  * condition be treated as opaque, which the `always` retrigger reads as
  * "re-fire on any value change".
@@ -81,12 +82,16 @@ export function collectConditionSourceKeys(
   }
 
   if (condition.kind === "leaf") {
-    // A `$`-rooted context path ($user.x / $vars.x / …) is not a form value:
-    // its changes arrive through the evaluation context, which re-evaluates
-    // the whole scope — so like an expression condition it contributes no
-    // per-field source key.
-    if (typeof condition.sourceKey === "string" && condition.sourceKey.length > 0 && !condition.sourceKey.startsWith("$")) {
-      out.add(condition.sourceKey);
+    // A form value — a plain key or its `$form.key` spelling — is a per-field
+    // dependency. A context path ($applicant.x / $vars.x / …) is not: its
+    // changes arrive through the evaluation context, which re-evaluates the
+    // whole scope, so it contributes no key while staying enumerable.
+    const key = typeof condition.sourceKey === "string" && condition.sourceKey.length > 0
+      ? leafSourceFormKey(condition.sourceKey)
+      : undefined;
+
+    if (key !== undefined) {
+      out.add(key);
     }
 
     return false;

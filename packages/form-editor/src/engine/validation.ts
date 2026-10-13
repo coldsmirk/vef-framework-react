@@ -81,6 +81,7 @@ export type ValidationIssueCode
     | "operator_invalid"
     | "source_key_empty"
     | "source_key_unresolved"
+    | "source_scope_unknown"
     | "source_empty"
     | "actions_not_array"
     | "actions_empty"
@@ -106,16 +107,29 @@ export type ValidationIssueCode
 export type ValidationSeverity = "error" | "warning";
 
 /**
+ * Any diagnostic about a schema the editor can show: its own
+ * {@link ValidationIssue}s and the ones a host's `validate` contributes (an
+ * approval bridge's contract check, say), whose `code` lives in the host's
+ * own namespace. `path` locates the problem — the editor's own path forms
+ * (`presentations.pc.children[0].key`, `node[Field_1].linkage`,
+ * `dataSources[0].request`, …) or a field-key chain (`amount`,
+ * `lines.price`), which is how a host names a field.
+ */
+export interface SchemaIssue {
+  path: string;
+  code: string;
+  severity: ValidationSeverity;
+  message: string;
+}
+
+/**
  * One problem found while validating a schema. `path` points at the offending
  * location (`presentations.pc.children[0].key`, `node[Field_1].linkage.rules[0]`,
  * …); `ruleId` is set on rule-scoped linkage issues whose rule id is known, so
  * the editor can map diagnostics onto rule cards.
  */
-export interface ValidationIssue {
-  path: string;
+export interface ValidationIssue extends SchemaIssue {
   code: ValidationIssueCode;
-  severity: ValidationSeverity;
-  message: string;
   ruleId?: string;
 }
 
@@ -136,12 +150,14 @@ interface ValidationIssueParams {
   display_text_invalid: { prop: string };
   validate_range_invalid: { lower: string; upper: string };
   data_source_ref_unknown: { id: string };
+  request_incomplete: { missing: string };
   trigger_kind_invalid: { kind: string };
   action_unknown_type: { type: string };
   state_action_on_edge_trigger: { type: string };
   state_action_on_form_scope: { type: string };
   action_requires_keyed_leaf: { type: string };
   source_key_unresolved: { key: string };
+  source_scope_unknown: { key: string };
   target_key_unresolved: { key: string };
   cycle_detected: { cycle: string };
 }
@@ -160,6 +176,7 @@ const WARNING_CODES: ReadonlySet<ValidationIssueCode> = new Set<ValidationIssueC
   "condition_group_empty",
   "source_key_empty",
   "source_key_unresolved",
+  "source_scope_unknown",
   "source_empty",
   "actions_empty",
   "target_key_empty",
@@ -196,7 +213,6 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   pattern_invalid: "pattern 不是合法的正则表达式",
   data_source_invalid: "数据源定义无效：kind 须为 static / ref / remote 且结构完整",
   request_malformed: "request 必须是对象且 resource / action 为字符串",
-  request_incomplete: "request 的 resource / action 尚未填写",
   linkage_malformed: "linkage 结构无效：必须是对象",
   rules_not_array: "rules 必须是数组",
   rule_malformed: "规则结构无效：必须是对象",
@@ -205,7 +221,7 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   condition_malformed: "条件结构无效",
   condition_kind_invalid: "kind 不是受支持的条件类型",
   logic_invalid: "logic 必须为 \"all\" 或 \"any\"",
-  condition_group_empty: "条件组没有子条件，规则不会生效",
+  condition_group_empty: "条件组没有子条件：「全部满足」时规则始终生效，「任一满足」时规则永不生效",
   operator_invalid: "operator 不是受支持的联动操作符",
   source_key_empty: "sourceKey 尚未选择",
   source_empty: "表达式 / 脚本内容为空",
@@ -244,12 +260,14 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
   columns_invalid: "columns 必须为 1 到 {max} 之间的整数",
   validate_range_invalid: "{lower} 不能大于 {upper}",
   data_source_ref_unknown: "引用的数据源不存在：{id}",
+  request_incomplete: "请求尚未配置完整：缺少{missing}",
   trigger_kind_invalid: "kind \"{kind}\" 不能用于该作用域",
   action_unknown_type: "type \"{type}\" 不是受支持的联动动作",
   state_action_on_edge_trigger: "\"{type}\" 是状态动作，只能用于条件触发",
   state_action_on_form_scope: "\"{type}\" 是状态动作，不能用于表单级联动",
   action_requires_keyed_leaf: "\"{type}\" 只能用于 keyed 叶子字段",
   source_key_unresolved: "sourceKey 未指向同一作用域内已存在的 keyed 节点：{key}",
+  source_scope_unknown: "sourceKey 的变量作用域不存在（可用 $form / $vars / $user / $node / $applicant / $globals）：{key}",
   target_key_unresolved: "targetKey 未指向同一作用域内已存在的 keyed 节点：{key}",
   cycle_detected: "联动规则存在循环依赖：{cycle}"
 };
@@ -290,7 +308,7 @@ export function formatIssueMessage(code: ValidationIssueCode, params?: unknown):
  * no path) — the plain-text line format shared by the apply pipeline's
  * error/warning reports and the dialogs' `$vef`-less fallbacks.
  */
-export function formatIssueLine(issue: ValidationIssue): string {
+export function formatIssueLine(issue: SchemaIssue): string {
   return issue.path.length > 0 ? `${issue.path}：${issue.message}` : issue.message;
 }
 
@@ -324,7 +342,7 @@ export function createIssue(
 /**
  * Whether any issue is error-severity — the complement of a result's `valid`.
  */
-export function hasErrorIssues(issues: readonly ValidationIssue[]): boolean {
+export function hasErrorIssues(issues: readonly SchemaIssue[]): boolean {
   return issues.some(issue => issue.severity === "error");
 }
 
@@ -343,7 +361,8 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * `api_call` linkage actions, form-global remote data sources, and inline
  * `remote` option sources. A non-object request or non-string `resource` /
  * `action` is structural breakage (error); empty strings are the editor's
- * freshly-seeded state and only warn.
+ * freshly-seeded state and only warn — once per request, naming what is
+ * missing, since one unconfigured request is one thing to fix.
  */
 export function validateRemoteRequest(request: unknown, path: string, ruleId?: string): ValidationIssue[] {
   if (!isRecord(request)) {
@@ -355,14 +374,21 @@ export function validateRemoteRequest(request: unknown, path: string, ruleId?: s
 
   if (typeof resource !== "string") {
     issues.push(createIssue(`${path}.resource`, "request_malformed", undefined, ruleId));
-  } else if (resource.length === 0) {
-    issues.push(createIssue(`${path}.resource`, "request_incomplete", undefined, ruleId));
   }
 
   if (typeof action !== "string") {
     issues.push(createIssue(`${path}.action`, "request_malformed", undefined, ruleId));
-  } else if (action.length === 0) {
-    issues.push(createIssue(`${path}.action`, "request_incomplete", undefined, ruleId));
+  }
+
+  const resourceMissing = resource === "";
+  const actionMissing = action === "";
+
+  if (resourceMissing && actionMissing) {
+    issues.push(createIssue(path, "request_incomplete", { missing: "资源（resource）和动作（action）" }, ruleId));
+  } else if (resourceMissing) {
+    issues.push(createIssue(`${path}.resource`, "request_incomplete", { missing: "资源（resource）" }, ruleId));
+  } else if (actionMissing) {
+    issues.push(createIssue(`${path}.action`, "request_incomplete", { missing: "动作（action）" }, ruleId));
   }
 
   return issues;

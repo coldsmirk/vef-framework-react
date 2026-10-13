@@ -11,9 +11,11 @@ import { AnimatePresence, motion } from "@vef-framework-react/core";
 import { assertNever } from "../../engine/assert-never";
 import { EditorIcon } from "../../icons";
 import { selectFieldCount, selectLinkageRuleCount, useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { useContextSources } from "../context-sources";
 import { FormDataSourcesPanel } from "../properties/form-data-sources-panel";
 import { FormLinkagePanel } from "../properties/form-linkage-panel";
 import { FormVariablesPanel } from "../properties/form-variables-panel";
+import { SystemVariablesPanel } from "../properties/system-variables-panel";
 import { panelTransition } from "../styles";
 import { FormBasicsTab } from "./form-basics-tab";
 import { LinkageOverview } from "./linkage-overview";
@@ -115,7 +117,7 @@ const sectionTitleCss = css({
   color: globalCssVars.colorTextSecondary
 });
 
-const eventsSectionCss = css({
+const followingSectionCss = css({
   marginTop: 22
 });
 
@@ -252,6 +254,47 @@ function DrawerSheet(): ReactElement {
   );
 }
 
+/**
+ * The 变量 tab: the form's own variables, then the host's system variables
+ * (read-only, when it declares any) — the order the condition builder lists
+ * form fields and system variables in, and the footer's variable count
+ * counts the form's own. Without system variables the tab is the plain
+ * form-variable list it always was, so a generic editor stays unchanged.
+ */
+function VariablesTab({
+  patch,
+  schema
+}: {
+  patch: (next: FormSchemaPatch) => void;
+  schema: FormSchema;
+}): ReactElement {
+  const hasSystemVariables = useContextSources().length > 0;
+  const formVariables = (
+    <FormVariablesPanel
+      variables={schema.variables ?? []}
+      onChange={variables => patch({ variables: variables.length > 0 ? variables : undefined })}
+    />
+  );
+
+  if (!hasSystemVariables) {
+    return <div css={reusedBodyCss}>{formVariables}</div>;
+  }
+
+  return (
+    <div css={reusedBodyCss}>
+      <section>
+        <div css={sectionTitleCss}>表单变量</div>
+        {formVariables}
+      </section>
+
+      <section css={followingSectionCss}>
+        <div css={sectionTitleCss}>系统变量</div>
+        <SystemVariablesPanel />
+      </section>
+    </div>
+  );
+}
+
 function DrawerBody({
   layer,
   patch,
@@ -281,14 +324,7 @@ function DrawerBody({
     }
 
     case "variables": {
-      return (
-        <div css={reusedBodyCss}>
-          <FormVariablesPanel
-            variables={schema.variables ?? []}
-            onChange={variables => patch({ variables: variables.length > 0 ? variables : undefined })}
-          />
-        </div>
-      );
+      return <VariablesTab patch={patch} schema={schema} />;
     }
 
     case "dataSources": {
@@ -314,7 +350,7 @@ function DrawerBody({
             <LinkageOverview />
           </section>
 
-          <section css={eventsSectionCss}>
+          <section css={followingSectionCss}>
             <div css={sectionTitleCss}>表单事件</div>
             <FormLinkagePanel schema={schema} onChange={linkage => patch({ linkage })} />
           </section>

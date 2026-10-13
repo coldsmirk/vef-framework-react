@@ -9,13 +9,14 @@ import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars, Tooltip } from "@vef-framework-react/components";
 import { useState } from "react";
 
-import { validateSchema } from "../../engine/schema/validate";
 import { formatIssueLine } from "../../engine/validation";
 import { EditorIcon } from "../../icons";
 import { useDeviceRegistries } from "../../store/engine-provider";
 import { selectFieldCount, selectTotalFieldCount, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useEditorLayout } from "../editor-layout-context";
-import { IssueList } from "../validation-summary";
+import { useHostValidation } from "../host-validation";
+import { describeIssueLocation } from "../issue-location";
+import { collectSchemaIssues, IssueList } from "../validation-summary";
 import { confirmDialog, notify } from "./notify";
 import { SchemaIoModal } from "./schema-io";
 
@@ -293,6 +294,7 @@ export function Toolbar({
   const device = useFormEditorStore(s => s.device);
   const storeApi = useFormEditorStoreApi();
   const registries = useDeviceRegistries();
+  const validate = useHostValidation();
   const layout = useEditorLayout();
 
   const [ioMode, setIoMode] = useState<SchemaIoMode>(null);
@@ -324,25 +326,26 @@ export function Toolbar({
     );
   };
 
-  // Pre-publish validation outlet: the schema's structured issues (65 codes,
-  // warnings included) finally reach the designer at the moment that matters.
-  // Errors block outright; warnings (dangling refs, unreachable default-hidden
-  // fields, …) list themselves in a confirm so publishing stays one decision.
+  // Pre-publish validation outlet: the schema's structured issues — the
+  // editor's own and the host's, warnings included — reach the designer at the
+  // moment that matters. Errors block outright; warnings (dangling refs,
+  // unreachable default-hidden fields, …) list themselves in a confirm so
+  // publishing stays one decision.
   const handlePublish = (): void => {
     if (!onPublish) {
       return;
     }
 
-    const { schema } = storeApi.getState();
-    const result = validateSchema(schema, registries);
-    const errors = result.issues.filter(issue => issue.severity === "error");
+    const { device, schema } = storeApi.getState();
+    const issues = collectSchemaIssues(schema, registries, validate);
+    const errors = issues.filter(issue => issue.severity === "error");
 
     if (errors.length > 0) {
-      notify("error", `Schema 存在 ${errors.length} 个错误，已阻止发布`);
+      notify("error", `表单存在 ${errors.length} 个错误，已阻止发布`);
       return;
     }
 
-    const warnings = result.issues.filter(issue => issue.severity === "warning");
+    const warnings = issues.filter(issue => issue.severity === "warning");
 
     if (warnings.length === 0) {
       onPublish(schema);
@@ -351,7 +354,7 @@ export function Toolbar({
 
     confirmDialog(
       `存在 ${warnings.length} 条校验提示，仍要发布？`,
-      <IssueList issues={warnings} />,
+      <IssueList describeLocation={issue => describeIssueLocation(issue.path, schema, device)} issues={warnings} />,
       {
         onOk: () => onPublish(schema),
         okType: "primary",

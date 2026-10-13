@@ -569,6 +569,52 @@ describe("linkage engine", () => {
         c: "z"
       }).hidden).toBe(false);
     });
+
+    it("applies a rule whose all-group has no children", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: []
+                }
+              },
+              actions: [{ type: "hide" }]
+            }
+          ]
+        }
+      });
+
+      expect(evaluateLinkage(field, {}).hidden).toBe(true);
+    });
+
+    it("never applies a rule whose any-group has no children", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "Rule_1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "any",
+                  children: []
+                }
+              },
+              actions: [{ type: "hide" }]
+            }
+          ]
+        }
+      });
+
+      expect(evaluateLinkage(field, {}).hidden).toBe(false);
+    });
   });
 
   describe("state lane — expression conditions", () => {
@@ -758,6 +804,79 @@ describe("linkage engine", () => {
 
       expect(state.hidden).toBe(true);
       expect(state.disabled).toBe(false);
+    });
+
+    it("exposes the applicant and the host globals to expressions", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: { kind: "condition", condition: { kind: "expression", source: "$globals.limit > 0" } },
+              actions: [{ type: "assign", value: { kind: "expression", source: "$applicant.name + '/' + $globals.limit" } }]
+            }
+          ]
+        }
+      });
+
+      const state = evaluateLinkage(field, {}, {
+        evaluationContext: {
+          applicant: { name: "张三" },
+          globals: { limit: 500 }
+        }
+      });
+
+      expect(state.assignedValue).toBe("张三/500");
+    });
+
+    it("resolves an applicant leaf source the same for every viewer", () => {
+      const field = makeField("target", {
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "$applicant.departmentId",
+                  operator: "eq",
+                  value: "dept-finance"
+                }
+              },
+              actions: [{ type: "show" }]
+            }
+          ],
+          defaults: { hidden: true }
+        }
+      });
+
+      const context = { applicant: { departmentId: "dept-finance" }, user: { departmentId: "dept-it" } };
+
+      expect(evaluateLinkage(field, {}, { evaluationContext: context }).hidden).toBe(false);
+    });
+
+    it("tracks the form key behind a $form leaf source", () => {
+      const keys = getLinkageSourceKeys({
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "$form.amount",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [{ type: "require" }]
+            }
+          ]
+        }
+      });
+
+      expect(keys).toEqual(["amount"]);
     });
 
     it("excludes $-rooted leaf sources from linkage source keys", () => {
@@ -2014,7 +2133,7 @@ describe("linkage engine", () => {
       });
 
       it("warns on an empty condition group", () => {
-        // The editor seeds an empty group when no sibling field exists yet.
+        // The editor never authors one; an imported schema can still carry it.
         const schema = makeSchema([
           makeField("a", {
             linkage: {
@@ -2630,6 +2749,91 @@ describe("linkage engine", () => {
           code: "source_key_unresolved",
           severity: "warning"
         }));
+      });
+
+      it("flags a leaf source under a scope root that does not exist", () => {
+        const schema = makeSchema([
+          makeField("a", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_1",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "$applcant.departmentId",
+                      operator: "eq",
+                      value: "dept-1"
+                    }
+                  },
+                  actions: [{ type: "show" }]
+                }
+              ]
+            }
+          })
+        ]);
+
+        expect(validateLinkageSchema(schema).issues).toEqual([
+          expect.objectContaining({
+            code: "source_scope_unknown",
+            severity: "warning"
+          })
+        ]);
+      });
+
+      it("flags a $form leaf source whose key is not in scope", () => {
+        const schema = makeSchema([
+          makeField("a", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_1",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "$form.missing",
+                      operator: "notEmpty"
+                    }
+                  },
+                  actions: [{ type: "show" }]
+                }
+              ]
+            }
+          })
+        ]);
+
+        expect(validateLinkageSchema(schema).issues).toContainEqual(expect.objectContaining({
+          code: "source_key_unresolved",
+          severity: "warning"
+        }));
+      });
+
+      it("accepts a $form leaf source whose key is in scope", () => {
+        const schema = makeSchema([
+          makeField("amount"),
+          makeField("a", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_1",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "$form.amount",
+                      operator: "notEmpty"
+                    }
+                  },
+                  actions: [{ type: "show" }]
+                }
+              ]
+            }
+          })
+        ]);
+
+        expect(validateLinkageSchema(schema).issues).toEqual([]);
       });
 
       it("never flags a $-rooted context source path as unresolved", () => {

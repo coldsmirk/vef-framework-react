@@ -9,6 +9,7 @@ import { sanitizeKey } from "../../../../engine/keys";
 import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { DynamicValueEditor as ActionValueEditor } from "../../dynamic-value-editor";
+import { RemoteRequestEditor } from "../../remote-request-editor";
 import { NO_COMPLETION_SETUP } from "./expression-input";
 import { createActionFor } from "./mutators";
 import { alertLevelOptions, isLinkageActionType } from "./options";
@@ -18,7 +19,6 @@ import {
   actionHeaderCss,
   actionRetriggerCss,
   actionRetriggerLabelCss,
-  apiFieldsCss,
   codeEditorWrapperCss,
   defaultHintCss,
   defaultTextCss,
@@ -258,21 +258,9 @@ function ActionBody({
     }
 
     case "api_call": {
-      return (
-        <div css={apiFieldsCss}>
-          <Input
-            placeholder="资源 (resource)"
-            value={action.request.resource}
-            onChange={event => onChange({ ...action, request: { ...action.request, resource: event.target.value } })}
-          />
-
-          <Input
-            placeholder="动作 (action)"
-            value={action.request.action}
-            onChange={event => onChange({ ...action, request: { ...action.request, action: event.target.value } })}
-          />
-        </div>
-      );
+      // The full request — version and bound parameters included, which the
+      // runtime resolves before the host handler runs.
+      return <RemoteRequestEditor request={action.request} onChange={request => onChange({ ...action, request })} />;
     }
 
     case "script": {

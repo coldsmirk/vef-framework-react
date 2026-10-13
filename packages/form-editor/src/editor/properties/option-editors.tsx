@@ -1,15 +1,14 @@
 import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ChangeEvent, ReactElement } from "react";
 
-import type { DynamicValue, FieldOption, RemoteDataSourceRequest, RemoteOptionMapping } from "../../types";
+import type { FieldOption } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Input } from "@vef-framework-react/components";
 import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { EditorIcon } from "../../icons";
-import { DynamicValueEditor } from "./dynamic-value-editor";
 
 const emptyCss = css({
   fontSize: globalCssVars.fontSizeSm,
@@ -81,41 +80,6 @@ const duplicateWarningCss = css({
   fontSize: globalCssVars.fontSizeSm,
   color: globalCssVars.colorWarningText,
   lineHeight: 1.5
-});
-
-const gridCss = css({
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-  gap: 8
-});
-
-const paramsSectionCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  paddingTop: 8,
-  borderTop: `1px dashed ${globalCssVars.colorBorderSecondary}`
-});
-
-const paramsHeaderCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary
-});
-
-const paramRowCss = css({
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 8
-});
-
-const paramKeyCss = css({
-  width: 140,
-  flexShrink: 0
-});
-
-const paramValueCss = css({
-  flex: 1,
-  minWidth: 0
 });
 
 export interface OptionListEditorProps {
@@ -346,162 +310,6 @@ export function OptionListEditor({ onChange, options }: OptionListEditorProps): 
       <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={addRow}>
         添加选项
       </Button>
-    </>
-  );
-}
-
-export interface RemoteRequestFieldsProps {
-  request: RemoteDataSourceRequest;
-  mapping: RemoteOptionMapping | undefined;
-  onChange: (request: RemoteDataSourceRequest, mapping: RemoteOptionMapping | undefined) => void;
-}
-
-/**
- * The resource / action / labelKey / valueKey editor for a remote option
- * request. Shared by the field option-source entry and the form-global
- * data-source panel; an all-empty mapping is normalized back to `undefined`.
- */
-export function RemoteRequestFields({
-  mapping,
-  onChange,
-  request
-}: RemoteRequestFieldsProps): ReactElement {
-  const patchRequest = (patch: Partial<RemoteDataSourceRequest>): void => {
-    onChange({ ...request, ...patch }, mapping);
-  };
-
-  const patchMapping = (patch: Partial<RemoteOptionMapping>): void => {
-    const next: RemoteOptionMapping = { ...mapping, ...patch };
-    const hasMapping = Object.values(next).some(value => typeof value === "string" && value.length > 0);
-    onChange(request, hasMapping ? next : undefined);
-  };
-
-  // Row index → a typed-but-uncommitted parameter name (see `updateParam`).
-  const [paramKeyDrafts, setParamKeyDrafts] = useState<Record<number, string>>({});
-  const params = request.params ?? {};
-  const paramEntries = Object.entries(params);
-
-  // `params` is a record, so a row edit rebuilds it from the entry list. That
-  // keeps insertion order (and therefore row order) stable across a rename,
-  // which patching the object in place would not.
-  //
-  // A rebuild is only safe while the keys are unique: `Object.fromEntries`
-  // keeps the LAST entry for a duplicate, so committing a colliding rename
-  // would delete the other row's value outright. A collision therefore holds
-  // the edit in the draft below and warns, matching the option list's policy —
-  // the user is mid-edit, and mid-edit is not a licence to drop their data.
-  const patchParams = (entries: Array<[string, DynamicValue]>): void => {
-    patchRequest({ params: entries.length > 0 ? Object.fromEntries(entries) : undefined });
-  };
-
-  const updateParam = (index: number, key: string, value: DynamicValue): void => {
-    const entries: Array<[string, DynamicValue]> = paramEntries.map(
-      (entry, i) => i === index ? [key, value] : entry
-    );
-
-    setParamKeyDrafts(drafts => {
-      return { ...drafts, [index]: key };
-    });
-
-    if (new Set(entries.map(([entryKey]) => entryKey)).size !== entries.length) {
-      return;
-    }
-
-    patchParams(entries);
-  };
-
-  // Row index → the key the user has typed but that has not been committed
-  // (because it currently collides). Cleared as soon as the stored key catches
-  // up, so a committed rename stops shadowing.
-  const paramKeyOf = (index: number, storedKey: string): string => {
-    const draft = paramKeyDrafts[index];
-
-    return draft !== undefined && draft !== storedKey ? draft : storedKey;
-  };
-
-  const duplicatedParamKeys = (): string[] => {
-    const seen = new Set<string>();
-    const duplicated = new Set<string>();
-
-    for (const [index, [storedKey]] of paramEntries.entries()) {
-      const key = paramKeyOf(index, storedKey);
-
-      if (seen.has(key)) {
-        duplicated.add(key);
-      }
-
-      seen.add(key);
-    }
-
-    return [...duplicated];
-  };
-
-  return (
-    <>
-      <div css={gridCss}>
-        <Input placeholder="resource" value={request.resource} onChange={event => patchRequest({ resource: event.target.value })} />
-        <Input placeholder="action" value={request.action} onChange={event => patchRequest({ action: event.target.value })} />
-      </div>
-
-      <div css={gridCss}>
-        <Input placeholder="labelKey（默认 label）" value={mapping?.labelKey ?? ""} onChange={event => patchMapping({ labelKey: event.target.value })} />
-        <Input placeholder="valueKey（默认 value）" value={mapping?.valueKey ?? ""} onChange={event => patchMapping({ valueKey: event.target.value })} />
-      </div>
-
-      <div css={gridCss}>
-        <Input placeholder="disabledKey（可选）" value={mapping?.disabledKey ?? ""} onChange={event => patchMapping({ disabledKey: event.target.value })} />
-        <Input placeholder="descriptionKey（可选）" value={mapping?.descriptionKey ?? ""} onChange={event => patchMapping({ descriptionKey: event.target.value })} />
-      </div>
-
-      <div css={gridCss}>
-        <Input placeholder="version（默认 v1）" value={request.version ?? ""} onChange={event => patchRequest({ version: event.target.value })} />
-      </div>
-
-      <div css={paramsSectionCss}>
-        <span css={paramsHeaderCss}>
-          请求参数 —— 字面量为固定值，表达式按当前表单求值（如 `$form.departmentId`），可实现级联
-        </span>
-
-        {duplicatedParamKeys().length > 0
-          ? <span css={duplicateWarningCss}>{`参数名重复，未保存：${duplicatedParamKeys().join("、")}`}</span>
-          : null}
-
-        {paramEntries.map(([key, value], index) => (
-          <div key={index} css={paramRowCss}>
-            <Input
-              css={paramKeyCss}
-              placeholder="参数名"
-              value={paramKeyOf(index, key)}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => updateParam(index, event.target.value, value)}
-            />
-
-            <div css={paramValueCss}>
-              <DynamicValueEditor
-                expressionPlaceholder="$form.departmentId"
-                literalPlaceholder="固定值"
-                value={value}
-                onChange={next => updateParam(index, key, next)}
-              />
-            </div>
-
-            <Button
-              aria-label="删除参数"
-              icon={<EditorIcon name="trash-2" />}
-              type="text"
-              onClick={() => patchParams(paramEntries.filter((_, i) => i !== index))}
-            />
-          </div>
-        ))}
-
-        <Button
-          block
-          icon={<EditorIcon name="plus" />}
-          type="dashed"
-          onClick={() => patchParams([...paramEntries, ["", { kind: "literal", value: "" }]])}
-        >
-          新增参数
-        </Button>
-      </div>
     </>
   );
 }

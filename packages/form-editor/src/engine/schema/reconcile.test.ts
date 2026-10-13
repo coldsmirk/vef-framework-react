@@ -112,6 +112,29 @@ describe("reconcile", () => {
       });
     });
 
+    it("rewrites a $form sourceKey and keeps its spelling", () => {
+      const watcher = tf("f2", "b", { linkage: { rules: [conditionRule("r1", "$form.a")] } });
+      const layer = layerOf(tf("f1", "a"), watcher);
+
+      const next = renameKeyReferences(layer, [], "a", "total");
+
+      expect(linkageOf(findNode(next, "f2"))?.rules?.[0]?.trigger).toEqual({
+        kind: "condition",
+        condition: {
+          kind: "leaf",
+          sourceKey: "$form.total",
+          operator: "empty"
+        }
+      });
+    });
+
+    it("leaves a context sourceKey alone when a same-named key is renamed", () => {
+      const watcher = tf("f2", "b", { linkage: { rules: [conditionRule("r1", "$applicant.a")] } });
+      const layer = layerOf(tf("f1", "a"), watcher);
+
+      expect(renameKeyReferences(layer, [], "a", "total")).toBe(layer);
+    });
+
     it("rewrites a set_field targetKey in the same scope", () => {
       const writer = tf("f2", "b", {
         linkage: {
@@ -201,6 +224,22 @@ describe("reconcile", () => {
       const next = pruneKeyReferences(layer, [], new Set(["a"]));
 
       expect(linkageOf(findNode(next, "f2"))?.rules).toEqual([]);
+    });
+
+    it("removes a rule whose $form leaf pointed at a removed key", () => {
+      const watcher = tf("f2", "b", { linkage: { rules: [conditionRule("r1", "$form.a")] } });
+      const layer = layerOf(watcher);
+
+      const next = pruneKeyReferences(layer, [], new Set(["a"]));
+
+      expect(linkageOf(findNode(next, "f2"))?.rules).toEqual([]);
+    });
+
+    it("keeps a rule whose context leaf shares a removed key's name", () => {
+      const watcher = tf("f2", "b", { linkage: { rules: [conditionRule("r1", "$globals.a")] } });
+      const layer = layerOf(watcher);
+
+      expect(pruneKeyReferences(layer, [], new Set(["a"]))).toBe(layer);
     });
 
     it("cascades leaf → group → rule when the prune empties the group", () => {

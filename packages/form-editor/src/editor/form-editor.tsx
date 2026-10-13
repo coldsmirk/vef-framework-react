@@ -2,7 +2,8 @@ import type { ReactElement, ReactNode, Ref, RefObject } from "react";
 
 import type { DeviceRegistries, FormFieldRegistry } from "../engine/registry/form-field-registry";
 import type { EditorDeviceMode, EditorViewMode } from "../store/form-store";
-import type { DataSourceResolver, EvaluationContext, FormSchema, LinkageContextSource, LinkageEvaluators } from "../types";
+import type { DataSourceApi, DataSourceResolver, EvaluationContext, FormSchema, LinkageContextSource, LinkageEvaluators } from "../types";
+import type { SchemaValidator } from "./host-validation";
 import type { ToolbarBrand } from "./toolbar/toolbar";
 
 import { css } from "@emotion/react";
@@ -18,10 +19,12 @@ import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } fr
 import { Canvas } from "./canvas/canvas";
 import { ContainerDragChip } from "./canvas/container-drag-chip";
 import { ContextSourcesProvider } from "./context-sources";
+import { DataSourceApisProvider } from "./data-source-apis";
 import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
 import { EditorLayoutProvider, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
 import { FormConfigDrawer } from "./form-config/form-config-drawer";
+import { HostValidationProvider } from "./host-validation";
 import { PalettePanel } from "./palette/palette-panel";
 import { previewDispatchEffect } from "./preview-effects";
 import { PreviewRuntimeProvider } from "./preview-runtime-context";
@@ -123,18 +126,41 @@ export interface FormEditorProviderProps {
    */
   dataSourceResolver?: DataSourceResolver;
   /**
-   * Host evaluation scope (`$user` / `$node`, variable overrides), forwarded to
-   * the live preview so host-context expressions evaluate truthfully.
+   * The host's catalog of option APIs. Remote option sources then lead with a
+   * picker — the designer chooses "部门列表" and binds its declared parameters
+   * instead of typing an endpoint and a field mapping — with "自定义接口" kept
+   * for anything else. Design-time only: a pick is stored as the request
+   * itself, so the runtime resolves it through `dataSourceResolver` exactly as
+   * it does a hand-typed one.
+   */
+  dataSourceApis?: DataSourceApi[];
+  /**
+   * Host evaluation scope (`$user` / `$node` / `$applicant` / `$globals`,
+   * variable overrides), forwarded to the live preview so host-context
+   * expressions evaluate truthfully. Values the designer enters as preview
+   * samples in the variables panel layer over it.
    */
   evaluationContext?: EvaluationContext;
   /**
-   * Host-declared global-context properties the visual condition builder
-   * offers as leaf-condition sources beside the form's own fields — e.g.
-   * `{ key: "$user.departmentId", label: "发起人部门" }`. Pure design-time
-   * metadata: the runtime resolves the path against `evaluationContext`
-   * whether or not it was declared here.
+   * Host-declared context properties — the form's system variables — e.g.
+   * `{ key: "$applicant.departmentId", label: "发起人部门 ID" }`. The variables
+   * panel lists them (with preview samples) and the visual condition builder
+   * offers them as leaf-condition sources beside the form's own fields. Pure
+   * design-time metadata: the runtime resolves the path against the live
+   * evaluation context whether or not it was declared here.
    */
   contextSources?: LinkageContextSource[];
+  /**
+   * The host's own checks of the schema, layered over the editor's structural
+   * validation — a downstream contract the editor cannot know about (an
+   * approval backend rejecting some field types, say). Called only for a
+   * schema free of structural errors, it returns host-specific issues, which
+   * join the editor's in the footer diagnostics (each one clickable to its
+   * location — a field-key chain path such as `lines.price` locates the field)
+   * and in the publish gate, where an error blocks like a structural one.
+   * Pass a stable function: a new identity re-runs validation.
+   */
+  validate?: SchemaValidator;
   onSchemaChange?: (schema: FormSchema) => void;
   /**
    * Curated imperative handle — lets a host shell read/replace the schema and
@@ -194,13 +220,15 @@ export function FormEditorProvider({
   apiRef,
   children,
   contextSources,
+  dataSourceApis,
   dataSourceResolver,
   evaluators,
   evaluationContext,
   initialSchema,
   onSchemaChange,
   registries: registriesProp,
-  registry: registryProp
+  registry: registryProp,
+  validate
 }: FormEditorProviderProps): ReactElement {
   const [registries] = useState<DeviceRegistries>(() => {
     return {
@@ -235,17 +263,21 @@ export function FormEditorProvider({
   return (
     <FormEditorStoreProvider initialState={initialSchema ? { schema: initialSchema } : {}}>
       <RegistryProvider registries={registries}>
-        <PreviewRuntimeProvider value={{
-          dataSourceResolver,
-          evaluators: previewEvaluators,
-          evaluationContext
-        }}
-        >
-          <ContextSourcesProvider sources={contextSources}>
-            <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
-            {children}
-          </ContextSourcesProvider>
-        </PreviewRuntimeProvider>
+        <ContextSourcesProvider sources={contextSources}>
+          <PreviewRuntimeProvider value={{
+            dataSourceResolver,
+            evaluators: previewEvaluators,
+            evaluationContext
+          }}
+          >
+            <HostValidationProvider validate={validate}>
+              <DataSourceApisProvider apis={dataSourceApis}>
+                <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
+                {children}
+              </DataSourceApisProvider>
+            </HostValidationProvider>
+          </PreviewRuntimeProvider>
+        </ContextSourcesProvider>
       </RegistryProvider>
     </FormEditorStoreProvider>
   );

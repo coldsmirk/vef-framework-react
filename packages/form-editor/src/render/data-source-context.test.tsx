@@ -60,6 +60,20 @@ describe("useFieldOptions", () => {
     expect(resolver.resolve).toHaveBeenCalledWith({ resource: "geo", action: "cities" }, undefined);
   });
 
+  it("hands the resolver a mapping without blank keys", async () => {
+    // A blank key persisted by an older designer means "the default", but a
+    // resolver reading `mapping.labelKey ?? "label"` would take "" literally.
+    const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([]) };
+
+    optionsFor({
+      kind: "remote",
+      request: { resource: "geo", action: "cities" },
+      mapping: { labelKey: "", valueKey: "code" }
+    }, [], resolver);
+
+    await waitFor(() => expect(resolver.resolve).toHaveBeenCalledWith({ resource: "geo", action: "cities" }, { valueKey: "code" }));
+  });
+
   it("resolves a ref to a form-global remote source", async () => {
     const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "D", value: "d" }]) };
     const dataSources: FormDataSource[] = [

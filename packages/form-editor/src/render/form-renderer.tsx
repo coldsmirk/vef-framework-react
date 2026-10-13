@@ -102,9 +102,10 @@ export interface FormRendererProps {
   dataSourceResolver?: DataSourceResolver;
   /**
    * Host-supplied evaluation scope. `$vars` here merges over (and overrides) the
-   * schema's variable defaults; `$user` / `$node` carry runtime context. The
-   * form derives `$vars` from `schema.variables` on its own, so this is only
-   * needed to supply user / node context or override a variable at runtime.
+   * schema's variable defaults; `$user` / `$node` / `$applicant` / `$globals`
+   * carry runtime context. The form derives `$vars` from `schema.variables` on
+   * its own, so this is only needed to supply host context or override a
+   * variable at runtime.
    */
   evaluationContext?: EvaluationContext;
   onSubmit?: (values: RuntimeFormValues) => void | Promise<void>;
@@ -189,7 +190,7 @@ interface RenderCtx {
   evaluators: LinkageEvaluators | undefined;
   /**
    * Stable ref to the form-composed evaluation scope (`$vars` from schema + host
-   * `$user`/`$node`). A ref — not the value — so a `$vars` change does not bust
+   * context). A ref — not the value — so a `$vars` change does not bust
    * `ctx` identity and re-render every memoized cell; field validators read the
    * latest via `.current` at change/submit time. The reactive value reaches the
    * runtime-state controllers (which must re-evaluate) via {@link EvaluationScopeContext}.
@@ -426,6 +427,8 @@ function FormRendererInner({
   const hostVariables = hostContext?.variables;
   const hostUser = hostContext?.user;
   const hostNode = hostContext?.node;
+  const hostApplicant = hostContext?.applicant;
+  const hostGlobals = hostContext?.globals;
 
   // `$vars` is a reactive store seeded from the schema's variable defaults (with
   // host overrides on top); a `set_variable` effect mutates it, and re-seeds
@@ -485,10 +488,12 @@ function FormRendererInner({
       return {
         variables,
         user: hostUser,
-        node: hostNode
+        node: hostNode,
+        applicant: hostApplicant,
+        globals: hostGlobals
       };
     },
-    [variables, hostUser, hostNode]
+    [variables, hostUser, hostNode, hostApplicant, hostGlobals]
   );
 
   // A stable ref to the live evaluation scope. Field validators read `.current`

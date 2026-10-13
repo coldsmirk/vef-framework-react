@@ -1,14 +1,16 @@
 import type { ChangeEvent, ReactElement } from "react";
 
-import type { FormDataSource } from "../../types";
+import type { FormDataSource, RemoteDataSource, RemoteDataSourceRequest, RemoteOptionMapping } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Input, Popconfirm, Segmented } from "@vef-framework-react/components";
+import { omit } from "@vef-framework-react/shared";
 
 import { createId } from "../../engine/ids";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStoreApi } from "../../store/form-store";
-import { OptionListEditor, RemoteRequestFields } from "./option-editors";
+import { OptionListEditor } from "./option-editors";
+import { RemoteOptionSourceEditor } from "./remote-option-source-editor";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 
 type DataSourceKind = FormDataSource["kind"];
@@ -89,6 +91,24 @@ function withKind(source: FormDataSource, kind: DataSourceKind): FormDataSource 
         name: source.name,
         kind: "remote",
         request: { resource: "", action: "" }
+      };
+}
+
+/**
+ * A remote source with a new request and mapping, omitting the mapping key
+ * when there is none to store.
+ */
+function withRemotePayload(
+  source: RemoteDataSource,
+  request: RemoteDataSourceRequest,
+  mapping: RemoteOptionMapping | undefined
+): FormDataSource {
+  return mapping === undefined
+    ? { ...omit(source, ["mapping"]), request }
+    : {
+        ...source,
+        request,
+        mapping
       };
 }
 
@@ -207,14 +227,10 @@ function DataSourceCard({
       {source.kind === "static"
         ? <OptionListEditor options={source.options} onChange={options => onUpdate({ ...source, options })} />
         : (
-            <RemoteRequestFields
+            <RemoteOptionSourceEditor
               mapping={source.mapping}
               request={source.request}
-              onChange={(request, mapping) => onUpdate({
-                ...source,
-                request,
-                mapping
-              })}
+              onChange={(request, mapping) => onUpdate(withRemotePayload(source, request, mapping))}
             />
           )}
     </div>

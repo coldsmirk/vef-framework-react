@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import type { FormEditorStoreApi } from "../../store/form-store";
 import type { FormSchema } from "../../types";
+import type { SchemaValidator } from "../host-validation";
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -11,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
+import { HostValidationProvider } from "../host-validation";
 import { EditorFooter } from "./footer";
 
 function makeSchema(): FormSchema {
@@ -39,7 +41,7 @@ function makeSchema(): FormSchema {
   };
 }
 
-function setupFooter(schema: FormSchema = makeSchema()): FormEditorStoreApi {
+function setupFooter(schema: FormSchema = makeSchema(), validate?: SchemaValidator): FormEditorStoreApi {
   let storeApi: FormEditorStoreApi | null = null;
 
   function Harness(): ReactElement {
@@ -55,7 +57,9 @@ function setupFooter(schema: FormSchema = makeSchema()): FormEditorStoreApi {
   render(
     <FormEditorStoreProvider initialState={{ schema }}>
       <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
-        <Harness />
+        <HostValidationProvider validate={validate}>
+          <Harness />
+        </HostValidationProvider>
       </RegistryProvider>
     </FormEditorStoreProvider>
   );
@@ -125,6 +129,36 @@ function linkageSchema(): FormSchema {
   return schema;
 }
 
+/**
+ * The base schema plus a default-hidden field with no show rule — the
+ * canonical warning, located on that field's node.
+ */
+function ghostSchema(): FormSchema {
+  const schema = makeSchema();
+
+  schema.presentations.pc.children.push({
+    id: "Field_hidden",
+    type: "textfield",
+    key: "ghost",
+    label: "幽灵",
+    linkage: { defaults: { hidden: true }, rules: [] }
+  });
+
+  return schema;
+}
+
+/**
+ * A host check rejecting the field keyed `name`, addressed by field key.
+ */
+const rejectName: SchemaValidator = () => [
+  {
+    path: "name",
+    code: "host_rejected",
+    severity: "error",
+    message: "审批表单不支持该字段"
+  }
+];
+
 describe("EditorFooter", () => {
   it("shows the field and variable counts", () => {
     setupFooter();
@@ -160,6 +194,105 @@ describe("EditorFooter", () => {
     setupFooter(schema);
 
     expect(screen.getByTestId("footer-issues")).toHaveTextContent("1 项提示");
+  });
+
+  describe("when the issues chip is opened", () => {
+    it("lists every issue", async () => {
+      const user = userEvent.setup();
+      setupFooter(ghostSchema());
+
+      await user.click(screen.getByTestId("footer-issues"));
+
+      expect(await screen.findByText(/默认隐藏但没有任何「显示」动作的规则/)).toBeInTheDocument();
+    });
+
+    it("says where an issue is by the name the designer gave it", async () => {
+      const user = userEvent.setup();
+      setupFooter(ghostSchema());
+
+      await user.click(screen.getByTestId("footer-issues"));
+
+      expect(await screen.findByText("幽灵")).toHaveAttribute("title", "node[Field_hidden].linkage.defaults.hidden");
+    });
+
+    it("names a data-source issue by the source's name", async () => {
+      const user = userEvent.setup();
+      setupFooter({
+        ...makeSchema(),
+        dataSources: [
+          {
+            id: "DataSource_1",
+            name: "部门",
+            kind: "remote",
+            request: { resource: "", action: "" }
+          }
+        ]
+      });
+
+      await user.click(screen.getByTestId("footer-issues"));
+
+      expect(await screen.findByText("数据源「部门」")).toBeInTheDocument();
+    });
+
+    it("selects the node an issue is about when the issue is clicked", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter(ghostSchema());
+
+      await user.click(screen.getByTestId("footer-issues"));
+      await user.click(await screen.findByRole("button", { name: /默认隐藏/ }));
+
+      expect(storeApi.getState().selectedId).toBe("Field_hidden");
+    });
+
+    it("opens the data-source tab for a data-source issue", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter({
+        ...makeSchema(),
+        dataSources: [
+          {
+            id: "DataSource_1",
+            name: "部门",
+            kind: "remote",
+            request: { resource: "", action: "" }
+          }
+        ]
+      });
+
+      await user.click(screen.getByTestId("footer-issues"));
+      await user.click(await screen.findByRole("button", { name: /请求尚未配置完整/ }));
+
+      expect(storeApi.getState().formConfigOpen).toBe(true);
+      expect(storeApi.getState().formConfigTab).toBe("dataSources");
+    });
+  });
+
+  describe("when the host validates the schema", () => {
+    it("counts the host's issues as the schema's own", () => {
+      setupFooter(makeSchema(), rejectName);
+
+      expect(screen.getByTestId("footer-issues")).toHaveTextContent("1 项问题");
+    });
+
+    it("locates a host issue addressed by field key", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter(makeSchema(), rejectName);
+
+      await user.click(screen.getByTestId("footer-issues"));
+      await user.click(await screen.findByRole("button", { name: /审批表单不支持该字段/ }));
+
+      expect(storeApi.getState().selectedId).toBe("Field_1");
+    });
+
+    it("never hands the host a schema with structural errors", () => {
+      const validate = vi.fn<SchemaValidator>(() => []);
+      const schema = makeSchema();
+
+      // A second field reusing the key "name" is a duplicate-key error.
+      schema.presentations.pc.children.push({ ...schema.presentations.pc.children[0]!, id: "Field_dup" });
+      setupFooter(schema, validate);
+
+      expect(validate).not.toHaveBeenCalledWith(schema);
+    });
   });
 
   it("opens the drawer to a tab when a count pill is clicked", async () => {

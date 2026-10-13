@@ -12,6 +12,7 @@ import type {
 import { createContext, use, useEffect, useMemo, useRef, useState } from "react";
 
 import { resolveRequestParams } from "../engine/data-source-params";
+import { normalizeOptionMapping } from "../engine/option-mapping";
 import { noopDataSourceResolver } from "../types";
 import { paramEvaluatorFor, useDataSourceParamScope } from "./data-source-param-scope";
 
@@ -95,8 +96,9 @@ type ResolvedSource
 
 /**
  * Collapse a field's option source to a static list or a concrete remote
- * request, dereferencing a `ref` against the form-global data sources. An
- * unknown reference resolves to an empty static list. A `ref` to a remote source
+ * request, dereferencing a `ref` against the form-global data sources, with
+ * the mapping normalized so a resolver never sees a blank key. An unknown
+ * reference resolves to an empty static list. A `ref` to a remote source
  * carries the source id as `refreshId`, so a `refresh_data_source` effect on that
  * id forces a re-fetch; an inline `remote` source has no id and cannot be a
  * refresh target.
@@ -110,7 +112,7 @@ function resolveSource(source: FieldOptionSource | undefined, dataSources: FormD
     return {
       kind: "remote",
       request: source.request,
-      mapping: source.mapping
+      mapping: normalizeOptionMapping(source.mapping)
     };
   }
 
@@ -125,7 +127,7 @@ function resolveSource(source: FieldOptionSource | undefined, dataSources: FormD
     : {
         kind: "remote",
         request: found.request,
-        mapping: found.mapping,
+        mapping: normalizeOptionMapping(found.mapping),
         refreshId: found.id
       };
 }

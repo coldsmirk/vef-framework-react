@@ -6,7 +6,8 @@ import type { OptionSourceKind } from "./source-mutators";
 import { css } from "@emotion/react";
 import { globalCssVars, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
 
-import { OptionListEditor, RemoteRequestFields } from "../../option-editors";
+import { OptionListEditor } from "../../option-editors";
+import { RemoteOptionSourceEditor } from "../../remote-option-source-editor";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { descriptionCss, entryLabelCss } from "../entry-field";
 import { optionSourceHasPayload, setOptionSourceKind } from "./source-mutators";
@@ -97,13 +98,13 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
 
       {source.kind === "remote"
         ? (
-            <RemoteRequestFields
+            <RemoteOptionSourceEditor
               mapping={source.mapping}
               request={source.request}
               onChange={(request, mapping) => onChange({
-                ...source,
+                kind: "remote",
                 request,
-                mapping
+                ...mapping !== undefined && { mapping }
               })}
             />
           )

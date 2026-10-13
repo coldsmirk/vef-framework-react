@@ -41,6 +41,13 @@ import {
   selectStyle
 } from "./styles";
 
+/**
+ * The source picker's popup width. The select itself shares a row with the
+ * operator, so a popup matching it would cut a field's "label · key" and a
+ * system variable's name mid-word.
+ */
+const SOURCE_POPUP_WIDTH = 240;
+
 export interface ConditionEditorProps {
   condition: LinkageCondition;
   sourceOptions: SourceFieldOption[];
@@ -426,7 +433,7 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
     : [
         { label: "表单字段", options: sourceOptions },
         {
-          label: "全局上下文",
+          label: "系统变量",
           options: contextSources.map(source => {
             return { value: source.key, label: source.label };
           })
@@ -439,6 +446,7 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
       <Select
         options={leafSourceOptions}
         placeholder="选择源字段"
+        popupMatchSelectWidth={SOURCE_POPUP_WIDTH}
         style={selectStyle}
         value={hasSource ? condition.sourceKey : undefined}
         onChange={value => onChange({ ...condition, sourceKey: String(value) })}

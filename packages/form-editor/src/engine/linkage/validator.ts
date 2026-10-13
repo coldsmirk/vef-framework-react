@@ -14,12 +14,13 @@ import type {
 import type { ScopePath } from "../schema/walk";
 import type { ValidationIssue } from "../validation";
 
-import { exhaustive } from "../assert-never";
+import { assertNever, exhaustive } from "../assert-never";
 import { isKeyedNode } from "../keys";
 import { isLeafField, walkNodes } from "../schema/walk";
 import { createIssue, isRecord, validateRemoteRequest } from "../validation";
 import { findLinkageCycles } from "./cycle";
 import { LINKAGE_OPERATORS } from "./operators";
+import { parseLeafSource } from "./scope";
 import { hasConditionTriggeredShow } from "./shape";
 import { collectConditionSourceKeys } from "./source-tracking";
 import { ALERT_LEVELS, FIELD_TRIGGER_KINDS, FORM_TRIGGER_KINDS, isStateAction, KEYED_ONLY_ACTIONS, LINKAGE_ACTION_TYPES } from "./taxonomy";
@@ -841,6 +842,54 @@ function validateCondition(args: {
   }
 }
 
+/**
+ * Check that a leaf `sourceKey` names something that can hold a value: a form
+ * key present in the rule's value scope (spelled plain or `$form.key`), or a
+ * path under a context root. A context path's members are host data this
+ * static pass cannot see into, so any member is accepted; a `$` root no scope
+ * slot answers to is not — it could never resolve, and silently never matching
+ * is exactly what a typo like `$applcant` would otherwise do.
+ */
+function validateLeafSource(args: {
+  issues: ValidationIssue[];
+  keyedNodes: Map<string, KeyedNodeUnion>;
+  ruleId: string | undefined;
+  sourceKey: string;
+  where: string;
+}): void {
+  const {
+    issues,
+    keyedNodes,
+    ruleId,
+    sourceKey,
+    where
+  } = args;
+  const source = parseLeafSource(sourceKey);
+
+  switch (source.kind) {
+    case "form": {
+      if (!keyedNodes.has(source.key)) {
+        issues.push(createIssue(where, "source_key_unresolved", { key: sourceKey }, ruleId));
+      }
+
+      return;
+    }
+
+    case "context": {
+      return;
+    }
+
+    case "unknown": {
+      issues.push(createIssue(where, "source_scope_unknown", { key: sourceKey }, ruleId));
+      return;
+    }
+
+    default: {
+      assertNever(source);
+    }
+  }
+}
+
 function validateLeafCondition(args: {
   condition: Record<string, unknown>;
   issues: ValidationIssue[];
@@ -864,11 +913,14 @@ function validateLeafCondition(args: {
     valid = false;
   } else if (sourceKey.length === 0) {
     issues.push(createIssue(`${where}.sourceKey`, "source_key_empty", undefined, ruleId));
-  } else if (!sourceKey.startsWith("$") && !keyedNodes.has(sourceKey)) {
-    // A `$`-rooted context path resolves against the host-supplied expression
-    // context, which this static pass cannot see into — treated like `$user`
-    // members inside an expression source: never flagged as unresolved.
-    issues.push(createIssue(`${where}.sourceKey`, "source_key_unresolved", { key: sourceKey }, ruleId));
+  } else {
+    validateLeafSource({
+      issues,
+      keyedNodes,
+      ruleId,
+      sourceKey,
+      where: `${where}.sourceKey`
+    });
   }
 
   if (typeof operator !== "string" || !OPERATOR_SET.has(operator)) {
@@ -909,8 +961,9 @@ function validateGroupCondition(args: {
   const { children } = condition;
 
   if (children.length === 0) {
-    // The editor seeds an empty group when no sibling field exists to
-    // reference yet; the rule simply never fires until a child is added.
+    // Legal, but almost always a mistake: `all` over no children holds, so
+    // the rule always applies, while `any` never does. The editor never
+    // authors one, so it arrives only from imported or hand-written JSON.
     issues.push(createIssue(`${where}.children`, "condition_group_empty", undefined, ruleId));
   }
 

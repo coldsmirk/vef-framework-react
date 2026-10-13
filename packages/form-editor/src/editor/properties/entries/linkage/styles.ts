@@ -296,10 +296,4 @@ export const valueEditorCss = css({
   gap: 6
 });
 
-export const apiFieldsCss = css({
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-  gap: 8
-});
-
 export const selectStyle = { width: "100%" } as const;

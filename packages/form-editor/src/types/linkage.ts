@@ -311,10 +311,10 @@ export type FieldPermission = "visible" | "editable" | "hidden" | "required";
 
 /**
  * Extra scope surfaced to expressions and scripts alongside the form values.
- * The default evaluator exposes these as `$vars` / `$user` / `$node` (plus
- * `$form` for the values and `$now` for the current time); all are optional, so
- * an expression that only reads `field.x` / `$form.x` keeps working when no
- * context is supplied.
+ * The default evaluator exposes these as `$vars` / `$user` / `$node` /
+ * `$applicant` / `$globals` (plus `$form` for the values and `$now` for the
+ * current time); all are optional, so an expression that only reads `field.x` /
+ * `$form.x` keeps working when no context is supplied.
  */
 export interface EvaluationContext {
   /**
@@ -322,32 +322,49 @@ export interface EvaluationContext {
    */
   variables?: Record<string, unknown>;
   /**
-   * Host-supplied current-user info (`$user`) — e.g. role-driven linkage.
+   * Host-supplied info about whoever is viewing the form right now (`$user`) —
+   * e.g. role-driven linkage in a single-user form.
    */
   user?: Record<string, unknown>;
   /**
    * Host-supplied workflow-node context (`$node`).
    */
   node?: Record<string, unknown>;
+  /**
+   * Host-supplied subject the form is filled on behalf of (`$applicant`) — in
+   * a workflow, the initiator. Unlike `$user` it is the same for everyone who
+   * opens one record, so a rule about the initiator evaluates identically for
+   * the initiator and for each approver who later views the form.
+   */
+  applicant?: Record<string, unknown>;
+  /**
+   * Host-supplied global variables (`$globals`): read-only attributes the host
+   * resolves rather than the schema declares — tenant settings, the initiator's
+   * roles, business limits. Contrast `$vars`, the form's own writable
+   * variables.
+   */
+  globals?: Record<string, unknown>;
 }
 
 /**
- * A host-declared global-context property the visual condition builder offers
- * as a leaf-condition source alongside the form's own fields. `key` is the
- * full scope path — rooted at `$form` / `$vars` / `$user` / `$node`, e.g.
- * `"$user.departmentId"` — stored verbatim as the leaf's `sourceKey` and
- * resolved at runtime against the live {@link EvaluationContext}. Declaring a
- * source only affects the designer's pick list; evaluation reads the context
- * either way, so an undeclared path written by hand still resolves.
+ * A host-declared context property — a "system variable" — that the designer
+ * lists in its variables panel and that the visual condition builder offers as
+ * a leaf-condition source alongside the form's own fields. `key` is the full
+ * scope path — rooted at `$form` / `$vars` / `$user` / `$node` / `$applicant` /
+ * `$globals`, e.g. `"$applicant.departmentId"` — stored verbatim as the leaf's
+ * `sourceKey` and resolved at runtime against the live
+ * {@link EvaluationContext}. Declaring a source only affects the designer;
+ * evaluation reads the context either way, so an undeclared path written by
+ * hand still resolves.
  */
 export interface LinkageContextSource {
   /**
-   * Scope path rooted at `$form` / `$vars` / `$user` / `$node`,
-   * e.g. `"$user.departmentId"`.
+   * Scope path rooted at `$form` / `$vars` / `$user` / `$node` / `$applicant`
+   * / `$globals`, e.g. `"$applicant.departmentId"`.
    */
   key: string;
   /**
-   * Display name shown in the source picker, e.g. `"发起人部门"`.
+   * Display name shown in the designer, e.g. `"发起人部门"`.
    */
   label: string;
 }
@@ -359,7 +376,8 @@ export interface LinkageContextSource {
  * their own expression engine, script sandbox, or effect runtime.
  *
  * The optional `context` argument carries the {@link EvaluationContext}
- * (`$vars` / `$user` / `$node`); a host evaluator may ignore it.
+ * (`$vars` / `$user` / `$node` / `$applicant` / `$globals`); a host evaluator
+ * may ignore it.
  */
 export interface LinkageEvaluators {
   /**

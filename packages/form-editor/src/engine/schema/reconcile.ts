@@ -13,6 +13,7 @@ import type { ScopeKeyBucket } from "../keys";
 import type { ScopePath } from "./walk";
 
 import { assertNever } from "../assert-never";
+import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
 import { bodyScopeKey, mapPreservingIdentity } from "./nodes";
 import { rewriteContainerBodies } from "./rewrite";
 import { isContainerNode, isLeafField, isRootScope, scopeEquals } from "./walk";
@@ -121,7 +122,9 @@ function reconcileFormLinkage(schema: FormSchema, transform: (linkage: FieldLink
 function renameConditionKeys(condition: LinkageCondition, oldKey: string, newKey: string): LinkageCondition {
   switch (condition.kind) {
     case "leaf": {
-      return condition.sourceKey === oldKey ? { ...condition, sourceKey: newKey } : condition;
+      return leafSourceFormKey(condition.sourceKey) === oldKey
+        ? { ...condition, sourceKey: withLeafSourceFormKey(condition.sourceKey, newKey) }
+        : condition;
     }
 
     case "group": {
@@ -219,7 +222,9 @@ export function renameKeyReferences(
 function pruneCondition(condition: LinkageCondition, removedKeys: ReadonlySet<string>): LinkageCondition | undefined {
   switch (condition.kind) {
     case "leaf": {
-      return removedKeys.has(condition.sourceKey) ? undefined : condition;
+      const key = leafSourceFormKey(condition.sourceKey);
+
+      return key !== undefined && removedKeys.has(key) ? undefined : condition;
     }
 
     case "group": {

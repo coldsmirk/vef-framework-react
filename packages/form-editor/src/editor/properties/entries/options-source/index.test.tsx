@@ -121,7 +121,7 @@ describe("options source entry", () => {
 
       // One keystroke appended to the existing value (the field prop is static in
       // this test, so a multi-char type would re-fire from the same base).
-      await user.type(screen.getByPlaceholderText("resource"), "s");
+      await user.type(screen.getByRole("textbox", { name: "资源" }), "s");
 
       expect(onChange).toHaveBeenLastCalledWith({ kind: "remote", request: { resource: "geos", action: "" } });
     });
