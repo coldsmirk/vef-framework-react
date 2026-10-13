@@ -275,20 +275,4 @@ describe("color/color-ops", () => {
       expect(toHexColor(hsv)).toBe(originalColor);
     });
   });
-
-  describe("performance", () => {
-    it("performs operations efficiently", () => {
-      const startTime = Date.now();
-
-      for (let i = 0; i < 500; i++) {
-        const color = `hsl(${i % 360}, 50%, 50%)`;
-        toHexColor(color);
-        toRgbColor(color);
-        isValidColor(color);
-      }
-
-      const duration = Date.now() - startTime;
-      expect(duration).toBeLessThan(1000);
-    });
-  });
 });

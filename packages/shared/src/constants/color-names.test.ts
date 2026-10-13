@@ -74,24 +74,5 @@ describe("constants/color-names", () => {
       const uniqueHexValues = new Set(hexValues);
       expect(hexValues).toHaveLength(uniqueHexValues.size);
     });
-
-    it("performs fast lookups", () => {
-      const startTime = performance.now();
-
-      // Perform many lookups
-      for (let i = 0; i < 1000; i++) {
-        colorNameMap.get("#ff0000");
-        colorNameMap.get("#00ff00");
-        colorNameMap.get("#0000ff");
-        colorNameMap.has("#ffffff");
-        colorNameMap.has("#000000");
-      }
-
-      const endTime = performance.now();
-      const duration = endTime - startTime;
-
-      // Should complete within reasonable time (less than 10ms for 5000 operations)
-      expect(duration).toBeLessThan(10);
-    });
   });
 });

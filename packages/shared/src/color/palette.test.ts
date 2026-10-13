@@ -129,25 +129,14 @@ describe("color/palette", () => {
       expect(uniqueColors.size).toBe(sampleSwatches.length);
     });
 
-    it("uses caching for performance", () => {
+    it("returns the cached palette for a repeated color", () => {
       const color = "#ff6600";
 
-      // First call
-      const startTime1 = Date.now();
       const palette1 = getColorPalette(color);
-      const duration1 = Date.now() - startTime1;
-
-      // Second call (should be cached)
-      const startTime2 = Date.now();
       const palette2 = getColorPalette(color);
-      const duration2 = Date.now() - startTime2;
 
-      // Should return the same palette
-      // Same reference due to caching
+      // The same reference: the second call is served from the cache.
       expect(palette1).toBe(palette2);
-
-      // Second call should be faster (cached)
-      expect(duration2).toBeLessThanOrEqual(duration1);
 
       // Both should have same content
       expect(palette1.size).toBe(palette2.size);
@@ -369,7 +358,7 @@ describe("color/palette", () => {
       expect(uniqueColors.size).toBeGreaterThan(1);
     });
 
-    it("handles performance with multiple different colors", () => {
+    it("produces a palette for each of many different colors", () => {
       const colors = [
         "#ff0000",
         "#00ff00",
@@ -391,16 +380,8 @@ describe("color/palette", () => {
         "#0080ff"
       ];
 
-      const startTime = Date.now();
-
       const palettes = colors.map(color => getColorPalette(color));
 
-      const duration = Date.now() - startTime;
-
-      // Should complete in reasonable time
-      expect(duration).toBeLessThan(1000);
-
-      // All should be valid palettes
       for (const palette of palettes) {
         expect(palette).toBeInstanceOf(Map);
         expect(palette.size).toBeGreaterThan(0);

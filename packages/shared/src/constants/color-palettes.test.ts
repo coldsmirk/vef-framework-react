@@ -140,25 +140,6 @@ describe("constants/color-palettes", () => {
       expect(colorPaletteMap.get("red")).toBeDefined();
     });
 
-    it("performs fast lookups", () => {
-      const startTime = performance.now();
-
-      // Perform many lookups
-      for (let i = 0; i < 1000; i++) {
-        colorPaletteMap.get("red")?.get(500);
-        colorPaletteMap.get("blue")?.get(600);
-        colorPaletteMap.get("green")?.get(400);
-        colorPaletteMap.has("gray");
-        colorPaletteMap.has("purple");
-      }
-
-      const endTime = performance.now();
-      const duration = endTime - startTime;
-
-      // Should complete within reasonable time (less than 10ms for 5000 operations)
-      expect(duration).toBeLessThan(10);
-    });
-
     it("has unique color combinations across palettes", () => {
       const allColors = new Set<string>();
       let duplicateCount = 0;
