@@ -4,7 +4,7 @@ import { createDefaultMobileRegistry, createDefaultRegistry } from "@vef-framewo
 import { describe, expect, it } from "vitest";
 
 import { createApprovalRegistries } from "./registry";
-import { validateApprovalSchema } from "./validate";
+import { validateApprovalProjection, validateApprovalSchema } from "./validate";
 
 function schemaOf(children: FormSchema["presentations"]["pc"]["children"]): FormSchema {
   return {
@@ -102,5 +102,47 @@ describe("validateApprovalSchema", () => {
 
     expect(result.valid).toBe(true);
     expect(result.issues).toEqual([expect.objectContaining({ code: "options_not_static", severity: "warning" })]);
+  });
+});
+
+describe("validateApprovalProjection", () => {
+  it("reports the projection's contract issues", () => {
+    const issues = validateApprovalProjection(schemaOf([
+      {
+        id: "F1",
+        type: "switch",
+        key: "flag",
+        label: "开关"
+      }
+    ]));
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "unmappable_field_type",
+        path: "flag",
+        severity: "error"
+      })
+    ]);
+  });
+
+  it("leaves structural problems to the editor's own pass", () => {
+    // A duplicate key is structural: validateSchema reports it, so the
+    // projection layer must not repeat it in the editor's diagnostics.
+    const issues = validateApprovalProjection(schemaOf([
+      {
+        id: "F1",
+        type: "textfield",
+        key: "name",
+        label: "姓名"
+      },
+      {
+        id: "F2",
+        type: "textfield",
+        key: "name",
+        label: "姓名 2"
+      }
+    ]));
+
+    expect(issues).toEqual([]);
   });
 });

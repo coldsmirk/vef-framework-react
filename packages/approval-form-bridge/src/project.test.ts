@@ -409,6 +409,24 @@ describe("projectFormSchema", () => {
       });
     });
 
+    it("projects a mapping without blank keys", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "select",
+          key: "city",
+          label: "城市",
+          dataSource: {
+            kind: "remote",
+            request: { resource: "city", action: "list" },
+            mapping: { labelKey: "", valueKey: "code" }
+          }
+        }
+      ]));
+
+      expect(result.fields[0]?.optionSource?.mapping).toEqual({ valueKey: "code" });
+    });
+
     it("dereferences a ref before projecting the option source", () => {
       const mapped: FormDataSource = {
         id: "DS3",

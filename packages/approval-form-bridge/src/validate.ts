@@ -1,4 +1,4 @@
-import type { DeviceRegistries, ValidationIssue } from "@vef-framework-react/form-editor";
+import type { DeviceRegistries, FormSchema, ValidationIssue } from "@vef-framework-react/form-editor";
 
 import type { ProjectionIssue } from "./issues";
 
@@ -45,4 +45,15 @@ export function validateApprovalSchema(candidate: unknown, registries: DeviceReg
     valid: structural.valid && projection.valid,
     issues: [...structural.issues, ...projection.issues]
   };
+}
+
+/**
+ * The approval layer of the save gate alone — the contract-fit issues of
+ * {@link projectFormSchema} — shaped for `FormEditor`'s `validate`. The editor
+ * runs its own structural pass and calls this only for a structurally sound
+ * schema, so a designer sees every issue of {@link validateApprovalSchema} in
+ * the editor's own diagnostics, each exactly once, and can jump to it.
+ */
+export function validateApprovalProjection(schema: FormSchema): ProjectionIssue[] {
+  return projectFormSchema(schema).issues;
 }

@@ -22,7 +22,7 @@ import type {
 } from "./contract";
 import type { ProjectionIssue } from "./issues";
 
-import { findParentContainer, inferColumnType, isKeyedNode, walkNodes } from "@vef-framework-react/form-editor";
+import { findParentContainer, inferColumnType, isKeyedNode, normalizeOptionMapping, walkNodes } from "@vef-framework-react/form-editor";
 
 import {
   issueCrossDeviceKindMismatch,
@@ -469,11 +469,13 @@ function resolveOptionSource(
   issues.push(issueOptionsNotStatic(path));
 
   if (resolved?.kind === "remote") {
+    const mapping = normalizeOptionMapping(resolved.mapping);
+
     return {
       optionSource: {
         kind: "remote",
         ...resolved.request !== undefined && { request: resolved.request },
-        ...resolved.mapping !== undefined && { mapping: resolved.mapping }
+        ...mapping !== undefined && { mapping }
       }
     };
   }
