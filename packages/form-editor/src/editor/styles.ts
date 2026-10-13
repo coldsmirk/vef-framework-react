@@ -11,7 +11,7 @@ import { globalCssVars } from "@vef-framework-react/components";
  *
  * Two layouts are supported (see `editor-layout-context.tsx`):
  * - docked: palette 296, properties 400
- * - drawer: the palette collapses to an icon rail and the properties panel
+ * - drawer (properties 360): the palette collapses to an icon rail and the properties panel
  * floats over the canvas's right edge, so the canvas keeps real width
  * inside narrow hosts (wizard steps, split panes).
  */
@@ -19,7 +19,10 @@ export const PALETTE_DOCK_WIDTH = 296;
 export const PALETTE_DOCK_WIDTH_DRAWER = 64;
 
 export const PROPERTIES_PANEL_WIDTH = 400;
-export const PROPERTIES_PANEL_WIDTH_DRAWER = 320;
+// The property editors are laid out for the docked 400px column; an overlay
+// much narrower squeezes their paired controls (a condition's source and
+// operator, a request's resource / action / version) into clipped inputs.
+export const PROPERTIES_PANEL_WIDTH_DRAWER = 360;
 
 export const paletteDockCss = css({
   position: "relative",

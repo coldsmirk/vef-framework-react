@@ -95,28 +95,33 @@ const selectedCss = css({
 
 const actionsCss = css({
   position: "absolute",
-  // An accent "control bar" floated just *above* the block's top-left corner,
-  // outside the block's own box, so it never sits over the block's label or
-  // control — the block keeps all of its own space. `bottom: 100%` rests the
-  // bar's hit box flush on the top edge; the visible pill detaches via the
-  // transparent `paddingBottom` below. Left-anchored (the name-tag corner in
-  // Formily / Webflow): the floating properties panel overlays the canvas's
-  // right edge, so a right-anchored bar on any full-width block — every
-  // root-level block — would sit underneath the panel exactly while that
-  // block is selected. A high z-index keeps it above any neighbour it may
-  // briefly overlap (the transient cost of living outside the box).
+  // An accent tab standing on the selection ring's top edge (the name-tag of
+  // Webflow / Figma), outside the block's own box, so it never sits over the
+  // block's label or control — the block keeps all of its own space. Slim on
+  // purpose: the tab rises 20px off the block (18px tab + the 2px bridge
+  // below) into the 16px stack gap, so it reaches at most a few pixels into
+  // the bottom edge of the block above. A tall floating pill covered most of
+  // that block's control instead — and caught the clicks aimed at it, which
+  // with a delete button on the bar is a hazard, not a cosmetic flaw.
+  // Left-anchored: the floating properties panel overlays the canvas's right
+  // edge, so a right-anchored bar on any full-width block — every root-level
+  // block — would sit underneath the panel exactly while that block is
+  // selected. `left` equals the corner radius, which is where the ring's top
+  // edge turns straight (the ring's radius grows by its 2px offset + 2px width,
+  // exactly as far as it sits outside the box), so the tab's square foot meets
+  // a straight line. A high z-index keeps it above the neighbour it touches.
   bottom: "100%",
-  left: 0,
+  left: globalCssVars.borderRadius,
   zIndex: 3,
-  // Hover bridge: the visual gap between the pill and the block must live
-  // INSIDE the bar's box as transparent padding, never as empty space between
-  // the two — a real gap would be a hover dead zone (the pointer crossing it
-  // leaves the block's hover chain, the bar folds away, and its actions
-  // become unreachable). The bar is a descendant of the block wrapper, so as
-  // long as the pointer stays inside this box, `:hover` holds. 8px puts the
-  // pill's bottom edge 4px clear of the selection ring's outer edge (2px
-  // offset + 2px width).
-  paddingBottom: 8,
+  // Hover bridge: the gap between the tab and the block must live INSIDE the
+  // bar's box as transparent padding, never as empty space between the two —
+  // a real gap would be a hover dead zone (the pointer crossing it leaves the
+  // block's hover chain, the bar folds away, and its actions become
+  // unreachable). The bar is a descendant of the block wrapper, so as long as
+  // the pointer stays inside this box, `:hover` holds. 2px is the ring's
+  // offset: the tab's foot lands on the ring's inner edge, covering the ring
+  // line beneath it, so tab and ring paint as one shape.
+  paddingBottom: 2,
   display: "flex",
   opacity: 0,
   transform: "scale(0.96)",
@@ -140,7 +145,7 @@ const actionsCss = css({
   // …except while a descendant block is hovered: a child slot near the
   // container's top-left corner would pop its bar right on top of the
   // selected container's (both anchor that corner), stacking two accent
-  // pills. Yield to the hovered child's bar — the selected bar returns the
+  // tabs. Yield to the hovered child's bar — the selected bar returns the
   // moment the pointer leaves the container's interior.
   "[data-canvas-field][data-selected='true']:has([data-canvas-field]:hover) > &": {
     opacity: 0,
@@ -157,34 +162,37 @@ const actionsCss = css({
   }
 });
 
-// The visible pill of the action bar — the accent fill matches the selection
-// ring, tying the bar to the same selection system. Split from the positioned
-// carrier above so the carrier's bottom padding can stay transparent (the
-// hover bridge) while the pill paints opaque.
+// The visible tab of the action bar — the accent fill matches the selection
+// ring, so the two read as one selection shape: rounded top corners, a square
+// foot standing on the ring. Flat, with no shadow, since it is attached rather
+// than floating. Split from the positioned carrier above so the carrier's
+// bottom padding can stay transparent (the hover bridge) while the tab paints
+// opaque.
 const actionsPillCss = css({
   display: "flex",
   alignItems: "center",
   gap: 1,
-  padding: 3,
-  borderRadius: globalCssVars.borderRadius,
+  height: 18,
+  padding: "0 3px",
+  borderRadius: `${globalCssVars.borderRadiusSm} ${globalCssVars.borderRadiusSm} 0 0`,
   background: globalCssVars.colorPrimary,
-  boxShadow: globalCssVars.shadowMd,
   color: globalCssVars.colorWhite
 });
 
 // A translucent-white hairline separating the "move" handle from the actions.
 const actionDividerCss = css({
   width: 1,
-  height: 16,
+  height: 10,
   margin: "0 2px",
   flexShrink: 0,
   background: `color-mix(in srgb, ${globalCssVars.colorWhite} 28%, transparent)`
 });
 
 const actionButtonCss = css({
-  width: 26,
-  height: 26,
-  borderRadius: globalCssVars.borderRadiusSm,
+  width: 20,
+  height: 18,
+  minWidth: 0,
+  borderRadius: globalCssVars.borderRadiusXs,
   padding: 0,
   // White glyphs on the accent bar, with a translucent-white press/hover wash.
   // VEF styles outrank the antd layer, so this sets the text-button colours
@@ -197,8 +205,8 @@ const actionButtonCss = css({
   },
 
   "& svg": {
-    width: 14,
-    height: 14
+    width: 12,
+    height: 12
   }
 });
 
@@ -216,9 +224,9 @@ const gripCss = css({
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 26,
-  height: 26,
-  borderRadius: globalCssVars.borderRadiusSm,
+  width: 16,
+  height: 18,
+  borderRadius: globalCssVars.borderRadiusXs,
   // The handle is the quietest glyph (dimmed white), brightening on hover.
   color: `color-mix(in srgb, ${globalCssVars.colorWhite} 72%, transparent)`,
   cursor: "grab",
@@ -230,7 +238,7 @@ const gripCss = css({
   "&:hover": { color: globalCssVars.colorWhite, background: `color-mix(in srgb, ${globalCssVars.colorWhite} 18%, transparent)` },
   "&:active": { cursor: "grabbing" },
 
-  "& svg": { width: 14, height: 14 }
+  "& svg": { width: 12, height: 12 }
 });
 
 // The offscreen-skip boundary for big forms, applied to every leaf preview.
