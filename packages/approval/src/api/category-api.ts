@@ -32,8 +32,9 @@ export function useCategoryApi(): CategoryApi {
       return {
         findTree: apiClient.createQueryFn<FlowCategory[], QueryParams<CategorySearch>>(
           "approval_category_find_tree",
-          ({ post }) => async params => {
-            const result = await post<FlowCategory[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_tree", params) });
+          ({ post }) => async search => {
+            // A CRUD read decodes its search criteria from `meta`, not `params`.
+            const result = await post<FlowCategory[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_tree", {}, search) });
 
             return result.data;
           }

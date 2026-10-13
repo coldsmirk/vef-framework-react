@@ -6,7 +6,7 @@ import type { InvocationLog, LogSearch, ReplayParams, ReplayResult } from "../ty
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { API_PATH, splitQueryParams } from "./query";
+import { API_PATH, toCrudReadMeta } from "./query";
 
 /**
  * The invocation log resource: the page query plus replay, a mutation because
@@ -28,9 +28,8 @@ export function useLogApi(): LogApi {
         findPage: apiClient.createQueryFn<PaginationResult<InvocationLog>, PaginatedQueryParams<LogSearch>>(
           "integration_log_find_page",
           ({ post }) => async queryParams => {
-            const { params, pagination } = splitQueryParams(queryParams);
             const result = await post<PaginationResult<InvocationLog>>(API_PATH, {
-              data: createApiRequest("integration/log", "find_page", params, pagination)
+              data: createApiRequest("integration/log", "find_page", {}, toCrudReadMeta(queryParams))
             });
 
             return result.data;

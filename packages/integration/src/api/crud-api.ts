@@ -23,7 +23,7 @@ import type {
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { API_PATH, splitQueryParams } from "./query";
+import { API_PATH, toCrudReadMeta } from "./query";
 
 interface Identifiable {
   id: string;
@@ -59,9 +59,8 @@ export function createCrudApi<TRow extends Identifiable, TParams extends object,
     findPage: apiClient.createQueryFn<PaginationResult<TRow>, PaginatedQueryParams<TSearch>>(
       `${keyPrefix}_find_page`,
       ({ post }) => async queryParams => {
-        const { params, pagination } = splitQueryParams(queryParams);
         const result = await post<PaginationResult<TRow>>(API_PATH, {
-          data: createApiRequest(resource, "find_page", params, pagination)
+          data: createApiRequest(resource, "find_page", {}, toCrudReadMeta(queryParams))
         });
 
         return result.data;

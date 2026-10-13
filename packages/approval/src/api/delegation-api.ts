@@ -3,18 +3,17 @@ import type { ApiResult, MutationFunction, PaginationResult, QueryFunction } fro
 
 import type { Delegation, DelegationParams, DelegationSearch } from "../types";
 
-import { SYMBOL_PAGINATION } from "@vef-framework-react/components";
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { API_PATH } from "./query";
+import { API_PATH, toCrudReadMeta } from "./query";
 
 const RESOURCE = "approval/delegation";
 
 /**
  * The CRUD API of approval delegations, shaped to plug straight into
  * `CrudPage`. The list is served by the framework's standard `find_page`,
- * which reads pagination from the request meta.
+ * which reads its filters and pagination from the request meta.
  */
 export interface DelegationApi {
   findPage: QueryFunction<PaginationResult<Delegation>, PaginatedQueryParams<DelegationSearch>>;
@@ -35,9 +34,8 @@ export function useDelegationApi(): DelegationApi {
         findPage: apiClient.createQueryFn<PaginationResult<Delegation>, PaginatedQueryParams<DelegationSearch>>(
           "approval_delegation_find_page",
           ({ post }) => async queryParams => {
-            const { [SYMBOL_PAGINATION]: pagination, ...params } = queryParams;
             const result = await post<PaginationResult<Delegation>>(API_PATH, {
-              data: createApiRequest(RESOURCE, "find_page", params, pagination)
+              data: createApiRequest(RESOURCE, "find_page", {}, toCrudReadMeta(queryParams))
             });
 
             return result.data;

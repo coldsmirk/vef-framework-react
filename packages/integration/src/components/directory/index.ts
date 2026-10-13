@@ -26,7 +26,8 @@ function useDirectory<T extends DirectoryEntry>(resource: string, key: string, s
 
   const queryFn = useMemo(
     () => apiClient.createQueryFn<T[], object>(key, ({ post }) => async queryParams => {
-      const result = await post<T[]>(API_PATH, { data: createApiRequest(resource, "find_all", queryParams ?? {}) });
+      // A CRUD read takes its filters from `meta`.
+      const result = await post<T[]>(API_PATH, { data: createApiRequest(resource, "find_all", {}, queryParams ?? {}) });
 
       return result.data;
     }),

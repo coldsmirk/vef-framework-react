@@ -24,3 +24,18 @@ export function splitQueryParams<TSearch extends AnyObject>(
 
   return { params, pagination };
 }
+
+/**
+ * Fold ProTable's symbol-keyed query params into the `meta` of a CRUD read
+ * (`find_page`, `find_all`, …). The backend decodes a CRUD search struct
+ * (`crud.Sortable`) from the request's `meta`, beside `page` / `size`, and
+ * never from `params`, where the filters would be dropped. The sort symbol is
+ * left on the spread copy; JSON serialization drops it.
+ */
+export function toCrudReadMeta<TSearch extends AnyObject>(
+  queryParams: PaginatedQueryParams<TSearch>
+): Omit<PaginatedQueryParams<TSearch>, typeof SYMBOL_PAGINATION> & Partial<PaginationParams> {
+  const { params, pagination } = splitQueryParams(queryParams);
+
+  return { ...params, ...pagination };
+}

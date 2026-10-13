@@ -6,7 +6,7 @@ import type { Run, RunIdParams, RunSearch } from "../types";
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { API_PATH, splitQueryParams } from "./query";
+import { API_PATH, toCrudReadMeta } from "./query";
 
 const RESOURCE = "sys/cron/run";
 
@@ -31,9 +31,8 @@ export function useRunApi(): RunApi {
         findPage: apiClient.createQueryFn<PaginationResult<Run>, PaginatedQueryParams<RunSearch>>(
           "cron_run_find_page",
           ({ post }) => async queryParams => {
-            const { params, pagination } = splitQueryParams(queryParams);
             const result = await post<PaginationResult<Run>>(API_PATH, {
-              data: createApiRequest(RESOURCE, "find_page", params, pagination)
+              data: createApiRequest(RESOURCE, "find_page", {}, toCrudReadMeta(queryParams))
             });
 
             return result.data;
@@ -42,7 +41,9 @@ export function useRunApi(): RunApi {
         findOne: apiClient.createQueryFn<Run, RunIdParams>(
           "cron_run_find_one",
           ({ post }) => async params => {
-            const result = await post<Run>(API_PATH, { data: createApiRequest(RESOURCE, "find_one", params) });
+            // find_one names its row through the CRUD search in `meta`; sent as
+            // `params`, the id would be dropped and an arbitrary run come back.
+            const result = await post<Run>(API_PATH, { data: createApiRequest(RESOURCE, "find_one", {}, params) });
 
             return result.data;
           }

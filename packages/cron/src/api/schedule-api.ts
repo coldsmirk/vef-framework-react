@@ -57,8 +57,9 @@ export function useScheduleApi(): ScheduleApi {
               : isEnabled === "false"
                 ? { ...rest, isEnabled: false }
                 : rest;
+            // A CRUD read takes its filters from `meta`, beside the pagination.
             const result = await post<PaginationResult<Schedule>>(API_PATH, {
-              data: createApiRequest(RESOURCE, "find_page", search, pagination)
+              data: createApiRequest(RESOURCE, "find_page", {}, { ...search, ...pagination })
             });
 
             return result.data;
