@@ -15,11 +15,6 @@ export interface StartInstanceDrawerProps {
    */
   flowCode: string | null;
   /**
-   * The tenant to start in. Only a super-admin's choice counts — omitted,
-   * their own tenant; everyone else always starts in their own tenant.
-   */
-  tenantId?: string;
-  /**
    * Prefilled business reference for business-bound flows started from a
    * host business page.
    */
@@ -33,7 +28,6 @@ export interface StartInstanceDrawerProps {
 
 function StartDrawerBody({
   flowCode,
-  tenantId,
   businessRef,
   onClose,
   onStarted
@@ -47,7 +41,7 @@ function StartDrawerBody({
   // startable flow (active, permitted, published).
   const { data: startForm, isLoading } = useQuery({
     queryFn: myApi.getStartForm,
-    queryKey: [myApi.getStartForm.key, { tenantId, flowCode }]
+    queryKey: [myApi.getStartForm.key, { flowCode }]
   });
 
   const start = useMutation({
@@ -60,7 +54,6 @@ function StartDrawerBody({
 
     try {
       await start.mutateAsync({
-        tenantId,
         flowCode,
         businessRef,
         formData: values
@@ -142,7 +135,6 @@ function StartDrawerBody({
  */
 export function StartInstanceDrawer({
   flowCode,
-  tenantId,
   businessRef,
   onClose,
   onStarted
@@ -160,7 +152,6 @@ export function StartInstanceDrawer({
         <StartDrawerBody
           businessRef={businessRef}
           flowCode={flowCode}
-          tenantId={tenantId}
           onClose={onClose}
           onStarted={onStarted}
         />

@@ -35,9 +35,10 @@ function UserField({
 /**
  * The create/update form body for a delegation: who delegates to whom, the
  * active window, and the optional flow/category scope (both empty = all
- * flows).
+ * flows). `tenantId` narrows the category scope to that tenant's categories
+ * plus the shared ones; omitted, every tenant's are offered.
  */
-export function DelegationForm() {
+export function DelegationForm({ tenantId }: { tenantId?: string }) {
   const { AppField } = useFormContext<DelegationParams>();
   const categoryApi = useCategoryApi();
 
@@ -45,7 +46,7 @@ export function DelegationForm() {
   // reach a delegator too, and its category is a shared one.
   const { data: categories } = useQuery({
     queryFn: categoryApi.findTree,
-    queryKey: [categoryApi.findTree.key, { includeShared: true }]
+    queryKey: [categoryApi.findTree.key, { tenantId, includeShared: true }]
   });
   const categoryOptions = useMemo(() => buildCategoryTreeOptions(categories ?? []), [categories]);
 

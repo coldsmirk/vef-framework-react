@@ -142,10 +142,6 @@ function InitiatedSearchFields() {
 
 export interface ApprovalMyInstancesPageProps {
   /**
-   * Scope the lists to one tenant; omit for the caller's full view.
-   */
-  tenantId?: string;
-  /**
    * Optional page title rendered above each list.
    */
   title?: ReactNode;
@@ -155,7 +151,7 @@ export interface ApprovalMyInstancesPageProps {
  * My submissions and my carbon copies. Returned submissions resubmit from
  * the detail drawer; opening an unread CC marks it read.
  */
-export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstancesPageProps) {
+export function ApprovalMyInstancesPage({ title }: ApprovalMyInstancesPageProps) {
   const api = useMyApprovalApi();
   const instanceApi = useInstanceApi();
   const [detailTarget, setDetailTarget] = useState<string | null>(null);
@@ -163,7 +159,7 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
 
   const { data: counts, refetch: refetchCounts } = useQuery({
     queryFn: api.getPendingCounts,
-    queryKey: [api.getPendingCounts.key, { tenantId }]
+    queryKey: [api.getPendingCounts.key, {}]
   });
 
   const markCCRead = useMutation({
@@ -193,7 +189,6 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
       key={`initiated-${refreshToken}`}
       basicSearch={<InitiatedSearchFields />}
       columnSettings={false}
-      defaultSearchValues={{ tenantId }}
       queryFn={api.findInitiated}
       rowKey="instanceId"
       tableColumns={INITIATED_COLUMNS}
@@ -218,7 +213,6 @@ export function ApprovalMyInstancesPage({ tenantId, title }: ApprovalMyInstances
     <Crud<MyCCRecord, MyCCRecordSearch, SceneValues>
       key={`cc-${refreshToken}`}
       columnSettings={false}
-      defaultSearchValues={{ tenantId }}
       queryFn={api.findCCRecords}
       rowKey="ccRecordId"
       tableColumns={CC_COLUMNS}

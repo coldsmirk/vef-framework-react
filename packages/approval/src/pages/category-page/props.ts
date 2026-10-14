@@ -9,10 +9,11 @@ export interface ApprovalCategoryPageProps {
    */
   permissions?: Partial<CategoryPermissionCodes>;
   /**
-   * The tenant new categories are created under. Multi-tenant hosts pass the
-   * current tenant; single-tenant deployments keep the backend default. A
-   * super-admin passes `SHARED_TENANT_ID` to create shared categories, the
-   * home of shared flows.
+   * The tenant whose categories the page manages: the tree shows them, and
+   * new categories are created under it. Categories are managed across
+   * tenants, gated by the permissions — `SHARED_TENANT_ID` manages the shared
+   * categories, the home of shared flows. Single-tenant deployments keep the
+   * default.
    *
    * @default "default"
    */

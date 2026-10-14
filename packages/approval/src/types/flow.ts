@@ -200,6 +200,11 @@ export interface ToggleFlowActiveParams {
  * equality predicates, AND-combined across pairs.
  */
 export interface FlowSearch {
+  /**
+   * Narrows the list to one tenant's flows — `SHARED_TENANT_ID` for the
+   * shared ones. Omitted, every tenant's are listed: flows are managed across
+   * tenants, gated by permission.
+   */
   tenantId?: string;
   categoryId?: string;
   keyword?: string;

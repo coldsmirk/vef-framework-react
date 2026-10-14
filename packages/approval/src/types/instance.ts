@@ -1,17 +1,12 @@
 import type { AddAssigneeType, ProcessTaskAction } from "./enums";
 
 /**
- * Parameters for `approval/instance.start`. `formData` is the form
- * renderer's submit payload, validated server-side against the version's
- * derived field list.
+ * Parameters for `approval/instance.start`. The instance runs in the tenant
+ * the caller acts in, from that tenant's own flows or the shared ones.
+ * `formData` is the form renderer's submit payload, validated server-side
+ * against the version's derived field list.
  */
 export interface StartInstanceParams {
-  /**
-   * The tenant the instance runs in. Only a super-admin's choice counts —
-   * omitted, their own tenant; everyone else always starts in their own
-   * tenant, from its own flows or the shared ones.
-   */
-  tenantId?: string;
   flowCode: string;
   /**
    * Opaque reference to the bound business record; required by convention for

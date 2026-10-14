@@ -65,6 +65,7 @@ function DelegationSearchFields() {
  */
 export function ApprovalDelegationPage({
   permissions,
+  tenantId,
   columnStorageKey = "approval.delegation",
   title
 }: ApprovalDelegationPageProps) {
@@ -78,7 +79,7 @@ export function ApprovalDelegationPage({
       deleteMutationFn={api.remove}
       formLayout={{ layout: "vertical" }}
       queryFn={api.findPage}
-      renderForm={() => <DelegationForm />}
+      renderForm={() => <DelegationForm tenantId={tenantId} />}
       rowKey="id"
       tableColumns={delegationColumns}
       title={title}

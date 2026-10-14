@@ -31,12 +31,12 @@ const RESOURCE = "approval/my";
  */
 export interface MyApprovalApi {
   findAvailableFlows: QueryFunction<PaginationResult<AvailableFlow>, PaginatedQueryParams<AvailableFlowSearch>>;
-  getStartForm: QueryFunction<StartForm, { tenantId?: string; flowCode: string }>;
+  getStartForm: QueryFunction<StartForm, { flowCode: string }>;
   findInitiated: QueryFunction<PaginationResult<InitiatedInstance>, PaginatedQueryParams<InitiatedInstanceSearch>>;
   findPendingTasks: QueryFunction<PaginationResult<PendingTask>, PaginatedQueryParams<PendingTaskSearch>>;
   findCompletedTasks: QueryFunction<PaginationResult<CompletedTask>, PaginatedQueryParams<CompletedTaskSearch>>;
   findCCRecords: QueryFunction<PaginationResult<MyCCRecord>, PaginatedQueryParams<MyCCRecordSearch>>;
-  getPendingCounts: QueryFunction<PendingCounts, { tenantId?: string }>;
+  getPendingCounts: QueryFunction<PendingCounts, Record<string, never>>;
   getInstanceDetail: QueryFunction<MyInstanceDetail, { instanceId: string }>;
 }
 
@@ -76,12 +76,12 @@ export function useMyApprovalApi(): MyApprovalApi {
 
       return {
         findAvailableFlows: pagedQuery<AvailableFlow, AvailableFlowSearch>("find_available_flows"),
-        getStartForm: detailQuery<StartForm, { tenantId?: string; flowCode: string }>("get_start_form"),
+        getStartForm: detailQuery<StartForm, { flowCode: string }>("get_start_form"),
         findInitiated: pagedQuery<InitiatedInstance, InitiatedInstanceSearch>("find_initiated"),
         findPendingTasks: pagedQuery<PendingTask, PendingTaskSearch>("find_pending_tasks"),
         findCompletedTasks: pagedQuery<CompletedTask, CompletedTaskSearch>("find_completed_tasks"),
         findCCRecords: pagedQuery<MyCCRecord, MyCCRecordSearch>("find_cc_records"),
-        getPendingCounts: detailQuery<PendingCounts, { tenantId?: string }>("get_pending_counts"),
+        getPendingCounts: detailQuery<PendingCounts, Record<string, never>>("get_pending_counts"),
         getInstanceDetail: detailQuery<MyInstanceDetail, { instanceId: string }>("get_instance_detail")
       };
     },

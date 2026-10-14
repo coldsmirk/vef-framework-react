@@ -5,10 +5,10 @@
  * takes its place within that tenant — and each instance of it runs in, and
  * belongs to, the tenant that started it.
  *
- * Only super-admins create and change shared definitions: pass it as the
- * `tenantId` of `ApprovalFlowPage` / `ApprovalCategoryPage` to manage them. A
- * shared flow sits under a shared category and routes no task or CC to
- * specific people, which the flow designer enforces once the flow's tenant is
- * this one.
+ * Shared definitions are managed like any other, gated by the flow and
+ * category permissions: pass it as the `tenantId` of `ApprovalFlowPage` /
+ * `ApprovalCategoryPage` to manage them. A shared flow sits under a shared
+ * category and routes no task or CC to specific people, which the flow
+ * designer enforces once the flow's tenant is this one.
  */
 export const SHARED_TENANT_ID = "0";

@@ -9,6 +9,11 @@ export interface ApprovalDelegationPageProps {
    */
   permissions?: Partial<DelegationPermissionCodes>;
   /**
+   * The tenant whose categories the category scope offers, beside the shared
+   * ones. Omitted, every tenant's categories are offered.
+   */
+  tenantId?: string;
+  /**
    * Storage key for the column-settings panel.
    */
   columnStorageKey?: string;

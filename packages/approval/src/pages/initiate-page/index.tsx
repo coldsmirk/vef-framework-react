@@ -47,12 +47,6 @@ const flowGridCss = css({
 
 export interface ApprovalInitiatePageProps {
   /**
-   * The tenant to offer and start flows in. Only a super-admin's choice
-   * counts — omitted, their own tenant; everyone else is always offered their
-   * own tenant's flows plus the shared ones (`SHARED_TENANT_ID`).
-   */
-  tenantId?: string;
-  /**
    * A fixed label pre-filter (e.g. `{ mobile: "" }` to offer only
    * mobile-initiable flows). Combined with the user's own label filter.
    */
@@ -100,12 +94,12 @@ function FlowCard({ flow, onClick }: { flow: AvailableFlow; onClick: () => void 
 }
 
 /**
- * The initiation portal: every flow the current user may start, grouped by
- * category, searchable by keyword and label. Clicking a card opens the start
+ * The initiation portal: every flow the current user may start — its tenant's
+ * own flows plus the shared ones — grouped by category, searchable by keyword
+ * and label. Clicking a card opens the start
  * drawer with the published form.
  */
 export function ApprovalInitiatePage({
-  tenantId,
   labels,
   title = "发起审批",
   onStarted
@@ -131,7 +125,6 @@ export function ApprovalInitiatePage({
     queryKey: [
       api.findAvailableFlows.key,
       {
-        tenantId,
         keyword: keyword.trim() || undefined,
         labels: mergedLabels,
         [SYMBOL_PAGINATION]: { page, size: PAGE_SIZE }
@@ -214,7 +207,6 @@ export function ApprovalInitiatePage({
 
         <StartInstanceDrawer
           flowCode={startTarget}
-          tenantId={tenantId}
           onClose={() => setStartTarget(null)}
           onStarted={onStarted}
         />

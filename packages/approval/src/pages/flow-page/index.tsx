@@ -30,7 +30,8 @@ export type { ApprovalFlowPageProps } from "./props";
 type FlowSceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
 
 /**
- * Full-page flow management: the flow list with label filtering, the
+ * Full-page flow management of one tenant's flows (`tenantId`): the flow list
+ * with label filtering, the
  * full-screen designer (settings → form → graph → review, deployed and
  * optionally published in one chain), version history, and activation.
  * Designer and toggle mutations invalidate the list query, so the table
@@ -50,7 +51,7 @@ export function ApprovalFlowPage({
   const [designerTarget, setDesignerTarget] = useState<Flow | null | undefined>(undefined);
   const [versionsTarget, setVersionsTarget] = useState<Flow | null>(null);
 
-  const { data: categories } = useQuery({ queryFn: categoryApi.findTree, queryKey: [categoryApi.findTree.key, {}] });
+  const { data: categories } = useQuery({ queryFn: categoryApi.findTree, queryKey: [categoryApi.findTree.key, { tenantId }] });
   const categoryOptions = useMemo(() => buildCategoryTreeOptions(categories ?? []), [categories]);
   const categoryNames = useMemo(() => flattenCategoryNames(categoryOptions), [categoryOptions]);
   const columns = useMemo(() => buildFlowColumns(categoryNames), [categoryNames]);
@@ -65,6 +66,7 @@ export function ApprovalFlowPage({
       <CrudPage<Flow, FlowSearch, FlowSceneValues>
         basicSearch={<FlowSearchFields categoryOptions={categoryOptions} />}
         columnSettings={{ storageKey: columnStorageKey }}
+        defaultSearchValues={{ tenantId }}
         queryFn={api.findFlows}
         rowKey="id"
         tableColumns={columns}

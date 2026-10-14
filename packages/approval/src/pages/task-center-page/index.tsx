@@ -116,10 +116,6 @@ const COMPLETED_COLUMNS: Array<TableColumn<CompletedTask>> = [
 
 export interface ApprovalTaskCenterPageProps {
   /**
-   * Scope the lists to one tenant; omit for the caller's full view.
-   */
-  tenantId?: string;
-  /**
    * Optional page title rendered above each list.
    */
   title?: ReactNode;
@@ -130,13 +126,13 @@ export interface ApprovalTaskCenterPageProps {
  * shows the full detail with the action bar; completing an action refreshes
  * both the list and the pending badge.
  */
-export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPageProps) {
+export function ApprovalTaskCenterPage({ title }: ApprovalTaskCenterPageProps) {
   const api = useMyApprovalApi();
   const [detailTarget, setDetailTarget] = useState<string | null>(null);
 
   const { data: counts, refetch: refetchCounts } = useQuery({
     queryFn: api.getPendingCounts,
-    queryKey: [api.getPendingCounts.key, { tenantId }]
+    queryKey: [api.getPendingCounts.key, {}]
   });
 
   const [refreshToken, setRefreshToken] = useState(0);
@@ -152,7 +148,6 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
       advancedSearch={<PendingTaskAdvancedSearchFields />}
       basicSearch={<PendingTaskSearchFields />}
       columnSettings={false}
-      defaultSearchValues={{ tenantId }}
       queryFn={api.findPendingTasks}
       rowKey="taskId"
       tableColumns={PENDING_COLUMNS}
@@ -176,7 +171,6 @@ export function ApprovalTaskCenterPage({ tenantId, title }: ApprovalTaskCenterPa
       advancedSearch={<CompletedTaskAdvancedSearchFields />}
       basicSearch={<CompletedTaskSearchFields />}
       columnSettings={false}
-      defaultSearchValues={{ tenantId }}
       queryFn={api.findCompletedTasks}
       rowKey="taskId"
       tableColumns={COMPLETED_COLUMNS}

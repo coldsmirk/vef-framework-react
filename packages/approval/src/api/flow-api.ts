@@ -36,9 +36,9 @@ export interface FlowApi {
   deploy: MutationFunction<FlowVersion, DeployFlowParams>;
   publishVersion: MutationFunction<unknown, PublishVersionParams>;
   toggleActive: MutationFunction<unknown, ToggleFlowActiveParams>;
-  getGraph: QueryFunction<FlowGraphBundle, { flowId: string; tenantId?: string; versionId?: string }>;
-  findVersions: QueryFunction<FlowVersionSummary[], { flowId: string; tenantId?: string }>;
-  findInitiators: QueryFunction<FlowInitiator[], { flowId: string; tenantId?: string }>;
+  getGraph: QueryFunction<FlowGraphBundle, { flowId: string; versionId?: string }>;
+  findVersions: QueryFunction<FlowVersionSummary[], { flowId: string }>;
+  findInitiators: QueryFunction<FlowInitiator[], { flowId: string }>;
   /**
    * The application's assignee / CC / initiator vocabularies. Application-wide
    * rather than per-flow: every flow is designed against the same registered
@@ -98,7 +98,7 @@ export function useFlowApi(): FlowApi {
           "approval_flow_toggle_active",
           ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, "toggle_active", params) })
         ),
-        getGraph: apiClient.createQueryFn<FlowGraphBundle, { flowId: string; tenantId?: string; versionId?: string }>(
+        getGraph: apiClient.createQueryFn<FlowGraphBundle, { flowId: string; versionId?: string }>(
           "approval_flow_get_graph",
           ({ post }) => async params => {
             const result = await post<FlowGraphBundle>(API_PATH, { data: createApiRequest(RESOURCE, "get_graph", params) });
@@ -106,7 +106,7 @@ export function useFlowApi(): FlowApi {
             return result.data;
           }
         ),
-        findVersions: apiClient.createQueryFn<FlowVersionSummary[], { flowId: string; tenantId?: string }>(
+        findVersions: apiClient.createQueryFn<FlowVersionSummary[], { flowId: string }>(
           "approval_flow_find_versions",
           ({ post }) => async params => {
             const result = await post<FlowVersionSummary[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_versions", params) });
@@ -114,7 +114,7 @@ export function useFlowApi(): FlowApi {
             return result.data;
           }
         ),
-        findInitiators: apiClient.createQueryFn<FlowInitiator[], { flowId: string; tenantId?: string }>(
+        findInitiators: apiClient.createQueryFn<FlowInitiator[], { flowId: string }>(
           "approval_flow_find_initiators",
           ({ post }) => async params => {
             const result = await post<FlowInitiator[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_initiators", params) });

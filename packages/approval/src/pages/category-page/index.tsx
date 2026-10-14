@@ -59,7 +59,8 @@ function CategorySearchFields() {
 }
 
 /**
- * Full-page flow-category management: the category tree with inline
+ * Full-page flow-category management of one tenant's categories
+ * (`tenantId`): the category tree with inline
  * create/update/delete. Deleting a category does not cascade — flows keep
  * their category id.
  */
@@ -76,6 +77,7 @@ export function ApprovalCategoryPage({
     <CrudPage<FlowCategory, CategorySearch, CategorySceneValues>
       basicSearch={<CategorySearchFields />}
       columnSettings={{ storageKey: columnStorageKey }}
+      defaultSearchValues={{ tenantId }}
       deleteMutationFn={api.remove}
       formLayout={{ layout: "vertical" }}
       isPaginated={false}

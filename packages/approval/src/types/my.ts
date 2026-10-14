@@ -206,7 +206,6 @@ export interface MyInstanceDetail {
  * Search parameters for `approval/my.find_available_flows`.
  */
 export interface AvailableFlowSearch {
-  tenantId?: string;
   keyword?: string;
   labels?: Record<string, string>;
 }
@@ -215,7 +214,6 @@ export interface AvailableFlowSearch {
  * Search parameters for `approval/my.find_initiated`.
  */
 export interface InitiatedInstanceSearch {
-  tenantId?: string;
   status?: InstanceStatus;
   keyword?: string;
 }
@@ -226,7 +224,6 @@ export interface InitiatedInstanceSearch {
  * filters AND together.
  */
 export interface MyTaskSearch {
-  tenantId?: string;
   /**
    * Matches the instance title by substring.
    */
@@ -268,6 +265,5 @@ export interface CompletedTaskSearch extends MyTaskSearch {
  * Search parameters for `approval/my.find_cc_records`.
  */
 export interface MyCCRecordSearch {
-  tenantId?: string;
   isRead?: boolean;
 }
