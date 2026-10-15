@@ -1,3 +1,5 @@
+import type { DataOption, QueryFunction } from "@vef-framework-react/core";
+
 import type { DynamicValue } from "./dynamic-value";
 import type { FieldOption } from "./schema";
 
@@ -170,3 +172,33 @@ export interface DataSourceResolver {
 export const noopDataSourceResolver: DataSourceResolver = {
   resolve: () => Promise.resolve([])
 };
+
+/**
+ * Loads host data dictionaries (code sets) in one call: given a list of code
+ * set keys, it answers each key's entries. The same contract as the
+ * application's `AppContext.codeSetQueryFn`, which is the default wherever a
+ * form takes one — and, run through TanStack Query under the same query key as
+ * `useCodeSetQuery`, a dictionary loaded anywhere in the application is not
+ * fetched again for a form.
+ */
+export type CodeSetQueryFn = QueryFunction<Record<string, DataOption[]>, string[]>;
+
+/**
+ * One data dictionary a host offers in the designer's picker for `codeSet`
+ * option sources. Design-time only: a pick stores the key alone, so the
+ * runtime and a backend projection never need this catalog.
+ */
+export interface CodeSetDescriptor {
+  /**
+   * The code set key the schema stores, e.g. `"sys.user.gender"`.
+   */
+  codeSet: string;
+  /**
+   * Display name in the picker, e.g. `"性别"`.
+   */
+  name: string;
+  /**
+   * Picker group heading for a long catalog, e.g. `"人事"`.
+   */
+  group?: string;
+}

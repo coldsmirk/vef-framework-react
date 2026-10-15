@@ -41,7 +41,7 @@ export interface ApprovalValidationRule {
 
 /**
  * Where a selection field's options come from, when the projection could not
- * enumerate them into `options`. Mirrors the Go backend's `FieldOptionSource`.
+ * enumerate them into `options`. Mirrors the Go backend's `OptionSourceKind`.
  *
  * The designer's source union also carries `static` and `ref`, but neither
  * survives projection: a static source — inline or reached through a `ref` — is
@@ -49,24 +49,32 @@ export interface ApprovalValidationRule {
  * at. Only a source that stays unresolved is emitted here, so this vocabulary is
  * deliberately narrower than the designer's.
  */
-export type ApprovalOptionSourceKind = "remote";
+export type ApprovalOptionSourceKind = "remote" | "codeSet";
 
 /**
- * A remote option source, post-dereference: a consumer never chases a
- * `dataSourceId`. `request` and `mapping` reuse the form-editor's own types,
- * which the Go `RemoteOptionRequest` / `RemoteOptionMapping` mirror field for
- * field — including `request.params`, carried UNEVALUATED (each parameter a
- * literal or an expression bound to the live form), because neither the backend
- * nor a list-rendering consumer holds the form values an expression reads.
+ * An option source the projection could not enumerate, post-dereference: a
+ * consumer never chases a `dataSourceId`. Mirrors the Go `FieldOptionSource`.
  *
- * `request` is optional only because the projector emits a source whose request
- * the designer left unset rather than silently dropping it; the Go deploy
- * validation rejects that document, so a deployed version always carries one.
+ * A `remote` source carries `request` and `mapping`, which reuse the
+ * form-editor's own types; the Go `RemoteOptionRequest` / `RemoteOptionMapping`
+ * mirror them field for field — including `request.params`, carried
+ * UNEVALUATED (each parameter a literal or an expression bound to the live
+ * form), because neither the backend nor a list-rendering consumer holds the
+ * form values an expression reads. `request` is optional only because the
+ * projector emits a source whose request the designer left unset rather than
+ * silently dropping it; the Go deploy validation rejects that document, so a
+ * deployed version always carries one.
+ *
+ * A `codeSet` source carries `codeSet`, the host data dictionary the options
+ * come from. Unlike a remote source it is checked: the backend validates a
+ * submitted value against that dictionary when the host registers a code-set
+ * loader, and a list view translates a stored value with one lookup.
  */
 export interface ApprovalFieldOptionSource {
   kind: ApprovalOptionSourceKind;
   request?: RemoteDataSourceRequest;
   mapping?: RemoteOptionMapping;
+  codeSet?: string;
 }
 
 /**

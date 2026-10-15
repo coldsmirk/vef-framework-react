@@ -14,6 +14,7 @@ import { createContext, use, useEffect, useMemo, useRef, useState } from "react"
 import { resolveRequestParams } from "../engine/data-source-params";
 import { normalizeOptionMapping } from "../engine/option-mapping";
 import { noopDataSourceResolver } from "../types";
+import { useCodeSetState } from "./code-set-context";
 import { paramEvaluatorFor, useDataSourceParamScope } from "./data-source-param-scope";
 
 interface DataSourceContextValue {
@@ -92,12 +93,13 @@ export function DataSourceProvider({
 
 type ResolvedSource
   = | { kind: "static"; options: FieldOption[] }
-    | { kind: "remote"; request: RemoteDataSourceRequest; mapping?: RemoteOptionMapping; refreshId?: string };
+    | { kind: "remote"; request: RemoteDataSourceRequest; mapping?: RemoteOptionMapping; refreshId?: string }
+    | { kind: "codeSet"; codeSet: string };
 
 /**
- * Collapse a field's option source to a static list or a concrete remote
- * request, dereferencing a `ref` against the form-global data sources, with
- * the mapping normalized so a resolver never sees a blank key. An unknown
+ * Collapse a field's option source to a static list, a concrete remote request
+ * or a code set, dereferencing a `ref` against the form-global data sources,
+ * with the mapping normalized so a resolver never sees a blank key. An unknown
  * reference resolves to an empty static list. A `ref` to a remote source
  * carries the source id as `refreshId`, so a `refresh_data_source` effect on that
  * id forces a re-fetch; an inline `remote` source has no id and cannot be a
@@ -106,6 +108,10 @@ type ResolvedSource
 function resolveSource(source: FieldOptionSource | undefined, dataSources: FormDataSource[]): ResolvedSource {
   if (!source || source.kind === "static") {
     return { kind: "static", options: source?.kind === "static" ? source.options : [] };
+  }
+
+  if (source.kind === "codeSet") {
+    return { kind: "codeSet", codeSet: source.codeSet };
   }
 
   if (source.kind === "remote") {
@@ -133,6 +139,7 @@ function resolveSource(source: FieldOptionSource | undefined, dataSources: FormD
 }
 
 const STATIC_RESULT = { loading: false, error: false } as const;
+const NO_OPTIONS: FieldOption[] = [];
 
 /**
  * A field's resolved options plus the remote-fetch status flags.
@@ -150,9 +157,10 @@ export interface FieldOptionsResult {
 
 /**
  * Resolve a selection field's options. Static (and `ref`-to-static) sources
- * return synchronously from the schema; `remote` (and `ref`-to-remote) sources
- * fetch through the host-injected resolver, exposing a `loading` flag while the
- * request is in flight. The previously resolved options are kept while a
+ * return synchronously from the schema; a `codeSet` source reads the form's
+ * batched dictionary load (`CodeSetProvider`); `remote` (and `ref`-to-remote)
+ * sources fetch through the host-injected resolver, exposing a `loading` flag
+ * while the request is in flight. The previously resolved options are kept while a
  * refresh is in flight (and after a failure), so a `refresh_data_source` effect
  * does not blank every consuming select until the new response lands. A stale
  * request is ignored if the source changes first.
@@ -165,6 +173,7 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     versions
   } = use(DataSourceContext);
   const resolved = useMemo(() => resolveSource(source, dataSources), [source, dataSources]);
+  const codeSets = useCodeSetState();
   // Bound parameters are evaluated here, before the request reaches the
   // resolver: the resolver stays transport-only, and because the cache key
   // below is the *resolved* request, a bound value changing re-fetches while an
@@ -280,5 +289,21 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     // per-render identity churn this fix removes.
   }, [cache, cacheKey, mapping, refreshId, resolver]);
 
-  return resolved.kind === "static" ? { options: resolved.options, ...STATIC_RESULT } : remote;
+  switch (resolved.kind) {
+    case "static": {
+      return { options: resolved.options, ...STATIC_RESULT };
+    }
+
+    case "codeSet": {
+      return {
+        options: codeSets.options?.[resolved.codeSet] ?? NO_OPTIONS,
+        loading: codeSets.loading,
+        error: codeSets.error
+      };
+    }
+
+    case "remote": {
+      return remote;
+    }
+  }
 }

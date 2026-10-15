@@ -480,7 +480,9 @@ function validateLeafField(
  * A selection field's inline option source: `static` carries its own option
  * list, `ref` points at a declared form-global data source (a dangling id is a
  * warning — deleting a data source after fields referenced it is legitimate
- * mid-authoring state), `remote` carries an inline request.
+ * mid-authoring state), `remote` carries an inline request, and `codeSet`
+ * names a host data dictionary (an unpicked one is a warning, like an unpicked
+ * data source).
  */
 function validateFieldOptionSource(source: unknown, where: string, ctx: Ctx): void {
   if (!isRecord(source)) {
@@ -511,6 +513,18 @@ function validateFieldOptionSource(source: unknown, where: string, ctx: Ctx): vo
     case "remote": {
       ctx.issues.push(...validateRemoteRequest(source.request, `${where}.request`));
       validateOptionMapping(source.mapping, `${where}.mapping`, "data_source_invalid", ctx.issues);
+      return;
+    }
+
+    case "codeSet": {
+      const { codeSet } = source;
+
+      if (typeof codeSet !== "string") {
+        ctx.issues.push(createIssue(`${where}.codeSet`, "data_source_invalid"));
+      } else if (codeSet.trim().length === 0) {
+        ctx.issues.push(createIssue(`${where}.codeSet`, "code_set_empty"));
+      }
+
       return;
     }
 

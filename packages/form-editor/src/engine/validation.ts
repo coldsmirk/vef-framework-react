@@ -65,6 +65,7 @@ export type ValidationIssueCode
   // Option sources
     | "data_source_invalid"
     | "data_source_ref_unknown"
+    | "code_set_empty"
     | "request_malformed"
     | "request_incomplete"
   // Linkage
@@ -183,6 +184,7 @@ const WARNING_CODES: ReadonlySet<ValidationIssueCode> = new Set<ValidationIssueC
   "target_key_unresolved",
   "variable_empty",
   "data_source_id_empty",
+  "code_set_empty",
   "retrigger_ignored",
   "default_hidden_unreachable",
   "subform_table_column"
@@ -234,6 +236,7 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   target_key_empty: "targetKey 尚未选择",
   variable_empty: "variable 尚未填写",
   data_source_id_empty: "dataSourceId 尚未选择",
+  code_set_empty: "数据字典尚未选择",
   value_malformed: "取值结构无效：须为 literal 或 expression 形态",
   alert_level_invalid: "level 不是受支持的提示级别",
   retrigger_invalid: "retrigger 必须为 \"edge\" 或 \"always\"",

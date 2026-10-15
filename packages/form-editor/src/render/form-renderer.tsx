@@ -6,6 +6,7 @@ import type { RuntimeForm, RuntimeFormValues } from "../runtime/types";
 import type {
   Block,
   ChromeTabItem,
+  CodeSetQueryFn,
   DataSourceResolver,
   EvaluationContext,
   FieldLinkageRule,
@@ -31,6 +32,7 @@ import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, memo, use, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 import { MobileScope } from "../components/mobile/scope";
+import { collectCodeSets } from "../engine/code-sets";
 import { schemaHasBoundParams } from "../engine/data-source-params";
 import { isKeyedField } from "../engine/keys";
 import {
@@ -48,6 +50,7 @@ import { dispatchFormEffects, useEffectDispatch } from "../runtime/effects";
 import { useRuntimeFieldState } from "../runtime/runtime-context";
 import { RuntimeStateController, SubformRowController } from "../runtime/runtime-state-controller";
 import { DeviceProvider, useContainerChrome, useDevice } from "../store/engine-provider";
+import { CodeSetProvider, useCodeSetState } from "./code-set-context";
 import { DataSourceProvider } from "./data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
@@ -100,6 +103,13 @@ export interface FormRendererProps {
    * (empty options) when omitted — static / ref-to-static sources never need it.
    */
   dataSourceResolver?: DataSourceResolver;
+  /**
+   * Loads the data dictionaries `codeSet` option sources read — every one the
+   * form references, in one call. Defaults to the application's
+   * `AppContext.codeSetQueryFn`; without either, a `codeSet` source has no
+   * options.
+   */
+  codeSetQueryFn?: CodeSetQueryFn;
   /**
    * Host-supplied evaluation scope. `$vars` here merges over (and overrides) the
    * schema's variable defaults; `$user` / `$node` / `$applicant` / `$globals`
@@ -396,6 +406,7 @@ interface FormRendererInnerProps {
   fieldPermissions?: Record<string, FieldPermission>;
   evaluators?: LinkageEvaluators;
   dataSourceResolver?: DataSourceResolver;
+  codeSetQueryFn?: CodeSetQueryFn;
   evaluationContext?: EvaluationContext;
   onSubmit?: (values: RuntimeFormValues) => void | Promise<void>;
   apiRef?: Ref<FormRendererApi>;
@@ -411,6 +422,7 @@ interface FormRendererInnerProps {
  */
 function FormRendererInner({
   apiRef,
+  codeSetQueryFn,
   dataSourceResolver,
   defaultValues,
   disabled = false,
@@ -569,6 +581,7 @@ function FormRendererInner({
   }, [evaluators, evaluationContext, fieldPermissions, form, runtimeSchema, sinks]);
 
   const domIdPrefix = useId();
+  const codeSets = useMemo(() => collectCodeSets(runtimeSchema), [runtimeSchema]);
 
   // Memoized so the field tree's props are stable across the controller's
   // per-keystroke re-renders — a precondition for `React.memo(BlockCell)` to
@@ -595,19 +608,21 @@ function FormRendererInner({
     <AppForm>
       <EvaluationScopeContext value={evaluationContext}>
         <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <RuntimeStateController
-            boundParams={boundParams}
-            evaluationContext={evaluationContext}
-            evaluators={evaluators}
-            fieldPermissions={fieldPermissions}
-            form={form}
-            schema={runtimeSchema}
-            sinks={sinks}
-          >
-            <Form css={rootCss} disabled={disabled}>
-              <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
-            </Form>
-          </RuntimeStateController>
+          <CodeSetProvider codeSets={codeSets} queryFn={codeSetQueryFn}>
+            <RuntimeStateController
+              boundParams={boundParams}
+              evaluationContext={evaluationContext}
+              evaluators={evaluators}
+              fieldPermissions={fieldPermissions}
+              form={form}
+              schema={runtimeSchema}
+              sinks={sinks}
+            >
+              <Form css={rootCss} disabled={disabled}>
+                <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
+              </Form>
+            </RuntimeStateController>
+          </CodeSetProvider>
         </DataSourceProvider>
       </EvaluationScopeContext>
     </AppForm>
@@ -883,7 +898,8 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
   // safe because it is a pure idempotent memo (same row + id ⇒ equal wrapper).
   const wrappedRowsRef = useRef(new WeakMap<Record<string, unknown>, Record<string, unknown>>());
 
-  const columns = useMemo(() => buildSubformColumns(subform.template), [subform.template]);
+  const { options: codeSetOptions } = useCodeSetState();
+  const columns = useMemo(() => buildSubformColumns(subform.template, codeSetOptions), [subform.template, codeSetOptions]);
   const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
 
   return (

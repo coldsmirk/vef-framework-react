@@ -10,6 +10,7 @@ import { OptionListEditor } from "../../option-editors";
 import { RemoteOptionSourceEditor } from "../../remote-option-source-editor";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { descriptionCss, entryLabelCss } from "../entry-field";
+import { CodeSetSource } from "./code-set-source";
 import { optionSourceHasPayload, setOptionSourceKind } from "./source-mutators";
 
 const wrapperCss = css({
@@ -28,12 +29,13 @@ const selectStyle = { width: "100%" } as const;
 
 const KIND_OPTIONS: Array<{ value: OptionSourceKind; label: string }> = [
   { value: "static", label: "静态选项" },
-  { value: "ref", label: "引用数据源" },
-  { value: "remote", label: "远程请求" }
+  { value: "ref", label: "数据源" },
+  { value: "remote", label: "远程请求" },
+  { value: "codeSet", label: "数据字典" }
 ];
 
 function isOptionSourceKind(value: unknown): value is OptionSourceKind {
-  return value === "static" || value === "ref" || value === "remote";
+  return value === "static" || value === "ref" || value === "remote" || value === "codeSet";
 }
 
 function readSource(value: unknown): FieldOptionSource {
@@ -46,9 +48,9 @@ function readSource(value: unknown): FieldOptionSource {
 
 /**
  * Editor for a selection field's option source. A segmented control switches
- * between an inline static list, a reference to a form-global data source, and
- * an inline remote request — the three arms of {@link FieldOptionSource}, all
- * resolved at runtime by `useFieldOptions`.
+ * between an inline static list, a reference to a form-global data source, an
+ * inline remote request, and a host data dictionary — the four arms of
+ * {@link FieldOptionSource}, all resolved at runtime by `useFieldOptions`.
  */
 export const OptionsSourceEntry: FC<EntryComponentProps> = ({
   entry,
@@ -57,7 +59,7 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
   onChange
 }) => {
   const source = readSource(entry.read(field));
-  // The three kinds share no payload, so switching a configured source discards
+  // The four kinds share no payload, so switching a configured source discards
   // work and is gated behind a confirmation; an unconfigured source switches
   // instantly.
   const kindSwitch = useConfirmableKindSwitch<OptionSourceKind>({
@@ -110,6 +112,7 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
           )
         : null}
 
+      {source.kind === "codeSet" ? <CodeSetSource codeSet={source.codeSet} onChange={codeSet => onChange({ kind: "codeSet", codeSet })} /> : null}
       {entry.description ? <span css={descriptionCss}>{entry.description}</span> : null}
     </div>
   );

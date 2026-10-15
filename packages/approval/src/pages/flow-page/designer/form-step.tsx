@@ -60,6 +60,7 @@ export function FormStep({
   onSchemaChange
 }: FormStepProps) {
   const {
+    codeSets,
     dataSourceApis,
     dataSourceResolver,
     evaluators,
@@ -97,6 +98,7 @@ export function FormStep({
         }}
       >
         <FormEditor
+          codeSets={codeSets}
           contextSources={contextSources}
           dataSourceApis={dataSourceApis}
           dataSourceResolver={dataSourceResolver}

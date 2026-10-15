@@ -2,7 +2,16 @@ import type { ReactElement, ReactNode, Ref, RefObject } from "react";
 
 import type { DeviceRegistries, FormFieldRegistry } from "../engine/registry/form-field-registry";
 import type { EditorDeviceMode, EditorViewMode } from "../store/form-store";
-import type { DataSourceApi, DataSourceResolver, EvaluationContext, FormSchema, LinkageContextSource, LinkageEvaluators } from "../types";
+import type {
+  CodeSetDescriptor,
+  CodeSetQueryFn,
+  DataSourceApi,
+  DataSourceResolver,
+  EvaluationContext,
+  FormSchema,
+  LinkageContextSource,
+  LinkageEvaluators
+} from "../types";
 import type { SchemaValidator } from "./host-validation";
 import type { ToolbarBrand } from "./toolbar/toolbar";
 
@@ -18,6 +27,7 @@ import { DeviceProvider, RegistryProvider } from "../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../store/form-store";
 import { Canvas } from "./canvas/canvas";
 import { ContainerDragChip } from "./canvas/container-drag-chip";
+import { CodeSetCatalogProvider } from "./code-set-catalog";
 import { ContextSourcesProvider } from "./context-sources";
 import { DataSourceApisProvider } from "./data-source-apis";
 import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
@@ -135,6 +145,19 @@ export interface FormEditorProviderProps {
    */
   dataSourceApis?: DataSourceApi[];
   /**
+   * Loads the data dictionaries `codeSet` option sources read, forwarded to the
+   * canvas and the live preview so a dictionary-backed select shows its real
+   * entries while designing. Defaults to the application's
+   * `AppContext.codeSetQueryFn`.
+   */
+  codeSetQueryFn?: CodeSetQueryFn;
+  /**
+   * The host's catalog of data dictionaries. The `codeSet` option-source editor
+   * then offers a searchable picker — "性别 · sys.user.gender" — instead of a
+   * key typed by hand. Design-time only: a pick stores the key alone.
+   */
+  codeSets?: CodeSetDescriptor[];
+  /**
    * Host evaluation scope (`$user` / `$node` / `$applicant` / `$globals`,
    * variable overrides), forwarded to the live preview so host-context
    * expressions evaluate truthfully. Values the designer enters as preview
@@ -219,6 +242,8 @@ function HostBridge({ apiRef, onSchemaChange }: Pick<FormEditorProviderProps, "a
 export function FormEditorProvider({
   apiRef,
   children,
+  codeSetQueryFn,
+  codeSets,
   contextSources,
   dataSourceApis,
   dataSourceResolver,
@@ -266,14 +291,17 @@ export function FormEditorProvider({
         <ContextSourcesProvider sources={contextSources}>
           <PreviewRuntimeProvider value={{
             dataSourceResolver,
+            codeSetQueryFn,
             evaluators: previewEvaluators,
             evaluationContext
           }}
           >
             <HostValidationProvider validate={validate}>
               <DataSourceApisProvider apis={dataSourceApis}>
-                <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
-                {children}
+                <CodeSetCatalogProvider codeSets={codeSets}>
+                  <HostBridge apiRef={apiRef} onSchemaChange={onSchemaChange} />
+                  {children}
+                </CodeSetCatalogProvider>
               </DataSourceApisProvider>
             </HostValidationProvider>
           </PreviewRuntimeProvider>

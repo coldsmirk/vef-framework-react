@@ -151,7 +151,7 @@ export function FormDataSourcesPanel({ dataSources, onChange }: FormDataSourcesP
 
   return (
     <div css={wrapperCss}>
-      {dataSources.length === 0 ? <span css={emptyCss}>暂无数据源，可被选择类字段以「引用数据源」方式复用</span> : null}
+      {dataSources.length === 0 ? <span css={emptyCss}>暂无数据源，选择类字段可在选项来源中选「数据源」复用</span> : null}
 
       {dataSources.map(source => (
         <DataSourceCard

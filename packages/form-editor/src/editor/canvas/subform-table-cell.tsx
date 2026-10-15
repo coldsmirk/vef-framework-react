@@ -1,10 +1,13 @@
 import type { ReactElement } from "react";
 
-import type { FieldOptionSource, KeyedFormField } from "../../types";
+import type { KeyedFormField } from "../../types";
 
 import { css } from "@emotion/react";
 import { Checkbox, DatePicker, globalCssVars, Input, InputNumber, Radio, Select, Switch } from "@vef-framework-react/components";
 import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
+
+import { useCodeSetState } from "../../render/code-set-context";
+import { columnOptions } from "../../render/subform-columns";
 
 const fullWidthStyle = { width: "100%" } as const;
 
@@ -12,18 +15,6 @@ const unsupportedCss = css({
   fontSize: globalCssVars.fontSizeSm,
   color: globalCssVars.colorTextTertiary
 });
-
-/**
- * Inline static option list — the only source resolvable without the async data
- * resolver, mirroring `render/subform-columns.tsx`. A remote / `ref` source shows
- * no options in the design sample, exactly as the runtime table cell would until
- * its data loads.
- */
-function staticOptions(source: FieldOptionSource | undefined): Array<{ label: string; value: string }> {
-  return source?.kind === "static"
-    ? source.options.map(option => { return { label: option.label, value: String(option.value) }; })
-    : [];
-}
 
 /**
  * A disabled, value-less control standing in for one table column's cell editor,
@@ -34,6 +25,11 @@ function staticOptions(source: FieldOptionSource | undefined): Array<{ label: st
  * code-editor) falls back to a muted dash.
  */
 export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
+  // The options the runtime cell shows (`render/subform-columns.tsx`): a static
+  // list or a data dictionary the canvas has loaded. A remote / `ref` source
+  // shows none, exactly as the runtime table cell would until its data loads.
+  const { options: codeSetOptions } = useCodeSetState();
+
   switch (field.type) {
     case "textfield": {
       return <Input disabled placeholder={field.placeholder} style={fullWidthStyle} />;
@@ -48,15 +44,15 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
     }
 
     case "select": {
-      return <Select disabled options={staticOptions(field.dataSource)} placeholder={field.placeholder} style={fullWidthStyle} />;
+      return <Select disabled options={columnOptions(field.dataSource, codeSetOptions)} placeholder={field.placeholder} style={fullWidthStyle} />;
     }
 
     case "radio": {
-      return <Radio.Group disabled options={staticOptions(field.dataSource)} />;
+      return <Radio.Group disabled options={columnOptions(field.dataSource, codeSetOptions)} />;
     }
 
     case "checkbox-group": {
-      return <Checkbox.Group disabled options={staticOptions(field.dataSource)} />;
+      return <Checkbox.Group disabled options={columnOptions(field.dataSource, codeSetOptions)} />;
     }
 
     case "switch": {

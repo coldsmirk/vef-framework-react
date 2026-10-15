@@ -57,8 +57,9 @@ function fieldKind(type: string): FieldKind {
 /**
  * The static `{ label, value }` options a field exposes to the permission
  * matrix, if any. Covers an inline `static` source and a `ref` that points at a
- * form-level static data source. A `remote` source (inline or referenced) is
- * host-resolved at runtime, so its options are unknown here and omitted.
+ * form-level static data source. A `remote` source (inline or referenced) and
+ * a `codeSet` one are host-resolved at runtime, so their options are unknown
+ * here and omitted.
  */
 function staticOptions(field: FormField, dataSources: Map<string, FormDataSource>): FieldOption[] | undefined {
   const source = "dataSource" in field ? field.dataSource : undefined;

@@ -244,12 +244,28 @@ export interface RemoteOptionSource {
 }
 
 /**
- * Where a selection field's options come from: an inline static list, a
- * reference to a form-global data source, or an inline remote request. Static
- * and `ref`-to-static resolve synchronously from the schema; `remote` (and
- * `ref`-to-remote) resolve through the host-injected {@link DataSourceResolver}.
+ * The entries of a host data dictionary (code set), named by its key. Every
+ * code set a form references loads in one batched call through the host's
+ * code-set query function, and only a dictionary's top-level entries become
+ * options.
  */
-export type FieldOptionSource = StaticOptionSource | RefOptionSource | RemoteOptionSource;
+export interface CodeSetOptionSource {
+  kind: "codeSet";
+  /**
+   * The code set key, e.g. `"sys.user.gender"`.
+   */
+  codeSet: string;
+}
+
+/**
+ * Where a selection field's options come from: an inline static list, a
+ * reference to a form-global data source, an inline remote request, or a host
+ * data dictionary. Static and `ref`-to-static resolve synchronously from the
+ * schema; `remote` (and `ref`-to-remote) resolve through the host-injected
+ * {@link DataSourceResolver}; `codeSet` through the host's
+ * {@link CodeSetQueryFn}.
+ */
+export type FieldOptionSource = StaticOptionSource | RefOptionSource | RemoteOptionSource | CodeSetOptionSource;
 
 /**
  * Single-line text input. Keyed: contributes a scalar value via `key`.

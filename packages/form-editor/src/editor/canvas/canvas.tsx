@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import type { EditorViewMode } from "../../store/form-store";
-import type { Block, ChromeTabItem, FlexNode, FormField, FormSchema, GapScale, GridNode, KeyedFormField, PresentationDevice, SectionNode, SubformNode, TableSubform, TabsNode } from "../../types";
+import type { Block, ChromeTabItem, CodeSetQueryFn, FlexNode, FormField, FormSchema, GapScale, GridNode, KeyedFormField, PresentationDevice, PresentationLayer, SectionNode, SubformNode, TableSubform, TabsNode } from "../../types";
 import type { DropZoneData } from "../dnd";
 import type { PreviewRuntime } from "../preview-runtime-context";
 import type { DropZoneAccept, DropZoneDescriptor, ZoneOrientation } from "./drop-zones";
@@ -9,14 +9,17 @@ import type { DropZoneAccept, DropZoneDescriptor, ZoneOrientation } from "./drop
 import { css } from "@emotion/react";
 import { Flex, globalCssVars, Stack } from "@vef-framework-react/components";
 import { CollisionPriority, useDroppable } from "@vef-framework-react/core";
+import { isShallowEqual } from "@vef-framework-react/shared";
 import { Activity, createContext, lazy, memo, Suspense, use, useMemo, useRef, useState } from "react";
 
 import { MobileScope } from "../../components/mobile/scope";
 import { assertNever } from "../../engine/assert-never";
+import { collectCodeSets } from "../../engine/code-sets";
 import { isValidatableField } from "../../engine/keys";
 import { resolvePresentation } from "../../engine/schema/presentation";
 import { isContainerNode } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
+import { CodeSetProvider } from "../../render/code-set-context";
 import { DataSourceProvider } from "../../render/data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "../../render/flex-style";
 import { FormFieldRenderer } from "../../render/form-field";
@@ -320,7 +323,7 @@ function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: Pre
   // resolver + versions, so wrapping them here is dead weight.
   const editDocument = (
     <DataSourceProvider dataSources={schema.dataSources}>
-      <EditDocument device={device} schema={schema} />
+      <EditDocument codeSetQueryFn={runtime.codeSetQueryFn} device={device} schema={schema} />
     </DataSourceProvider>
   );
 
@@ -343,6 +346,7 @@ function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: Pre
             // supplied externally (the shell's screen) so masks cover the whole
             // screen; a bare mobile preview elsewhere keeps native behavior.
             <FormRenderer
+              codeSetQueryFn={runtime.codeSetQueryFn}
               dataSourceResolver={runtime.dataSourceResolver}
               device={device}
               evaluationContext={runtime.evaluationContext}
@@ -366,20 +370,47 @@ function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: Pre
  * mobile can reach this) shows the seed state; otherwise the device's own block
  * tree renders through {@link StackBody}.
  */
-function EditDocument({ device, schema }: { device: PresentationDevice; schema: FormSchema }): ReactElement {
+/**
+ * The code sets the edit document's fields read, with an identity that only
+ * changes when the set does: the layer is a new object on every edit, and the
+ * dictionary load below it need not see one.
+ */
+function useCanvasCodeSets(layer: PresentationLayer | undefined): string[] {
+  const codeSets = useMemo(() => layer === undefined ? [] : collectCodeSets(layer), [layer]);
+  const stableRef = useRef(codeSets);
+
+  if (!isShallowEqual(stableRef.current, codeSets)) {
+    stableRef.current = codeSets;
+  }
+
+  return stableRef.current;
+}
+
+function EditDocument({
+  codeSetQueryFn,
+  device,
+  schema
+}: {
+  codeSetQueryFn?: CodeSetQueryFn;
+  device: PresentationDevice;
+  schema: FormSchema;
+}): ReactElement {
   const layer = resolvePresentation(schema, device);
   // Memoized so the provider value is a stable primitive (a fresh resolve each
   // render would, per the context-value lint rule, look like a new construction).
   const formGap = useMemo(() => resolveStackGap(layer?.gap, DEFAULT_STACK_GAP), [layer?.gap]);
+  const codeSets = useCanvasCodeSets(layer);
 
   if (layer === undefined) {
     return <MobileSeedState />;
   }
 
   return (
-    <FormGapContext value={formGap}>
-      <StackBody fill blocks={layer.children} tailTarget={ROOT_TAIL_TARGET} />
-    </FormGapContext>
+    <CodeSetProvider codeSets={codeSets} queryFn={codeSetQueryFn}>
+      <FormGapContext value={formGap}>
+        <StackBody fill blocks={layer.children} tailTarget={ROOT_TAIL_TARGET} />
+      </FormGapContext>
+    </CodeSetProvider>
   );
 }
 

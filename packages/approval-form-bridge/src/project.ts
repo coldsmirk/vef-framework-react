@@ -436,14 +436,15 @@ function projectSubform(
 /**
  * Collapse a selection field's option source into exactly one of two
  * projections: the enumerated `{ label, value }` options of a static source,
- * or the descriptor of a remote one. A `ref` is dereferenced first, so the
- * result is always post-dereference and a consumer never chases a
+ * or the descriptor of a code set or remote one. A `ref` is dereferenced first,
+ * so the result is always post-dereference and a consumer never chases a
  * `dataSourceId`.
  *
- * A remote source still warns: the backend validates a submitted value against
- * `options` alone, so it will accept anything for this field either way — the
- * descriptor tells a consumer how to DISPLAY a stored value, it does not make
- * the value checked. A remote source whose request the designer left unset is
+ * A code set does not warn: the backend checks a submitted value against the
+ * dictionary itself. A remote source still does: the backend validates a
+ * submitted value against `options` alone, so it will accept anything for this
+ * field either way — the descriptor tells a consumer how to DISPLAY a stored
+ * value, it does not make the value checked. A remote source whose request the designer left unset is
  * emitted rather than dropped, so the Go deploy validation names it instead of
  * the projection silently degrading it to a source-less field. A dangling ref
  * and an unknown kind yield neither.
@@ -464,6 +465,17 @@ function resolveOptionSource(
 
   if (resolved?.kind === "static") {
     return { options: resolved.options };
+  }
+
+  if (resolved?.kind === "codeSet") {
+    // An unpicked dictionary is still emitted, so the Go deploy validation
+    // names the field; its blank key is dropped, as Go's `omitempty` does.
+    return {
+      optionSource: {
+        kind: "codeSet",
+        ...resolved.codeSet.length > 0 && { codeSet: resolved.codeSet }
+      }
+    };
   }
 
   issues.push(issueOptionsNotStatic(path));

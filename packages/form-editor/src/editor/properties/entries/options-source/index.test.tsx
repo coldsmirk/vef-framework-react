@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { definePropertyEntry } from "../../../../types";
+import { CodeSetCatalogProvider } from "../../../code-set-catalog";
 import { OptionsSourceEntry } from "./index";
 
 const entry = definePropertyEntry<SelectField, FieldOptionSource | undefined>({
@@ -85,6 +86,17 @@ describe("options source entry", () => {
 
       expect(onChange).toHaveBeenCalledWith({ kind: "remote", request: { resource: "", action: "" } });
     });
+
+    it("switches to a data dictionary source", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      renderEntry(makeField({ kind: "static", options: [] }), onChange);
+
+      await user.click(screen.getByText("数据字典"));
+
+      expect(onChange).toHaveBeenCalledWith({ kind: "codeSet", codeSet: "" });
+    });
   });
 
   describe("ref", () => {
@@ -109,6 +121,46 @@ describe("options source entry", () => {
       renderEntry(makeField({ kind: "ref", dataSourceId: "" }), vi.fn());
 
       expect(screen.getByText(/表单暂无数据源/)).toBeInTheDocument();
+    });
+  });
+
+  describe("codeSet", () => {
+    it("picks a dictionary from the host catalog", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <CodeSetCatalogProvider codeSets={[
+          {
+            codeSet: "sys.user.gender",
+            name: "性别",
+            group: "人事"
+          }
+        ]}
+        >
+          <OptionsSourceEntry entry={entry} field={makeField({ kind: "codeSet", codeSet: "" })} schema={schemaWith()} onChange={onChange} />
+        </CodeSetCatalogProvider>
+      );
+
+      await user.click(screen.getByRole("combobox", { name: "数据字典" }));
+      await user.click(await screen.findByText("性别 · sys.user.gender"));
+
+      expect(onChange).toHaveBeenCalledWith({ kind: "codeSet", codeSet: "sys.user.gender" });
+    });
+
+    it("commits a typed key on blur rather than per keystroke", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      renderEntry(makeField({ kind: "codeSet", codeSet: "" }), onChange);
+
+      await user.type(screen.getByRole("textbox", { name: "数据字典" }), " sys.user.gender ");
+
+      expect(onChange).not.toHaveBeenCalled();
+
+      await user.tab();
+
+      expect(onChange).toHaveBeenCalledExactlyOnceWith({ kind: "codeSet", codeSet: "sys.user.gender" });
     });
   });
 

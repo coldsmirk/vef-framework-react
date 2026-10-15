@@ -1055,6 +1055,36 @@ describe("validateSchema", () => {
         path: "presentations.pc.children[0].dataSource.request"
       }));
     });
+
+    it("accepts a code set source naming a dictionary", () => {
+      const result = validate(selectWith({ kind: "codeSet", codeSet: "sys.user.gender" }));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+    });
+
+    it("warns (not errors) on a code set source with no dictionary picked", () => {
+      const result = validate(selectWith({ kind: "codeSet", codeSet: " " }));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "code_set_empty",
+          path: "presentations.pc.children[0].dataSource.codeSet",
+          severity: "warning"
+        })
+      ]);
+    });
+
+    it("rejects a code set source whose key is not a string", () => {
+      const result = validate(selectWith({ kind: "codeSet", codeSet: 7 }));
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "data_source_invalid",
+        path: "presentations.pc.children[0].dataSource.codeSet"
+      }));
+    });
   });
 
   describe("when a subform variant is missing or invalid", () => {

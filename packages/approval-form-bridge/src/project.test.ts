@@ -379,6 +379,22 @@ describe("projectFormSchema", () => {
       ]);
     });
 
+    it("projects a code set source as the option source without warning", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "F1",
+          type: "select",
+          key: "gender",
+          label: "性别",
+          dataSource: { kind: "codeSet", codeSet: "sys.user.gender" }
+        }
+      ]));
+
+      expect(result.fields[0]).not.toHaveProperty("options");
+      expect(result.fields[0]?.optionSource).toEqual({ kind: "codeSet", codeSet: "sys.user.gender" });
+      expect(result.issues).toEqual([]);
+    });
+
     it("projects an inline remote source's request and mapping as the option source", () => {
       const result = projectFormSchema(schemaOf([
         {

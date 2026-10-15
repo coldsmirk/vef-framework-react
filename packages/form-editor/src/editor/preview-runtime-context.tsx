@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { DataSourceResolver, EvaluationContext, LinkageEvaluators } from "../types";
+import type { CodeSetQueryFn, DataSourceResolver, EvaluationContext, LinkageEvaluators } from "../types";
 
 import { createContext, use, useCallback, useMemo, useState } from "react";
 
@@ -18,6 +18,7 @@ import { useContextSources } from "./context-sources";
 export interface PreviewRuntime {
   evaluators?: LinkageEvaluators;
   dataSourceResolver?: DataSourceResolver;
+  codeSetQueryFn?: CodeSetQueryFn;
   evaluationContext?: EvaluationContext;
 }
 
@@ -112,11 +113,12 @@ export function PreviewRuntimeProvider({
     () => {
       return {
         dataSourceResolver: value.dataSourceResolver,
+        codeSetQueryFn: value.codeSetQueryFn,
         evaluators: value.evaluators,
         evaluationContext
       };
     },
-    [value.dataSourceResolver, value.evaluators, evaluationContext]
+    [value.dataSourceResolver, value.codeSetQueryFn, value.evaluators, evaluationContext]
   );
 
   const previewSamples = useMemo<PreviewSamples>(

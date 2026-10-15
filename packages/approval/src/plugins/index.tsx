@@ -1,5 +1,5 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
-import type { DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
+import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode } from "react";
 
 import type { KindOptions } from "../types";
@@ -65,6 +65,14 @@ export interface ApprovalPlugins {
    * listed here.
    */
   dataSourceApis?: DataSourceApi[];
+  /**
+   * The host's catalog of data dictionaries. The form designer's 数据字典
+   * option source then offers a searchable picker instead of a key typed by
+   * hand. A pick stores the key alone: forms load their dictionaries through
+   * the application's `AppContext.codeSetQueryFn`, which must serve every key
+   * listed here.
+   */
+  codeSets?: CodeSetDescriptor[];
   /**
    * Overrides for expression / script evaluation in form linkage and in
    * data-source parameters bound to the form. Optional: the form runtime falls

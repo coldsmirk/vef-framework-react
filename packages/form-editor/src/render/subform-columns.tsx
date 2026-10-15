@@ -1,6 +1,6 @@
 import type { EditableColumn } from "@vef-framework-react/components";
 
-import type { Block, FieldOptionSource, KeyedFormField } from "../types";
+import type { Block, FieldOption, FieldOptionSource, KeyedFormField } from "../types";
 
 import { createEditableColumn, filterOptionByLabel } from "@vef-framework-react/components";
 import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
@@ -19,17 +19,31 @@ import { validateKeyedFieldValue } from "./submit";
 type Row = Record<string, unknown>;
 
 /**
- * Inline static option list — the only source resolved synchronously here. A
- * remote / `ref` data source needs the async resolver and renders with no
- * options for now (a documented follow-up); the column still edits the value.
+ * The loaded options of the form's data dictionaries, keyed by code set.
  */
-function staticOptions(source: FieldOptionSource | undefined): Array<{ label: string; value: string }> {
+export type CodeSetOptions = Readonly<Record<string, FieldOption[]>> | undefined;
+
+/**
+ * A column's options: an inline static list, or a data dictionary the form has
+ * already loaded in its batched code-set call. A remote / `ref` data source
+ * needs the async resolver and renders with no options for now (a documented
+ * follow-up); the column still edits the value.
+ */
+export function columnOptions(source: FieldOptionSource | undefined, codeSets: CodeSetOptions): Array<{ label: string; value: string }> {
+  let options: FieldOption[] = [];
+
+  if (source?.kind === "static") {
+    options = source.options;
+  } else if (source?.kind === "codeSet") {
+    options = codeSets?.[source.codeSet] ?? [];
+  }
+
   // The components select / radio / checkbox fields take string-valued options;
   // coerce here (a numeric option value renders as its string form in a table
   // cell — v1, acceptable for the common string-keyed case).
-  return source?.kind === "static"
-    ? source.options.map(option => { return { label: option.label, value: String(option.value) }; })
-    : [];
+  return options.map(option => {
+    return { label: option.label, value: String(option.value) };
+  });
 }
 
 /**
@@ -51,7 +65,7 @@ function isRequired(field: KeyedFormField): boolean {
  * is host-extensible, so neither switch can be exhaustive; when adding a type
  * here, add its preview there too or the canvas degrades to a muted dash.
  */
-function columnFor(field: Block): EditableColumn<Row> | null {
+function columnFor(field: Block, codeSets: CodeSetOptions): EditableColumn<Row> | null {
   if (isContainerNode(field) || !isKeyedField(field)) {
     return null;
   }
@@ -111,7 +125,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
             noWrapper
             allowClear={field.allowClear}
             filterOption={filterOptionByLabel}
-            options={staticOptions(field.dataSource)}
+            options={columnOptions(field.dataSource, codeSets)}
             placeholder={field.placeholder}
             showSearch={field.showSearch}
           />
@@ -124,7 +138,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
         title,
         width,
         validators,
-        renderEditor: f => <f.Radio noWrapper options={staticOptions(field.dataSource)} />
+        renderEditor: f => <f.Radio noWrapper options={columnOptions(field.dataSource, codeSets)} />
       });
     }
 
@@ -133,7 +147,7 @@ function columnFor(field: Block): EditableColumn<Row> | null {
         title,
         width,
         validators,
-        renderEditor: f => <f.CheckboxGroup noWrapper options={staticOptions(field.dataSource)} />
+        renderEditor: f => <f.CheckboxGroup noWrapper options={columnOptions(field.dataSource, codeSets)} />
       });
     }
 
@@ -186,6 +200,6 @@ function columnFor(field: Block): EditableColumn<Row> | null {
  * Build the `EditableTable` columns for a subform template, one per keyed leaf
  * field in document order. Non-keyed blocks are dropped.
  */
-export function buildSubformColumns(template: Block[]): Array<EditableColumn<Row>> {
-  return template.map(block => columnFor(block)).filter((column): column is EditableColumn<Row> => column !== null);
+export function buildSubformColumns(template: Block[], codeSets?: CodeSetOptions): Array<EditableColumn<Row>> {
+  return template.map(block => columnFor(block, codeSets)).filter((column): column is EditableColumn<Row> => column !== null);
 }

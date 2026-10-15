@@ -27,6 +27,10 @@ export function setOptionSourceKind(
         ? current
         : { kind: "remote", request: { ...EMPTY_REQUEST } };
     }
+
+    case "codeSet": {
+      return { kind: "codeSet", codeSet: current?.kind === "codeSet" ? current.codeSet : "" };
+    }
   }
 }
 
@@ -49,6 +53,10 @@ export function optionSourceHasPayload(source: FieldOptionSource): boolean {
       return source.request.resource.length > 0
         || source.request.action.length > 0
         || source.mapping !== undefined;
+    }
+
+    case "codeSet": {
+      return source.codeSet.length > 0;
     }
   }
 }
