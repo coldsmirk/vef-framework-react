@@ -33,6 +33,7 @@ export function buildFlowColumns(categoryNames: Map<string, string>): Array<Tabl
         <Flex align="center" gap="small">
           <FlowIcon name={row.icon} />
           <Text>{value}</Text>
+          {row.isShared && <Tag color="purple">全局</Tag>}
         </Flex>
       )
     },

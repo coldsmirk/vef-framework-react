@@ -64,6 +64,7 @@ describe("createEmptyDraft", () => {
     expect(draft.basic.tenantId).toBe("t1");
     expect(draft.basic.bindingMode).toBe("standalone");
     expect(draft.basic.isAllInitiationAllowed).toBe(false);
+    expect(draft.basic.isShared).toBe(false);
     expect(draft.storageMode).toBe("json");
     expect(draft.flowDefinition.nodes).toHaveLength(0);
   });

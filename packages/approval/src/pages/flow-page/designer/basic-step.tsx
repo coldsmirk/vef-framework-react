@@ -244,7 +244,7 @@ export interface BasicStepProps {
   initiatorKinds?: ReadonlyArray<KindDescriptor<InitiatorKind>>;
   categoryOptions: CategoryTreeOption[];
   /**
-   * The flow code is immutable after creation.
+   * The flow code and whether the flow is shared are immutable after creation.
    */
   isEditing: boolean;
   onBasicChange: (patch: Partial<FlowDraftBasic>) => void;
@@ -317,6 +317,21 @@ export function BasicStep({
                 style={{ width: "100%" }}
                 value={basic.icon}
                 onChange={icon => onBasicChange({ icon: icon ?? undefined })}
+              />
+            </Labeled>
+          </Grid.Item>
+
+          <Grid.Item span={24}>
+            <Labeled
+              label="全局流程"
+              hint={isEditing
+                ? "创建后不可修改"
+                : "开启后所有租户都可发起；审批人与抄送人不能指定具体的用户、角色或部门。创建后不可修改"}
+            >
+              <Switch
+                checked={basic.isShared}
+                disabled={isEditing}
+                onChange={isShared => onBasicChange({ isShared })}
               />
             </Labeled>
           </Grid.Item>

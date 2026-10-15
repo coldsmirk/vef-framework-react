@@ -12,7 +12,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useCategoryApi, useFlowApi } from "../../../api";
 import { toEditorPlugins, useApprovalPlugins } from "../../../plugins";
-import { SHARED_TENANT_ID } from "../../../types";
 import { buildCategoryTreeOptions } from "../../category-page/form";
 import { BasicStep } from "./basic-step";
 import { FlowStep } from "./flow-step";
@@ -62,12 +61,11 @@ function DesignerBody({
   const [publishNow, setPublishNow] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // A flow's tenant never changes, and a flow sits under a category of its own
-  // tenant — a shared flow under a shared category — so the picker offers
-  // exactly those (the server pins everyone but a super-admin to their own
-  // tenant regardless).
+  // A flow's tenant never changes, and a flow — a shared one too — sits under
+  // a category of its own tenant, so the picker offers exactly those.
   const flowTenantId = flow?.tenantId ?? tenantId;
-  const isShared = flowTenantId === SHARED_TENANT_ID;
+  // Fixed once the flow exists; while creating, the basic step's switch.
+  const isShared = flow?.isShared ?? draft?.basic.isShared ?? false;
   const { data: categories } = useQuery({
     queryFn: categoryApi.findTree,
     queryKey: [categoryApi.findTree.key, { tenantId: flowTenantId }]
@@ -122,6 +120,7 @@ function DesignerBody({
       flowId: flow.id,
       basic: {
         tenantId: flow.tenantId,
+        isShared: flow.isShared,
         code: flow.code,
         name: flow.name,
         categoryId: flow.categoryId,
@@ -249,6 +248,7 @@ function DesignerBody({
       if (currentDraft.flowId === undefined) {
         const created = await create.mutateAsync({
           tenantId: basic.tenantId,
+          isShared: basic.isShared,
           code: basic.code,
           name: basic.name,
           categoryId: basic.categoryId,

@@ -2,7 +2,8 @@ import type { AddAssigneeType, ProcessTaskAction } from "./enums";
 
 /**
  * Parameters for `approval/instance.start`. The instance runs in the tenant
- * the caller acts in, from that tenant's own flows or the shared ones.
+ * the caller acts in, from that tenant's own flows or the ones other tenants
+ * share.
  * `formData` is the form renderer's submit payload, validated server-side
  * against the version's derived field list.
  */

@@ -38,14 +38,8 @@ export interface CategorySearch {
   name?: string;
   isActive?: boolean;
   /**
-   * Narrows the read to one tenant's categories — `SHARED_TENANT_ID` for the
-   * shared ones. Omitted, every tenant's are read: categories are managed
-   * across tenants, gated by permission.
+   * Narrows the read to one tenant's categories. Omitted, every tenant's are
+   * read: categories are managed across tenants, gated by permission.
    */
   tenantId?: string;
-  /**
-   * Adds the shared categories to the named tenant's — what a picker scoping
-   * a delegation needs, since shared flows sit under shared categories.
-   */
-  includeShared?: boolean;
 }

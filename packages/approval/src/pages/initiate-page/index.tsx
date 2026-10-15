@@ -95,9 +95,9 @@ function FlowCard({ flow, onClick }: { flow: AvailableFlow; onClick: () => void 
 
 /**
  * The initiation portal: every flow the current user may start — its tenant's
- * own flows plus the shared ones — grouped by category, searchable by keyword
- * and label. Clicking a card opens the start
- * drawer with the published form.
+ * own flows plus the ones other tenants share — grouped by category,
+ * searchable by keyword and label. Clicking a card opens the start drawer with
+ * the published form.
  */
 export function ApprovalInitiatePage({
   labels,

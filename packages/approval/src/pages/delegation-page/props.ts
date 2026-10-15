@@ -9,8 +9,8 @@ export interface ApprovalDelegationPageProps {
    */
   permissions?: Partial<DelegationPermissionCodes>;
   /**
-   * The tenant whose categories the category scope offers, beside the shared
-   * ones. Omitted, every tenant's categories are offered.
+   * The tenant whose categories the category scope offers. Omitted, every
+   * tenant's categories are offered.
    */
   tenantId?: string;
   /**

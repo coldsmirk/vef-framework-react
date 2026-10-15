@@ -33,7 +33,17 @@ export interface BusinessBindingConfig {
  * A flow definition record, mirroring the Go `approval.Flow`.
  */
 export interface Flow extends FullAudited {
+  /**
+   * The tenant that owns and manages the flow; it never changes.
+   */
   tenantId: string;
+  /**
+   * Offers the flow to every tenant beside its own flows: any tenant starts
+   * it like one of its own, and a flow of that tenant with the same code takes
+   * its place there. A shared flow routes no task or CC to specific people.
+   * Fixed at creation.
+   */
+  isShared: boolean;
   categoryId: string;
   code: string;
   name: string;
@@ -135,6 +145,11 @@ export interface InitiatorParams {
  */
 export interface CreateFlowParams {
   tenantId: string;
+  /**
+   * Offers the flow to every tenant (`Flow.isShared`). Its code must then be
+   * unique among the shared flows of every tenant.
+   */
+  isShared?: boolean;
   code: string;
   name: string;
   categoryId: string;
@@ -201,11 +216,17 @@ export interface ToggleFlowActiveParams {
  */
 export interface FlowSearch {
   /**
-   * Narrows the list to one tenant's flows — `SHARED_TENANT_ID` for the
-   * shared ones. Omitted, every tenant's are listed: flows are managed across
-   * tenants, gated by permission.
+   * Narrows the list to the flows one tenant owns, its shared ones included.
+   * Omitted, every tenant's are listed: flows are managed across tenants,
+   * gated by permission.
    */
   tenantId?: string;
+  /**
+   * Adds to `tenantId`'s flows the shared flows of other tenants whose code it
+   * has not taken for a flow of its own — every flow a start by code finds in
+   * that tenant, which is what a picker of a tenant's usable flows needs.
+   */
+  includeShared?: boolean;
   categoryId?: string;
   keyword?: string;
   isActive?: boolean;

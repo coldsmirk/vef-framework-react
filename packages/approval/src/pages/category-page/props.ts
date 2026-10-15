@@ -11,9 +11,8 @@ export interface ApprovalCategoryPageProps {
   /**
    * The tenant whose categories the page manages: the tree shows them, and
    * new categories are created under it. Categories are managed across
-   * tenants, gated by the permissions — `SHARED_TENANT_ID` manages the shared
-   * categories, the home of shared flows. Single-tenant deployments keep the
-   * default.
+   * tenants, gated by the permissions; a shared flow sits under a category of
+   * the tenant that owns it. Single-tenant deployments keep the default.
    *
    * @default "default"
    */

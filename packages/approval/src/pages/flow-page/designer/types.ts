@@ -9,6 +9,10 @@ import type { BindingMode, BusinessBindingConfig, InitiatorParams, StorageMode }
  */
 export interface FlowDraftBasic {
   tenantId: string;
+  /**
+   * Offers the flow to every tenant; fixed once the flow is created.
+   */
+  isShared: boolean;
   code: string;
   name: string;
   categoryId: string;
@@ -45,6 +49,7 @@ export function createEmptyDraft(tenantId: string): FlowDraft {
   return {
     basic: {
       tenantId,
+      isShared: false,
       code: "",
       name: "",
       categoryId: "",

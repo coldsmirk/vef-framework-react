@@ -7,4 +7,3 @@ export * from "./enums";
 export type * from "./flow";
 export type * from "./instance";
 export type * from "./my";
-export * from "./tenancy";
