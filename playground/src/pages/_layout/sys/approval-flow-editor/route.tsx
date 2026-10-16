@@ -1,9 +1,9 @@
-import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
-import type { ReactNode } from "react";
+import type { EditorPlugins, FlowDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
+import type { FC, ReactNode } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { ApprovalFlowEditor } from "@vef-framework-react/approval-flow-editor";
-import { Page } from "@vef-framework-react/components";
+import { Page, Select } from "@vef-framework-react/components";
 import { useCallback } from "react";
 
 export const Route = createFileRoute("/_layout/sys/approval-flow-editor")({
@@ -22,7 +22,17 @@ const initialValue: FlowDefinition = {
       id: "approval_1",
       kind: "approval",
       position: { x: 520, y: 120 },
-      data: { name: "部门审批" }
+      data: {
+        name: "部门审批",
+        assignees: [
+          {
+            kind: "user",
+            ids: ["zhang"],
+            tenantId: "hospital-a",
+            sortOrder: 1
+          }
+        ]
+      }
     },
     {
       id: "approval_2",
@@ -113,7 +123,54 @@ const initialValue: FlowDefinition = {
   ]
 };
 
-const plugins = {
+/**
+ * The demo is a shared flow: it routes work to people of other tenants, so a
+ * rule that picks users or departments asks for the tenant first and the
+ * pickers below list only that tenant's people.
+ */
+const TENANTS = [
+  { value: "hospital-a", label: "第一医院" },
+  { value: "hospital-b", label: "第二医院" }
+];
+
+const USERS_BY_TENANT: Record<string, Array<{ label: string; value: string }>> = {
+  "hospital-a": [{ label: "张三", value: "zhang" }, { label: "王五", value: "wang" }],
+  "hospital-b": [{ label: "李四", value: "li" }, { label: "赵六", value: "zhao" }]
+};
+
+const DEPARTMENTS_BY_TENANT: Record<string, Array<{ label: string; value: string }>> = {
+  "hospital-a": [{ label: "内科", value: "a-internal" }, { label: "外科", value: "a-surgery" }],
+  "hospital-b": [{ label: "检验科", value: "b-lab" }, { label: "药剂科", value: "b-pharmacy" }]
+};
+
+function createTenantPicker(optionsByTenant: Record<string, Array<{ label: string; value: string }>>): FC<PickerProps> {
+  const TenantPicker: FC<PickerProps> = ({
+    disabled,
+    tenantId,
+    value,
+    onChange
+  }) => (
+    <Select
+      disabled={disabled}
+      mode="multiple"
+      options={tenantId ? optionsByTenant[tenantId] ?? [] : []}
+      placeholder="选择"
+      style={{ width: "100%" }}
+      value={value}
+      onChange={onChange}
+    />
+  );
+
+  return TenantPicker;
+}
+
+const plugins: EditorPlugins = {
+  shared: true,
+  tenants: TENANTS,
+  pickers: {
+    user: createTenantPicker(USERS_BY_TENANT),
+    department: createTenantPicker(DEPARTMENTS_BY_TENANT)
+  },
   // Host-declared globals resolved from the instance's server-side snapshot
   // (`Instance.Globals`) — available to visual conditions and expressions
   // alongside the built-in applicant subjects and the form fields below.
