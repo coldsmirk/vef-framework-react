@@ -13,7 +13,6 @@ import { BUILTIN_CC_KINDS } from "../../types";
 import {
   FormField,
   indexKinds,
-  isKindSelectable,
   kindSelectOptions,
   PrincipalKindPicker,
   principalListItemHeaderStyle,
@@ -48,15 +47,15 @@ export const CcList: FC<CcListProps> = ({
   showTiming = false
 }) => {
   const rowKeys = useRowKeys(value.length);
-  const { ccKinds, shared } = useEditorPlugins();
+  const { ccKinds } = useEditorPlugins();
   // The application's catalog when the host wires one, the framework built-ins
   // otherwise — mirrors AssigneeList.
   const kinds = ccKinds ?? BUILTIN_CC_KINDS;
   const kindIndex = indexKinds(kinds);
-  const kindOptions = kindSelectOptions(kinds, shared);
+  const kindOptions = kindSelectOptions(kinds);
 
   const addItem = () => {
-    const first = kinds.find(descriptor => isKindSelectable(descriptor.selection, shared));
+    const first = kinds[0];
 
     onChange([...value, { kind: first?.kind ?? "user", ...principalRowResetFor(first?.selection) }]);
   };

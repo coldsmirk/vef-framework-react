@@ -20,13 +20,12 @@ import { Checkbox, Input, InputNumber, Segmented, Select } from "@vef-framework-
 import { useShallow } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
-import { useEditorPlugins } from "../../plugins";
 import { useEditorStore } from "../../store";
 import { AssigneeList } from "./assignee-list";
 import { CcList } from "./cc-list";
 import { FieldPermissionTable } from "./field-permission-table";
 import { PrincipalPicker } from "./principal-picker";
-import { CheckboxList, ConfigSection, disableNamedPeopleActions, FormField } from "./shared";
+import { CheckboxList, ConfigSection, FormField } from "./shared";
 
 const EXECUTION_TYPE_OPTIONS: Array<{ label: string; value: ExecutionType }> = [
   { label: "人工审批", value: "manual" },
@@ -92,10 +91,6 @@ const TIMEOUT_ACTION_OPTIONS: Array<{ label: string; value: TimeoutAction }> = [
   { label: "转交管理员", value: "transfer_admin" }
 ];
 
-// A shared flow cannot hand a task to node admins or named fallback users.
-const SHARED_EMPTY_HANDLER_OPTIONS = disableNamedPeopleActions(EMPTY_HANDLER_OPTIONS);
-const SHARED_TIMEOUT_ACTION_OPTIONS = disableNamedPeopleActions(TIMEOUT_ACTION_OPTIONS);
-
 const APPROVAL_FIELD_PERMISSIONS: Array<{ label: string; value: FieldPermission }> = [
   { label: "可见", value: "visible" },
   { label: "可编辑", value: "editable" },
@@ -124,7 +119,6 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
     return node?.type === "approval" ? node.data : undefined;
   });
   const readonly = useEditorStore(s => s.readonly);
-  const { shared } = useEditorPlugins();
   const updateNodeData = useEditorStore(s => s.updateNodeData);
 
   // Candidate targets for "rollback to specified node": other task nodes in the
@@ -266,7 +260,7 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
         <FormField label="无审批人时">
           <Select
             disabled={readonly}
-            options={shared ? SHARED_EMPTY_HANDLER_OPTIONS : EMPTY_HANDLER_OPTIONS}
+            options={EMPTY_HANDLER_OPTIONS}
             style={FULL_WIDTH_STYLE}
             value={data.emptyAssigneeAction ?? "auto_pass"}
             onChange={value => update({ emptyAssigneeAction: value })}
@@ -447,7 +441,7 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
             <FormField label="超时处理">
               <Select
                 disabled={readonly}
-                options={shared ? SHARED_TIMEOUT_ACTION_OPTIONS : TIMEOUT_ACTION_OPTIONS}
+                options={TIMEOUT_ACTION_OPTIONS}
                 style={FULL_WIDTH_STYLE}
                 value={data.timeoutAction ?? "none"}
                 onChange={value => update({ timeoutAction: value })}

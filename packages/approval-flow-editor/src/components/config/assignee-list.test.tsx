@@ -146,61 +146,181 @@ describe("AssigneeList kind catalog", () => {
   });
 });
 
+const TENANTS = [
+  { value: "org-a", label: "A 机构" },
+  { value: "org-b", label: "B 机构" }
+];
+
+/**
+ * A picker that shows the tenant it was handed, so a test can tell what the
+ * row passed down.
+ */
+const TenantEchoPicker: FC<PickerProps> = ({ tenantId }) => <div>{`选择器·${tenantId ?? "无机构"}`}</div>;
+
 describe("AssigneeList in a shared flow", () => {
-  it("seeds a new row from the first kind that picks no specific people", async () => {
+  const sharedPlugins: EditorPlugins = {
+    shared: true,
+    tenants: TENANTS,
+    pickers: {
+      user: TenantEchoPicker,
+      department: TenantEchoPicker,
+      role: stubPicker("角色")
+    }
+  };
+
+  it("offers every kind, the ones picking specific people included", async () => {
+    const user = userEvent.setup();
+
+    renderList({ value: [{ kind: "self", sortOrder: 1 }], plugins: sharedPlugins });
+
+    await user.click(screen.getByRole("combobox"));
+
+    expect(await screen.findByTitle("指定用户")).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByTitle("指定角色")).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByTitle("指定部门")).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("asks for the tenant before listing users", () => {
+    renderList({ value: [{ kind: "user", sortOrder: 1 }], plugins: sharedPlugins });
+
+    expect(screen.getByText("机构")).toBeInTheDocument();
+    expect(screen.getByText("选择器·无机构")).toBeInTheDocument();
+  });
+
+  it("hands the chosen tenant to the picker", () => {
+    renderList({
+      value: [
+        {
+          kind: "user",
+          tenantId: "org-b",
+          sortOrder: 1
+        }
+      ],
+      plugins: sharedPlugins
+    });
+
+    expect(screen.getByText("选择器·org-b")).toBeInTheDocument();
+  });
+
+  it("asks for the tenant before listing departments too", () => {
+    renderList({ value: [{ kind: "department", sortOrder: 1 }], plugins: sharedPlugins });
+
+    expect(screen.getByText("机构")).toBeInTheDocument();
+  });
+
+  it("clears the ids when the tenant changes", async () => {
     const user = userEvent.setup();
 
     const onChange = vi.fn();
-    renderList({
-      value: [],
-      plugins: { shared: true },
-      onChange
-    });
-
-    await user.click(screen.getByRole("button", { name: /添加处理人/ }));
-
-    expect(onChange).toHaveBeenCalledWith([
-      {
-        kind: "self",
-        ids: undefined,
-        formField: undefined,
-        sortOrder: 1
-      }
-    ]);
-  });
-
-  it("keeps a loaded people-picking row readable by its label", () => {
     renderList({
       value: [
         {
           kind: "user",
           ids: ["user-1"],
+          tenantId: "org-a",
           sortOrder: 1
         }
       ],
-      plugins: { shared: true }
+      plugins: sharedPlugins,
+      onChange
     });
 
-    expect(screen.getByTitle("指定用户")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("combobox")[1]!);
+    await user.click(await screen.findByTitle("B 机构"));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: "user",
+        ids: [],
+        tenantId: "org-b"
+      })
+    ]);
   });
 
-  it("refuses the kinds that pick specific people", async () => {
+  it("keeps the tenant when the row switches between users and departments", async () => {
     const user = userEvent.setup();
 
     const onChange = vi.fn();
     renderList({
-      value: [{ kind: "self", sortOrder: 1 }],
-      plugins: { shared: true },
+      value: [
+        {
+          kind: "user",
+          ids: ["user-1"],
+          tenantId: "org-a",
+          sortOrder: 1
+        }
+      ],
+      plugins: sharedPlugins,
       onChange
     });
 
-    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getAllByRole("combobox")[0]!);
+    await user.click(await screen.findByTitle("指定部门"));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: "department",
+        ids: [],
+        tenantId: "org-a"
+      })
+    ]);
+  });
+
+  it("drops the tenant when the row switches to a kind that is not per tenant", async () => {
+    const user = userEvent.setup();
+
+    const onChange = vi.fn();
+    renderList({
+      value: [
+        {
+          kind: "user",
+          ids: ["user-1"],
+          tenantId: "org-a",
+          sortOrder: 1
+        }
+      ],
+      plugins: sharedPlugins,
+      onChange
+    });
+
+    await user.click(screen.getAllByRole("combobox")[0]!);
     await user.click(await screen.findByTitle("指定角色"));
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        kind: "role",
+        ids: [],
+        tenantId: undefined
+      })
+    ]);
+  });
 
-    await user.click(screen.getByTitle("直属上级"));
+  it("picks roles without a tenant", () => {
+    renderList({ value: [{ kind: "role", sortOrder: 1 }], plugins: sharedPlugins });
 
-    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ kind: "superior" })]);
+    expect(screen.queryByText("机构")).not.toBeInTheDocument();
+    expect(screen.getByText("角色选择器")).toBeInTheDocument();
+  });
+
+  it("picks users through the plain picker when the host lists no tenants", () => {
+    renderList({
+      value: [{ kind: "user", sortOrder: 1 }],
+      plugins: { ...sharedPlugins, tenants: undefined }
+    });
+
+    expect(screen.queryByText("机构")).not.toBeInTheDocument();
+    expect(screen.getByText("选择器·无机构")).toBeInTheDocument();
+  });
+});
+
+describe("AssigneeList in an ordinary flow", () => {
+  it("picks users without a tenant even when the host lists tenants", () => {
+    renderList({
+      value: [{ kind: "user", sortOrder: 1 }],
+      plugins: { tenants: TENANTS, pickers: { user: TenantEchoPicker } }
+    });
+
+    expect(screen.queryByText("机构")).not.toBeInTheDocument();
+    expect(screen.getByText("选择器·无机构")).toBeInTheDocument();
   });
 });

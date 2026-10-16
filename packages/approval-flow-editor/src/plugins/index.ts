@@ -1,2 +1,2 @@
 export { EditorPluginsContext, useEditorPlugins } from "./context";
-export type { EditorPlugins, PickerProps } from "./types";
+export type { EditorPlugins, PickerProps, TenantOption } from "./types";

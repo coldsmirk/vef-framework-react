@@ -167,14 +167,13 @@ function DesignerBody({
       ? validateFlowDefinition(draft.flowDefinition, {
           formFields: projection?.formFields ?? [],
           assigneeKinds: kindOptions?.assignees,
-          ccKinds: kindOptions?.ccs,
-          shared: isShared
+          ccKinds: kindOptions?.ccs
         })
       : [],
-    [draft, projection, kindOptions, isShared]
+    [draft, projection, kindOptions]
   );
-  // A shared flow runs in every tenant, so the editor keeps its rules off
-  // specific people — the backend refuses to deploy them.
+  // A shared flow routes work to people of other tenants, so the editor asks
+  // for the tenant before it lists users or departments.
   const editorPlugins = useMemo(
     () => {
       return { ...toEditorPlugins(plugins, projection?.formFields ?? [], kindOptions), shared: isShared };

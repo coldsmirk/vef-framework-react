@@ -20,4 +20,4 @@ export * from "./types";
 // The picker contract hosts implement for `ApprovalPlugins.pickers`, plus the
 // kind-descriptor vocabulary a host reads to key a picker by a custom kind —
 // re-exported so a host wires the provider from this package alone.
-export type { EditorPlugins, KindDescriptor, PickerProps, PrincipalKind, SelectionMode } from "@vef-framework-react/approval-flow-editor";
+export type { EditorPlugins, KindDescriptor, PickerProps, PrincipalKind, SelectionMode, TenantOption } from "@vef-framework-react/approval-flow-editor";

@@ -10,6 +10,22 @@ export interface PickerProps {
   value: string[];
   onChange: (ids: string[]) => void;
   disabled?: boolean;
+  /**
+   * The tenant to pick from. Set only for a user or department picker of a
+   * shared flow whose host wired {@link EditorPlugins.tenants}: such a flow
+   * routes work to people of other tenants than the one that starts it, so the
+   * designer picks the tenant first and the picker lists that tenant's people.
+   * Omitted, the picker lists whatever the host scopes it to by default.
+   */
+  tenantId?: string;
+}
+
+/**
+ * One tenant a shared flow's rules can pick people from.
+ */
+export interface TenantOption {
+  value: string;
+  label: string;
 }
 
 /**
@@ -71,12 +87,19 @@ export interface EditorPlugins {
    */
   globalSubjects?: FormFieldDefinition[];
   /**
-   * The flow being edited is shared — owned by no tenant and run by every
-   * tenant (the backend's `approval.SharedTenantID`). A shared flow routes no
-   * work to specific people, so the editor disables the assignee / CC kinds
-   * that pick users, roles or departments and the actions handing a task to
-   * node admins or named fallback users, and validation flags any of them a
-   * loaded definition still carries — the backend refuses to deploy them.
+   * The flow being edited is shared: offered to every tenant, so its work may
+   * be routed to people of other tenants than the one that starts it. With
+   * {@link EditorPlugins.tenants} wired, an assignee or CC rule that picks
+   * users or departments then asks for a tenant first and hands it to the
+   * picker. Roles and host catalogs are not per tenant and are picked as in
+   * any flow.
    */
   shared?: boolean;
+  /**
+   * The tenants a shared flow's user and department rules can pick from. The
+   * editor knows no tenant of its own; the host lists them. Ignored unless the
+   * flow is {@link EditorPlugins.shared}; without it a shared flow picks people
+   * through the plain pickers, scoped as the host scopes them.
+   */
+  tenants?: readonly TenantOption[];
 }

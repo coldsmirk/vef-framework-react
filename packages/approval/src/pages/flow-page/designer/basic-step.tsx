@@ -326,7 +326,7 @@ export function BasicStep({
               label="全局流程"
               hint={isEditing
                 ? "创建后不可修改"
-                : "开启后所有租户都可发起；审批人与抄送人不能指定具体的用户、角色或部门。创建后不可修改"}
+                : "开启后所有机构都可发起，审批人与抄送人可以指定其他机构的用户或部门。创建后不可修改"}
             >
               <Switch
                 checked={basic.isShared}

@@ -11,7 +11,6 @@ import { fullWidthStyle } from "../../styles";
 import { BUILTIN_ASSIGNEE_KINDS } from "../../types";
 import {
   indexKinds,
-  isKindSelectable,
   kindSelectOptions,
   PrincipalKindPicker,
   principalListItemHeaderStyle,
@@ -37,13 +36,13 @@ export const AssigneeList: FC<AssigneeListProps> = ({
   disabled
 }) => {
   const rowKeys = useRowKeys(value.length);
-  const { assigneeKinds, shared } = useEditorPlugins();
+  const { assigneeKinds } = useEditorPlugins();
   // The application's catalog when the host wires one, the framework built-ins
   // otherwise — an editor with no metadata integration still offers the kinds
   // every deployment has.
   const kinds = assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS;
   const kindIndex = indexKinds(kinds);
-  const kindOptions = kindSelectOptions(kinds, shared);
+  const kindOptions = kindSelectOptions(kinds);
 
   const emitAssignees = (next: AssigneeDefinition[]) => {
     onChange(next.map((a, i) => {
@@ -52,7 +51,7 @@ export const AssigneeList: FC<AssigneeListProps> = ({
   };
 
   const addAssignee = () => {
-    const first = kinds.find(descriptor => isKindSelectable(descriptor.selection, shared));
+    const first = kinds[0];
 
     emitAssignees([
       ...value,

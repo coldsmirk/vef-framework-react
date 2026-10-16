@@ -262,6 +262,11 @@ export interface CcDefinition {
   ids?: string[];
   formField?: string;
   timing?: CcTiming;
+  /**
+   * The tenant a shared flow's designer picked `ids` from. Designer-only: the
+   * backend stores it with the definition and never reads it.
+   */
+  tenantId?: string;
 }
 
 /**
@@ -362,6 +367,11 @@ export interface AssigneeDefinition {
   ids?: string[];
   formField?: string;
   sortOrder: number;
+  /**
+   * The tenant a shared flow's designer picked `ids` from. Designer-only: the
+   * backend stores it with the definition and never reads it.
+   */
+  tenantId?: string;
 }
 
 /**

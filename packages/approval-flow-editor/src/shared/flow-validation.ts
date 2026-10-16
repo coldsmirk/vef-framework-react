@@ -29,8 +29,7 @@ import {
   AGGREGATE_OPERATORS,
   BUILTIN_ASSIGNEE_KINDS,
   BUILTIN_CC_KINDS,
-  CONDITION_OPERATORS as CONDITION_OPERATOR_LIST,
-  isPrincipalKind
+  CONDITION_OPERATORS as CONDITION_OPERATOR_LIST
 } from "../types";
 
 /**
@@ -110,12 +109,7 @@ export type FlowValidationCode
     | "invalid_field_permission"
     | "field_permission_key_unknown"
     | "cc_field_permission_not_allowed"
-    | "field_permission_required_auto_pass"
-    | "shared_assignee_names_people"
-    | "shared_cc_names_people"
-    | "shared_fallback_users"
-    | "shared_node_admins"
-    | "shared_timeout_to_admins";
+    | "field_permission_required_auto_pass";
 
 /**
  * Build a Set from a Record keyed by every member of a string union: omitting
@@ -289,13 +283,6 @@ export interface FlowValidationContext {
    * The CC kinds this application accepts.
    */
   ccKinds?: readonly KindDescriptor[];
-  /**
-   * The flow is shared — owned by no tenant and run by every tenant (the
-   * backend's `approval.SharedTenantID`). Adds the backend's deploy rule for
-   * such a flow: no assignee or CC rule may pick users, roles or departments,
-   * and no node may hand a task to node admins or named fallback users.
-   */
-  shared?: boolean;
 }
 
 /**
@@ -392,10 +379,6 @@ export function validateFlowDefinition(
       validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
       validateApprovalNodeConfig(node.id, node.data, errors);
 
-      if (context.shared) {
-        validateSharedTaskNode(node.id, node.data, vocabulary, errors);
-      }
-
       if (node.data?.rollbackTargetKeys?.length) {
         rollbackRefs.push({ nodeId: node.id, keys: node.data.rollbackTargetKeys });
       }
@@ -408,20 +391,12 @@ export function validateFlowDefinition(
       validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
       validateHandleNodeConfig(node.id, node.data, errors);
 
-      if (context.shared) {
-        validateSharedTaskNode(node.id, node.data, vocabulary, errors);
-      }
-
       continue;
     }
 
     if (node.kind === "cc") {
       validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors);
       validateFieldPermissions(node.id, node.data?.fieldPermissions, true, formFieldKeys, errors);
-
-      if (context.shared) {
-        validateSharedCcs(node.id, node.data?.ccs, vocabulary, errors);
-      }
     }
   }
 
@@ -863,80 +838,6 @@ function validateHandleNodeConfig(
 /**
  * Validate CC recipient definitions. Mirrors the backend `validateCCDefinitions`.
  */
-/**
- * Reports whether a kind's input picks users, roles or departments — people
- * of one tenant, whom a shared flow cannot route anything to.
- */
-function selectsPeople(selection: SelectionMode | undefined): boolean {
-  return selection !== undefined && isPrincipalKind(selection);
-}
-
-/**
- * Mirrors the backend's `ValidateSharedFlowNodes` for a task node of a shared
- * flow: a shared flow runs in every tenant, so its assignee and CC rules must
- * not pick specific people, and it cannot hand a task to node admins or named
- * fallback users. It judges those actions, never a leftover admin / fallback
- * list, which hands nothing to anyone while no action routes to it.
- */
-function validateSharedTaskNode(
-  nodeId: string,
-  data: TaskNodeData | undefined,
-  vocabulary: KindVocabulary,
-  errors: FlowValidationError[]
-): void {
-  if ((data?.assignees ?? []).some(assignee => selectsPeople(vocabulary.assignees.get(assignee.kind)))) {
-    errors.push({
-      code: "shared_assignee_names_people",
-      message: "全局流程的审批人不能指定具体的用户、角色或部门",
-      nodeId
-    });
-  }
-
-  if (data?.emptyAssigneeAction === "transfer_specified") {
-    errors.push({
-      code: "shared_fallback_users",
-      message: "全局流程无审批人时不能转交指定人员",
-      nodeId
-    });
-  }
-
-  if (data?.emptyAssigneeAction === "transfer_admin") {
-    errors.push({
-      code: "shared_node_admins",
-      message: "全局流程无审批人时不能转交管理员",
-      nodeId
-    });
-  }
-
-  if ((data?.timeoutHours ?? 0) > 0 && data?.timeoutAction === "transfer_admin") {
-    errors.push({
-      code: "shared_timeout_to_admins",
-      message: "全局流程的超时处理不能转交管理员",
-      nodeId
-    });
-  }
-
-  validateSharedCcs(nodeId, data?.ccs, vocabulary, errors);
-}
-
-/**
- * The CC half of {@link validateSharedTaskNode}, shared with CC nodes.
- */
-function validateSharedCcs(
-  nodeId: string,
-  ccs: CcDefinition[] | undefined,
-  vocabulary: KindVocabulary,
-  errors: FlowValidationError[]
-): void {
-  if ((ccs ?? []).some(cc => selectsPeople(vocabulary.ccs.get(cc.kind)))) {
-    errors.push({
-      code: "shared_cc_names_people",
-      message: "全局流程的抄送人不能指定具体的用户、角色或部门",
-      nodeId
-    });
-  }
-}
-
 function validateCcDefinitions(
   nodeId: string,
   ccs: CcDefinition[] | undefined,

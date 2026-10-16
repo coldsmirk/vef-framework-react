@@ -42,6 +42,11 @@ interface PrincipalPickerProps {
   onChange: (ids: string[]) => void;
   disabled?: boolean;
   /**
+   * The tenant the picker lists people of, for a rule of a shared flow (see
+   * `PickerProps.tenantId`).
+   */
+  tenantId?: string;
+  /**
    * Rendered instead of the "no plugin" hint when the host wired no picker for
    * this kind. For a list that selects principals the hint is the whole answer
    * — there is nothing else to offer — but where the value has another way in
@@ -69,6 +74,7 @@ export const PrincipalPicker: FC<PrincipalPickerProps> = ({
   value,
   onChange,
   disabled,
+  tenantId,
   fallback
 }) => {
   const { pickers } = useEditorPlugins();
@@ -80,5 +86,5 @@ export const PrincipalPicker: FC<PrincipalPickerProps> = ({
     return fallback ?? <div css={placeholderStyle}>{`未提供${name}选择器插件`}</div>;
   }
 
-  return <Picker disabled={disabled} value={value} onChange={onChange} />;
+  return <Picker disabled={disabled} tenantId={tenantId} value={value} onChange={onChange} />;
 };

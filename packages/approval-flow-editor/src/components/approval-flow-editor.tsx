@@ -143,23 +143,21 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   // (tri-state — undefined means "no inventory to check against", distinct
   // from an explicit empty array meaning "the form has zero fields"), the
   // application's own assignee / CC vocabularies, so a host kind is not
-  // reported as an unknown type, and whether the flow is shared.
+  // reported as an unknown type.
   const {
     formFields,
     assigneeKinds,
-    ccKinds,
-    shared
+    ccKinds
   } = useEditorPlugins();
   const validationContext = useMemo<FlowValidationContext>(
     () => {
       return {
         formFields,
         assigneeKinds,
-        ccKinds,
-        shared
+        ccKinds
       };
     },
-    [formFields, assigneeKinds, ccKinds, shared]
+    [formFields, assigneeKinds, ccKinds]
   );
 
   const { onDragOver, onDrop } = useDrop();

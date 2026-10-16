@@ -8,7 +8,7 @@ export { DEFAULT_NODE_DATA, isNodeKind, NODE_KIND_LABELS, NODE_KINDS, NODE_RULES
 export { ApprovalIcon, CcIcon, ConditionIcon, EndIcon, HandleIcon, StartIcon } from "./icons";
 
 // Plugins
-export type { EditorPlugins, PickerProps } from "./plugins";
+export type { EditorPlugins, PickerProps, TenantOption } from "./plugins";
 
 export {
   validateFlowDefinition,

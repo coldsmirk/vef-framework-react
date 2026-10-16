@@ -1,4 +1,4 @@
-import type { EditorPlugins, FormFieldDefinition, PickerProps } from "@vef-framework-react/approval-flow-editor";
+import type { EditorPlugins, FormFieldDefinition, PickerProps, TenantOption } from "@vef-framework-react/approval-flow-editor";
 import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode } from "react";
 
@@ -26,6 +26,16 @@ export interface ApprovalPlugins {
    * input, so the pages stay functional without host wiring.
    */
   pickers?: Partial<Record<string, FC<PickerProps>>>;
+  /**
+   * The tenants a shared flow's rules can pick people from. A shared flow is
+   * offered to every tenant and routes work to people of other tenants than
+   * the one that starts it, so its designer picks a tenant first and then the
+   * users or departments of that tenant. Wire the `user` and `department`
+   * pickers to list the tenant they are handed (`PickerProps.tenantId`); roles
+   * and host catalogs are not per tenant. Without it a shared flow picks
+   * people through the plain pickers.
+   */
+  tenants?: TenantOption[];
   /**
    * Form field registries for rendering and designing approval forms.
    * Defaults to the approval profile from `approval-form-bridge`
@@ -158,6 +168,7 @@ export function toEditorPlugins(
 ): EditorPlugins {
   return {
     pickers: plugins.pickers,
+    tenants: plugins.tenants,
     globalSubjects: plugins.globalSubjects,
     assigneeKinds: kindOptions?.assignees,
     ccKinds: kindOptions?.ccs,

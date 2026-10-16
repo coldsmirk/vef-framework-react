@@ -3,11 +3,11 @@ import type { FC, ReactNode } from "react";
 import type { KindDescriptor, SelectionMode } from "../../types";
 
 import { css } from "@emotion/react";
-import { Collapse, globalCssVars, Input } from "@vef-framework-react/components";
+import { Collapse, globalCssVars, Input, Select } from "@vef-framework-react/components";
 
 import { ChevronRightIcon } from "../../icons";
-import { configSectionContentStyle, configSectionStyle, formFieldLabelStyle, formFieldStyle } from "../../styles";
-import { isPrincipalKind } from "../../types";
+import { useEditorPlugins } from "../../plugins";
+import { configSectionContentStyle, configSectionStyle, formFieldLabelStyle, formFieldStyle, fullWidthStyle } from "../../styles";
 import { PrincipalPicker } from "./principal-picker";
 
 /* ── Collapsible Section ───────────────────────────────────────────────── */
@@ -161,6 +161,7 @@ interface PrincipalListEntry {
   kind: string;
   ids?: string[];
   formField?: string;
+  tenantId?: string;
 }
 
 interface PrincipalKindPickerProps {
@@ -176,7 +177,7 @@ interface PrincipalKindPickerProps {
    * The patch shape is the intersection of what assignee / cc rows accept, so a
    * single component drives both without per-list typing.
    */
-  onPatch: (partial: { ids?: string[]; formField?: string }) => void;
+  onPatch: (partial: { ids?: string[]; formField?: string; tenantId?: string }) => void;
 }
 
 /**
@@ -194,6 +195,8 @@ export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
   disabled,
   onPatch
 }) => {
+  const { shared, tenants } = useEditorPlugins();
+
   if (!descriptor) {
     return <div css={unknownKindStyle}>{`当前应用未注册该类型：${item.kind}`}</div>;
   }
@@ -215,17 +218,62 @@ export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
     return null;
   }
 
+  // A shared flow routes work to people of other tenants than the one that
+  // starts it, and users and departments belong to one tenant each: the tenant
+  // is picked first, and the picker lists only that tenant's people. Roles and
+  // host catalogs are not per tenant, so they are picked as in any flow.
+  const perTenant = shared === true && tenants !== undefined && isPerTenantSelection(descriptor.selection);
+
+  if (!perTenant) {
+    return (
+      <PrincipalPicker
+        disabled={disabled}
+        kind={descriptor.kind}
+        label={descriptor.label}
+        selection={descriptor.selection}
+        value={item.ids ?? []}
+        onChange={ids => onPatch({ ids })}
+      />
+    );
+  }
+
   return (
-    <PrincipalPicker
-      disabled={disabled}
-      kind={descriptor.kind}
-      label={descriptor.label}
-      selection={descriptor.selection}
-      value={item.ids ?? []}
-      onChange={ids => onPatch({ ids })}
-    />
+    <>
+      <FormField label="机构">
+        <Select
+          css={fullWidthStyle}
+          disabled={disabled}
+          placeholder="先选择机构"
+          showSearch={{ optionFilterProp: "label" }}
+          value={item.tenantId}
+          options={tenants.map(tenant => {
+            return { label: tenant.label, value: tenant.value };
+          })}
+          // The ids belong to the tenant they were picked from.
+          onChange={tenantId => onPatch({ tenantId, ids: [] })}
+        />
+      </FormField>
+
+      <PrincipalPicker
+        disabled={disabled || item.tenantId === undefined}
+        kind={descriptor.kind}
+        label={descriptor.label}
+        selection={descriptor.selection}
+        tenantId={item.tenantId}
+        value={item.ids ?? []}
+        onChange={ids => onPatch({ ids })}
+      />
+    </>
   );
 };
+
+/**
+ * Whether a kind's ids belong to one tenant each: users and departments do,
+ * roles and host catalogs are shared by every tenant.
+ */
+function isPerTenantSelection(selection: SelectionMode): boolean {
+  return selection === "user" || selection === "department";
+}
 
 /**
  * The value fields a row must carry after its kind changes, derived from the
@@ -234,16 +282,32 @@ export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
  * a stale `ids` under a `form_field` kind is exactly what save-time validation
  * has no way to notice.
  */
-export function principalRowResetFor(selection: SelectionMode | undefined): { ids?: string[]; formField?: string } {
+export function principalRowResetFor(selection: SelectionMode | undefined): { ids?: string[]; formField?: string; tenantId?: string } {
   if (selection === "form_field") {
-    return { ids: undefined, formField: "" };
+    return {
+      ids: undefined,
+      formField: "",
+      tenantId: undefined
+    };
   }
 
   if (selection === undefined || selection === "none") {
-    return { ids: undefined, formField: undefined };
+    return {
+      ids: undefined,
+      formField: undefined,
+      tenantId: undefined
+    };
   }
 
-  return { ids: [], formField: undefined };
+  // Users and departments are both picked from a tenant, so a row switching
+  // between them keeps the tenant it had chosen.
+  return isPerTenantSelection(selection)
+    ? { ids: [], formField: undefined }
+    : {
+        ids: [],
+        formField: undefined,
+        tenantId: undefined
+      };
 }
 
 /**
@@ -254,46 +318,12 @@ export function indexKinds<K extends string>(descriptors: ReadonlyArray<KindDesc
 }
 
 /**
- * Whether a flow may pick a kind: every kind, except — in a shared flow — one
- * picking users, roles or departments, which belong to a single tenant.
- */
-export function isKindSelectable(selection: SelectionMode, shared: boolean | undefined): boolean {
-  return shared !== true || !isPrincipalKind(selection);
-}
-
-/**
- * The empty-assignee and timeout actions that hand a task to node admins or
- * named fallback users.
- */
-const NAMED_PEOPLE_ACTIONS = new Set<string>(["transfer_admin", "transfer_specified"]);
-
-/**
- * An action dropdown's options for a shared flow: the actions handing a task
- * to node admins or named fallback users — people of one tenant — are
- * disabled, still reading as their label on a loaded definition.
- */
-export function disableNamedPeopleActions<T extends string>(
-  options: ReadonlyArray<{ label: string; value: T }>
-): Array<{ label: string; value: T; disabled: boolean }> {
-  return options.map(option => {
-    return { ...option, disabled: NAMED_PEOPLE_ACTIONS.has(option.value) };
-  });
-}
-
-/**
- * The kind dropdown's options. A kind the flow may not pick stays listed but
- * disabled, so a row a loaded definition still carries reads as its label
- * while validation flags it.
+ * The kind dropdown's options.
  */
 export function kindSelectOptions<K extends string>(
-  descriptors: ReadonlyArray<KindDescriptor<K>>,
-  shared: boolean | undefined
-): Array<{ label: string; value: K; disabled: boolean }> {
+  descriptors: ReadonlyArray<KindDescriptor<K>>
+): Array<{ label: string; value: K }> {
   return descriptors.map(descriptor => {
-    return {
-      label: descriptor.label,
-      value: descriptor.kind,
-      disabled: !isKindSelectable(descriptor.selection, shared)
-    };
+    return { label: descriptor.label, value: descriptor.kind };
   });
 }
