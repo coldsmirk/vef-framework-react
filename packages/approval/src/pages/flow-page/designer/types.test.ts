@@ -62,7 +62,7 @@ describe("createEmptyDraft", () => {
     const draft = createEmptyDraft("t1");
 
     expect(draft.basic.tenantId).toBe("t1");
-    expect(draft.basic.bindingMode).toBe("standalone");
+    expect(draft.basic.businessKind).toBeUndefined();
     expect(draft.basic.isAllInitiationAllowed).toBe(false);
     expect(draft.basic.isShared).toBe(false);
     expect(draft.storageMode).toBe("json");

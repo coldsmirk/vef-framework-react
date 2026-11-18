@@ -55,13 +55,13 @@ export function buildFlowColumns(categoryNames: Map<string, string>): Array<Tabl
       render: (value: Flow["labels"]) => <LabelsDisplay labels={value} />
     },
     {
-      title: "业务绑定",
-      dataIndex: "bindingMode",
+      title: "表单来源",
+      dataIndex: "businessKind",
       width: 110,
       align: "center",
-      render: (value: Flow["bindingMode"]) => value === "business"
-        ? <Tag color="blue">业务绑定</Tag>
-        : <Tag>独立存储</Tag>
+      render: (value: Flow["businessKind"]) => value
+        ? <Tag color="blue">业务表单</Tag>
+        : <Tag>流程表单</Tag>
     },
     {
       title: "版本",

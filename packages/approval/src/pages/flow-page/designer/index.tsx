@@ -15,6 +15,7 @@ import { useCategoryApi, useFlowApi } from "../../../api";
 import { toEditorPlugins, useApprovalPlugins } from "../../../plugins";
 import { buildCategoryTreeOptions } from "../../category-page/form";
 import { BasicStep } from "./basic-step";
+import { FieldCatalog } from "./field-catalog";
 import { FlowStep } from "./flow-step";
 import { FormStep } from "./form-step";
 import { ReviewStep } from "./review-step";
@@ -114,6 +115,13 @@ function DesignerBody({
     staleTime: Infinity
   });
 
+  const { data: businessKinds } = useQuery({
+    queryFn: flowApi.listBusinessKinds,
+    queryKey: [flowApi.listBusinessKinds.key, {}],
+    staleTime: Infinity
+  });
+  const kind = businessKinds?.find(item => item.kind === draft?.basic.businessKind);
+
   useEffect(() => {
     if (!isEditing || draft !== null || versions === undefined || initiatorRows === undefined) {
       return;
@@ -138,7 +146,7 @@ function DesignerBody({
         icon: flow.icon ?? undefined,
         description: flow.description ?? undefined,
         labels: flow.labels ?? {},
-        bindingMode: flow.bindingMode,
+        businessKind: flow.businessKind,
         businessBinding: flow.businessBinding ?? undefined,
         adminUserIds: flow.adminUserIds,
         isAllInitiationAllowed: flow.isAllInitiationAllowed,
@@ -174,23 +182,25 @@ function DesignerBody({
     () => draft?.formSchema ? validateApprovalSchema(draft.formSchema, plugins.registries) : null,
     [draft?.formSchema, plugins.registries]
   );
+  const fields = draft?.basic.businessKind ? kind?.formFields : projection?.formFields;
   const flowErrors = useMemo(
     () => draft
       ? validateFlowDefinition(draft.flowDefinition, {
-          formFields: projection?.formFields ?? [],
+          formFields: fields ?? [],
+          globalSubjects: plugins.globalSubjects,
           assigneeKinds: kindOptions?.assignees,
           ccKinds: kindOptions?.ccs
         })
       : [],
-    [draft, projection, kindOptions]
+    [draft, fields, kindOptions, plugins.globalSubjects]
   );
   // A shared flow routes work to people of other tenants, so the editor asks
   // for the tenant before it lists users or departments.
   const editorPlugins = useMemo(
     () => {
-      return { ...toEditorPlugins(plugins, projection?.formFields ?? [], kindOptions), shared: isShared };
+      return { ...toEditorPlugins(plugins, fields ?? [], kindOptions), shared: isShared };
     },
-    [plugins, projection, kindOptions, isShared]
+    [plugins, fields, kindOptions, isShared]
   );
 
   const handleBasicChange = useCallback((patch: Partial<FlowDraftBasic>) => {
@@ -223,11 +233,12 @@ function DesignerBody({
     && basic.name.trim() !== ""
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
-    && (basic.bindingMode !== "business" || isBindingValid(basic.businessBinding))
+    && (!basic.businessKind || kind !== undefined)
+    && (!basic.businessBinding || Boolean(kind && isBindingValid(basic.businessBinding)))
     && (basic.isAllInitiationAllowed || initiatorsForSubmit(draft).length > 0);
   const stepValid = [
     basicValid,
-    formGate === null || formGate.valid,
+    Boolean(kind) || formGate === null || formGate.valid,
     flowErrors.length === 0,
     true
   ];
@@ -252,7 +263,7 @@ function DesignerBody({
       // their mode: a standalone flow must carry no binding, a flow open to
       // everyone must carry no initiator rules. The in-progress state is
       // dropped only here, so toggling either switch never loses input.
-      const businessBinding = basic.bindingMode === "business" ? basic.businessBinding : undefined;
+      const { businessKind, businessBinding } = basic;
       const initiators = initiatorsForSubmit(currentDraft);
 
       let flowId: string;
@@ -267,7 +278,7 @@ function DesignerBody({
           icon: basic.icon,
           description: basic.description,
           labels: basic.labels,
-          bindingMode: basic.bindingMode,
+          businessKind,
           businessBinding,
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
@@ -283,7 +294,7 @@ function DesignerBody({
           icon: basic.icon,
           description: basic.description,
           labels: basic.labels,
-          bindingMode: basic.bindingMode,
+          businessKind,
           businessBinding,
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
@@ -297,9 +308,9 @@ function DesignerBody({
       const version = await deploy.mutateAsync({
         flowId,
         description: versionDescription.trim() || undefined,
-        storageMode: currentDraft.storageMode,
+        storageMode: businessKind ? "json" : currentDraft.storageMode,
         flowDefinition: currentDraft.flowDefinition,
-        formSchema: currentDraft.formSchema ?? undefined
+        formSchema: businessKind ? undefined : currentDraft.formSchema ?? undefined
       });
 
       if (publishNow) {
@@ -319,6 +330,7 @@ function DesignerBody({
     <BasicStep
       key="basic"
       basic={basic}
+      businessKinds={businessKinds}
       categoryOptions={categoryOptions}
       initiatorKinds={kindOptions?.initiators}
       initiators={draft.initiators}
@@ -326,14 +338,18 @@ function DesignerBody({
       onBasicChange={handleBasicChange}
       onInitiatorsChange={handleInitiatorsChange}
     />,
-    <FormStep
-      key="form"
-      initialSchema={draft.formSchema ?? undefined}
-      registries={plugins.registries}
-      storageMode={draft.storageMode}
-      onSchemaChange={handleSchemaChange}
-      onStorageModeChange={storageMode => setDraft(prev => prev ? { ...prev, storageMode } : prev)}
-    />,
+    basic.businessKind
+      ? <FieldCatalog key="catalog" fields={kind?.formFields ?? []} title="业务字段目录" />
+      : (
+          <FormStep
+            key="form"
+            initialSchema={draft.formSchema ?? undefined}
+            registries={plugins.registries}
+            storageMode={draft.storageMode}
+            onSchemaChange={handleSchemaChange}
+            onStorageModeChange={storageMode => setDraft(prev => prev ? { ...prev, storageMode } : prev)}
+          />
+        ),
     <FlowStep
       key="flow"
       plugins={editorPlugins}
@@ -342,8 +358,9 @@ function DesignerBody({
     />,
     <ReviewStep
       key="review"
+      businessKindLabel={kind?.label}
       draft={draft}
-      fields={projection?.fields ?? []}
+      fields={kind?.formFields ?? projection?.fields ?? []}
       publishNow={publishNow}
       versionDescription={versionDescription}
       onPublishNowChange={setPublishNow}
@@ -354,7 +371,7 @@ function DesignerBody({
   return (
     <Flex style={{ height: "100%", flexDirection: "column" }}>
       <div style={{ padding: "12px 32px", borderBottom: "1px solid var(--vef-color-border-secondary)" }}>
-        <Steps current={step} items={STEP_ITEMS} size="small" style={{ maxWidth: 720, marginInline: "auto" }} />
+        <Steps current={step} items={STEP_ITEMS.map((item, index) => index === 1 && basic.businessKind ? { title: "字段目录" } : item)} size="small" style={{ maxWidth: 720, marginInline: "auto" }} />
       </div>
 
       <div style={{
@@ -368,7 +385,7 @@ function DesignerBody({
           // Every pane stays mounted so editor state survives step switches;
           // display toggles visibility only.
           const active = index === step;
-          const scrollable = index === 0 || index === 3;
+          const scrollable = index === 0 || index === 3 || (index === 1 && Boolean(basic.businessKind));
 
           return (
             <div

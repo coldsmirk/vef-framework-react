@@ -195,13 +195,34 @@ export const PrincipalKindPicker: FC<PrincipalKindPickerProps> = ({
   disabled,
   onPatch
 }) => {
-  const { shared, tenants } = useEditorPlugins();
+  const {
+    formFields,
+    shared,
+    tenants
+  } = useEditorPlugins();
 
   if (!descriptor) {
     return <div css={unknownKindStyle}>{`当前应用未注册该类型：${item.kind}`}</div>;
   }
 
   if (descriptor.selection === "form_field") {
+    if (formFields) {
+      return (
+        <FormField label="表单字段">
+          <Select
+            aria-label="表单字段"
+            css={fullWidthStyle}
+            disabled={disabled}
+            options={formFields.map(field => { return { label: field.label, value: field.key }; })}
+            placeholder="选择字段"
+            showSearch={{ optionFilterProp: "label" }}
+            value={item.formField || undefined}
+            onChange={formField => onPatch({ formField })}
+          />
+        </FormField>
+      );
+    }
+
     return (
       <FormField label="字段标识">
         <Input

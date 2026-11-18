@@ -31,6 +31,7 @@ import {
   BUILTIN_CC_KINDS,
   CONDITION_OPERATORS as CONDITION_OPERATOR_LIST
 } from "../types";
+import { BUILT_IN_SUBJECT_FIELDS } from "./condition-subjects";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -67,6 +68,8 @@ export type FlowValidationCode
     | "condition_duplicate_handle"
     | "condition_branch_no_edge"
     | "invalid_assignee_kind"
+    | "unknown_catalog_field"
+    | "invalid_aggregate_reference"
     | "assignee_ids_required"
     | "assignee_form_field_required"
     | "invalid_cc_kind"
@@ -275,6 +278,7 @@ export interface FlowValidationContext {
    * integration at all should omit it rather than pass `[]`.
    */
   formFields?: FormFieldDefinition[];
+  globalSubjects?: FormFieldDefinition[];
   /**
    * The assignee kinds this application accepts.
    */
@@ -315,6 +319,7 @@ export function validateFlowDefinition(
   // undefined stays undefined (inventory unavailable, key-existence check
   // skipped); an explicit array — including [] — becomes a lookup Set.
   const formFieldKeys = formFields ? new Set(formFields.map(field => field.key)) : undefined;
+  const subjects = formFields && new Map([...formFields, ...context.globalSubjects ?? [], ...BUILT_IN_SUBJECT_FIELDS].map(field => [field.key, field]));
   const vocabulary: KindVocabulary = {
     assignees: selectionIndex(context.assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS),
     ccs: selectionIndex(context.ccKinds ?? BUILTIN_CC_KINDS)
@@ -370,7 +375,7 @@ export function validateFlowDefinition(
 
     if (node.kind === "condition") {
       conditionBranches.set(node.id, node.data?.branches);
-      validateBranchConditions(node.id, node.data?.branches, errors);
+      validateBranchConditions(node.id, node.data?.branches, errors, subjects);
       continue;
     }
 
@@ -395,7 +400,7 @@ export function validateFlowDefinition(
     }
 
     if (node.kind === "cc") {
-      validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors);
+      validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors, formFieldKeys);
       validateFieldPermissions(node.id, node.data?.fieldPermissions, true, formFieldKeys, errors);
     }
   }
@@ -647,6 +652,14 @@ function validateTaskNodeConfig(
       });
     }
 
+    if (selection === "form_field" && assignee.formField && formFieldKeys && !formFieldKeys.has(assignee.formField)) {
+      errors.push({
+        code: "unknown_catalog_field",
+        nodeId,
+        message: `人员来源字段「${assignee.formField}」不在字段目录中`
+      });
+    }
+
     if (selection === "form_field" && !assignee.formField?.trim()) {
       errors.push({
         code: "assignee_form_field_required",
@@ -682,7 +695,7 @@ function validateTaskNodeConfig(
     });
   }
 
-  validateCcDefinitions(nodeId, data?.ccs, vocabulary, errors);
+  validateCcDefinitions(nodeId, data?.ccs, vocabulary, errors, formFieldKeys);
   validateFieldPermissions(nodeId, data?.fieldPermissions, false, formFieldKeys, errors);
   validateRequiredFieldTimeoutAutoPass(nodeId, data, errors);
 }
@@ -842,7 +855,8 @@ function validateCcDefinitions(
   nodeId: string,
   ccs: CcDefinition[] | undefined,
   vocabulary: KindVocabulary,
-  errors: FlowValidationError[]
+  errors: FlowValidationError[],
+  formFieldKeys: Set<string> | undefined
 ): void {
   const ccItems = ccs ?? [];
 
@@ -863,6 +877,14 @@ function validateCcDefinitions(
         code: "cc_ids_required",
         message: "该抄送人类型必须选择具体对象",
         nodeId
+      });
+    }
+
+    if (selection === "form_field" && cc.formField && formFieldKeys && !formFieldKeys.has(cc.formField)) {
+      errors.push({
+        code: "unknown_catalog_field",
+        nodeId,
+        message: `人员来源字段「${cc.formField}」不在字段目录中`
       });
     }
 
@@ -977,7 +999,8 @@ function validateConditionGroup(
   nodeId: string,
   branch: ConditionBranchDefinition,
   group: ConditionGroup,
-  errors: FlowValidationError[]
+  errors: FlowValidationError[],
+  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   if (group.conditions.length === 0) {
     errors.push({
@@ -991,7 +1014,7 @@ function validateConditionGroup(
   }
 
   for (const condition of group.conditions) {
-    validateBranchCondition(nodeId, branch, condition, errors);
+    validateBranchCondition(nodeId, branch, condition, errors, subjects);
   }
 }
 
@@ -1064,7 +1087,8 @@ function validateConditionAggregateShape(
 function validateBranchConditions(
   nodeId: string,
   branches: ConditionBranchDefinition[] | undefined,
-  errors: FlowValidationError[]
+  errors: FlowValidationError[],
+  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   const seenPriorities = new Set<number>();
   const conditionBranches = branches ?? [];
@@ -1102,7 +1126,7 @@ function validateBranchConditions(
     }
 
     for (const group of conditionGroups) {
-      validateConditionGroup(nodeId, branch, group, errors);
+      validateConditionGroup(nodeId, branch, group, errors, subjects);
     }
   }
 }
@@ -1111,7 +1135,8 @@ function validateBranchCondition(
   nodeId: string,
   branch: ConditionBranchDefinition,
   condition: ConditionDefinition,
-  errors: FlowValidationError[]
+  errors: FlowValidationError[],
+  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   switch (condition.kind) {
     case "field": {
@@ -1129,6 +1154,26 @@ function validateBranchCondition(
           nodeId,
           branchId: branch.id
         });
+      }
+
+      if (subjects && condition.subject) {
+        const field = subjects.get(condition.subject);
+
+        if (!field) {
+          errors.push({
+            code: "unknown_catalog_field",
+            nodeId,
+            branchId: branch.id,
+            message: `条件字段「${condition.subject}」不在字段目录中`
+          });
+        } else if (condition.aggregate && (field.kind !== "table" || (condition.column && !field.columns?.some(col => col.key === condition.column && col.kind === "number")))) {
+          errors.push({
+            code: "invalid_aggregate_reference",
+            nodeId,
+            branchId: branch.id,
+            message: "聚合条件需要明细表字段，汇总列必须为数值列"
+          });
+        }
       }
 
       validateConditionAggregateShape(nodeId, branch, condition, errors);

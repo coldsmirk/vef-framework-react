@@ -654,14 +654,68 @@ describe("validateFlowDefinition branch condition structure", () => {
 });
 
 describe("validateFlowDefinition aggregate conditions", () => {
+  it("checks the chosen business catalog for condition and personnel references", () => {
+    const fields: FormFieldDefinition[] = [
+      {
+        key: "lead",
+        kind: "input",
+        label: "负责人"
+      }
+    ];
+    const definition = flowWith({
+      data: {
+        name: "审核",
+        assignees: [
+          {
+            kind: "form_field",
+            formField: "lead",
+            sortOrder: 1
+          }
+        ]
+      }
+    });
+    expect(codesOf(definition, fields)).toEqual([]);
+    expect(codesOf(definition, [])).toContain("unknown_catalog_field");
+    const missingField = conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "qty" }));
+    expect(codesOf(missingField, fields)).toContain("unknown_catalog_field");
+    const scalarAggregate = conditionFlowWith(aggregateBranch({ aggregate: "count", subject: "lead" }));
+    expect(codesOf(scalarAggregate, fields)).toContain("invalid_aggregate_reference");
+  });
+
   it("accepts a well-formed sum aggregate", () => {
-    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "qty" })));
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "qty" })), [
+      {
+        key: "items",
+        label: "明细",
+        kind: "table",
+        columns: [
+          {
+            key: "qty",
+            label: "数量",
+            kind: "number"
+          }
+        ]
+      }
+    ]);
 
     expect(codes).toEqual([]);
   });
 
   it("accepts count without a column", () => {
-    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "count" })));
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "count" })), [
+      {
+        key: "items",
+        label: "明细",
+        kind: "table",
+        columns: [
+          {
+            key: "qty",
+            label: "数量",
+            kind: "number"
+          }
+        ]
+      }
+    ]);
 
     expect(codes).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import type { FC } from "react";
 
-import type { AggregateKind, ConditionDefinition, ConditionOperator, FormFieldDefinition, PrincipalKind } from "../../types";
+import type { AggregateKind, ConditionDefinition, ConditionOperator, PrincipalKind } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
@@ -8,34 +8,12 @@ import dayjs from "dayjs";
 import { XIcon } from "lucide-react";
 
 import { useEditorPlugins } from "../../plugins";
+import { BUILT_IN_SUBJECT_FIELDS } from "../../shared/condition-subjects";
 import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
 import { AGGREGATE_LABELS, getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
 import { PrincipalPicker } from "./principal-picker";
 
 const FULL_WIDTH_STYLE = { width: "100%" } as const;
-
-/**
- * Applicant attributes the engine resolves from the instance context instead
- * of form data. They share the field-condition pipeline (same operators as a
- * text field), so the picker offers them alongside the form fields. These
- * subjects are reserved names on the backend — a form field with a colliding
- * key is shadowed, and so is a host global (the engine resolves the built-ins
- * first), which is deliberate: the same instance column drives assignee
- * resolution and the initiator check, so a global able to redefine it for
- * condition routing alone would split one "department" into two values.
- */
-const BUILT_IN_SUBJECT_FIELDS: FormFieldDefinition[] = [
-  {
-    key: "applicantId",
-    kind: "input",
-    label: "发起人 ID"
-  },
-  {
-    key: "applicantDepartmentId",
-    kind: "input",
-    label: "发起人部门 ID"
-  }
-];
 
 /**
  * The principal a built-in subject holds, so its value can be picked instead

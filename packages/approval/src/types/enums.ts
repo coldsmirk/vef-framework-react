@@ -92,12 +92,6 @@ export type AddAssigneeType = "before" | "after" | "parallel";
 export type VersionStatus = "draft" | "published" | "archived";
 
 /**
- * Flow-level binding mode: `standalone` stores form data in the approval
- * tables, `business` write-backs into an existing business table.
- */
-export type BindingMode = "standalone" | "business";
-
-/**
  * Version-level physical storage mode of form data.
  */
 export type StorageMode = "json" | "table";

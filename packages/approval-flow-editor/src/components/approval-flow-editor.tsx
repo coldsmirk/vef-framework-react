@@ -146,6 +146,7 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   // reported as an unknown type.
   const {
     formFields,
+    globalSubjects,
     assigneeKinds,
     ccKinds
   } = useEditorPlugins();
@@ -153,11 +154,12 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
     () => {
       return {
         formFields,
+        globalSubjects,
         assigneeKinds,
         ccKinds
       };
     },
-    [formFields, assigneeKinds, ccKinds]
+    [formFields, globalSubjects, assigneeKinds, ccKinds]
   );
 
   const { onDragOver, onDrop } = useDrop();

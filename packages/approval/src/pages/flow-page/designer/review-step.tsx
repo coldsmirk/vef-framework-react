@@ -13,15 +13,16 @@ import {
   LabelsDisplay,
   Stack,
   Switch,
-  Table,
   Tag,
   Text
 } from "@vef-framework-react/components";
 
+import { FieldCatalog } from "./field-catalog";
 import { initiatorsForSubmit } from "./types";
 
 export interface ReviewStepProps {
   draft: FlowDraft;
+  businessKindLabel?: string;
   /**
    * The deploy-derived field inventory (from the client-side projection).
    */
@@ -38,6 +39,7 @@ export interface ReviewStepProps {
  */
 export function ReviewStep({
   draft,
+  businessKindLabel,
   fields,
   versionDescription,
   publishNow,
@@ -75,9 +77,9 @@ export function ReviewStep({
             {
               key: "binding",
               label: "业务绑定",
-              children: basic.bindingMode === "business"
+              children: basic.businessBinding
                 ? <Tag color="blue">{`业务表 ${basic.businessBinding?.tableName ?? ""}`}</Tag>
-                : <Tag>独立存储</Tag>
+                : businessKindLabel ?? "流程表单"
             },
             {
               key: "initiation",
@@ -101,39 +103,13 @@ export function ReviewStep({
             {
               key: "storage",
               label: "存储模式",
-              children: draft.storageMode === "table" ? "独立表存储" : "JSON 存储"
+              children: !basic.businessKind && draft.storageMode === "table" ? "独立表存储" : "JSON 存储"
             }
           ]}
         />
       </Card>
 
-      <Card title={`表单字段（${fields.length}）`}>
-        {fields.length === 0
-          ? <Text type="secondary">该流程未设计表单。</Text>
-          : (
-              <Table<ApprovalFormField>
-                dataSource={fields}
-                pagination={false}
-                rowKey="key"
-                size="small"
-                columns={[
-                  {
-                    title: "字段键",
-                    dataIndex: "key",
-                    width: 220,
-                    render: (value: string) => <Text code>{value}</Text>
-                  },
-                  { title: "名称", dataIndex: "label" },
-                  {
-                    title: "类型",
-                    dataIndex: "kind",
-                    width: 120,
-                    render: (value: string) => <Tag>{value}</Tag>
-                  }
-                ]}
-              />
-            )}
-      </Card>
+      <FieldCatalog fields={fields} title={`字段目录（${fields.length}）`} />
 
       <Card title="发布选项">
         <Stack gap={12}>

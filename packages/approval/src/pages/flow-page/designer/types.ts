@@ -2,7 +2,7 @@ import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
 import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
-import type { BindingMode, BusinessBindingConfig, InitiatorParams, StorageMode } from "../../../types";
+import type { BusinessBindingConfig, InitiatorParams, StorageMode } from "../../../types";
 
 /**
  * The flow-settings half of the designer draft — everything
@@ -20,7 +20,7 @@ export interface FlowDraftBasic {
   icon?: string;
   description?: string;
   labels: Record<string, string>;
-  bindingMode: BindingMode;
+  businessKind?: string;
   businessBinding?: BusinessBindingConfig;
   adminUserIds: string[];
   isAllInitiationAllowed: boolean;
@@ -56,7 +56,6 @@ export function createEmptyDraft(tenantId: string): FlowDraft {
       name: "",
       categoryId: "",
       labels: {},
-      bindingMode: "standalone",
       adminUserIds: [],
       isAllInitiationAllowed: false,
       instanceTitleTemplate: ""

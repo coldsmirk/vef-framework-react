@@ -1,6 +1,6 @@
 import type { KindDescriptor } from "@vef-framework-react/approval-flow-editor";
 
-import type { BusinessBindingConfig, InitiatorKind, InitiatorParams, InstanceStatus } from "../../../types";
+import type { BusinessBindingConfig, BusinessKindDescriptor, InitiatorKind, InitiatorParams, InstanceStatus } from "../../../types";
 import type { CategoryTreeOption } from "../../category-page/form";
 import type { FlowDraftBasic } from "./types";
 
@@ -237,6 +237,7 @@ const EMPTY_BINDING: BusinessBindingConfig = {
 
 export interface BasicStepProps {
   basic: FlowDraftBasic;
+  businessKinds?: BusinessKindDescriptor[];
   initiators: InitiatorParams[];
   /**
    * The initiator kinds this application registers, from
@@ -260,6 +261,7 @@ export interface BasicStepProps {
  */
 export function BasicStep({
   basic,
+  businessKinds,
   initiators,
   initiatorKinds,
   categoryOptions,
@@ -432,35 +434,36 @@ export function BasicStep({
         </Stack>
       </Card>
 
-      <Card title="业务绑定">
+      <Card title="业务类型">
         <Stack gap={12}>
-          <Radio.Group
-            optionType="button"
-            value={basic.bindingMode}
-            options={[
-              { label: "独立存储", value: "standalone" },
-              { label: "绑定业务表", value: "business" }
-            ]}
-            onChange={event => {
-              const mode = event.target.value;
-
-              if (mode === "standalone" || mode === "business") {
-                onBasicChange({ bindingMode: mode });
-              }
-            }}
+          <Select<string>
+            allowClear
+            aria-label="业务类型"
+            loading={businessKinds === undefined}
+            options={businessKinds?.map(item => { return { value: item.kind, label: item.label }; })}
+            placeholder="使用流程表单"
+            showSearch={{ optionFilterProp: "label" }}
+            value={basic.businessKind}
+            onChange={businessKind => onBasicChange({ businessKind, businessBinding: undefined })}
           />
 
-          <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
-            {basic.bindingMode === "standalone"
-              ? "表单数据存储在审批系统内，适合独立审批单。"
-              : "审批状态回写到既有业务表，业务记录是事实源，审批引擎按版本快照投影状态。"}
-          </Text>
+          {basic.businessKind && !businessKinds?.some(item => item.kind === basic.businessKind) && businessKinds
+            && <Text type="danger">该业务类型已不可用，请重新选择。</Text>}
 
-          {basic.bindingMode === "business" && (
-            <BusinessBindingEditor
-              binding={basic.businessBinding ?? EMPTY_BINDING}
-              onChange={businessBinding => onBasicChange({ businessBinding })}
-            />
+          {basic.businessKind && (
+            <>
+              <Flex align="center" gap="small">
+                <Switch
+                  aria-label="回写审批状态到业务表"
+                  checked={Boolean(basic.businessBinding)}
+                  onChange={enabled => onBasicChange({ businessBinding: enabled ? EMPTY_BINDING : undefined })}
+                />
+
+                <Text>回写审批状态到业务表</Text>
+              </Flex>
+
+              {basic.businessBinding && <BusinessBindingEditor binding={basic.businessBinding} onChange={businessBinding => onBasicChange({ businessBinding })} />}
+            </>
           )}
         </Stack>
       </Card>

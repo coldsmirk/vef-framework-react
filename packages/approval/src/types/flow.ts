@@ -4,10 +4,10 @@ import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FullAudited } from "./base";
-import type { BindingMode, InitiatorKind, InstanceStatus, StorageMode, VersionStatus } from "./enums";
+import type { InitiatorKind, InstanceStatus, StorageMode, VersionStatus } from "./enums";
 
 /**
- * Business binding for a `business`-mode flow, mirroring the Go
+ * Optional projection for a business-kind flow, mirroring the Go
  * `approval.BusinessBindingConfig`. All table / column names must be plain
  * SQL identifiers; `keyColumns` must exactly match a complete, non-null
  * primary or unique key on `tableName`.
@@ -60,7 +60,6 @@ export interface Flow extends FullAudited {
    * characters.
    */
   labels?: Record<string, string>;
-  bindingMode: BindingMode;
   businessBinding?: BusinessBindingConfig | null;
   adminUserIds: string[];
   isAllInitiationAllowed: boolean;
@@ -168,7 +167,6 @@ export interface CreateFlowParams {
   icon?: string;
   description?: string;
   labels?: Record<string, string>;
-  bindingMode: BindingMode;
   businessBinding?: BusinessBindingConfig;
   adminUserIds?: string[];
   isAllInitiationAllowed: boolean;
@@ -188,7 +186,6 @@ export interface UpdateFlowParams {
   icon?: string;
   description?: string;
   labels?: Record<string, string>;
-  bindingMode: BindingMode;
   businessBinding?: BusinessBindingConfig;
   adminUserIds?: string[];
   isAllInitiationAllowed: boolean;
