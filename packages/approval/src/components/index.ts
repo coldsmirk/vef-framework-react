@@ -1,3 +1,4 @@
+export { AnnotationComposer, AnnotationList, AnnotationResponseComposer, useAnnotations } from "./annotations";
 export {
   InstanceDetailPanel,
   InstanceHeader,

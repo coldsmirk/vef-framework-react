@@ -7,12 +7,12 @@ import { useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
+import { AnnotationTimeline, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
 import { ACTIVITY_ACTION_LABELS } from "../status/labels";
-import { InstanceTimeline } from "../timeline";
 import { UserGroup, UserLabel } from "../user";
 import { InstanceHeader } from "./index";
 
@@ -108,6 +108,7 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
     queryKey: [api.getInstanceDetail.key, { instanceId }]
   });
 
+  const fieldAnnotations = useFieldAnnotations(detail);
   const business = useBusinessForm(detail?.instance.businessKind);
 
   if (isLoading) {
@@ -140,6 +141,8 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
         title={instance.title}
       />
 
+      {fieldAnnotations.dialog}
+
       <Tabs
         items={[
           {
@@ -153,6 +156,7 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
                     applicant={instance.applicant}
                     formData={instance.formData}
                     globals={instance.globals}
+                    renderFieldExtra={fieldAnnotations.renderFieldExtra}
                     schema={detail.formSchema}
                   />
                 )
@@ -160,7 +164,7 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
           {
             key: "timeline",
             label: "流转记录",
-            children: <InstanceTimeline timeline={detail.timeline} />
+            children: <AnnotationTimeline detail={detail} />
           },
           {
             key: "graph",

@@ -1,4 +1,4 @@
-import type { FormRendererApi, FormSchema, PresentationDevice } from "@vef-framework-react/form-editor";
+import type { FormRendererApi, FormRendererProps, FormSchema, PresentationDevice } from "@vef-framework-react/form-editor";
 import type { RefObject } from "react";
 
 import type { FieldPermission, FormData, UserInfo } from "../../types";
@@ -11,6 +11,7 @@ import { useApprovalPlugins } from "../../plugins";
 import { toFormEvaluationContext } from "../../plugins/form-context";
 
 export interface InstanceFormPanelProps {
+  renderFieldExtra?: FormRendererProps["renderFieldExtra"];
   /**
    * The version-pinned host form-designer document. Absent for flows without
    * a form — renders an empty state.
@@ -66,7 +67,8 @@ export function InstanceFormPanel({
   disabled,
   device = "pc",
   apiRef,
-  onSubmit
+  onSubmit,
+  renderFieldExtra
 }: InstanceFormPanelProps) {
   const {
     dataSourceResolver,
@@ -90,6 +92,7 @@ export function InstanceFormPanel({
         evaluationContext={evaluationContext}
         evaluators={evaluators}
         fieldPermissions={fieldPermissions}
+        renderFieldExtra={renderFieldExtra}
         schema={schema}
         onSubmit={onSubmit}
       />

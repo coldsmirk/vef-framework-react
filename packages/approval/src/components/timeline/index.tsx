@@ -1,4 +1,5 @@
 import type { TimelineItem } from "@vef-framework-react/components";
+import type { ReactNode } from "react";
 
 import type { Activity, CCRecipient, NodeParticipant, NodeVisitStatus, TimelineEntry } from "../../types";
 
@@ -217,6 +218,7 @@ function EntryBody({ entry }: { entry: TimelineEntry }) {
 }
 
 export interface InstanceTimelineProps {
+  renderEntryExtra?: (entry: TimelineEntry) => ReactNode;
   timeline: TimelineEntry[];
 }
 
@@ -226,7 +228,7 @@ export interface InstanceTimelineProps {
  * milestones. Participants, carbon copies, and side activities render
  * beneath each node header.
  */
-export function InstanceTimeline({ timeline }: InstanceTimelineProps) {
+export function InstanceTimeline({ timeline, renderEntryExtra }: InstanceTimelineProps) {
   if (timeline.length === 0) {
     return <Empty description="暂无流转记录" />;
   }
@@ -236,7 +238,12 @@ export function InstanceTimeline({ timeline }: InstanceTimelineProps) {
       key: String(index),
       color: entryDotColor(entry),
       title: <EntryHeader entry={entry} />,
-      content: <EntryBody entry={entry} />
+      content: (
+        <>
+          <EntryBody entry={entry} />
+          {renderEntryExtra?.(entry)}
+        </>
+      )
     };
   });
 

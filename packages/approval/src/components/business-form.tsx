@@ -3,7 +3,7 @@ import type { BusinessFormHandle } from "../plugins";
 import { Alert, showWarningMessage } from "@vef-framework-react/components";
 import { useRef } from "react";
 
-import { useApprovalPlugins } from "../plugins";
+import { resolveBusinessRenderer, useApprovalPlugins } from "../plugins";
 
 export function MissingBusinessKind() {
   return <Alert showIcon title="该业务类型未在本应用注册" type="warning" />;
@@ -12,7 +12,7 @@ export function MissingBusinessKind() {
 export function useBusinessForm(kind?: string) {
   const { businessKinds } = useApprovalPlugins();
   const handle = useRef<BusinessFormHandle>(null);
-  const renderer = kind && businessKinds && Object.hasOwn(businessKinds, kind) ? businessKinds[kind] : undefined;
+  const renderer = resolveBusinessRenderer(businessKinds, kind);
 
   async function collect() {
     try {

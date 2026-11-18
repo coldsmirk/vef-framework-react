@@ -116,6 +116,10 @@ export interface ResolvedApprovalPlugins extends ApprovalPlugins {
   registries: DeviceRegistries;
 }
 
+export function resolveBusinessRenderer(kinds: ApprovalPlugins["businessKinds"], kind?: string) {
+  return kind && kinds && Object.hasOwn(kinds, kind) ? kinds[kind] : undefined;
+}
+
 const ApprovalPluginsContext = createContext<ResolvedApprovalPlugins | null>(null);
 ApprovalPluginsContext.displayName = "ApprovalPluginsContext";
 

@@ -41,12 +41,12 @@ import { useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { useApprovalPlugins } from "../../plugins";
+import { AnnotationTimeline, DetailAnnotations, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
 import { InstanceStatusTag } from "../status";
-import { InstanceTimeline } from "../timeline";
 import { UserLabel } from "../user";
 import { AddAssigneeModal, CCModal, ReasonModal, RemoveAssigneeModal, RollbackModal, TransferModal, UrgeModal } from "./action-modals";
 
@@ -224,6 +224,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
 
+  const fieldAnnotations = useFieldAnnotations(detail);
   const business = useBusinessForm(detail?.instance.businessKind);
   const missingRenderer = Boolean(detail?.instance.businessKind && !business.renderer);
   const actions = useMemo(() => new Set<InstanceAction>(detail?.availableActions), [detail]);
@@ -459,10 +460,13 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
               fieldPermissions={detail.fieldPermissions}
               formData={instance.formData}
               globals={instance.globals}
+              renderFieldExtra={fieldAnnotations.renderFieldExtra}
               schema={detail.formSchema}
               onSubmit={onFormSubmit}
             />
           )}
+
+      <DetailAnnotations detail={detail} />
 
       {showActionArea && (
         <Stack
@@ -543,6 +547,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
         title={instance.title}
       />
 
+      {fieldAnnotations.dialog}
+
       <Tabs
         items={[
           {
@@ -553,7 +559,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
           {
             key: "timeline",
             label: "流转记录",
-            children: <InstanceTimeline timeline={detail.timeline} />
+            children: <AnnotationTimeline detail={detail} />
           },
           {
             key: "graph",
