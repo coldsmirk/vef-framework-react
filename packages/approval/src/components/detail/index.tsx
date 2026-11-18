@@ -41,6 +41,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { useApprovalPlugins } from "../../plugins";
+import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
@@ -223,6 +224,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
 
+  const business = useBusinessForm(detail?.instance.businessKind);
+  const missingRenderer = Boolean(detail?.instance.businessKind && !business.renderer);
   const actions = useMemo(() => new Set<InstanceAction>(detail?.availableActions), [detail]);
   const myTask = detail?.myTask;
 
@@ -313,7 +316,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
       return;
     }
 
-    if (!detail?.formSchema) {
+    if (detail?.instance.businessKind || !detail?.formSchema) {
       await dispatchFormSubmit(mode, undefined);
 
       return;
@@ -341,7 +344,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   async function dispatchFormSubmit(mode: FormSubmitMode, values: Record<string, unknown> | undefined): Promise<void> {
     if (mode === "resubmit") {
       await runAction(
-        () => resubmit.mutateAsync({ instanceId, formData: values }),
+        async () => resubmit.mutateAsync({ instanceId, formData: instance.businessKind ? await business.collect() : values }),
         "已重新提交"
       );
 
@@ -353,11 +356,11 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     }
 
     await runAction(
-      () => processTask.mutateAsync({
+      async () => processTask.mutateAsync({
         taskId: myTask.taskId,
         action: mode,
         opinion: opinion.trim() || undefined,
-        formData: values
+        formData: instance.businessKind ? await business.collect() : values
       }),
       mode === "handle" ? "已办理" : "已通过"
     );
@@ -374,11 +377,11 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     const values = formApiRef.current?.getSubmitValues();
 
     await runAction(
-      () => processTask.mutateAsync({
+      async () => processTask.mutateAsync({
         taskId: myTask.taskId,
         action: "reject",
         opinion: opinion.trim() || undefined,
-        formData: values
+        formData: instance.businessKind ? await business.collect() : values
       }),
       "已拒绝"
     );
@@ -388,7 +391,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("transfer") && myTask !== undefined) {
     secondaryButtons.push(
-      <Button key="transfer" icon={<Icon component={CornerUpLeftIcon} />} onClick={() => setModal("transfer")}>
+      <Button key="transfer" disabled={missingRenderer || acting} icon={<Icon component={CornerUpLeftIcon} />} onClick={() => setModal("transfer")}>
         转办
       </Button>
     );
@@ -396,7 +399,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("rollback") && (myTask?.rollbackTargets?.length ?? 0) > 0) {
     secondaryButtons.push(
-      <Button key="rollback" icon={<Icon component={Undo2Icon} />} onClick={() => setModal("rollback")}>
+      <Button key="rollback" disabled={missingRenderer || acting} icon={<Icon component={Undo2Icon} />} onClick={() => setModal("rollback")}>
         回退
       </Button>
     );
@@ -404,7 +407,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("add_assignee") && (myTask?.addAssigneeTypes?.length ?? 0) > 0) {
     secondaryButtons.push(
-      <Button key="addAssignee" icon={<Icon component={UserPlusIcon} />} onClick={() => setModal("addAssignee")}>
+      <Button key="addAssignee" disabled={missingRenderer || acting} icon={<Icon component={UserPlusIcon} />} onClick={() => setModal("addAssignee")}>
         加签
       </Button>
     );
@@ -412,7 +415,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("remove_assignee") && (myTask?.removableAssignees?.length ?? 0) > 0) {
     secondaryButtons.push(
-      <Button key="removeAssignee" icon={<Icon component={UserMinusIcon} />} onClick={() => setModal("removeAssignee")}>
+      <Button key="removeAssignee" disabled={missingRenderer || acting} icon={<Icon component={UserMinusIcon} />} onClick={() => setModal("removeAssignee")}>
         减签
       </Button>
     );
@@ -420,7 +423,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("add_cc")) {
     secondaryButtons.push(
-      <Button key="cc" icon={<Icon component={MailPlusIcon} />} onClick={() => setModal("cc")}>
+      <Button key="cc" disabled={missingRenderer || acting} icon={<Icon component={MailPlusIcon} />} onClick={() => setModal("cc")}>
         抄送
       </Button>
     );
@@ -428,7 +431,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("urge") && urgeTargets.length > 0) {
     secondaryButtons.push(
-      <Button key="urge" icon={<Icon component={MegaphoneIcon} />} onClick={() => setModal("urge")}>
+      <Button key="urge" disabled={missingRenderer || acting} icon={<Icon component={MegaphoneIcon} />} onClick={() => setModal("urge")}>
         催办
       </Button>
     );
@@ -436,7 +439,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   if (actions.has("withdraw")) {
     secondaryButtons.push(
-      <Button key="withdraw" icon={<Icon component={RotateCcwIcon} />} onClick={() => setModal("withdraw")}>
+      <Button key="withdraw" disabled={missingRenderer || acting} icon={<Icon component={RotateCcwIcon} />} onClick={() => setModal("withdraw")}>
         撤回
       </Button>
     );
@@ -446,16 +449,20 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   const formTab = (
     <Stack gap={16}>
-      <InstanceFormPanel
-        apiRef={formApiRef}
-        applicant={instance.applicant}
-        disabled={!formWritable}
-        fieldPermissions={detail.fieldPermissions}
-        formData={instance.formData}
-        globals={instance.globals}
-        schema={detail.formSchema}
-        onSubmit={onFormSubmit}
-      />
+      {instance.businessKind
+        ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} myTask={myTask} view={detail.businessView} /> : <MissingBusinessKind />
+        : (
+            <InstanceFormPanel
+              apiRef={formApiRef}
+              applicant={instance.applicant}
+              disabled={!formWritable}
+              fieldPermissions={detail.fieldPermissions}
+              formData={instance.formData}
+              globals={instance.globals}
+              schema={detail.formSchema}
+              onSubmit={onFormSubmit}
+            />
+          )}
 
       {showActionArea && (
         <Stack
@@ -481,6 +488,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
             {canDecide && (
               <>
                 <Button
+                  disabled={missingRenderer}
                   icon={<Icon component={CheckIcon} />}
                   loading={acting}
                   type="primary"
@@ -491,6 +499,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
                 <Button
                   danger
+                  disabled={missingRenderer}
                   icon={<Icon component={XIcon} />}
                   loading={acting}
                   onClick={() => void rejectTask()}
@@ -502,6 +511,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
             {canResubmit && (
               <Button
+                disabled={missingRenderer}
                 icon={<Icon component={SendIcon} />}
                 loading={acting}
                 type="primary"
@@ -564,6 +574,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
           await processTask.mutateAsync({
             taskId: myTask.taskId,
             action: "transfer",
+            formData: instance.businessKind ? await business.collect() : undefined,
             transferToId,
             opinion: transferOpinion.trim() || undefined
           });
@@ -583,6 +594,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
           await processTask.mutateAsync({
             taskId: myTask.taskId,
             action: "rollback",
+            formData: instance.businessKind ? await business.collect() : undefined,
             targetNodeId,
             opinion: rollbackOpinion.trim() || undefined
           });

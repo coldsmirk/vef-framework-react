@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { InstanceFormPanel } from "../../components";
+import { MissingBusinessKind, useBusinessForm } from "../../components/business-form";
 import { FlowIcon } from "../../components/icon";
 
 export interface StartInstanceDrawerProps {
@@ -112,6 +113,7 @@ function StartDrawerBody({
     refetchOnMount: "always"
   });
 
+  const business = useBusinessForm(startForm?.businessKind);
   const handled = useRef<Error | null>(null);
   const handleClosedWindow = useCallback((reason: unknown) => {
     if (!(isBusinessError(reason) && reason.code === 40_027) || handled.current === reason) {
@@ -142,7 +144,7 @@ function StartDrawerBody({
       await start.mutateAsync({
         flowCode,
         businessRef,
-        formData: values
+        formData: startForm?.businessKind ? await business.collect() : values
       });
       showSuccessMessage("已提交审批");
       onClose();
@@ -155,7 +157,7 @@ function StartDrawerBody({
   }
 
   async function handleSubmitClick(): Promise<void> {
-    if (startForm?.formSchema) {
+    if (!startForm?.businessKind && startForm?.formSchema) {
       // The renderer's validation pipeline gates submission; onSubmit below
       // only fires when it passes.
       await formApiRef.current?.submit();
@@ -191,19 +193,24 @@ function StartDrawerBody({
 
       {startForm.initiationWindow?.open && startForm.initiationWindow.current && <DeadlineHint {...startForm.initiationWindow.current} />}
 
-      <InstanceFormPanel
-        apiRef={formApiRef}
-        applicant={startForm.applicant}
-        globals={startForm.globals}
-        schema={startForm.formSchema}
-        onSubmit={values => void submitStart(values)}
-      />
+      {startForm.businessKind
+        ? business.renderer ? <business.renderer.StartForm businessRef={businessRef} flow={startForm} handle={business.handle} /> : <MissingBusinessKind />
+        : (
+            <InstanceFormPanel
+              apiRef={formApiRef}
+              applicant={startForm.applicant}
+              globals={startForm.globals}
+              schema={startForm.formSchema}
+              onSubmit={values => void submitStart(values)}
+            />
+          )}
 
       <Flex
         justify="flex-end"
         style={{ borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`, paddingTop: 16 }}
       >
         <Button
+          disabled={Boolean(startForm.businessKind && !business.renderer)}
           icon={<Icon component={SendIcon} />}
           loading={submitting}
           type="primary"

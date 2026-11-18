@@ -7,6 +7,7 @@ import { useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
+import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
@@ -107,6 +108,8 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
     queryKey: [api.getInstanceDetail.key, { instanceId }]
   });
 
+  const business = useBusinessForm(detail?.instance.businessKind);
+
   if (isLoading) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: 240 }}>
@@ -142,15 +145,17 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
           {
             key: "form",
             label: "审批表单",
-            children: (
-              <InstanceFormPanel
-                disabled
-                applicant={instance.applicant}
-                formData={instance.formData}
-                globals={instance.globals}
-                schema={detail.formSchema}
-              />
-            )
+            children: instance.businessKind
+              ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} view={detail.businessView} /> : <MissingBusinessKind />
+              : (
+                  <InstanceFormPanel
+                    disabled
+                    applicant={instance.applicant}
+                    formData={instance.formData}
+                    globals={instance.globals}
+                    schema={detail.formSchema}
+                  />
+                )
           },
           {
             key: "timeline",

@@ -1,12 +1,21 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps, TenantOption } from "@vef-framework-react/approval-flow-editor";
 import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
-import type { FC, PropsWithChildren, ReactNode } from "react";
+import type { FC, PropsWithChildren, ReactNode, Ref } from "react";
 
-import type { KindOptions } from "../types";
+import type { InstanceDetail, KindOptions, StartForm, ViewerTask } from "../types";
 import type { FormGlobalDefinition } from "./form-context";
 
 import { createApprovalRegistries } from "@vef-framework-react/approval-form-bridge";
 import { createContext, use, useMemo, useState } from "react";
+
+export interface BusinessFormHandle {
+  collect: () => Promise<Record<string, unknown>>;
+}
+
+export interface BusinessKindRenderer {
+  StartForm: FC<{ flow: StartForm; businessRef?: string; handle: Ref<BusinessFormHandle> }>;
+  DetailView: FC<{ detail: InstanceDetail; view: unknown; myTask?: ViewerTask; handle: Ref<BusinessFormHandle> }>;
+}
 
 /**
  * Host-integration points shared by every approval page and component. Wrap
@@ -14,6 +23,7 @@ import { createContext, use, useMemo, useState } from "react";
  * and renderer below is resolved from it — pages never take these as props.
  */
 export interface ApprovalPlugins {
+  businessKinds?: Record<string, BusinessKindRenderer>;
   /**
    * Pickers that resolve concrete ids, keyed by kind. The flow designer and
    * the runtime action dialogs (transfer, add assignee, CC) share them.
