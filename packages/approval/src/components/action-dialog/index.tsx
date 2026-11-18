@@ -79,7 +79,7 @@ export function ActionFooter({
  * runs, closing only on success (errors are surfaced by the mutation layer
  * and keep the dialog open for retry).
  */
-export function useConfirm(onClose: () => void) {
+export function useConfirm(onClose: () => void, onError?: (error: unknown) => void) {
   const [submitting, setSubmitting] = useState(false);
 
   async function run(action: () => Promise<void>): Promise<void> {
@@ -88,8 +88,8 @@ export function useConfirm(onClose: () => void) {
     try {
       await action();
       onClose();
-    } catch {
-      /* surfaced by the mutation */
+    } catch (error) {
+      onError?.(error);
     } finally {
       setSubmitting(false);
     }

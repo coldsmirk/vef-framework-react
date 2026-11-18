@@ -48,7 +48,14 @@ export function PrincipalSelect({
   const Picker = pickers?.[kind] ?? (selection ? pickers?.[selection] : undefined);
 
   const handleChange = (ids: string[]): void => {
-    onChange(maxCount === undefined ? ids : ids.slice(0, maxCount));
+    // A multi-person host picker can emit both the previous and the newly
+    // picked id when it is used for a single-seat action.
+    const replacement = maxCount === 1 && ids.length > 1 ? ids.find(id => !value.includes(id)) : undefined;
+    const next = replacement === undefined ? ids.slice(0, maxCount) : [replacement];
+
+    if (next.length !== value.length || next.some((id, i) => id !== value[i])) {
+      onChange(next);
+    }
   };
 
   if (Picker) {
@@ -59,6 +66,7 @@ export function PrincipalSelect({
     <Select<string[]>
       allowClear
       disabled={disabled}
+      maxTagCount={2}
       mode="tags"
       open={false}
       placeholder={FALLBACK_PLACEHOLDERS[kind] ?? (selection ? FALLBACK_PLACEHOLDERS[selection] : undefined) ?? "输入 ID，回车添加"}

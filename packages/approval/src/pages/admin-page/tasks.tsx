@@ -18,8 +18,9 @@ import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
-import { formatTimestamp, PrincipalSelect, TaskStatusTag, UserLabel } from "../../components";
-import { ActionDialog, ActionFooter, useConfirm } from "../../components/action-dialog";
+import { formatTimestamp, TaskStatusTag, UserLabel } from "../../components";
+import { ActionDialog, ActionFooter } from "../../components/action-dialog";
+import { UserActionField, useUserAction } from "../../components/action-dialog/user-selection";
 import { TASK_STATUS_OPTIONS } from "../../components/status/labels";
 import { PredecessorLabel } from "../../components/user";
 
@@ -107,17 +108,15 @@ interface ReassignModalProps {
 }
 
 function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) {
-  const [userIds, setUserIds] = useState<string[]>([]);
+  const selection = useUserAction(onClose);
   const [reason, setReason] = useState("");
-  const { submitting, run } = useConfirm(onClose);
-  const newAssigneeId = userIds[0];
+  const { submitting, run } = selection;
+  const newAssigneeId = selection.userIds[0];
 
   return (
     <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Labeled label="改派给">
-          <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
-        </Labeled>
+        <UserActionField label="改派给" maxCount={1} selection={selection} />
 
         <Labeled label="改派原因">
           <Input.TextArea
@@ -131,7 +130,7 @@ function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) 
       </Stack>
 
       <ActionFooter
-        disabled={newAssigneeId === undefined}
+        disabled={newAssigneeId === undefined || Boolean(selection.message)}
         okText="改派"
         submitting={submitting}
         onCancel={onClose}

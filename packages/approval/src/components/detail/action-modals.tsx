@@ -4,7 +4,7 @@ import { Input, Labeled, Radio, Select, Stack } from "@vef-framework-react/compo
 import { useState } from "react";
 
 import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
-import { PrincipalSelect } from "../principal";
+import { UserActionField, useUserAction } from "../action-dialog/user-selection";
 import { isTaskStatus } from "../status";
 import { TASK_STATUS_LABELS } from "../status/labels";
 
@@ -30,17 +30,15 @@ export interface TransferModalProps extends ActionModalProps {
 }
 
 function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) {
-  const [userIds, setUserIds] = useState<string[]>([]);
+  const selection = useUserAction(onClose);
   const [opinion, setOpinion] = useState("");
-  const { submitting, run } = useConfirm(onClose);
-  const transferToId = userIds[0];
+  const { submitting, run } = selection;
+  const transferToId = selection.userIds[0];
 
   return (
     <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Labeled label="转办给">
-          <PrincipalSelect kind="user" maxCount={1} value={userIds} onChange={setUserIds} />
-        </Labeled>
+        <UserActionField label="转办给" maxCount={1} selection={selection} />
 
         <Labeled label="转办说明">
           <Input.TextArea
@@ -54,7 +52,7 @@ function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) 
       </Stack>
 
       <ActionFooter
-        disabled={transferToId === undefined}
+        disabled={transferToId === undefined || Boolean(selection.message)}
         okText="转办"
         submitting={submitting}
         onCancel={onClose}
@@ -160,16 +158,18 @@ function AddAssigneeForm({
   onClose,
   onConfirm
 }: Omit<AddAssigneeModalProps, "open">) {
-  const [userIds, setUserIds] = useState<string[]>([]);
+  const selection = useUserAction(onClose);
   const [addType, setAddType] = useState(() => allowedTypes.length === 1 ? allowedTypes[0] : undefined);
-  const { submitting, run } = useConfirm(onClose);
+  const {
+    userIds,
+    submitting,
+    run
+  } = selection;
 
   return (
     <>
       <Stack gap={12} style={{ paddingBlock: 8 }}>
-        <Labeled label="加签人员">
-          <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
-        </Labeled>
+        <UserActionField label="加签人员" maxCount={50} selection={selection} />
 
         <Labeled label="加签方式">
           <Radio.Group
@@ -189,7 +189,7 @@ function AddAssigneeForm({
       </Stack>
 
       <ActionFooter
-        disabled={userIds.length === 0 || addType === undefined}
+        disabled={userIds.length === 0 || addType === undefined || Boolean(selection.message)}
         okText="加签"
         submitting={submitting}
         onCancel={onClose}
@@ -290,19 +290,21 @@ export interface CCModalProps extends ActionModalProps {
 }
 
 function CCForm({ onClose, onConfirm }: Omit<CCModalProps, "open">) {
-  const [userIds, setUserIds] = useState<string[]>([]);
-  const { submitting, run } = useConfirm(onClose);
+  const selection = useUserAction(onClose);
+  const {
+    userIds,
+    submitting,
+    run
+  } = selection;
 
   return (
     <>
       <Stack gap={4} style={{ paddingBlock: 8 }}>
-        <Labeled label="抄送给">
-          <PrincipalSelect kind="user" maxCount={50} value={userIds} onChange={setUserIds} />
-        </Labeled>
+        <UserActionField label="抄送给" maxCount={50} selection={selection} />
       </Stack>
 
       <ActionFooter
-        disabled={userIds.length === 0}
+        disabled={userIds.length === 0 || Boolean(selection.message)}
         okText="抄送"
         submitting={submitting}
         onCancel={onClose}
