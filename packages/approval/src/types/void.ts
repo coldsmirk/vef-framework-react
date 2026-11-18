@@ -12,11 +12,11 @@ export interface VoidPlan {
 
 export interface VoidRecord extends FullAudited {
   tenantId: string;
-  instanceId: string;
+  instanceId?: string;
   status: "requested" | "voided" | "dismissed";
   requestInstanceId?: string;
   operator: UserInfo;
-  reason: string;
+  reason?: string;
   attachments?: string[];
   options?: VoidOptions;
   reversals: string[];
@@ -33,11 +33,11 @@ export interface VoidRequestSummary {
 }
 
 export interface VoidTarget {
-  instanceId: string;
-  instanceNo: string;
-  title: string;
-  flowName: string;
-  applicant: UserInfo;
+  instanceId?: string;
+  instanceNo?: string;
+  title?: string;
+  flowName?: string;
+  applicant?: UserInfo;
   finishedAt?: string;
   businessKind?: string;
 }

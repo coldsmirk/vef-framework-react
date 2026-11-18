@@ -10,7 +10,7 @@ import { useAdminApprovalApi, useMyApprovalApi } from "../../api";
 import { resolveBusinessRenderer, useApprovalPlugins } from "../../plugins";
 import { PlanSummary } from "./summary";
 
-export function useVoidDraft(target: VoidTarget, mode: "admin" | "requester", record?: VoidRecord) {
+export function useVoidDraft(target: VoidTarget & { instanceId: string }, mode: "admin" | "requester", record?: VoidRecord) {
   const admin = useAdminApprovalApi();
   const my = useMyApprovalApi();
   const [reason, setReason] = useState(record?.reason ?? "");

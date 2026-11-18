@@ -34,12 +34,13 @@ export function PlanSummary({ plan }: { plan: VoidPlan }) {
 export function TargetSummary({ target }: { target: VoidTarget }) {
   return (
     <Stack gap={4}>
-      <Text strong>{target.title}</Text>
+      {target.title && <Text strong>{target.title}</Text>}
 
       <Flex gap="small" wrap="wrap">
-        <Text>{target.instanceNo}</Text>
-        <Text>{target.flowName}</Text>
-        <Text>{`申请人 ${target.applicant.name}`}</Text>
+        {target.instanceNo && <Text>{target.instanceNo}</Text>}
+        {target.flowName && <Text>{target.flowName}</Text>}
+        {target.applicant && <Text>{`申请人 ${target.applicant.name}`}</Text>}
+        {target.applicant?.departmentName && <Text>{target.applicant.departmentName}</Text>}
         {target.finishedAt && <Text>{`完成于 ${formatTimestamp(target.finishedAt)}`}</Text>}
       </Flex>
     </Stack>
@@ -61,7 +62,7 @@ export function VoidRecordSummary({ record }: { record: VoidRecord }) {
         {record.voidedAt && <Text>{formatTimestamp(record.voidedAt)}</Text>}
       </Flex>
 
-      <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{`作废原因：${record.reason}`}</Text>
+      {record.reason !== undefined && <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{`作废原因：${record.reason}`}</Text>}
       {!!record.attachments?.length && <StoredFileUpload disabled maxCount={record.attachments.length} value={record.attachments} onChange={() => undefined} />}
 
       {record.status === "voided" && (

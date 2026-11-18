@@ -9,7 +9,7 @@ import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
 import { useVoidDraft, VoidFormFields } from "./form";
 import { TargetSummary } from "./summary";
 
-function DirectVoidForm({ target, onClose }: { target: VoidTarget; onClose: () => void }) {
+function DirectVoidForm({ target, onClose }: { target: VoidTarget & { instanceId: string }; onClose: () => void }) {
   const draft = useVoidDraft(target, "admin");
   const admin = useAdminApprovalApi();
   const my = useMyApprovalApi();
@@ -74,7 +74,7 @@ export function DirectVoidDialog({
   open,
   target,
   onClose
-}: { open: boolean; target: VoidTarget; onClose: () => void }) {
+}: { open: boolean; target: VoidTarget & { instanceId: string }; onClose: () => void }) {
   return (
     <ActionDialog open={open} title="作废审批单" onClose={onClose}>
       <DirectVoidForm target={target} onClose={onClose} />

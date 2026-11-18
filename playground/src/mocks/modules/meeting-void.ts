@@ -205,7 +205,7 @@ export function setupMeetingVoids(instances: Map<string, MyInstanceDetail>, meet
     },
     decide(request: MyInstanceDetail, action: ProcessTaskAction) {
       const { record } = request.businessView as VoidRequestBusinessView;
-      const target = get(record.instanceId);
+      const target = get(record.instanceId!);
 
       if (action === "approve") {
         execute(target, record);
@@ -222,8 +222,8 @@ export function setupMeetingVoids(instances: Map<string, MyInstanceDetail>, meet
         attachments: data?.attachments,
         options: data?.options
       });
-      view.plan = plan(view.target.instanceId, view.record.options);
-      const pending = get(view.target.instanceId).voidRequest;
+      view.plan = plan(view.target.instanceId!, view.record.options);
+      const pending = get(view.target.instanceId!).voidRequest;
 
       if (pending) {
         pending.requestStatus = "running";

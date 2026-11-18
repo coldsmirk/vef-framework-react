@@ -283,3 +283,35 @@ it("shows the executed record on a voided target and allows the host to override
   expect(screen.getByText("已撤销的事项")).toBeVisible();
   expect(screen.getByText("通知参会人")).toBeVisible();
 });
+
+it("omits restricted target and record fields while keeping the live plan visible", async () => {
+  setup(<InstanceDetailPanel instanceId="req" />, () => {
+    return {
+      ...request,
+      businessView: {
+        target: {},
+        plan,
+        record: {
+          ...record,
+          instanceId: undefined,
+          reason: undefined
+        }
+      }
+    };
+  });
+  expect(await screen.findByText("释放会议室")).toBeVisible();
+  expect(screen.getByText("通知参会人")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "查看原审批单" })).not.toBeInTheDocument();
+  expect(screen.queryByText("预算会议")).not.toBeInTheDocument();
+  expect(screen.queryByText(/^作废原因/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/undefined|^—$/)).not.toBeInTheDocument();
+});
+
+it("shows the target applicant without a hidden department and opens a visible target", async () => {
+  const user = userEvent.setup();
+  setup(<InstanceDetailPanel instanceId="req" />, req => req.params?.instanceId === "i" ? { ...base, availableActions: [] } : request);
+  expect(await screen.findAllByText("申请人 周宁")).not.toHaveLength(0);
+  await user.click(screen.getByRole("button", { name: "查看原审批单" }));
+  const drawer = within(await screen.findByRole("dialog", { name: "原审批单" }));
+  expect(await drawer.findByText("预算会议")).toBeVisible();
+});

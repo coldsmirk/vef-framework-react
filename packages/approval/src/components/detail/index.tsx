@@ -226,6 +226,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const [modal, setModal] = useState<DetailModal | null>(null);
   const [opinion, setOpinion] = useState("");
   const [acting, setActing] = useState(false);
+  const [businessReady, setBusinessReady] = useState(true);
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
 
@@ -478,7 +479,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const formTab = (
     <Stack gap={16}>
       {instance.businessKind
-        ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} myTask={myTask} view={detail.businessView} /> : <MissingBusinessKind />
+        ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} myTask={myTask} view={detail.businessView} onAvailabilityChange={setBusinessReady} /> : <MissingBusinessKind />
         : (
             <InstanceFormPanel
               apiRef={formApiRef}
@@ -542,7 +543,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
             {canResubmit && (
               <Button
-                disabled={missingRenderer}
+                disabled={missingRenderer || !businessReady}
                 icon={<Icon component={SendIcon} />}
                 loading={acting}
                 type="primary"
