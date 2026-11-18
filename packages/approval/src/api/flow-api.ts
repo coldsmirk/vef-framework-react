@@ -2,6 +2,7 @@ import type { PaginatedQueryParams } from "@vef-framework-react/components";
 import type { MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
 
 import type {
+  BusinessKindDescriptor,
   CreateFlowParams,
   DeployFlowParams,
   Flow,
@@ -45,6 +46,7 @@ export interface FlowApi {
    * resolvers.
    */
   listKindOptions: QueryFunction<KindOptions, Record<string, never>>;
+  listBusinessKinds: QueryFunction<BusinessKindDescriptor[], Record<string, never>>;
 }
 
 /**
@@ -118,6 +120,14 @@ export function useFlowApi(): FlowApi {
           "approval_flow_find_initiators",
           ({ post }) => async params => {
             const result = await post<FlowInitiator[]>(API_PATH, { data: createApiRequest(RESOURCE, "find_initiators", params) });
+
+            return result.data;
+          }
+        ),
+        listBusinessKinds: apiClient.createQueryFn<BusinessKindDescriptor[], Record<string, never>>(
+          "approval_flow_list_business_kinds",
+          ({ post }) => async () => {
+            const result = await post<BusinessKindDescriptor[]>(API_PATH, { data: createApiRequest(RESOURCE, "list_business_kinds", {}) });
 
             return result.data;
           }

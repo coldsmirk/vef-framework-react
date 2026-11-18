@@ -1,5 +1,6 @@
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
+import type { AnnotationView } from "./annotation";
 import type { FormData, UserInfo } from "./base";
 import type { InstanceFlowGraph, TimelineEntry } from "./detail";
 import type { ActionType, BindingProjectionStatus, InstanceStatus, TaskStatus } from "./enums";
@@ -57,6 +58,7 @@ export interface AdminInstanceInfo {
   status: InstanceStatus;
   currentNodeId?: string;
   currentNodeName?: string;
+  businessKind?: string;
   businessRef?: string;
   formData?: FormData;
   /**
@@ -76,6 +78,8 @@ export interface AdminInstanceInfo {
 export interface AdminInstanceDetail {
   instance: AdminInstanceInfo;
   formSchema?: FormSchema;
+  businessView?: unknown;
+  annotations?: AnnotationView[];
   timeline: TimelineEntry[];
   flowGraph: InstanceFlowGraph;
 }

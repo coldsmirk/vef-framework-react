@@ -1,4 +1,5 @@
 export type * from "./admin";
+export * from "./annotation";
 export type * from "./base";
 export type * from "./category";
 export type * from "./delegation";

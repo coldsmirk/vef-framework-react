@@ -1,7 +1,11 @@
 import type { NodeKind } from "@vef-framework-react/approval-flow-editor";
 
+import type { AdminInstanceDetail } from "./admin";
 import type { UserInfo } from "./base";
 import type { ActivityAction, NodeProgressStatus, NodeVisitStatus } from "./enums";
+import type { MyInstanceDetail } from "./my";
+
+export type InstanceDetail = MyInstanceDetail | AdminInstanceDetail;
 
 /**
  * One assignee's involvement at an approval/handle node during a single
@@ -69,6 +73,7 @@ export type TimelineEntryKind = "start" | "approval" | "handle" | "cc" | "end" |
  * predicted.
  */
 export interface TimelineEntry {
+  visitId?: string;
   kind: TimelineEntryKind;
   nodeId?: string;
   name?: string;

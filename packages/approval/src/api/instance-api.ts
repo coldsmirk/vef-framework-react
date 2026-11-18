@@ -3,10 +3,12 @@ import type { MutationFunction } from "@vef-framework-react/core";
 import type {
   AddAssigneeParams,
   AddCCParams,
+  AnnotationView,
   MarkCCReadParams,
   ProcessTaskParams,
   RemoveAssigneeParams,
   ResubmitInstanceParams,
+  SaveAnnotationParams,
   StartInstanceParams,
   UrgeTaskParams,
   WithdrawInstanceParams
@@ -25,6 +27,8 @@ const RESOURCE = "approval/instance";
  * imperatively from the detail views.
  */
 export interface InstanceApi {
+  saveAnnotation: MutationFunction<AnnotationView, SaveAnnotationParams>;
+  deleteAnnotation: MutationFunction<unknown, { id: string }>;
   start: MutationFunction<unknown, StartInstanceParams>;
   processTask: MutationFunction<unknown, ProcessTaskParams>;
   withdraw: MutationFunction<unknown, WithdrawInstanceParams>;
@@ -52,6 +56,15 @@ export function useInstanceApi(): InstanceApi {
       }
 
       return {
+        saveAnnotation: apiClient.createMutationFn<AnnotationView, SaveAnnotationParams>(
+          "approval_instance_save_annotation",
+          ({ post }) => async params => {
+            const result = await post<AnnotationView>(API_PATH, { data: createApiRequest(RESOURCE, "save_annotation", params) });
+
+            return result.data;
+          }
+        ),
+        deleteAnnotation: action<{ id: string }>("delete_annotation"),
         start: action<StartInstanceParams>("start"),
         processTask: action<ProcessTaskParams>("process_task"),
         withdraw: action<WithdrawInstanceParams>("withdraw"),

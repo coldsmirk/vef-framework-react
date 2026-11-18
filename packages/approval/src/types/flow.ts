@@ -1,4 +1,5 @@
 import type { AssigneeKind, CcKind, FlowDefinition, FormFieldDefinition, KindDescriptor } from "@vef-framework-react/approval-flow-editor";
+import type { ApprovalFormField } from "@vef-framework-react/approval-form-bridge";
 import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
@@ -34,6 +35,7 @@ export interface BusinessBindingConfig {
  * A flow definition record, mirroring the Go `approval.Flow`.
  */
 export interface Flow extends FullAudited {
+  businessKind?: string;
   /**
    * The tenant that owns and manages the flow; it never changes.
    */
@@ -72,6 +74,7 @@ export interface Flow extends FullAudited {
  * A versioned snapshot of a flow definition, mirroring `approval.FlowVersion`.
  */
 export interface FlowVersion extends FullAudited {
+  businessKind?: string;
   flowId: string;
   version: number;
   status: VersionStatus;
@@ -124,6 +127,12 @@ export interface KindOptions {
   initiators: Array<KindDescriptor<InitiatorKind>>;
 }
 
+export interface BusinessKindDescriptor {
+  kind: string;
+  label: string;
+  formFields: ApprovalFormField[];
+}
+
 /**
  * A flow initiator rule, mirroring `approval.FlowInitiator`.
  */
@@ -146,6 +155,7 @@ export interface InitiatorParams {
  * Parameters for `approval/flow.create`.
  */
 export interface CreateFlowParams {
+  businessKind?: string;
   tenantId: string;
   /**
    * Offers the flow to every tenant (`Flow.isShared`). Its code must then be
@@ -172,6 +182,7 @@ export interface CreateFlowParams {
  * set (full replace semantics).
  */
 export interface UpdateFlowParams {
+  businessKind?: string;
   flowId: string;
   name: string;
   icon?: string;

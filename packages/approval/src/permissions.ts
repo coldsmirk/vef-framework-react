@@ -56,6 +56,7 @@ export const APPROVAL_PERMISSIONS = {
     update: "approval.delegation.update",
     delete: "approval.delegation.delete"
   },
+  annotation: { write: "approval.annotation.write" },
   handover: {
     apply: "approval.handover.apply"
   }

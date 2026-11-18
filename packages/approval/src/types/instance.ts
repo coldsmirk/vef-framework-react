@@ -10,8 +10,7 @@ import type { AddAssigneeType, ProcessTaskAction } from "./enums";
 export interface StartInstanceParams {
   flowCode: string;
   /**
-   * Opaque reference to the bound business record; required by convention for
-   * business-bound flows unless the host's `BusinessRefProvider` derives one.
+   * Existing record submitted to the business handler, or an opaque handle for a form flow.
    */
   businessRef?: string;
   formData?: Record<string, unknown>;

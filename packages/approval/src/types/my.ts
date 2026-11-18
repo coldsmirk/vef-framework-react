@@ -1,6 +1,7 @@
 import type { WindowStatus } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
+import type { AnnotationView } from "./annotation";
 import type { FormData, UserInfo } from "./base";
 import type { InstanceFlowGraph, TimelineEntry } from "./detail";
 import type { AddAssigneeType, FieldPermission, InstanceAction, InstanceStatus, TaskStatus } from "./enums";
@@ -10,6 +11,7 @@ import type { AddAssigneeType, FieldPermission, InstanceAction, InstanceStatus, 
  * `my.AvailableFlow`.
  */
 export interface AvailableFlow {
+  businessKind?: string;
   flowId: string;
   flowCode: string;
   flowName: string;
@@ -28,6 +30,7 @@ export interface AvailableFlow {
  * like starting the instance.
  */
 export interface StartForm {
+  businessKind?: string;
   flowId: string;
   flowCode: string;
   flowName: string;
@@ -146,6 +149,7 @@ export interface MyInstanceInfo {
   status: InstanceStatus;
   currentNodeId?: string;
   currentNodeName?: string;
+  businessKind?: string;
   businessRef?: string;
   formData?: FormData;
   /**
@@ -200,6 +204,8 @@ export interface ViewerTask {
 export interface MyInstanceDetail {
   instance: MyInstanceInfo;
   formSchema?: FormSchema;
+  businessView?: unknown;
+  annotations?: AnnotationView[];
   timeline: TimelineEntry[];
   flowGraph: InstanceFlowGraph;
   availableActions: InstanceAction[];
