@@ -7,43 +7,47 @@ import { VOID_REQUEST_KIND } from "@vef-framework-react/approval";
 import { defineMock, MockBusinessError } from "../define-mock";
 import { applyKeyword, paginate } from "../helpers/paginate";
 
-export const expenseForm: FormSchema = {
-  version: 2,
-  id: "expense",
-  presentations: {
-    pc: {
-      children: [
-        {
-          id: "subject",
-          key: "subject",
-          type: "textfield",
-          label: "报销事项"
-        },
-        {
-          id: "lines",
-          key: "lines",
-          type: "subform",
-          variant: "stack",
-          label: "费用明细",
-          template: [
-            {
-              id: "item",
-              key: "item",
-              type: "textfield",
-              label: "费用项目"
-            },
-            {
-              id: "amount",
-              key: "amount",
-              type: "number",
-              label: "金额（元）"
-            }
-          ]
-        }
-      ]
+export function createExpenseForm(variant: "stack" | "table"): FormSchema {
+  return {
+    version: 2,
+    id: "expense",
+    presentations: {
+      pc: {
+        children: [
+          {
+            id: "subject",
+            key: "subject",
+            type: "textfield",
+            label: "报销事项"
+          },
+          {
+            id: "lines",
+            key: "lines",
+            type: "subform",
+            variant,
+            label: "费用明细",
+            template: [
+              {
+                id: "item",
+                key: "item",
+                type: "textfield",
+                label: "费用项目"
+              },
+              {
+                id: "amount",
+                key: "amount",
+                type: "number",
+                label: "金额（元）"
+              }
+            ]
+          }
+        ]
+      }
     }
-  }
-};
+  };
+}
+
+export const expenseForm = createExpenseForm("stack");
 
 const catalog: BusinessKindDescriptor[] = [
   {

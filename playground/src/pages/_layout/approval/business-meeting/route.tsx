@@ -22,6 +22,7 @@ function MeetingPage() {
     { label: "作废申请已获批", value: "meeting-delivery-request" },
     { label: "作废申请已结束", value: "meeting-premises-request" },
     { label: "费用报销 · 字段批注与交接", value: "expense-review" },
+    { label: "费用报销 · 表格明细批注", value: "expense-table" },
     { label: "资产调拨 · 未注册业务表单", value: "asset-returned" }
   ];
 

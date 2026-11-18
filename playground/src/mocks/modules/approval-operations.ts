@@ -2,7 +2,7 @@ import type { AdminTask, ApprovalMetrics, CompletedTask, HandoverReport, MyInsta
 
 import { defineMock, MockBusinessError } from "../define-mock";
 import { applyKeyword, paginate } from "../helpers/paginate";
-import { expenseForm } from "./approval-flows";
+import { createExpenseForm, expenseForm } from "./approval-flows";
 
 const former = { id: "u_1", name: "张三" };
 const reviewer = { id: "u_2", name: "李四" };
@@ -13,62 +13,80 @@ interface Search { page?: number; pageSize?: number; keyword?: string; status?: 
 
 export function setupApprovalOperations(instances: Map<string, MyInstanceDetail>, meeting: (id: string, returned?: boolean) => MyInstanceDetail) {
   const reviewNode = "财务复核";
-  const detail = meeting("expense-review");
-  Object.assign(detail.instance, {
-    flowId: "expenses",
-    flowCode: "expenses",
-    flowName: "日常费用报销",
-    title: "采购样品差旅报销",
-    instanceNo: "BX-2026-021",
-    businessKind: undefined,
-    applicant,
-    currentNodeName: reviewNode,
-    formData: { subject: "采购样品差旅报销", lines: [{ item: "高铁车票", amount: 385 }, { item: "市内交通", amount: 68 }] }
-  });
-  detail.formSchema = expenseForm;
-  detail.fieldPermissions = { subject: "editable", lines: "editable" };
-  detail.businessView = undefined;
-  detail.availableActions = ["approve", "reject"];
-  const visit = detail.timeline[1]!;
-  visit.name = reviewNode;
-  visit.participants![0]!.predecessor = former;
-  visit.participants![0]!.handoverReason = "离职";
-  detail.flowGraph.nodes[1]!.data.name = reviewNode;
-  const note = detail.annotations![0]!;
-  detail.annotations = [
-    {
-      ...note,
-      nodeName: reviewNode,
-      content: "请附上采购申请单。",
-      anchor: { field: "subject" }
-    },
-    {
-      ...note,
-      id: "line-note",
-      nodeName: reviewNode,
-      content: "第一笔行程需补充乘车人。",
-      anchor: { field: "lines", row: 0 }
-    },
-    {
-      ...note,
-      id: "column-note",
-      nodeName: reviewNode,
-      content: "请核对各项费用的报销金额。",
-      anchor: { field: "lines", column: "amount" }
-    },
-    {
-      ...note,
-      id: "cell-note",
-      nodeName: reviewNode,
-      content: "请核对第二笔金额和发票。",
-      anchor: {
-        field: "lines",
-        row: 1,
-        column: "amount"
+
+  function seedExpense(variant: "stack" | "table") {
+    const detail = meeting(variant === "table" ? "expense-table" : "expense-review");
+    Object.assign(detail.instance, {
+      flowId: "expenses",
+      flowCode: "expenses",
+      flowName: "日常费用报销",
+      title: "采购样品差旅报销",
+      instanceNo: variant === "stack" ? "BX-2026-021" : "BX-2026-022",
+      businessKind: undefined,
+      applicant,
+      currentNodeName: reviewNode,
+      formData: { subject: "采购样品差旅报销", lines: [{ item: "高铁车票", amount: 385 }, { item: "市内交通", amount: 68 }] }
+    });
+    detail.formSchema = createExpenseForm(variant);
+    detail.fieldPermissions = { subject: "editable", lines: "editable" };
+    detail.businessView = undefined;
+    detail.availableActions = ["approve", "reject"];
+    const visit = detail.timeline[1]!;
+    visit.name = reviewNode;
+    visit.participants![0]!.predecessor = former;
+    visit.participants![0]!.handoverReason = "离职";
+    detail.flowGraph.nodes[1]!.data.name = reviewNode;
+    const note = detail.annotations![0]!;
+    detail.annotations = [
+      {
+        ...note,
+        nodeName: reviewNode,
+        content: "请附上采购申请单。",
+        anchor: { field: "subject" }
+      },
+      {
+        ...note,
+        id: `${detail.instance.instanceId}-line-note`,
+        nodeName: reviewNode,
+        content: "第一笔行程需补充乘车人。",
+        anchor: { field: "lines", row: 0 }
+      },
+      {
+        ...note,
+        id: `${detail.instance.instanceId}-column-note`,
+        nodeName: reviewNode,
+        content: "请核对各项费用的报销金额。",
+        anchor: { field: "lines", column: "amount" }
+      },
+      {
+        ...note,
+        id: `${detail.instance.instanceId}-cell-note`,
+        nodeName: reviewNode,
+        content: "请核对第二笔金额和发票。",
+        anchor: {
+          field: "lines",
+          row: 1,
+          column: "amount"
+        }
       }
+    ];
+
+    if (variant === "table") {
+      detail.annotations.unshift({
+        ...note,
+        id: "table-note",
+        nodeName: reviewNode,
+        content: "请核对费用明细与收据总额。",
+        anchor: { field: "lines" }
+      });
     }
-  ];
-  instances.set(detail.instance.instanceId, detail);
+
+    instances.set(detail.instance.instanceId, detail);
+    return detail;
+  }
+
+  const detail = seedExpense("stack");
+  seedExpense("table");
   const waiting = meeting("expense-returned", true);
   Object.assign(waiting.instance, {
     ...detail.instance,
