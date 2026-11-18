@@ -2,18 +2,22 @@ import type { EditorPlugins, FormFieldDefinition, PickerProps, TenantOption } fr
 import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode, Ref } from "react";
 
-import type { InstanceDetail, KindOptions, StartForm, ViewerTask } from "../types";
+import type { InstanceDetail, KindOptions, StartForm, ViewerTask, VoidOptions, VoidTarget } from "../types";
 import type { FormGlobalDefinition } from "./form-context";
 
 import { createApprovalRegistries } from "@vef-framework-react/approval-form-bridge";
 import { createContext, use, useMemo, useState } from "react";
+
+import { VoidRequestDetailView, VoidRequestStartForm } from "../components/void/request-renderer";
+import { VOID_REQUEST_KIND } from "../types";
 
 export interface BusinessFormHandle {
   collect: () => Promise<Record<string, unknown>>;
 }
 
 export interface BusinessKindRenderer {
-  StartForm: FC<{ flow: StartForm; businessRef?: string; handle: Ref<BusinessFormHandle> }>;
+  StartForm: FC<{ flow: StartForm; businessRef?: string; handle: Ref<BusinessFormHandle>; voidTarget?: VoidTarget; onAvailabilityChange?: (available: boolean) => void }>;
+  VoidOptions?: FC<{ value: VoidOptions; onChange: (value: VoidOptions) => void }>;
   DetailView: FC<{ detail: InstanceDetail; view: unknown; myTask?: ViewerTask; handle: Ref<BusinessFormHandle> }>;
 }
 
@@ -120,6 +124,8 @@ export function resolveBusinessRenderer(kinds: ApprovalPlugins["businessKinds"],
   return kind && kinds && Object.hasOwn(kinds, kind) ? kinds[kind] : undefined;
 }
 
+const FALLBACK_PLUGINS: ApprovalPlugins = { businessKinds: { [VOID_REQUEST_KIND]: { StartForm: VoidRequestStartForm, DetailView: VoidRequestDetailView } } };
+
 const ApprovalPluginsContext = createContext<ResolvedApprovalPlugins | null>(null);
 ApprovalPluginsContext.displayName = "ApprovalPluginsContext";
 
@@ -141,6 +147,7 @@ export function ApprovalProvider({ plugins, children }: ApprovalProviderProps) {
     () => {
       return {
         ...plugins,
+        businessKinds: { ...FALLBACK_PLUGINS.businessKinds, ...plugins?.businessKinds },
         registries: plugins?.registries ?? defaultRegistries
       };
     },
@@ -149,8 +156,6 @@ export function ApprovalProvider({ plugins, children }: ApprovalProviderProps) {
 
   return <ApprovalPluginsContext value={value}>{children}</ApprovalPluginsContext>;
 }
-
-const FALLBACK_PLUGINS: ApprovalPlugins = {};
 
 /**
  * Resolves the approval plugin set. Usable without a provider — every

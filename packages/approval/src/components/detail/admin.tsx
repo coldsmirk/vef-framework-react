@@ -2,11 +2,12 @@ import type { TableColumn } from "@vef-framework-react/components";
 
 import type { AdminActionLog } from "../../types";
 
-import { Empty, Flex, pageSizeOptions, Spin, Stack, SYMBOL_PAGINATION, Table, Tabs, Tag, Text } from "@vef-framework-react/components";
+import { Button, Empty, Flex, pageSizeOptions, PermissionGate, Spin, Stack, SYMBOL_PAGINATION, Table, Tabs, Tag, Text } from "@vef-framework-react/components";
 import { useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
+import { APPROVAL_PERMISSIONS } from "../../permissions";
 import { AnnotationTimeline, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
@@ -14,6 +15,8 @@ import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
 import { ACTIVITY_ACTION_LABELS } from "../status/labels";
 import { UserGroup, UserLabel } from "../user";
+import { DirectVoidDialog } from "../void/direct-dialog";
+import { VoidBanners } from "../void/summary";
 import { InstanceHeader } from "./index";
 
 const ACTION_LOG_COLUMNS: Array<TableColumn<AdminActionLog>> = [
@@ -91,6 +94,7 @@ function ActionLogPanel({ instanceId }: { instanceId: string }) {
 
 export interface AdminInstanceDetailPanelProps {
   instanceId: string;
+  voidPermission?: string;
 }
 
 /**
@@ -100,7 +104,7 @@ export interface AdminInstanceDetailPanelProps {
  * audit trail. Admin write actions (terminate, reassign) live on the admin
  * page rows, not in this panel.
  */
-export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPanelProps) {
+export function AdminInstanceDetailPanel({ instanceId, voidPermission = APPROVAL_PERMISSIONS.instance.void }: AdminInstanceDetailPanelProps) {
   const api = useAdminApprovalApi();
 
   const { data: detail, isLoading } = useQuery({
@@ -108,6 +112,7 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
     queryKey: [api.getInstanceDetail.key, { instanceId }]
   });
 
+  const [voidOpen, setVoidOpen] = useState(false);
   const fieldAnnotations = useFieldAnnotations(detail);
   const business = useBusinessForm(detail?.instance.businessKind);
 
@@ -140,6 +145,15 @@ export function AdminInstanceDetailPanel({ instanceId }: AdminInstanceDetailPane
         status={instance.status}
         title={instance.title}
       />
+
+      <VoidBanners record={detail.voidRecord} renderRequest={id => <AdminInstanceDetailPanel instanceId={id} voidPermission={voidPermission} />} request={detail.voidRequest} />
+
+      {detail.availableActions?.includes("void") && (
+        <PermissionGate requiredPermissions={voidPermission}>
+          <Button danger disabled={Boolean(instance.businessKind && !business.renderer)} style={{ alignSelf: "flex-start" }} onClick={() => setVoidOpen(true)}>作废</Button>
+          <DirectVoidDialog open={voidOpen} target={instance} onClose={() => setVoidOpen(false)} />
+        </PermissionGate>
+      )}
 
       {fieldAnnotations.dialog}
 

@@ -1,6 +1,8 @@
 import type { Interval } from "@vef-framework-react/calendar";
 import type { FormRendererApi } from "@vef-framework-react/form-editor";
 
+import type { VoidTarget } from "../../types";
+
 import { Alert, Button, Drawer, Empty, Flex, globalCssVars, Icon, showSuccessMessage, showWarningMessage, Spin, Stack, Text } from "@vef-framework-react/components";
 import { isBusinessError, useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
 import { SendIcon } from "lucide-react";
@@ -30,6 +32,7 @@ export interface StartInstanceDrawerProps {
    * Presents the server's reason after a closed initiation window dismisses the drawer.
    */
   onWindowClosed?: (message: string) => void;
+  voidTarget?: VoidTarget;
 }
 
 const WARNING_PERIOD_MS = 30 * 60_000;
@@ -89,6 +92,7 @@ function DeadlineHint({ startsAtUnixMs, endsAtUnixMs: end }: Interval) {
 function StartDrawerBody({
   flowCode,
   businessRef,
+  voidTarget,
   onClose,
   onStarted,
   onWindowClosed
@@ -97,6 +101,8 @@ function StartDrawerBody({
   const myApi = useMyApprovalApi();
   const instanceApi = useInstanceApi();
   const formApiRef = useRef<FormRendererApi | null>(null);
+  const [businessReady, setBusinessReady] = useState(true);
+  const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // The load is gated exactly like starting: a rendered form implies a
@@ -139,6 +145,7 @@ function StartDrawerBody({
 
   async function submitStart(values: Record<string, unknown> | undefined): Promise<void> {
     setSubmitting(true);
+    setSubmitError("");
 
     try {
       await start.mutateAsync({
@@ -151,6 +158,10 @@ function StartDrawerBody({
       onStarted?.();
     } catch (error_) {
       handleClosedWindow(error_);
+
+      if (voidTarget && error_ instanceof Error) {
+        setSubmitError(error_.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -194,7 +205,7 @@ function StartDrawerBody({
       {startForm.initiationWindow?.open && startForm.initiationWindow.current && <DeadlineHint {...startForm.initiationWindow.current} />}
 
       {startForm.businessKind
-        ? business.renderer ? <business.renderer.StartForm businessRef={businessRef} flow={startForm} handle={business.handle} /> : <MissingBusinessKind />
+        ? business.renderer ? <business.renderer.StartForm businessRef={businessRef} flow={startForm} handle={business.handle} voidTarget={voidTarget} onAvailabilityChange={setBusinessReady} /> : <MissingBusinessKind />
         : (
             <InstanceFormPanel
               apiRef={formApiRef}
@@ -205,12 +216,14 @@ function StartDrawerBody({
             />
           )}
 
+      {submitError && <Alert showIcon title={submitError} type="error" />}
+
       <Flex
         justify="flex-end"
         style={{ borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`, paddingTop: 16 }}
       >
         <Button
-          disabled={Boolean(startForm.businessKind && !business.renderer)}
+          disabled={Boolean(startForm.businessKind && (!business.renderer || !businessReady))}
           icon={<Icon component={SendIcon} />}
           loading={submitting}
           type="primary"
@@ -231,6 +244,7 @@ function StartDrawerBody({
 export function StartInstanceDrawer({
   flowCode,
   businessRef,
+  voidTarget,
   onClose,
   onStarted,
   onWindowClosed
@@ -241,7 +255,7 @@ export function StartInstanceDrawer({
       open={flowCode !== null}
       placement="right"
       size={720}
-      title="发起审批"
+      title={voidTarget ? "申请作废" : "发起审批"}
       onClose={onClose}
     >
       {flowCode !== null && (
@@ -249,6 +263,7 @@ export function StartInstanceDrawer({
           key={flowCode}
           businessRef={businessRef}
           flowCode={flowCode}
+          voidTarget={voidTarget}
           onClose={onClose}
           onStarted={onStarted}
           onWindowClosed={onWindowClosed}

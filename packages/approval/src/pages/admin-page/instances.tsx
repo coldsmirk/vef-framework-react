@@ -86,6 +86,7 @@ function InstanceSearchFields() {
 
 export interface InstancesPanelProps {
   detailPermission: string;
+  voidPermission?: string;
   terminatePermission: string;
 }
 
@@ -95,6 +96,7 @@ export interface InstancesPanelProps {
  */
 export function InstancesPanel({
   detailPermission,
+  voidPermission,
   terminatePermission
 }: InstancesPanelProps) {
   const api = useAdminApprovalApi();
@@ -152,7 +154,7 @@ export function InstancesPanel({
         title="审批详情"
         onClose={() => setDetailTarget(null)}
       >
-        {detailTarget !== null && <AdminInstanceDetailPanel instanceId={detailTarget} />}
+        {detailTarget !== null && <AdminInstanceDetailPanel instanceId={detailTarget} voidPermission={voidPermission} />}
       </Drawer>
 
       <ReasonModal

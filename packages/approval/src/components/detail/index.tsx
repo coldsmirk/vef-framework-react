@@ -2,7 +2,7 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 import type { FormRendererApi } from "@vef-framework-react/form-editor";
 import type { ReactNode } from "react";
 
-import type { InstanceAction, MyInstanceDetail, ProcessTaskAction, UserInfo } from "../../types";
+import type { InstanceAction, MyInstanceDetail, ProcessTaskAction, UserInfo, VoidRequestBusinessView } from "../../types";
 import type { UrgeTarget } from "./action-modals";
 
 import {
@@ -24,7 +24,7 @@ import {
   Text,
   Title
 } from "@vef-framework-react/components";
-import { useMutation, useQuery } from "@vef-framework-react/core";
+import { useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
 import {
   CheckIcon,
   CornerUpLeftIcon,
@@ -39,8 +39,10 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
-import { useInstanceApi, useMyApprovalApi } from "../../api";
+import { useAdminApprovalApi, useInstanceApi, useMyApprovalApi } from "../../api";
+import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
 import { useApprovalPlugins } from "../../plugins";
+import { VOID_REQUEST_KIND } from "../../types";
 import { AnnotationTimeline, DetailAnnotations, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
@@ -48,6 +50,7 @@ import { InstanceFormPanel } from "../form-panel";
 import { formatTimestamp } from "../format";
 import { InstanceStatusTag } from "../status";
 import { UserLabel } from "../user";
+import { VoidBanners } from "../void/summary";
 import { AddAssigneeModal, CCModal, ReasonModal, RemoveAssigneeModal, RollbackModal, TransferModal, UrgeModal } from "./action-modals";
 
 export type { UrgeTarget } from "./action-modals";
@@ -170,7 +173,7 @@ export function InstanceHeader({
   );
 }
 
-type DetailModal = "transfer" | "rollback" | "addAssignee" | "removeAssignee" | "cc" | "urge" | "withdraw";
+type DetailModal = "requestVoid" | "transfer" | "rollback" | "addAssignee" | "removeAssignee" | "cc" | "urge" | "withdraw";
 
 /**
  * The form-tab submission modes routed through the form renderer's validate +
@@ -196,6 +199,8 @@ export interface InstanceDetailPanelProps {
  */
 export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceDetailPanelProps) {
   const api = useMyApprovalApi();
+  const admin = useAdminApprovalApi();
+  const client = useQueryClient();
   const instanceApi = useInstanceApi();
 
   const {
@@ -280,6 +285,19 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   async function completeAction(message: string): Promise<void> {
     showSuccessMessage(message);
     setOpinion("");
+
+    if (instance.businessKind === VOID_REQUEST_KIND) {
+      const targetId = (detail?.businessView as VoidRequestBusinessView | undefined)?.target?.instanceId;
+
+      if (targetId) {
+        void client.invalidateQueries({ queryKey: [admin.getInstanceDetail.key, { instanceId: targetId }] });
+        void client.invalidateQueries({ queryKey: [api.getInstanceDetail.key, { instanceId: targetId }] });
+        void client.invalidateQueries({ queryKey: [admin.findInstances.key] });
+        void client.invalidateQueries({ queryKey: [admin.getMetrics.key] });
+        void client.invalidateQueries({ queryKey: [api.findInitiated.key] });
+      }
+    }
+
     await refetch();
     onActionCompleted?.();
   }
@@ -295,6 +313,11 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     } finally {
       setActing(false);
     }
+  }
+
+  function refreshAfterRequest() {
+    void refetch();
+    onActionCompleted?.();
   }
 
   function requireOpinion(): boolean {
@@ -389,6 +412,10 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   }
 
   const secondaryButtons: ReactNode[] = [];
+
+  if (actions.has("request_void") && instance.voidFlowCode) {
+    secondaryButtons.push(<Button key="requestVoid" disabled={missingRenderer || acting} onClick={() => setModal("requestVoid")}>申请作废</Button>);
+  }
 
   if (actions.has("transfer") && myTask !== undefined) {
     secondaryButtons.push(
@@ -547,6 +574,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
         title={instance.title}
       />
 
+      <VoidBanners record={detail.voidRecord} renderRequest={id => <InstanceDetailPanel instanceId={id} onActionCompleted={refreshAfterRequest} />} request={detail.voidRequest} />
+      {modal === "requestVoid" && <StartInstanceDrawer flowCode={instance.voidFlowCode ?? null} voidTarget={instance} onClose={() => setModal(null)} onStarted={refreshAfterRequest} />}
       {fieldAnnotations.dialog}
 
       <Tabs

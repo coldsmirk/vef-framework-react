@@ -27,6 +27,7 @@ export interface ApprovalAdminPageProps {
     instanceQuery?: string;
     instanceDetail?: string;
     instanceTerminate?: string;
+    instanceVoid?: string;
     taskQuery?: string;
     taskReassign?: string;
     bindingQuery?: string;
@@ -58,6 +59,7 @@ export function ApprovalAdminPage({
   const perms = {
     instanceQuery: permissions?.instanceQuery ?? APPROVAL_PERMISSIONS.instance.query,
     instanceDetail: permissions?.instanceDetail ?? APPROVAL_PERMISSIONS.instance.detail,
+    instanceVoid: permissions?.instanceVoid ?? APPROVAL_PERMISSIONS.instance.void,
     instanceTerminate: permissions?.instanceTerminate ?? APPROVAL_PERMISSIONS.instance.terminate,
     taskQuery: permissions?.taskQuery ?? APPROVAL_PERMISSIONS.task.query,
     taskReassign: permissions?.taskReassign ?? APPROVAL_PERMISSIONS.task.reassign,
@@ -75,7 +77,7 @@ export function ApprovalAdminPage({
     items.push({
       key: "instances",
       label: "实例管理",
-      children: <InstancesPanel detailPermission={perms.instanceDetail} terminatePermission={perms.instanceTerminate} />
+      children: <InstancesPanel detailPermission={perms.instanceDetail} terminatePermission={perms.instanceTerminate} voidPermission={perms.instanceVoid} />
     });
   }
 
