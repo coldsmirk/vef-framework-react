@@ -10,22 +10,23 @@ import { PrincipalSelect } from "../principal";
  */
 export function useUserAction(onClose: () => void) {
   const [userIds, setUserIds] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
+  const [failure, setFailure] = useState<{ message: string; requiresNewSelection: boolean }>();
   const { submitting, run } = useConfirm(onClose, error => {
-    if (isBusinessError(error) && error.code === 40_028) {
-      setMessage(error.message);
-    }
+    setFailure({
+      message: error instanceof Error && error.message ? error.message : "操作未完成，请重试。",
+      requiresNewSelection: isBusinessError(error) && error.code === 40_028
+    });
   });
 
   function select(ids: string[]) {
     setUserIds(ids);
-    setMessage("");
+    setFailure(undefined);
   }
 
   return {
     userIds,
     select,
-    message,
+    failure,
     submitting,
     run
   };
@@ -44,7 +45,7 @@ export function UserActionField({
     <Labeled label={label}>
       <Stack gap={6}>
         <PrincipalSelect disabled={selection.submitting} kind="user" maxCount={maxCount} value={selection.userIds} onChange={selection.select} />
-        {selection.message && <Alert showIcon description="请重新选择人员后再提交。" title={selection.message} type="warning" />}
+        {selection.failure && <Alert showIcon description={selection.failure.requiresNewSelection ? "请重新选择人员后再提交。" : undefined} title={selection.failure.message} type={selection.failure.requiresNewSelection ? "warning" : "error"} />}
       </Stack>
     </Labeled>
   );

@@ -130,7 +130,7 @@ function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) 
       </ActionBody>
 
       <ActionFooter
-        disabled={newAssigneeId === undefined || Boolean(selection.message)}
+        disabled={newAssigneeId === undefined || selection.failure?.requiresNewSelection}
         okText="改派"
         submitting={submitting}
         onCancel={onClose}
@@ -163,7 +163,7 @@ export interface TasksPanelProps {
  * Cross-user task supervision with admin reassignment for pending tasks.
  */
 export function TasksPanel({ reassignPermission }: TasksPanelProps) {
-  const api = useAdminApprovalApi();
+  const api = useAdminApprovalApi({ inlineReassignErrors: true });
   const [reassignTarget, setReassignTarget] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 

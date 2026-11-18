@@ -20,7 +20,7 @@ export function useBusinessForm(kind?: string) {
     setBlockedReason(available ? undefined : reason);
   }, []);
 
-  async function collect() {
+  async function collect({ inlineError = false } = {}) {
     try {
       if (!handle.current) {
         throw new Error("业务表单尚未就绪");
@@ -28,7 +28,10 @@ export function useBusinessForm(kind?: string) {
 
       return await handle.current.collect();
     } catch (error) {
-      showWarningMessage(error instanceof Error && error.message ? error.message : "请检查业务表单后重试");
+      if (!inlineError) {
+        showWarningMessage(error instanceof Error && error.message ? error.message : "请检查业务表单后重试");
+      }
+
       throw error;
     }
   }

@@ -201,7 +201,7 @@ export interface InstanceDetailPanelProps {
 export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceDetailPanelProps) {
   const api = useMyApprovalApi();
   const refreshVoidTarget = useRefreshVoidTarget();
-  const instanceApi = useInstanceApi();
+  const instanceApi = useInstanceApi({ inlineUserErrors: true });
 
   const {
     data: detail,
@@ -611,7 +611,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
           await processTask.mutateAsync({
             taskId: myTask.taskId,
             action: "transfer",
-            formData: instance.businessKind ? await business.collect() : undefined,
+            formData: instance.businessKind ? await business.collect({ inlineError: true }) : undefined,
             transferToId,
             opinion: transferOpinion.trim() || undefined
           });

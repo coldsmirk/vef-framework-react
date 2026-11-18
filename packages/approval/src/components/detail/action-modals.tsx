@@ -52,7 +52,7 @@ function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) 
       </ActionBody>
 
       <ActionFooter
-        disabled={transferToId === undefined || Boolean(selection.message)}
+        disabled={transferToId === undefined || selection.failure?.requiresNewSelection}
         okText="转办"
         submitting={submitting}
         onCancel={onClose}
@@ -189,7 +189,7 @@ function AddAssigneeForm({
       </ActionBody>
 
       <ActionFooter
-        disabled={userIds.length === 0 || addType === undefined || Boolean(selection.message)}
+        disabled={userIds.length === 0 || addType === undefined || selection.failure?.requiresNewSelection}
         okText="加签"
         submitting={submitting}
         onCancel={onClose}
@@ -304,7 +304,7 @@ function CCForm({ onClose, onConfirm }: Omit<CCModalProps, "open">) {
       </ActionBody>
 
       <ActionFooter
-        disabled={userIds.length === 0 || Boolean(selection.message)}
+        disabled={userIds.length === 0 || selection.failure?.requiresNewSelection}
         okText="抄送"
         submitting={submitting}
         onCancel={onClose}

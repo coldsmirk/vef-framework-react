@@ -1,5 +1,5 @@
 import userEvent from "@testing-library/user-event";
-import { BusinessError } from "@vef-framework-react/core";
+import { BusinessError, HTTP_CLIENT } from "@vef-framework-react/core";
 
 import { mockApprovalApi, render, screen, within } from "../../../test-utils";
 import { TasksPanel } from "./tasks";
@@ -56,5 +56,6 @@ describe("TasksPanel", () => {
     await user.type(dialog.getByRole("combobox"), "former{Enter}");
     await user.click(dialog.getByRole("button", { name: /改\s*派/ }));
     expect(await dialog.findByText(reason)).toBeVisible();
+    expect(Object.getPrototypeOf(apiClient[HTTP_CLIENT]).post).toHaveBeenCalledWith("/api", expect.objectContaining({ skipErrorMessage: true, data: expect.objectContaining({ action: "reassign_task" }) }));
   });
 });

@@ -92,6 +92,20 @@ describe("handed-over user selections", () => {
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
   });
 
+  it("keeps temporary failures visible and allows retry with the same person", async () => {
+    const user = userEvent.setup();
+    const close = vi.fn();
+    const confirm = vi.fn().mockRejectedValueOnce(new Error("网络暂不可用")).mockResolvedValue(undefined);
+    render(<TransferModal open onClose={close} onConfirm={confirm} />);
+    await user.type(screen.getByRole("combobox"), "former{Enter}");
+    const submit = screen.getByRole("button", { name: /转\s*办/ });
+    await user.click(submit);
+    expect(await screen.findByText("网络暂不可用")).toBeVisible();
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  });
+
   it("shows the server's no-successor reason in the add-assignee picker", async () => {
     const user = userEvent.setup();
     const confirm = vi.fn().mockRejectedValue(new BusinessError(40_028, unassigned));
