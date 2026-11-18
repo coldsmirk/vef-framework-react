@@ -47,6 +47,7 @@ import { Route as LayoutMdDepartmentRouteRouteImport } from "./../pages/_layout/
 import { Route as LayoutAuthUserRouteRouteImport } from "./../pages/_layout/auth/user/route";
 import { Route as LayoutAuthRoleRouteRouteImport } from "./../pages/_layout/auth/role/route";
 import { Route as LayoutAuthMenuRouteRouteImport } from "./../pages/_layout/auth/menu/route";
+import { Route as LayoutApprovalWorkCalendarRouteRouteImport } from "./../pages/_layout/approval/work-calendar/route";
 import { Route as LayoutApprovalTaskCenterRouteRouteImport } from "./../pages/_layout/approval/task-center/route";
 import { Route as LayoutApprovalMyInstancesRouteRouteImport } from "./../pages/_layout/approval/my-instances/route";
 import { Route as LayoutApprovalInitiateRouteRouteImport } from "./../pages/_layout/approval/initiate/route";
@@ -241,6 +242,12 @@ const LayoutAuthMenuRouteRoute = LayoutAuthMenuRouteRouteImport.update({
   path: "/auth/menu",
   getParentRoute: () => LayoutRouteRoute,
 } as any);
+const LayoutApprovalWorkCalendarRouteRoute =
+  LayoutApprovalWorkCalendarRouteRouteImport.update({
+    id: "/work-calendar",
+    path: "/work-calendar",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
 const LayoutApprovalTaskCenterRouteRoute =
   LayoutApprovalTaskCenterRouteRouteImport.update({
     id: "/task-center",
@@ -303,6 +310,7 @@ export interface FileRoutesByFullPath {
   "/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
   "/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
   "/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
+  "/approval/work-calendar": typeof LayoutApprovalWorkCalendarRouteRoute;
   "/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -346,6 +354,7 @@ export interface FileRoutesByTo {
   "/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
   "/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
   "/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
+  "/approval/work-calendar": typeof LayoutApprovalWorkCalendarRouteRoute;
   "/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -391,6 +400,7 @@ export interface FileRoutesById {
   "/_layout/approval/initiate": typeof LayoutApprovalInitiateRouteRoute;
   "/_layout/approval/my-instances": typeof LayoutApprovalMyInstancesRouteRoute;
   "/_layout/approval/task-center": typeof LayoutApprovalTaskCenterRouteRoute;
+  "/_layout/approval/work-calendar": typeof LayoutApprovalWorkCalendarRouteRoute;
   "/_layout/auth/menu": typeof LayoutAuthMenuRouteRoute;
   "/_layout/auth/role": typeof LayoutAuthRoleRouteRoute;
   "/_layout/auth/user": typeof LayoutAuthUserRouteRoute;
@@ -436,6 +446,7 @@ export interface FileRouteTypes {
     | "/approval/initiate"
     | "/approval/my-instances"
     | "/approval/task-center"
+    | "/approval/work-calendar"
     | "/auth/menu"
     | "/auth/role"
     | "/auth/user"
@@ -479,6 +490,7 @@ export interface FileRouteTypes {
     | "/approval/initiate"
     | "/approval/my-instances"
     | "/approval/task-center"
+    | "/approval/work-calendar"
     | "/auth/menu"
     | "/auth/role"
     | "/auth/user"
@@ -523,6 +535,7 @@ export interface FileRouteTypes {
     | "/_layout/approval/initiate"
     | "/_layout/approval/my-instances"
     | "/_layout/approval/task-center"
+    | "/_layout/approval/work-calendar"
     | "/_layout/auth/menu"
     | "/_layout/auth/role"
     | "/_layout/auth/user"
@@ -800,6 +813,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutAuthMenuRouteRouteImport;
       parentRoute: typeof LayoutRouteRoute;
     };
+    "/_layout/approval/work-calendar": {
+      id: "/_layout/approval/work-calendar";
+      path: "/work-calendar";
+      fullPath: "/approval/work-calendar";
+      preLoaderRoute: typeof LayoutApprovalWorkCalendarRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
     "/_layout/approval/task-center": {
       id: "/_layout/approval/task-center";
       path: "/task-center";
@@ -868,6 +888,7 @@ interface LayoutApprovalRouteRouteChildren {
   LayoutApprovalInitiateRouteRoute: typeof LayoutApprovalInitiateRouteRoute;
   LayoutApprovalMyInstancesRouteRoute: typeof LayoutApprovalMyInstancesRouteRoute;
   LayoutApprovalTaskCenterRouteRoute: typeof LayoutApprovalTaskCenterRouteRoute;
+  LayoutApprovalWorkCalendarRouteRoute: typeof LayoutApprovalWorkCalendarRouteRoute;
 }
 
 const LayoutApprovalRouteRouteChildren: LayoutApprovalRouteRouteChildren = {
@@ -880,6 +901,7 @@ const LayoutApprovalRouteRouteChildren: LayoutApprovalRouteRouteChildren = {
   LayoutApprovalInitiateRouteRoute: LayoutApprovalInitiateRouteRoute,
   LayoutApprovalMyInstancesRouteRoute: LayoutApprovalMyInstancesRouteRoute,
   LayoutApprovalTaskCenterRouteRoute: LayoutApprovalTaskCenterRouteRoute,
+  LayoutApprovalWorkCalendarRouteRoute: LayoutApprovalWorkCalendarRouteRoute,
 };
 
 const LayoutApprovalRouteRouteWithChildren =

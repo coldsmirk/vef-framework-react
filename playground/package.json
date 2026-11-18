@@ -22,6 +22,7 @@
     "@vef-framework-react/approval": "workspace:*",
     "@vef-framework-react/approval-flow-editor": "workspace:*",
     "@vef-framework-react/approval-form-bridge": "workspace:*",
+    "@vef-framework-react/calendar": "workspace:*",
     "@vef-framework-react/components": "workspace:*",
     "@vef-framework-react/core": "workspace:*",
     "@vef-framework-react/form-editor": "workspace:*",

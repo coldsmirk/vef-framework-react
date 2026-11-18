@@ -101,13 +101,53 @@ export function setupMeetingVoids(instances: Map<string, MyInstanceDetail>, meet
     return { instanceId: id };
   }
 
+  function seedVoidState(id: string, target: MyInstanceDetail) {
+    if (id === "meeting-voided") {
+      execute(target, makeRecord(target, "场地检修，会议延期", { releaseRoom: true }));
+
+      return;
+    }
+
+    if (id === "meeting-delivery" || id === "meeting-premises") {
+      const record = makeRecord(target, "会场安排已调整", { releaseRoom: true });
+      const request = get(startRequest(target, record).instanceId);
+      const approved = id === "meeting-delivery";
+      request.instance.status = approved ? "approved" : "rejected";
+      request.instance.finishedAt = time;
+      request.instance.currentNodeName = undefined;
+      request.myTask = undefined;
+      request.availableActions = [];
+      const review = request.timeline.at(-1)!;
+      review.finishedAt = time;
+      review.status = approved ? "passed" : "rejected";
+      review.participants![0]!.status = request.instance.status;
+      request.flowGraph.nodes[1]!.data.status = review.status;
+
+      if (approved) {
+        execute(target, record);
+      } else {
+        record.status = "dismissed";
+        target.voidRequest = undefined;
+        target.availableActions = ["request_void"];
+      }
+
+      return;
+    }
+
+    if (id === "meeting-pending" || id === "meeting-revision") {
+      startRequest(target, makeRecord(target, "会务安排调整"), id === "meeting-revision");
+    }
+  }
+
   const samples = [
     ["meeting-direct", "年度预算讨论会"],
     ["meeting-blocked", "正在签到的培训会"],
     ["meeting-requestable", "设备采购讨论会"],
     ["meeting-pending", "季度采购复核会"],
     ["meeting-voided", "会务协调会"],
-    ["meeting-revision", "项目评审会"]
+    ["meeting-revision", "项目评审会"],
+    ["meeting-delivery", "设备交付协调会"],
+    ["meeting-premises", "园区用房协调会"]
   ] as const;
 
   for (const [index, [id, title]] of samples.entries()) {
@@ -146,11 +186,7 @@ export function setupMeetingVoids(instances: Map<string, MyInstanceDetail>, meet
 
     instances.set(id, target);
 
-    if (id === "meeting-voided") {
-      execute(target, makeRecord(target, "场地检修，会议延期", { releaseRoom: true }));
-    } else if (id === "meeting-pending" || id === "meeting-revision") {
-      startRequest(target, makeRecord(target, "会务安排调整"), id === "meeting-revision");
-    }
+    seedVoidState(id, target);
   }
 
   defineMock<{ instanceId: string }>("approval/admin", "get_instance_detail", ({ params }) => {

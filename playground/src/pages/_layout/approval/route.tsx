@@ -6,6 +6,8 @@ import { ApprovalProvider } from "@vef-framework-react/approval";
 import { Select } from "@vef-framework-react/components";
 import { FORM_DATA_SOURCE_APIS, formDataSourceResolver } from "~apis";
 
+import { meetingRenderer } from "./meeting-renderer";
+
 interface MockOption {
   label: string;
   value: string;
@@ -65,6 +67,7 @@ function createMockPicker(kind: PrincipalKind): FC<PickerProps> {
  * its organization structure.
  */
 const APPROVAL_PLUGINS: ApprovalPlugins = {
+  businessKinds: { "office.meeting": meetingRenderer },
   pickers: {
     user: createMockPicker("user"),
     role: createMockPicker("role"),

@@ -79,7 +79,8 @@ const MENUS: UserMenu[] = [
     leaf("文件预览", "/sys/file-preview-demo", "eye")
   ]),
   dir("审批中心", "/approval", "workflow", [
-    leaf("会议室预订演示", "/approval/business-meeting", "calendar"),
+    leaf("工作日历", "/approval/work-calendar", "calendar-days"),
+    leaf("审批场景演示", "/approval/business-meeting", "calendar"),
     leaf("发起审批", "/approval/initiate", "send"),
     leaf("任务中心", "/approval/task-center", "clipboard-check"),
     leaf("我的申请", "/approval/my-instances", "file-text"),

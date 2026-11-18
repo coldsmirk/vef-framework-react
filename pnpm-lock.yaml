@@ -783,6 +783,9 @@ importers:
       '@vef-framework-react/approval-form-bridge':
         specifier: workspace:*
         version: link:../packages/approval-form-bridge
+      '@vef-framework-react/calendar':
+        specifier: workspace:*
+        version: link:../packages/calendar
       '@vef-framework-react/components':
         specifier: workspace:*
         version: link:../packages/components

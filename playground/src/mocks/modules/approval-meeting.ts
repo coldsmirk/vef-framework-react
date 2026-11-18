@@ -3,6 +3,8 @@ import type { AnnotationView, MyInstanceDetail, ProcessTaskParams, ResubmitInsta
 import { VOID_REQUEST_KIND } from "@vef-framework-react/approval";
 
 import { defineMock, MockBusinessError } from "../define-mock";
+import { expenseForm, officeStartForm } from "./approval-flows";
+import { setupApprovalOperations } from "./approval-operations";
 import { setupMeetingVoids } from "./meeting-void";
 
 const applicant = { id: "u_1", name: "张三" };
@@ -170,6 +172,11 @@ function get(id: string) {
 }
 
 function record(detail: MyInstanceDetail, data?: Record<string, unknown>) {
+  if (!detail.instance.businessKind) {
+    detail.instance.formData = { ...detail.instance.formData, ...data as MyInstanceDetail["instance"]["formData"] };
+    return;
+  }
+
   const previous = detail.businessView as { writes: number };
   detail.businessView = {
     ...previous,
@@ -180,11 +187,38 @@ function record(detail: MyInstanceDetail, data?: Record<string, unknown>) {
 }
 
 const voids = setupMeetingVoids(instances, meeting);
-defineMock<{ flowCode: string }>("approval/my", "get_start_form", ({ params }) => params.flowCode === voids.flowCode ? voids.startForm : start);
+setupApprovalOperations(instances, meeting);
+defineMock<{ flowCode: string }>("approval/my", "get_start_form", ({ params }) => params.flowCode === voids.flowCode ? voids.startForm : officeStartForm(params.flowCode) ?? start);
 defineMock<{ instanceId: string }>("approval/my", "get_instance_detail", ({ params }) => get(params.instanceId));
 defineMock<StartInstanceParams>("approval/instance", "start", ({ params }) => {
   if (params.flowCode === voids.flowCode) {
     return voids.start(params.formData);
+  }
+
+  const office = officeStartForm(params.flowCode);
+
+  if (office) {
+    const id = crypto.randomUUID();
+    const submitted = meeting(id);
+    submitted.instance = {
+      ...submitted.instance,
+      flowId: office.flowId,
+      flowCode: office.flowCode,
+      flowName: office.flowName,
+      applicant: office.applicant,
+      businessKind: office.businessKind,
+      instanceId: id,
+      instanceNo: `BX-${instances.size + 1}`,
+      title: String(params.formData?.subject || office.flowName),
+      formData: params.formData as MyInstanceDetail["instance"]["formData"]
+    };
+    submitted.formSchema = expenseForm;
+    submitted.businessView = undefined;
+    submitted.annotations = [];
+    submitted.myTask = undefined;
+    submitted.availableActions = [];
+    instances.set(id, submitted);
+    return { instanceId: id };
   }
 
   const detail = meeting("meeting-new");
