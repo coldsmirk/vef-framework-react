@@ -12,10 +12,17 @@ import type { MaybeUndefined } from "@vef-framework-react/shared";
 
 import type { QueryKey } from "../api";
 
-// Module augmentation for mutation meta
+/**
+ * Controls the HTTP client's global error message for an individual operation.
+ */
+interface FeedbackMeta extends Record<string, unknown> {
+  shouldShowErrorFeedback?: boolean;
+}
+
 declare module "@tanstack/react-query" {
   interface Register {
-    mutationMeta: {
+    queryMeta: FeedbackMeta;
+    mutationMeta: FeedbackMeta & {
       /**
        * Query keys to invalidate on successful mutation
        */

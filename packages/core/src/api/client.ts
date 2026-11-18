@@ -1,4 +1,4 @@
-import type { FetchQueryOptions, MutationOptions, QueryClient, QueryFunctionContext, QueryMeta } from "@tanstack/react-query";
+import type { FetchQueryOptions, MutationFunctionContext, MutationMeta, MutationOptions, QueryClient, QueryFunctionContext, QueryMeta } from "@tanstack/react-query";
 import type { Awaitable, Except, If, IsNever, IsOptional } from "@vef-framework-react/shared";
 import type { GenericAbortSignal } from "axios";
 
@@ -114,7 +114,8 @@ export class ApiClient {
    */
   private createProxiedHttpClient(
     httpClient: Readonly<HttpClient>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    skipErrorMessage = false
   ): Readonly<HttpClient> {
     const proxyCache = new Map<string | symbol, Function>();
 
@@ -127,17 +128,21 @@ export class ApiClient {
         }
 
         if (!proxyCache.has(prop)) {
-          const handler = PROXIED_METHODS.has(prop as string) && signal !== undefined
+          const handler = PROXIED_METHODS.has(prop as string) && (signal || skipErrorMessage)
             ? async (url: string, options?: RequestOptions) => {
-              const combinedSignal = combineAbortSignals(signal, options?.signal);
+              const combined = signal && combineAbortSignals(signal, options?.signal);
 
               try {
                 return await value.apply(target, [
                   url,
-                  { ...options, signal: combinedSignal.signal }
+                  {
+                    ...options,
+                    ...combined && { signal: combined.signal },
+                    ...skipErrorMessage && { skipErrorMessage: true }
+                  }
                 ]);
               } finally {
-                combinedSignal.dispose();
+                combined?.dispose();
               }
             }
             : (...args: unknown[]) => value.apply(target, args);
@@ -185,7 +190,7 @@ export class ApiClient {
       const [, params] = queryKey;
       // The handler must close over this invocation's client so async and
       // concurrent queries cannot share mutable signal state.
-      const httpClient = this.createProxiedHttpClient(this.#httpClient, signal);
+      const httpClient = this.createProxiedHttpClient(this.#httpClient, signal, meta?.shouldShowErrorFeedback === false);
       const queryFn = factory(httpClient);
       return queryFn(params as TParams, pageParam as TPageParam, meta);
     };
@@ -198,10 +203,21 @@ export class ApiClient {
    */
   public createMutationFn<TResult = unknown, TParams = never>(
     key: string,
-    factory: (http: Readonly<HttpClient>) => (params: TParams) => Awaitable<TResult>
+    factory: (http: Readonly<HttpClient>) => (params: TParams, meta?: MutationMeta) => Awaitable<TResult>
   ): MutationFunction<TResult, TParams> {
     const mutationFn = factory(this.#httpClient);
-    const wrapperFn = (params: TParams): Awaitable<TResult> => mutationFn(params);
+    let inlineMutationFn: typeof mutationFn;
+
+    const wrapperFn = (params: TParams, context?: MutationFunctionContext): Awaitable<TResult> => {
+      const meta = context?.meta;
+
+      if (meta?.shouldShowErrorFeedback === false) {
+        inlineMutationFn ??= factory(this.createProxiedHttpClient(this.#httpClient, undefined, true));
+        return inlineMutationFn(params, meta);
+      }
+
+      return mutationFn(params, meta);
+    };
 
     return attachKey(wrapperFn, key) as unknown as MutationFunction<TResult, TParams>;
   }

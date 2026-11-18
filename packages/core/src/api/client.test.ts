@@ -171,6 +171,24 @@ describe("api/ApiClient", () => {
   });
 
   describe("createQueryFn", () => {
+    it("applies inline error feedback to one query while preserving its cancellation signal", async () => {
+      const get = vi.spyOn(HttpClient.prototype, "get").mockRejectedValue(new Error("unavailable"));
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const queryFn = client.createQueryFn("data", getDataQueryFactory);
+      const { signal } = new AbortController();
+      const context = buildContext(["data"] as const, signal, client[QUERY_CLIENT]);
+
+      await expect(queryFn({ ...context, meta: { shouldShowErrorFeedback: false } })).rejects.toThrow("unavailable");
+      await expect(queryFn(context)).rejects.toThrow("unavailable");
+
+      expect(get).toHaveBeenNthCalledWith(1, "/data", {
+        params: { id: 1 },
+        signal,
+        skipErrorMessage: true
+      });
+      expect(get).toHaveBeenNthCalledWith(2, "/data", { params: { id: 1 }, signal });
+    });
+
     it("attaches the provided key as a readonly property on the returned function", () => {
       const client = new ApiClient({ http: { baseUrl: "http://test" } });
 
@@ -215,6 +233,27 @@ describe("api/ApiClient", () => {
   });
 
   describe("createMutationFn", () => {
+    it("keeps feedback meta scoped to each execution of the same mutation", async () => {
+      const post = vi.spyOn(HttpClient.prototype, "post").mockRejectedValue(new Error("unavailable"));
+      const client = new ApiClient({ http: { baseUrl: "http://test" } });
+      const mutationFn = client.createMutationFn<unknown, string>("save", http => async (path, meta) => {
+        await Promise.resolve();
+        return http.post(path, { data: meta?.invalidates });
+      });
+      const results = await Promise.allSettled([
+        client.executeMutation({
+          mutationFn,
+          params: "/inline",
+          meta: { shouldShowErrorFeedback: false, invalidates: [["list"]] }
+        }),
+        client.executeMutation({ mutationFn, params: "/global" })
+      ]);
+
+      expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
+      expect(post).toHaveBeenCalledWith("/inline", { data: [["list"]], skipErrorMessage: true });
+      expect(post).toHaveBeenCalledWith("/global", { data: undefined });
+    });
+
     it("attaches the provided key as a readonly property", () => {
       const client = new ApiClient({ http: { baseUrl: "http://test" } });
 
