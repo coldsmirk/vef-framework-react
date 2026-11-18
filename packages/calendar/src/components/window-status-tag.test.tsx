@@ -19,7 +19,13 @@ describe("WindowStatusTag", () => {
 
   it("shows the next opening with its weekday", () => {
     render(<WindowStatusTag status={{ open: false, next: interval }} />);
-    expect(screen.getByText("下次开放：11 月 3 日（周一）10:00")).toBeInTheDocument();
+    const next = screen.getByText("下次开放：11 月 3 日（周一）10:00");
+    expect(next).toBeInTheDocument();
+    expect(next).toHaveStyle({
+      width: "fit-content",
+      maxWidth: "100%",
+      whiteSpace: "normal"
+    });
   });
 
   it("explains when no opening is in sight", () => {
