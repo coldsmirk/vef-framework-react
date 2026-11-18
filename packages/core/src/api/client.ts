@@ -216,7 +216,7 @@ export class ApiClient {
         return inlineMutationFn(params, meta);
       }
 
-      return mutationFn(params, meta);
+      return meta === undefined ? mutationFn(params) : mutationFn(params, meta);
     };
 
     return attachKey(wrapperFn, key) as unknown as MutationFunction<TResult, TParams>;

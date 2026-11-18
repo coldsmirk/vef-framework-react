@@ -62,10 +62,6 @@ function savedIdMutation(params: { id: number }): { savedId: number } {
   return { savedId: params.id };
 }
 
-function savedIdMutationFactory(): typeof savedIdMutation {
-  return savedIdMutation;
-}
-
 function contentMutation(params: { content: string }): { ok: true; content: string } {
   return { ok: true, content: params.content };
 }
@@ -264,7 +260,8 @@ describe("api/ApiClient", () => {
 
     it("invokes the user mutationFn with the provided params when run via executeMutation", async () => {
       const client = new ApiClient({ http: { baseUrl: "http://test" } });
-      const mutationFn = client.createMutationFn("test/mut", savedIdMutationFactory);
+      const handler = vi.fn(savedIdMutation);
+      const mutationFn = client.createMutationFn("test/mut", () => handler);
 
       const result = await client.executeMutation({
         mutationFn,
@@ -272,6 +269,7 @@ describe("api/ApiClient", () => {
       });
 
       expect(result).toEqual({ savedId: 7 });
+      expect(handler).toHaveBeenCalledExactlyOnceWith({ id: 7 });
     });
   });
 
