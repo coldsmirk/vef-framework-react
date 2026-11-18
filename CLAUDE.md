@@ -1,6 +1,6 @@
-# VEF Framework React — Agent Guide
+# CLAUDE.md
 
-This guide applies to all coding agents working in this repository. Keep `CLAUDE.md` and `AGENTS.md` identical.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Kept in sync with `AGENTS.md` — edit both together.
 
 ## Project Overview
 
