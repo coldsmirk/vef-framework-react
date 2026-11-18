@@ -124,7 +124,7 @@ function DesignerBody({
   });
   const kind = businessKinds?.find(item => item.kind === draft?.basic.businessKind);
 
-  const isVoidable = !draft?.basic.businessKind || (kind?.isVoidable === true && kind.kind !== VOID_REQUEST_KIND);
+  const isVoidable = !draft?.basic.businessKind || (businessKinds && kind?.isVoidable === true && kind.kind !== VOID_REQUEST_KIND);
   const { data: selectedVoidFlow } = useSelectedVoidFlow(flowTenantId, draft?.basic.voidPolicy === "approval" ? draft.basic.voidFlowCode : undefined);
 
   useEffect(() => {

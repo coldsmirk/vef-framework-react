@@ -57,16 +57,19 @@ describe("business kind design", () => {
     });
     render(<FlowDesignerDrawer open flow={{ ...flow, businessKind: "meeting" }} tenantId="t" onClose={vi.fn()} />, { apiClient });
     expect(await screen.findByText("目录尚未加载")).toBeInTheDocument();
+    expect(screen.queryByText("该业务类型不支持作废。")).not.toBeInTheDocument();
     const next = screen.getByText("下一步").closest("button");
     expect(next).toBeDisabled();
     catalog.resolve([
       {
         kind: "meeting",
         label: "会议预订",
+        isVoidable: false,
         formFields: []
       }
     ]);
     expect(await screen.findByText("目录已加载（0）")).toBeInTheDocument();
+    expect(screen.getByText("该业务类型不支持作废。")).toBeVisible();
     expect(next).toBeEnabled();
   });
 
@@ -135,21 +138,39 @@ describe("business kind design", () => {
       switch (req.action) {
         case "find_flows": {
           lookups.push(req);
-          return {
-            total: 2,
-            items: [
-              {
-                code: "cancel",
-                name: "会议作废流程",
+          const flows = [
+            {
+              code: "meet",
+              name: "会议共享作废",
+              businessKind: "approval.void_request"
+            },
+            {
+              code: "leave",
+              name: "年假办理流程",
+              businessKind: "leave"
+            },
+            ...Array.from({ length: 30 }, (_, index) => {
+              return {
+                code: `void-${index}`,
+                name: `其他作废流程 ${index + 1}`,
                 businessKind: "approval.void_request"
-              },
-              {
-                code: "leave",
-                name: "年假办理流程",
-                businessKind: "leave"
-              }
-            ]
-          };
+              };
+            }),
+            {
+              code: "cancel",
+              name: "会议作废流程",
+              businessKind: "approval.void_request"
+            }
+          ];
+          const {
+            keyword,
+            businessKind,
+            page,
+            pageSize
+          } = req.params!;
+          const matches = flows.filter(item => item.businessKind === businessKind && item.name.includes(String(keyword ?? "")));
+          const offset = (Number(page) - 1) * Number(pageSize);
+          return { total: matches.length, items: matches.slice(offset, offset + Number(pageSize)) };
         }
 
         case "find_versions": { return [{ id: "v" }]; }
@@ -216,8 +237,10 @@ describe("business kind design", () => {
     expect(screen.getByRole("button", { name: "下一步" })).toBeDisabled();
     await user.click(screen.getByRole("combobox", { name: "作废申请流程" }));
     await user.type(screen.getByRole("combobox", { name: "作废申请流程" }), "会议");
+    const option = await screen.findByText("会议作废流程");
+    expect(screen.queryByText("会议共享作废")).not.toBeInTheDocument();
     expect(screen.queryByText("年假办理流程")).not.toBeInTheDocument();
-    await user.click(await screen.findByText("会议作废流程"));
+    await user.click(option);
     await waitFor(() => expect(screen.getByRole("button", { name: "下一步" })).toBeEnabled());
     expect(lookups).toContainEqual(expect.objectContaining({
       params: expect.objectContaining({
@@ -227,6 +250,13 @@ describe("business kind design", () => {
         keyword: "会议"
       })
     }));
+    expect(lookups).toContainEqual(expect.objectContaining({ params: expect.objectContaining({ page: 2, businessKind: "approval.void_request" }) }));
+    const picker = screen.getByRole("combobox", { name: "作废申请流程" });
+    await user.click(picker);
+    await user.type(picker, "其他");
+    await screen.findByText("其他作废流程 1");
+    expect(screen.getByRole("option", { name: "会议作废流程" })).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{Escape}");
     expect(screen.queryByText("流程表单编辑器")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "回写审批状态到业务表" })).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "下一步" }));

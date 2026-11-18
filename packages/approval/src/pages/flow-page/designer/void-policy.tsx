@@ -18,7 +18,7 @@ const policies: Array<{ label: string; value: VoidPolicy }> = [
   { label: "审批后作废", value: "approval" }
 ];
 
-function filter(tenantId: string, keyword: string, page: number) {
+function filter(tenantId: string, page: number, keyword?: string) {
   return {
     tenantId,
     includeShared: true,
@@ -29,7 +29,7 @@ function filter(tenantId: string, keyword: string, page: number) {
 }
 
 /**
- * A previously saved code can lie beyond the first page of name/code matches.
+ * A saved code can lie on any page. The server's keyword filter searches names.
  */
 export function useSelectedVoidFlow(tenantId: string, code?: string) {
   const api = useApiClient();
@@ -37,7 +37,7 @@ export function useSelectedVoidFlow(tenantId: string, code?: string) {
     "approval_selected_void_flow",
     ({ post }) => async params => {
       for (let page = 1; ; page++) {
-        const data = await fetchFlows(post, filter(params.tenantId, params.code, page));
+        const data = await fetchFlows(post, filter(params.tenantId, page));
         const found = data.items.find(flow => flow.code === params.code && flow.businessKind === VOID_REQUEST_KIND);
 
         if (found) {
@@ -64,9 +64,11 @@ function subscribeViewport(notify: () => void) {
 
 function VoidFlowPicker({
   tenantId,
+  targetCode,
+  value,
   selected,
   onChange
-}: { tenantId: string; selected?: Flow | null; onChange: (code: string) => void }) {
+}: { tenantId: string; targetCode: string; value?: string; selected?: Flow | null; onChange: (code: string) => void }) {
   const api = useApiClient();
   const listHeight = useSyncExternalStore(
     subscribeViewport,
@@ -75,7 +77,7 @@ function VoidFlowPicker({
   );
   const search = useMemo(() => api.createQueryFn<PaginationResult<Flow>, { tenantId: string; keyword: string }, number>(
     "approval_void_flow_options",
-    ({ post }) => (params, page) => fetchFlows(post, filter(params.tenantId, params.keyword, page))
+    ({ post }) => (params, page) => fetchFlows(post, filter(params.tenantId, page, params.keyword))
   ), [api]);
   const [keyword, setKeyword] = useState("");
   const choices = useInfiniteQuery({
@@ -85,26 +87,27 @@ function VoidFlowPicker({
     getNextPageParam: (last, pages) => last.items.length > 0 && pages.length * PAGE_SIZE < last.total ? pages.length + 1 : undefined
   });
   const options = new Map<string, string>();
-  const pages = choices.data?.pages ?? [];
+  const flows = choices.data?.pages.flatMap(page => page.items) ?? [];
 
-  for (const page of pages) {
-    for (const flow of page.items) {
-      if (flow.businessKind === VOID_REQUEST_KIND) {
-        options.set(flow.code, flow.name);
-      }
+  if (selected) {
+    flows.unshift(selected);
+  }
+
+  for (const flow of flows) {
+    if (flow.businessKind === VOID_REQUEST_KIND && flow.code !== targetCode) {
+      options.set(flow.code, flow.name);
     }
   }
 
   return (
     <Select<string>
       aria-label="作废申请流程"
-      labelRender={() => selected?.name ?? "请选择作废申请流程"}
       listHeight={listHeight}
       loading={choices.isFetching}
       options={[...options].map(([value, label]) => { return { value, label }; })}
       placeholder="搜索作废申请流程"
       showSearch={{ filterOption: false, onSearch: setKeyword }}
-      value={selected?.code}
+      value={value && options.has(value) ? value : undefined}
       onChange={onChange}
       onPopupScroll={event => {
         const list = event.currentTarget;
@@ -117,19 +120,23 @@ function VoidFlowPicker({
   );
 }
 
-export function voidPolicyIssue(basic: FlowDraftBasic, isVoidable: boolean, selected?: Flow | null): string | undefined {
+export function voidPolicyIssue(basic: FlowDraftBasic, isVoidable: boolean | undefined, selected?: Flow | null): string | undefined {
   const policy = basic.voidPolicy ?? "disabled";
 
   if (policies.every(p => p.value !== policy)) {
     return "请选择有效的作废方式";
   }
 
-  if (policy !== "disabled" && !isVoidable) {
+  if (policy !== "disabled" && isVoidable === false) {
     return "该业务类型不支持作废";
   }
 
   if (policy !== "approval" && basic.voidFlowCode) {
     return "只有审批后作废可以指定作废申请流程";
+  }
+
+  if (policy === "approval" && basic.voidFlowCode && basic.voidFlowCode === basic.code.trim()) {
+    return "作废申请流程不能选择当前流程自身";
   }
 
   if (policy === "approval" && (!basic.voidFlowCode || selected?.code !== basic.voidFlowCode || selected.businessKind !== VOID_REQUEST_KIND)) {
@@ -144,7 +151,7 @@ export function VoidPolicySection({
   onChange
 }: {
   basic: FlowDraftBasic;
-  isVoidable: boolean;
+  isVoidable: boolean | undefined;
   selected?: Flow | null;
   onChange: (patch: Partial<FlowDraftBasic>) => void;
 }) {
@@ -159,8 +166,13 @@ export function VoidPolicySection({
           onChange={event => onChange({ voidPolicy: event.target.value, voidFlowCode: undefined })}
         />
 
-        {!isVoidable && <Text type="secondary">{basic.businessKind === VOID_REQUEST_KIND ? "作废申请流程本身不能作废。" : "该业务类型不支持作废。"}</Text>}
-        {policy === "approval" && <Labeled required label="作废申请流程"><VoidFlowPicker selected={selected} tenantId={basic.tenantId} onChange={voidFlowCode => onChange({ voidFlowCode })} /></Labeled>}
+        {isVoidable === false && <Text type="secondary">{basic.businessKind === VOID_REQUEST_KIND ? "作废申请流程本身不能作废。" : "该业务类型不支持作废。"}</Text>}
+
+        {policy === "approval" && (
+          <Labeled required label="作废申请流程">
+            <VoidFlowPicker selected={selected} targetCode={basic.code.trim()} tenantId={basic.tenantId} value={basic.voidFlowCode} onChange={voidFlowCode => onChange({ voidFlowCode })} />
+          </Labeled>
+        )}
       </Stack>
     </Card>
   );

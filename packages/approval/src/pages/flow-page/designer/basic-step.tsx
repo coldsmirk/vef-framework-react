@@ -239,7 +239,7 @@ const EMPTY_BINDING: BusinessBindingConfig = {
 export interface BasicStepProps {
   basic: FlowDraftBasic;
   businessKinds?: BusinessKindDescriptor[];
-  isVoidable: boolean;
+  isVoidable: boolean | undefined;
   selectedVoidFlow?: Flow | null;
   initiators: InitiatorParams[];
   /**

@@ -15,6 +15,15 @@ function validBinding(): BusinessBindingConfig {
 describe("void policy validation", () => {
   const { basic } = createEmptyDraft("t");
 
+  it("rejects a shared request flow shadowed by the target's trimmed code", () => {
+    expect(voidPolicyIssue({
+      ...basic,
+      code: " cancel ",
+      voidPolicy: "approval",
+      voidFlowCode: "cancel"
+    }, true)).toBe("作废申请流程不能选择当前流程自身");
+  });
+
   it("only allows a request flow under the approval policy", () => {
     expect(voidPolicyIssue({
       ...basic,
