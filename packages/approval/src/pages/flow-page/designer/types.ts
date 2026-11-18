@@ -75,6 +75,30 @@ export function createEmptyDraft(tenantId: string): FlowDraft {
 export const BUSINESS_IDENTIFIER_PATTERN = /^[A-Z_]\w{0,62}$/i;
 
 /**
+ * Check direct field substitutions used by the title input. Advanced Go
+ * templates may rebind dot; only the server can parse those authoritatively.
+ */
+export function missingTitleField(template: string, fields: ReadonlyArray<{ key: string }>): string | undefined {
+  const actions = template.matchAll(/\{\{(?<action>[\s\S]*?)\}\}/g).map(match => match.groups?.action?.trim() ?? "").toArray();
+
+  if (actions.some(action => !/^\$?\.[\p{L}\p{N}_.]+$/u.test(action))) {
+    return undefined;
+  }
+
+  const keys = new Set(fields.map(field => field.key));
+
+  for (const action of actions) {
+    const key = /^\$?\.formData\.(?<key>[^.]+)/u.exec(action)?.groups?.key;
+
+    if (key && !keys.has(key)) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * The initiator rules a draft should be saved with.
  *
  * A flow open to everyone carries none: the two settings are mutually exclusive

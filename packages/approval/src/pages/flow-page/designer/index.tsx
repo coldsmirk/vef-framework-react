@@ -19,7 +19,7 @@ import { FieldCatalog } from "./field-catalog";
 import { FlowStep } from "./flow-step";
 import { FormStep } from "./form-step";
 import { ReviewStep } from "./review-step";
-import { createEmptyDraft, EMPTY_FLOW_DEFINITION, initiatorsForSubmit, isBindingValid } from "./types";
+import { createEmptyDraft, EMPTY_FLOW_DEFINITION, initiatorsForSubmit, isBindingValid, missingTitleField } from "./types";
 
 const STEP_ITEMS = [
   { title: "流程设置" },
@@ -263,10 +263,12 @@ function DesignerBody({
   const currentDraft = draft;
   const { basic } = currentDraft;
   const windowIssue = initiationWindowIssue(basic.initiationWindow);
+  const missingField = kind && missingTitleField(basic.instanceTitleTemplate, kind.formFields);
   const basicValid = !windowIssue && basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
+    && !missingField
     && (!basic.businessKind || kind !== undefined)
     && (!basic.businessBinding || Boolean(kind && isBindingValid(basic.businessBinding)))
     && (basic.isAllInitiationAllowed || initiatorsForSubmit(draft).length > 0);
@@ -282,7 +284,7 @@ function DesignerBody({
   // The issues themselves live in each editor's own diagnostics, which locate
   // them, so the step bodies keep their full height.
   const blockedReasons = [
-    windowIssue ?? "请先完善流程设置中的必填项",
+    missingField ? `单据标题引用的字段「${missingField}」不在业务字段目录中` : windowIssue ?? "请先完善流程设置中的必填项",
     `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
     `流程存在 ${flowErrors.length} 个问题，可在画布工具栏的问题提示中查看并定位`,
     undefined

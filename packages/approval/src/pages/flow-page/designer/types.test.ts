@@ -1,6 +1,6 @@
 import type { BusinessBindingConfig } from "../../../types";
 
-import { createEmptyDraft, initiatorsForSubmit, isBindingValid } from "./types";
+import { createEmptyDraft, initiatorsForSubmit, isBindingValid, missingTitleField } from "./types";
 
 function validBinding(): BusinessBindingConfig {
   return {
@@ -10,6 +10,14 @@ function validBinding(): BusinessBindingConfig {
     instanceIdColumn: "approval_instance_id"
   };
 }
+
+describe("business title fields", () => {
+  it("checks root-level field references against the selected catalog", () => {
+    expect(missingTitleField("{{.flowName}} · {{.formData.topic}}", [{ key: "topic" }])).toBeUndefined();
+    expect(missingTitleField("{{$.formData.topic}}", [])).toBe("topic");
+    expect(missingTitleField("{{with .other}}{{.formData.topic}}{{end}}", [])).toBeUndefined();
+  });
+});
 
 describe("isBindingValid", () => {
   it("accepts a complete minimal binding", () => {
