@@ -1,6 +1,6 @@
-# AGENTS.md
+# VEF Framework React — Agent Guide
 
-This file provides guidance to AI coding agents when working with code in this repository. Kept in sync with `CLAUDE.md` — edit both together.
+This guide applies to all coding agents working in this repository. Keep `CLAUDE.md` and `AGENTS.md` identical.
 
 ## Project Overview
 
@@ -81,6 +81,7 @@ Packages publish under `@vef-framework-react/*` as dual ESM/CJS with TypeScript 
 ### Key Patterns
 
 - **Business approval forms** register a `BusinessKindRenderer` under `ApprovalPlugins.businessKinds[kind]`. Its `StartForm` and `DetailView` expose `BusinessFormHandle.collect()` on the supplied `handle`. Collect validates local input and returns the data for one `start`, `resubmit`, or `process_task` request. A missing renderer disables the action. The designer uses `list_business_kinds` for the field catalog, deploys business versions with JSON storage and an empty form schema, and checks conditions, personnel, field permissions and rollback options against the backend contract. Aggregate conditions use the projected or business form fields. Scalar conditions can also reference runtime globals. The wizard checks static title references at business kind selection or during ordinary form design.
+- **Instance voiding** uses the current flow policy and the detail's server-resolved actions. Direct voids require `approval.instance.void` and preview with `admin.plan_void`. The built-in `approval.void_request` renderer receives a `voidTarget` from the target detail, previews with `my.plan_void`, and submits through the ordinary start or resubmit action. A host can override this renderer in `ApprovalPlugins.businessKinds`. A target renderer can supply `BusinessKindRenderer.VoidOptions({ value, onChange })`. Changes to those options always fetch a fresh plan, including on returned requests. Read-only details render the supplied live plan, record and visible target fields. Hidden fields are omitted, including the link when the target ID is hidden.
 - **Approval annotations** come from the viewer-specific detail. Use `useAnnotations(detail)`, `AnnotationList`, `AnnotationComposer`, and `AnnotationResponseComposer` for inline business views. Draft saves and deletes use `approval.annotation.write`. A task decision publishes its drafts and an applicant resubmission publishes response drafts. A field filter can select a whole field, a row, a column, or a cell. Node audiences select approval and handle nodes.
 - **Form field extras** use the optional `FormRenderer.renderFieldExtra({ key, type, label, row, column })` render prop. It runs for visible keyed fields after linkage and field permissions. A subform has one whole-field slot. Stacked rows also provide their row index and column key, while desktop table cells use the whole-table slot. Returning `null` keeps the original layout.
 
