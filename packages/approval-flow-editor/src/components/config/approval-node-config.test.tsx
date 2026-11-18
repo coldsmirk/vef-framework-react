@@ -1,3 +1,5 @@
+import { expect, it } from "vitest";
+
 import { render, screen } from "../../../../components/test-utils";
 import { EditorPluginsContext } from "../../plugins";
 import { EditorStoreProvider } from "../../store/editor";
