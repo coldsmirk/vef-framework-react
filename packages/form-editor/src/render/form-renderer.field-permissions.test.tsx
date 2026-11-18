@@ -133,6 +133,7 @@ describe("FormRenderer field extras", () => {
 
   it("places row, column and cell extras in their respective table cells", async () => {
     const user = userEvent.setup();
+    const errors = vi.spyOn(console, "error");
     renderRuntime(<FormRenderer defaultValues={{ lines: [{ amount: "7" }] }} renderFieldExtra={renderLocation} schema={stack(tableSubform())} />);
     expect(screen.getByRole("columnheader", { name: /all-amount/ })).toHaveTextContent("amount");
     const cell = screen.getByText("0-amount").closest("td");
@@ -142,6 +143,8 @@ describe("FormRenderer field extras", () => {
     expect(rollup.closest("table")).toBeNull();
     await user.click(screen.getByRole("button", { name: /编\s*辑/ }));
     expect(screen.getByText("0-amount").closest("td")).toContainElement(screen.getByRole("textbox"));
+    expect(errors.mock.calls.filter(args => args.some(arg => String(arg).includes("React.Fragment")))).toEqual([]);
+    errors.mockRestore();
   });
 
   it("identifies visible stacked cells by table key, row and column", () => {

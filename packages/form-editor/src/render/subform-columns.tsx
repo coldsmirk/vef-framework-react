@@ -248,10 +248,10 @@ export function buildSubformColumns(
       title: header === null || header === undefined
         ? column.title
         : (
-            <>
+            <span>
               {field.label ?? field.key}
               {header}
-            </>
+            </span>
           ),
       renderView: (value, record, index) => cell(column.renderView ? column.renderView(value, record, index) : value as ReactNode, index),
       renderEditor: editor && ((bound, context) => cell(editor(bound, context), context.index))
