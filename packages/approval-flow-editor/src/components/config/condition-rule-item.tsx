@@ -6,9 +6,10 @@ import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
 import dayjs from "dayjs";
 import { XIcon } from "lucide-react";
+import { useMemo } from "react";
 
 import { useEditorPlugins } from "../../plugins";
-import { BUILT_IN_SUBJECT_FIELDS } from "../../shared/condition-subjects";
+import { conditionSubjectOptions, subjectOptionValue } from "../../shared/condition-subjects";
 import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
 import { AGGREGATE_LABELS, getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
 import { PrincipalPicker } from "./principal-picker";
@@ -149,7 +150,8 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   onChange,
   onRemove
 }) => {
-  const { formFields = [], globalSubjects = [] } = useEditorPlugins();
+  const { formFields, globalSubjects } = useEditorPlugins();
+  const subjectOptions = useMemo(() => conditionSubjectOptions(formFields, globalSubjects), [formFields, globalSubjects]);
 
   const removeButton = (
     <Button
@@ -184,18 +186,8 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
     );
   }
 
-  // Resolution order mirrors the engine: built-in applicant subjects, then
-  // host-supplied globals, then form data. A key colliding with an earlier
-  // layer is shadowed at runtime, so the duplicate is dropped here instead of
-  // offering a dead option — a global cannot make a built-in subject
-  // selectable, which is what BUILT_IN_SUBJECT_PRINCIPALS is for.
-  const globalSubjectFields = globalSubjects.filter(g => BUILT_IN_SUBJECT_FIELDS.every(b => b.key !== g.key));
-  const contextSubjectFields = [...BUILT_IN_SUBJECT_FIELDS, ...globalSubjectFields];
-  const subjectFields = [
-    ...contextSubjectFields,
-    ...formFields.filter(f => contextSubjectFields.every(c => c.key !== f.key))
-  ];
-  const selectedField = subjectFields.find(f => f.key === condition.subject);
+  const selectedValue = condition.subject ? subjectOptionValue(condition.subject, condition.aggregate !== undefined) : undefined;
+  const selectedField = subjectOptions.find(option => option.value === selectedValue)?.field;
   // A table subject always compares through an aggregate: the fold yields
   // one number, so the operator set narrows to the numeric comparisons and
   // the value input is always numeric.
@@ -212,15 +204,15 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   const isNoValue = !isTableSubject && (NO_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
   const isMultiValue = !isTableSubject && (MULTI_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
 
-  const handleFieldChange = (key: string) => {
-    const nextField = subjectFields.find(f => f.key === key);
+  const handleFieldChange = (value: string) => {
+    const nextField = subjectOptions.find(option => option.value === value)!.field;
 
     onChange({
       ...condition,
-      subject: key,
+      subject: nextField.key,
       // Selecting a table defaults to the column-free count so the rule is
       // immediately well-formed; scalar subjects carry no aggregate.
-      aggregate: nextField?.kind === "table" ? "count" : undefined,
+      aggregate: nextField.kind === "table" ? "count" : undefined,
       column: undefined,
       operator: "",
       value: undefined
@@ -380,9 +372,11 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
         aria-label="条件字段"
         css={subjectSelectStyle}
         disabled={readonly}
-        options={subjectFields.map(f => { return { label: f.label, value: f.key }; })}
+        labelRender={({ label }) => label ?? condition.subject}
+        options={subjectOptions}
         placeholder="选择字段"
-        value={condition.subject || undefined}
+        showSearch={{ optionFilterProp: "label" }}
+        value={selectedValue}
         onChange={handleFieldChange}
       />
 

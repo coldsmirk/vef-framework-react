@@ -81,8 +81,9 @@ export interface EditorPlugins {
    * server-side by the host's `InstanceGlobalsResolver`) instead of form
    * data. `kind` drives the operator set and value input exactly as it does
    * for form fields; a key colliding with a built-in subject is dropped, and
-   * a form field colliding with either is shadowed (mirroring the engine's
-   * resolution order).
+   * a scalar form field colliding with either is shadowed. Aggregates always
+   * read a form table and remain selectable alongside a same-key scalar.
+   * A global table cannot supply an aggregate.
    *
    * So this is not the seam for making a built-in subject selectable — the
    * engine resolves those from the instance itself and ignores a same-named
