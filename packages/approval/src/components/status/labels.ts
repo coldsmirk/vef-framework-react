@@ -74,6 +74,7 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
   reassign: "改派",
   terminate: "终止",
   add_cc: "抄送",
+  handover: "工作交接",
   urge: "催办"
 };
 

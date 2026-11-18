@@ -7,7 +7,7 @@ import { Empty, Flex, globalCssVars, Stack, Tag, Text, Timeline, Tooltip } from 
 import { formatTimestamp } from "../format";
 import { TaskStatusTag } from "../status";
 import { ACTIVITY_ACTION_LABELS } from "../status/labels";
-import { UserLabel } from "../user";
+import { PredecessorLabel, UserLabel } from "../user";
 
 const VISIT_STATUS_DOT_COLORS: Record<NodeVisitStatus, string> = {
   active: "blue",
@@ -41,6 +41,7 @@ function ParticipantRow({ participant }: { participant: NodeParticipant }) {
     <Stack gap={4}>
       <Flex align="center" gap="small" wrap="wrap">
         <UserLabel user={participant.user} />
+        {participant.predecessor && <PredecessorLabel reason={participant.handoverReason} user={participant.predecessor} />}
 
         {participant.delegator && (
           <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">

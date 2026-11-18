@@ -35,6 +35,7 @@ export interface AdminTask {
   createdAt: string;
   deadline?: string;
   finishedAt?: string;
+  predecessor?: UserInfo;
 }
 
 /**

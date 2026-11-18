@@ -67,7 +67,8 @@ export type ActionType
     | "resubmit"
     | "reassign"
     | "terminate"
-    | "add_cc";
+    | "add_cc"
+    | "handover";
 
 /**
  * The activity vocabulary of timeline / flow-graph projections: every

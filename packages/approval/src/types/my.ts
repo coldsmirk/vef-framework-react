@@ -80,6 +80,7 @@ export interface PendingTask {
   createdAt: string;
   deadline?: string;
   isTimeout: boolean;
+  predecessor?: UserInfo;
 }
 
 /**
@@ -97,6 +98,7 @@ export interface CompletedTask {
   nodeName: string;
   status: string;
   finishedAt?: string;
+  predecessor?: UserInfo;
 }
 
 /**

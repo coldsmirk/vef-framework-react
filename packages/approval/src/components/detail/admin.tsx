@@ -37,7 +37,7 @@ const ACTION_LOG_COLUMNS: Array<TableColumn<AdminActionLog>> = [
       return (
         <Stack gap={4}>
           {row.transferTo
-            && <Text type="secondary">{`转办给 ${row.transferTo.name || row.transferTo.id}`}</Text>}
+            && <Text type="secondary">{`${row.action === "handover" ? "接手人：" : "转办给 "}${row.transferTo.name || row.transferTo.id}`}</Text>}
 
           {people.length > 0 && <UserGroup avatarSize={20} users={people} />}
           {row.opinion && <Text style={{ whiteSpace: "pre-wrap" }}>{row.opinion}</Text>}

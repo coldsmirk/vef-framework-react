@@ -1,6 +1,6 @@
 import type { UserInfo } from "../../types";
 
-import { Avatar, Space, Text, Tooltip } from "@vef-framework-react/components";
+import { Avatar, globalCssVars, Space, Text, Tooltip } from "@vef-framework-react/components";
 
 /**
  * Deterministic avatar hue per user id, drawn from the antd preset palette so
@@ -74,6 +74,14 @@ export function UserLabel({
         <Text>{displayName}</Text>
       </Space>
     </Tooltip>
+  );
+}
+
+export function PredecessorLabel({ user, reason }: { user: UserInfo; reason?: string }) {
+  return (
+    <Text style={{ fontSize: globalCssVars.fontSizeSm }} type="secondary">
+      {`接替 ${user.name || user.id}${reason ? `（${reason}）` : ""}`}
+    </Text>
   );
 }
 

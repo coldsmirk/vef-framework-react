@@ -5,6 +5,7 @@ import type { AdminTask, AdminTaskSearch } from "../../types";
 
 import {
   Crud,
+  Flex,
   Input,
   Labeled,
   OperationButton,
@@ -20,6 +21,7 @@ import { useAdminApprovalApi } from "../../api";
 import { formatTimestamp, PrincipalSelect, TaskStatusTag, UserLabel } from "../../components";
 import { ActionDialog, ActionFooter, useConfirm } from "../../components/action-dialog";
 import { TASK_STATUS_OPTIONS } from "../../components/status/labels";
+import { PredecessorLabel } from "../../components/user";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
 
@@ -43,7 +45,12 @@ const COLUMNS: Array<TableColumn<AdminTask>> = [
     title: "处理人",
     dataIndex: "assignee",
     width: 150,
-    render: (value: AdminTask["assignee"]) => <UserLabel user={value} />
+    render: (value: AdminTask["assignee"], row) => (
+      <Flex align="center" gap="small" wrap="wrap">
+        <UserLabel user={value} />
+        {row.predecessor && <PredecessorLabel user={row.predecessor} />}
+      </Flex>
+    )
   },
   {
     title: "状态",

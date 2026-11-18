@@ -1,7 +1,6 @@
 import type { TimelineEntry } from "../../types";
 
-import { render, screen } from "@testing-library/react";
-
+import { render, screen } from "../../../test-utils";
 import { InstanceTimeline } from "./index";
 
 function entry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
@@ -15,6 +14,30 @@ function entry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
 }
 
 describe("InstanceTimeline", () => {
+  it("shows the predecessor, handover reason and delegation beside the actual assignee", () => {
+    render(
+      <InstanceTimeline timeline={[
+        entry({
+          participants: [
+            {
+              taskId: "t1",
+              user: { id: "c", name: "陈晨" },
+              delegator: { id: "b", name: "李四" },
+              predecessor: { id: "a", name: "张三" },
+              handoverReason: "离职",
+              status: "pending"
+            }
+          ]
+        })
+      ]}
+      />
+    );
+
+    expect(screen.getByText("陈晨")).toBeVisible();
+    expect(screen.getByText("接替 张三（离职）")).toBeVisible();
+    expect(screen.getByText("（受 李四 委托）")).toBeVisible();
+  });
+
   it("renders an empty state when there are no entries", () => {
     render(<InstanceTimeline timeline={[]} />);
 

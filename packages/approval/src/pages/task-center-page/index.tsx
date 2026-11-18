@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useMyApprovalApi } from "../../api";
 import { formatTimestamp, InstanceDetailDrawer, TaskStatusTag, UserLabel } from "../../components";
 import { FlowIcon } from "../../components/icon";
+import { PredecessorLabel } from "../../components/user";
 import {
   CompletedTaskAdvancedSearchFields,
   CompletedTaskSearchFields,
@@ -45,6 +46,21 @@ function instanceTitleColumn<TRow extends { instanceTitle: string; instanceNo: s
   };
 }
 
+function taskNode(name: string, row: PendingTask | CompletedTask) {
+  return (
+    <Flex align="center" gap={6} wrap="wrap">
+      <Text>{name}</Text>
+
+      {row.predecessor && (
+        <span>
+          我
+          <PredecessorLabel user={row.predecessor} />
+        </span>
+      )}
+    </Flex>
+  );
+}
+
 const PENDING_COLUMNS: Array<TableColumn<PendingTask>> = [
   instanceTitleColumn<PendingTask>(),
   {
@@ -61,7 +77,8 @@ const PENDING_COLUMNS: Array<TableColumn<PendingTask>> = [
   {
     title: "当前节点",
     dataIndex: "nodeName",
-    width: 140
+    width: 140,
+    render: taskNode
   },
   {
     title: "到达时间",
@@ -98,7 +115,8 @@ const COMPLETED_COLUMNS: Array<TableColumn<CompletedTask>> = [
   {
     title: "处理节点",
     dataIndex: "nodeName",
-    width: 140
+    width: 140,
+    render: taskNode
   },
   {
     title: "处理结果",

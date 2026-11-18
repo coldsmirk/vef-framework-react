@@ -8,7 +8,7 @@ import { Avatar, Divider, Flex, globalCssVars, Popover, Stack, Tag } from "@vef-
 import { formatTimestamp } from "../format";
 import { TaskStatusTag } from "../status";
 import { ACTIVITY_ACTION_LABELS } from "../status/labels";
-import { avatarColor } from "../user";
+import { avatarColor, PredecessorLabel } from "../user";
 import { personTone } from "./people";
 
 /**
@@ -143,6 +143,8 @@ function ParticipantDetail({ person }: { person: Extract<NodePerson, { kind: "pa
 
       {participant.delegator
         && <span css={metaStyle}>{`受 ${participant.delegator.name || participant.delegator.id} 委托`}</span>}
+
+      {participant.predecessor && <PredecessorLabel reason={participant.handoverReason} user={participant.predecessor} />}
 
       {participant.transferTo
         && <span css={metaStyle}>{`转办给 ${participant.transferTo.name || participant.transferTo.id}`}</span>}

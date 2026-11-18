@@ -20,6 +20,8 @@ export interface NodeParticipant {
   attachments?: string[];
   actionTime?: string;
   transferTo?: UserInfo;
+  predecessor?: UserInfo;
+  handoverReason?: string;
 }
 
 /**
