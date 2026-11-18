@@ -1,7 +1,5 @@
-.menu {
-  &:global(.vef-menu-light.vef-menu-root.vef-menu-inline) {
-    border-inline-end: 0;
-  }
+.menu:global(.vef-menu-light.vef-menu-root.vef-menu-inline) {
+  border-inline-end: 0;
 }
 
 .search-input {
@@ -9,11 +7,9 @@
 }
 
 /* Config list container */
-.config-list-card {
-  &:global(.vef-card) {
-    --vef-card-body-padding: 0;
-    overflow: hidden;
-  }
+.config-list-card:global(.vef-card) {
+  --vef-card-body-padding: 0;
+  overflow: hidden;
 }
 
 /* Config item styles */
@@ -78,8 +74,6 @@
 }
 
 /* Aside panel */
-.aside-card {
-  &:global(.vef-flex-card) {
-    height: 100%;
-  }
+.aside-card:global(.vef-flex-card) {
+  height: 100%;
 }
