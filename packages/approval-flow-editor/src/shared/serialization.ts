@@ -100,7 +100,7 @@ export function toFlowDefinition(nodes: FlowNode[], edges: FlowEdge[]): FlowDefi
  * flow skips non-deletable nodes while still cascading edge removal for deleted
  * neighbors, which keeps the graph free of dangling edges.
  */
-function toFlowNode(node: NodeDefinition): FlowNode {
+function toFlowNode(node: NodeDefinition, businessKind?: string): FlowNode {
   switch (node.kind) {
     case "start": { return {
       id: node.id,
@@ -123,7 +123,7 @@ function toFlowNode(node: NodeDefinition): FlowNode {
       type: "approval",
       position: { ...node.position },
       deletable: NODE_RULES.approval.deletable,
-      data: normalizeNodeData("approval", node.data ?? {})
+      data: normalizeNodeData("approval", node.data ?? {}, businessKind)
     }; }
 
     case "handle": { return {
@@ -160,12 +160,12 @@ function toFlowNode(node: NodeDefinition): FlowNode {
  * positions and data are deep-copied (see {@link toFlowNode}), so a host
  * mutating the definition it passed in cannot bypass the store.
  */
-export function fromFlowDefinition(definition: FlowDefinition): {
+export function fromFlowDefinition(definition: FlowDefinition, businessKind?: string): {
   nodes: FlowNode[];
   edges: FlowEdge[];
 } {
   return {
-    nodes: definition.nodes.map(node => toFlowNode(node)),
+    nodes: definition.nodes.map(node => toFlowNode(node, businessKind)),
     edges: definition.edges.map(edge => {
       return {
         id: edge.id ?? `edge_${generateId()}`,

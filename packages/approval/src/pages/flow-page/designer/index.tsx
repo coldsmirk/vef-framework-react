@@ -188,6 +188,7 @@ function DesignerBody({
       ? validateFlowDefinition(draft.flowDefinition, {
           formFields: fields ?? [],
           globalSubjects: plugins.globalSubjects,
+          businessKind: draft.basic.businessKind,
           assigneeKinds: kindOptions?.assignees,
           ccKinds: kindOptions?.ccs
         })
@@ -198,13 +199,46 @@ function DesignerBody({
   // for the tenant before it lists users or departments.
   const editorPlugins = useMemo(
     () => {
-      return { ...toEditorPlugins(plugins, fields ?? [], kindOptions), shared: isShared };
+      return {
+        ...toEditorPlugins(plugins, fields ?? [], kindOptions),
+        shared: isShared,
+        businessKind: draft?.basic.businessKind
+      };
     },
-    [plugins, fields, kindOptions, isShared]
+    [plugins, fields, kindOptions, isShared, draft?.basic.businessKind]
   );
 
   const handleBasicChange = useCallback((patch: Partial<FlowDraftBasic>) => {
-    setDraft(prev => prev ? { ...prev, basic: { ...prev.basic, ...patch } } : prev);
+    setDraft(prev => {
+      if (!prev) {
+        return prev;
+      }
+
+      const basic = { ...prev.basic, ...patch };
+      const flowDefinition = patch.businessKind && patch.businessKind !== prev.basic.businessKind
+        ? {
+            ...prev.flowDefinition,
+            nodes: prev.flowDefinition.nodes.map(node => {
+              if (!node.data || node.data.rollbackDataStrategy === undefined) {
+                return node;
+              }
+
+              const updated = structuredClone(node);
+
+              if (updated.data) {
+                delete updated.data.rollbackDataStrategy;
+              }
+
+              return updated;
+            })
+          }
+        : prev.flowDefinition;
+      return {
+        ...prev,
+        basic,
+        flowDefinition
+      };
+    });
   }, []);
   const handleInitiatorsChange = useCallback((initiators: InitiatorParams[]) => {
     setDraft(prev => prev ? { ...prev, initiators } : prev);

@@ -51,6 +51,11 @@ function codesOf(definition: FlowDefinition, formFields: FormFieldDefinition[] =
 }
 
 describe("validateFlowDefinition node config rules", () => {
+  it("rejects an explicit form rollback strategy on a business flow", () => {
+    const flow = flowWith({ data: { name: "审核", rollbackDataStrategy: "keep" } });
+    expect(validateFlowDefinition(flow, { businessKind: "meeting" }).map(issue => issue.code)).toContain("business_rollback_data_strategy");
+  });
+
   it("accepts a bare designer-default approval node", () => {
     expect(codesOf(flowWith({}))).toEqual([]);
   });

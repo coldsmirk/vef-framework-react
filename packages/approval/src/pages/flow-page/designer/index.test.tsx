@@ -54,11 +54,24 @@ describe("business kind design", () => {
           version: {
             storageMode: "table",
             flowSchema: {
-              nodes: [{ id: "start", kind: "start" }, { id: "end", kind: "end" }],
+              nodes: [
+                { id: "start", kind: "start" },
+                {
+                  id: "a",
+                  kind: "approval",
+                  data: { rollbackDataStrategy: "keep" }
+                },
+                { id: "end", kind: "end" }
+              ],
               edges: [
                 {
                   id: "edge",
                   source: "start",
+                  target: "a"
+                },
+                {
+                  id: "edge-2",
+                  source: "a",
                   target: "end"
                 }
               ]
@@ -106,5 +119,7 @@ describe("business kind design", () => {
     expect(writes[0]?.params).toMatchObject({ businessKind: "meeting" });
     expect(writes[1]?.params).toMatchObject({ storageMode: "json" });
     expect(writes[1]?.params?.formSchema).toBeUndefined();
+    expect(writes[1]?.params?.flowDefinition).toMatchObject({ nodes: [{}, { id: "a", data: {} }, {}] });
+    expect(JSON.stringify(writes[1]?.params?.flowDefinition)).not.toContain("rollbackDataStrategy");
   });
 });

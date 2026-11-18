@@ -67,7 +67,7 @@ export const CC_NODE_DEFAULTS = {
  * mutating the definition it passed in cannot rewrite editor state behind
  * zustand's back (`core/immer` disables auto-freeze, so nothing would throw).
  */
-export function normalizeNodeData<K extends NodeKind>(kind: K, data: NodeDataMap[K]): NodeDataMap[K] {
+export function normalizeNodeData<K extends NodeKind>(kind: K, data: NodeDataMap[K], businessKind?: string): NodeDataMap[K] {
   switch (kind) {
     case "approval": {
       // A sequential queue has no parallel lane: the backend rejects a
@@ -94,6 +94,10 @@ export function normalizeNodeData<K extends NodeKind>(kind: K, data: NodeDataMap
       if (approvalData.rollbackType === "none") {
         approvalData.isRollbackAllowed = false;
         approvalData.rollbackType = APPROVAL_NODE_DEFAULTS.rollbackType;
+      }
+
+      if (businessKind) {
+        delete approvalData.rollbackDataStrategy;
       }
 
       return structuredClone(approvalData) as NodeDataMap[K];

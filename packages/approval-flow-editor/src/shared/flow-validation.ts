@@ -68,6 +68,7 @@ export type FlowValidationCode
     | "condition_duplicate_handle"
     | "condition_branch_no_edge"
     | "invalid_assignee_kind"
+    | "business_rollback_data_strategy"
     | "unknown_catalog_field"
     | "invalid_aggregate_reference"
     | "assignee_ids_required"
@@ -255,6 +256,7 @@ export interface FlowValidationError {
  * types. Pass the served catalog wherever it is available.
  */
 export interface FlowValidationContext {
+  businessKind?: string;
   /**
    * The form's top-level field inventory — the same list
    * `EditorPlugins.formFields` feeds to the condition editor and the
@@ -359,6 +361,14 @@ export function validateFlowDefinition(
         nodeId: node.id
       });
       continue;
+    }
+
+    if (context.businessKind && node.data?.rollbackDataStrategy !== undefined) {
+      errors.push({
+        code: "business_rollback_data_strategy",
+        nodeId: node.id,
+        message: "业务流程不支持回退数据策略"
+      });
     }
 
     if (node.kind === "start") {

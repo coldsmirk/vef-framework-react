@@ -180,7 +180,7 @@ export const createGraphSlice: EditorSliceCreator<GraphSlice> = (set, get) => {
       // designer defaults so a freshly-added node serializes fully explicit.
       // `type` is a runtime NodeKind here, so the kind ↔ data correlation
       // cannot be proven by the correlated-union check — assert the node.
-      const mergedData = normalizeNodeData(type, { ...structuredClone(defaultData), ...data } as NodeDataMap[typeof type]);
+      const mergedData = normalizeNodeData(type, { ...structuredClone(defaultData), ...data } as NodeDataMap[typeof type], get().businessKind);
 
       get().checkpoint();
 

@@ -146,6 +146,7 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   // reported as an unknown type.
   const {
     formFields,
+    businessKind,
     globalSubjects,
     assigneeKinds,
     ccKinds
@@ -154,12 +155,13 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
     () => {
       return {
         formFields,
+        businessKind,
         globalSubjects,
         assigneeKinds,
         ccKinds
       };
     },
-    [formFields, globalSubjects, assigneeKinds, ccKinds]
+    [formFields, globalSubjects, assigneeKinds, ccKinds, businessKind]
   );
 
   const { onDragOver, onDrop } = useDrop();
@@ -258,12 +260,20 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
       return;
     }
 
+    const kindChanged = storeApi.getState().businessKind !== businessKind;
+
+    if (kindChanged) {
+      storeApi.setState({ businessKind });
+      loadDefinition(value ?? toDefinition());
+      return;
+    }
+
     if (value && value === lastEmittedRef.current) {
       return;
     }
 
     loadDefinition(value ?? EMPTY_DEFINITION);
-  }, [value, loadDefinition]);
+  }, [value, loadDefinition, storeApi, businessKind, toDefinition]);
 
   // Notify parent of meaningful data changes via version counter.
   const onChangeRef = useRef(onChange);
@@ -441,7 +451,7 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
   className,
   style
 }) => {
-  const [initialData] = useState(() => value && value.nodes.length > 0 ? fromFlowDefinition(value) : createSeedFlow());
+  const [initialData] = useState(() => value && value.nodes.length > 0 ? fromFlowDefinition(value, plugins?.businessKind) : createSeedFlow());
 
   return (
     <ReactFlowProvider>
@@ -451,6 +461,7 @@ export const ApprovalFlowEditor: FC<ApprovalFlowEditorProps> = ({
         <EditorStoreProvider
           initialState={{
             readonly: readonly ?? false,
+            businessKind: plugins?.businessKind,
             nodes: initialData.nodes,
             edges: initialData.edges
           }}

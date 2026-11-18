@@ -11,7 +11,7 @@ export const createFlowSlice: EditorSliceCreator<FlowSlice> = (set, get) => {
     loadDefinition: definition => {
       // An empty definition hydrates to the seed flow (start → end): start/end
       // are neither deletable nor addable, so the editor must guarantee them.
-      const { nodes, edges } = definition.nodes.length > 0 ? fromFlowDefinition(definition) : createSeedFlow();
+      const { nodes, edges } = definition.nodes.length > 0 ? fromFlowDefinition(definition, get().businessKind) : createSeedFlow();
 
       // A reload is a new document — its undo timeline starts empty.
       get().breakCoalescing();

@@ -33,6 +33,10 @@ export interface TenantOption {
  */
 export interface EditorPlugins {
   /**
+   * Selected business handler; its record survives a task rollback.
+   */
+  businessKind?: string;
+  /**
    * Pickers that resolve concrete ids, keyed by kind. A row looks up its own
    * kind first and falls back to its selection mode, so the three built-in
    * pickers (`user` / `role` / `department`) serve every kind that selects the

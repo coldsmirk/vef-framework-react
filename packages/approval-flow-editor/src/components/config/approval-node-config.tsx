@@ -20,6 +20,7 @@ import { Checkbox, Input, InputNumber, Segmented, Select } from "@vef-framework-
 import { useShallow } from "@vef-framework-react/core";
 import { useMemo } from "react";
 
+import { useEditorPlugins } from "../../plugins";
 import { useEditorStore } from "../../store";
 import { AssigneeList } from "./assignee-list";
 import { CcList } from "./cc-list";
@@ -111,6 +112,7 @@ interface ApprovalNodeConfigProps {
 }
 
 export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
+  const { businessKind } = useEditorPlugins();
   // Subscribe to the node's data, not the node object: dragging changes the
   // node's identity every frame while its data reference stays stable, so this
   // large form does not re-render during drags.
@@ -343,15 +345,17 @@ export const ApprovalNodeConfig: FC<ApprovalNodeConfigProps> = ({ nodeId }) => {
                 />
               </FormField>
 
-              <FormField label="回退数据策略">
-                <Select
-                  disabled={readonly}
-                  options={ROLLBACK_DATA_OPTIONS}
-                  style={FULL_WIDTH_STYLE}
-                  value={data.rollbackDataStrategy ?? "keep"}
-                  onChange={value => update({ rollbackDataStrategy: value })}
-                />
-              </FormField>
+              {!businessKind && (
+                <FormField label="回退数据策略">
+                  <Select
+                    disabled={readonly}
+                    options={ROLLBACK_DATA_OPTIONS}
+                    style={FULL_WIDTH_STYLE}
+                    value={data.rollbackDataStrategy ?? "keep"}
+                    onChange={value => update({ rollbackDataStrategy: value })}
+                  />
+                </FormField>
+              )}
 
               {data.rollbackType === "specified" && (
                 <FormField label="回退目标节点">

@@ -12,7 +12,7 @@ export const {
   StoreProvider: EditorStoreProvider,
   useStoreApi: useEditorStoreApi,
   useStore: useEditorStore
-} = createComponentStore<EditorState, Pick<EditorState, "readonly" | "nodes" | "edges">>(
+} = createComponentStore<EditorState, Pick<EditorState, "readonly" | "nodes" | "edges" | "businessKind">>(
   "ApprovalEditor",
   (...args) => {
     return {

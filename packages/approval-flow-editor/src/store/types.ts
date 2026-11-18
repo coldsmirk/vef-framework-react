@@ -8,6 +8,7 @@ import type { ConditionBranchDefinition, FlowDefinition, FlowEdge, FlowNode, Nod
  * Graph data CRUD — nodes, edges, and their event handlers
  */
 export interface GraphSlice {
+  businessKind?: string;
   nodes: FlowNode[];
   edges: FlowEdge[];
   onNodesChange: OnNodesChange<FlowNode>;
