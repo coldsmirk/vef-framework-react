@@ -239,7 +239,33 @@ describe("EditableTable", () => {
     });
   });
 
-  describe("operation column width", () => {
+  describe("operation column", () => {
+    it("omits the operation column when every row is read-only", () => {
+      render(<Harness canDelete={false} canEdit={false} />);
+      expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
+    });
+
+    it("keeps the operation column for a per-row predicate", () => {
+      render(<Harness canEdit={row => row.id === "2"} />);
+      expect(screen.getByRole("columnheader", { name: "操作" })).toBeVisible();
+      expect(within(rowOf("Edward")).queryByRole("button")).not.toBeInTheDocument();
+      expect(within(rowOf("Helena")).getByRole("button", { name: label("编辑") })).toBeVisible();
+    });
+
+    it("keeps the column for custom row actions on read-only rows", () => {
+      render(<Harness canEdit={false} renderRowActions={row => <button type="button">{row.name}</button>} />);
+      expect(screen.getByRole("columnheader", { name: "操作" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Edward" })).toBeVisible();
+    });
+
+    it("shows save and cancel for a newly added row when existing rows cannot be edited", async () => {
+      const user = userEvent.setup();
+      render(<Harness creatable canEdit={false} />);
+      await user.click(screen.getByRole("button", { name: label("新增记录") }));
+      expect(screen.getByRole("button", { name: label("保存") })).toBeVisible();
+      expect(screen.getByRole("button", { name: label("取消") })).toBeVisible();
+    });
+
     it("defaults to a fixed width so the actions never stretch", () => {
       const { container } = render(<Harness />);
 

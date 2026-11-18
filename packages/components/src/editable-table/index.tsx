@@ -67,14 +67,14 @@ function EditableTableInner<TRow extends AnyObject>({
       return {
         deletable: deletablePredicate,
         editable: editablePredicate,
-        enabled: true,
+        enabled: canEdit !== false || Boolean(canDelete || creatable || renderRowActions),
         extra: renderRowActions,
         texts: operationColumn?.texts,
         title: operationColumn?.title,
         width: operationColumn?.width ?? DEFAULT_OPERATION_COLUMN_WIDTH
       };
     },
-    [deletablePredicate, editablePredicate, operationColumn, renderRowActions]
+    [canDelete, canEdit, creatable, deletablePredicate, editablePredicate, operationColumn, renderRowActions]
   );
 
   const tableColumns = useEditableColumns(columns, getKey, operation);
