@@ -1,7 +1,7 @@
 import type { AnnotationView, FieldAnchor, InstanceDetail } from "../../types";
 import type { AnnotationGroup, AnnotationThread } from "./use-annotations";
 
-import { Button, Empty, Flex, globalCssVars, Modal, Stack, Text } from "@vef-framework-react/components";
+import { Alert, Button, Empty, Flex, globalCssVars, Modal, Stack, Text } from "@vef-framework-react/components";
 import { useMemo, useState } from "react";
 
 import { InstanceTimeline } from "../timeline";
@@ -24,14 +24,18 @@ const audiences = {
   users: "指定人员可见"
 };
 
-function AnnotationLine({ value }: { value: AnnotationView }) {
+function AnnotationLine({ value, detail }: { value: AnnotationView; detail: InstanceDetail }) {
+  const { audience } = value;
+  const names = audience.scope === "nodes"
+    ? detail.flowGraph.nodes.filter(node => audience.nodeIds.includes(node.nodeId)).map(node => node.data.name).filter(Boolean)
+    : [];
   return (
     <Stack gap={4}>
       <Flex align="baseline" gap="small" wrap="wrap">
         <Text strong>{value.author.name}</Text>
         <Text type="secondary">{value.status === "discarded" && value.parentId ? "已作废（审批单已结束）" : statuses[value.status]}</Text>
         {value.resolution && <Text>{value.resolution === "addressed" ? "已修改" : "不采纳"}</Text>}
-        <Text type="secondary">{audiences[value.audience.scope]}</Text>
+        <Text type="secondary">{names.length > 0 ? `指定节点可见（${names.join("、")}）` : audiences[audience.scope]}</Text>
       </Flex>
 
       {value.content && <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{value.content}</Text>}
@@ -42,23 +46,33 @@ function AnnotationLine({ value }: { value: AnnotationView }) {
 function Thread({
   detail,
   thread,
-  taskId,
-  canRespond
+  actions
 }: {
   detail: InstanceDetail;
   thread: AnnotationThread;
-  taskId?: string;
-  canRespond: boolean;
+  actions: ReturnType<typeof useAnnotations>;
 }) {
   const { annotation, responses } = thread;
   const [editing, setEditing] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const draftResponse = responses.find(r => r.status === "draft");
-  const respond = canRespond && annotation.status === "published" && !annotation.parentId;
-  const edit = Boolean(taskId && annotation.taskId === taskId && annotation.status === "draft");
+  const respond = actions.canRespond && annotation.status === "published" && !annotation.parentId;
+  const edit = actions.task && annotation.taskId === actions.task.taskId && annotation.status === "draft" && !annotation.parentId;
+
+  async function deleteDraft() {
+    setDeleteError("");
+
+    try {
+      await actions.remove({ id: annotation.id });
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "未能删除草稿，请重试");
+    }
+  }
+
   return (
     <Stack gap={8} style={{ borderInlineStart: `2px solid ${globalCssVars.colorBorderSecondary}`, paddingInlineStart: 12 }}>
-      <AnnotationLine value={annotation} />
-      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine value={response} /></div>)}
+      <AnnotationLine detail={detail} value={annotation} />
+      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} value={response} /></div>)}
 
       {editing
         ? (
@@ -71,10 +85,16 @@ function Thread({
             </>
           )
         : (edit || respond) && (
-            <Button size="small" style={{ alignSelf: "flex-start" }} type="link" onClick={() => setEditing(true)}>
-              {edit ? "编辑草稿" : draftResponse ? "编辑回应" : "回应批注"}
-            </Button>
+            <Flex gap="small">
+              <Button disabled={actions.pending} size="small" type="link" onClick={() => setEditing(true)}>
+                {edit ? "编辑草稿" : draftResponse ? "编辑回应" : "回应批注"}
+              </Button>
+
+              {edit && <Button danger disabled={actions.pending} size="small" type="link" onClick={() => void deleteDraft()}>删除草稿</Button>}
+            </Flex>
           )}
+
+      {!editing && deleteError && <Alert showIcon title={deleteError} type="error" />}
     </Stack>
   );
 }
@@ -82,18 +102,14 @@ function Thread({
 function ThreadGroup({
   group,
   detail,
-  taskId,
-  canRespond
-}: { group: AnnotationGroup; detail: InstanceDetail; taskId?: string; canRespond: boolean }) {
-  return <Stack gap={12}>{group.threads.map(thread => <Thread key={thread.annotation.id} canRespond={canRespond} detail={detail} taskId={taskId} thread={thread} />)}</Stack>;
+  actions
+}: { group: AnnotationGroup; detail: InstanceDetail; actions: ReturnType<typeof useAnnotations> }) {
+  return <Stack gap={12}>{group.threads.map(thread => <Thread key={thread.annotation.id} actions={actions} detail={detail} thread={thread} />)}</Stack>;
 }
 
 export function AnnotationList({ detail, field }: { detail: InstanceDetail; field?: FieldAnchor }) {
-  const {
-    groups,
-    task,
-    canRespond
-  } = useAnnotations(detail);
+  const actions = useAnnotations(detail);
+  const { groups } = actions;
   const filtered = field
     ? groups.map(group => {
         return { ...group, threads: group.threads.filter(t => matchesField(t.annotation, field)) };
@@ -105,7 +121,7 @@ export function AnnotationList({ detail, field }: { detail: InstanceDetail; fiel
           {filtered.map(group => (
             <Stack key={group.threads[0]!.annotation.id} gap={8}>
               <Text strong>{group.name}</Text>
-              <ThreadGroup canRespond={canRespond} detail={detail} group={group} taskId={task?.taskId} />
+              <ThreadGroup actions={actions} detail={detail} group={group} />
             </Stack>
           ))}
         </Stack>
@@ -114,13 +130,10 @@ export function AnnotationList({ detail, field }: { detail: InstanceDetail; fiel
 }
 
 export function AnnotationTimeline({ detail }: { detail: InstanceDetail }) {
-  const {
-    groups,
-    task,
-    canRespond
-  } = useAnnotations(detail);
+  const actions = useAnnotations(detail);
+  const { groups } = actions;
   const byEntry = new Map(groups.map(group => [group.entry, group]));
-  const renderGroup = (group: AnnotationGroup) => <ThreadGroup key={group.threads[0]!.annotation.id} canRespond={canRespond} detail={detail} group={group} taskId={task?.taskId} />;
+  const renderGroup = (group: AnnotationGroup) => <ThreadGroup key={group.threads[0]!.annotation.id} actions={actions} detail={detail} group={group} />;
   return (
     <Stack gap={12}>
       <InstanceTimeline
@@ -142,7 +155,8 @@ export function AnnotationTimeline({ detail }: { detail: InstanceDetail }) {
 }
 
 export function DetailAnnotations({ detail }: { detail: InstanceDetail }) {
-  const { task, canRespond } = useAnnotations(detail);
+  const actions = useAnnotations(detail);
+  const { task, canRespond } = actions;
   const [composing, setComposing] = useState(false);
 
   if (canRespond && detail.annotations?.length) {
@@ -158,14 +172,21 @@ export function DetailAnnotations({ detail }: { detail: InstanceDetail }) {
     return null;
   }
 
-  return composing
-    ? (
-        <Stack gap={8}>
-          <AnnotationComposer detail={detail} onDone={() => setComposing(false)} />
-          <Button size="small" style={{ alignSelf: "flex-start" }} type="text" onClick={() => setComposing(false)}>取消</Button>
-        </Stack>
-      )
-    : <Button style={{ alignSelf: "flex-start" }} onClick={() => setComposing(true)}>添加批注</Button>;
+  const drafts = detail.annotations?.filter(annotation => annotation.taskId === task.taskId && annotation.status === "draft" && !annotation.parentId);
+  return (
+    <Stack gap={8}>
+      {drafts?.map(annotation => <Thread key={annotation.id} actions={actions} detail={detail} thread={{ annotation, responses: [] }} />)}
+
+      {composing
+        ? (
+            <>
+              <AnnotationComposer detail={detail} onDone={() => setComposing(false)} />
+              <Button size="small" style={{ alignSelf: "flex-start" }} type="text" onClick={() => setComposing(false)}>取消</Button>
+            </>
+          )
+        : <Button style={{ alignSelf: "flex-start" }} onClick={() => setComposing(true)}>添加批注</Button>}
+    </Stack>
+  );
 }
 
 export function useFieldAnnotations(detail: InstanceDetail | undefined) {

@@ -80,7 +80,8 @@ function groupThreads(detail: InstanceDetail): AnnotationGroup[] {
 export function matchesField(annotation: AnnotationView, location: FieldAnchor): boolean {
   const { anchor } = annotation;
   return typeof anchor === "object" && anchor !== null && "field" in anchor && anchor.field === location.field
-    && (location.row === undefined || ("row" in anchor && anchor.row === location.row && "column" in anchor && anchor.column === location.column));
+    && (location.row === undefined || ("row" in anchor && anchor.row === location.row))
+    && (location.column === undefined || ("column" in anchor && anchor.column === location.column));
 }
 
 export function useAnnotations(detail: InstanceDetail) {

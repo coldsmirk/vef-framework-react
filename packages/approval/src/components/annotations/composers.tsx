@@ -57,7 +57,7 @@ function AudienceInput({
           aria-label="可见节点"
           maxTagCount={1}
           mode="multiple"
-          options={detail.flowGraph.nodes.map(node => { return { label: node.data.name, value: node.nodeId }; })}
+          options={detail.flowGraph.nodes.filter(node => node.kind === "approval" || node.kind === "handle").map(node => { return { label: node.data.name, value: node.nodeId }; })}
           placeholder="选择流程节点"
           showSearch={{ optionFilterProp: "label" }}
           value={value.nodeIds}
