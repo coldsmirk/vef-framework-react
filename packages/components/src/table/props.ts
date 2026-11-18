@@ -7,6 +7,8 @@ import type { TableProps as TablePropsInternal } from "antd";
 export interface TableProps<TRow = AnyObject> extends Except<TablePropsInternal<TRow>, "scroll"> {
   /**
    * Whether the table height is fixed and should be calculated automatically.
+   * Set to false for an inline table that grows with its rows. Wide columns
+   * still scroll horizontally within the table.
    *
    * @default true
    */

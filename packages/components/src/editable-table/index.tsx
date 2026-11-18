@@ -94,6 +94,7 @@ function EditableTableInner<TRow extends AnyObject>({
         <Table<TRow>
           columns={tableColumns}
           dataSource={value}
+          flexHeight={false}
           locale={locale}
           pagination={pagination ?? false}
           rowKey={getKey}

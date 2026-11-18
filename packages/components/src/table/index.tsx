@@ -21,6 +21,10 @@ const DEFAULT_COLUMN_WIDTH = 200;
 
 const STRIPED_ROW_CLASS = "vef-table-row-striped";
 
+// The measured header includes a scrollbar gutter. Its intrinsic width must
+// not feed back into the space allocated to the scrolling table by its host.
+const scrollContainerStyle = css({ contain: "inline-size" });
+
 // Stripe and hover tints are composited as an opaque pair (container
 // background-color + translucent fill as a background-image layer): fixed
 // columns need an opaque background to mask the content scrolling beneath
@@ -81,7 +85,7 @@ export function Table<TRow = AnyObject>({
 
   const tableProps = useMemo<TablePropsInternal<TRow>>(() => {
     if (!flexHeight) {
-      return { columns };
+      return { columns, scroll: { x: "100%" } };
     }
 
     const scrollX = virtual ? calculateVirtualScrollX(columns) : "max-content";
@@ -113,7 +117,7 @@ export function Table<TRow = AnyObject>({
     <div
       ref={tableRef}
       className={className}
-      css={[styles.fullHeight, striped && stripedStyle]}
+      css={[flexHeight && styles.fullHeight, scrollContainerStyle, striped && stripedStyle]}
       style={style}
     >
       <TableInternal

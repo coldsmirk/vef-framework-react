@@ -17,6 +17,11 @@ const DATA_SOURCE: Row[] = [
 ];
 
 describe("table/Table", () => {
+  it("isolates the scrolling table's intrinsic width from its host", () => {
+    const { container } = render(<Table columns={TABLE_COLUMNS} dataSource={DATA_SOURCE} rowKey="id" />);
+    expect(container.firstElementChild).toHaveStyle({ contain: "inline-size" });
+  });
+
   describe("striped", () => {
     it("does not mark any row as striped by default", () => {
       render(
