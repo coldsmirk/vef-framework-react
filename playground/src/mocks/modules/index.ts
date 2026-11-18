@@ -3,6 +3,7 @@
 
 // Auth must register before any UI-mounted query fires.
 import "./auth";
+import "./approval-meeting";
 // sys-dictionary seeds the dictionary registry that other modules consume.
 import "./sys-dictionary";
 import "./sys-dictionary-item";

@@ -53,6 +53,7 @@ import { Route as LayoutApprovalInitiateRouteRouteImport } from "./../pages/_lay
 import { Route as LayoutApprovalFlowRouteRouteImport } from "./../pages/_layout/approval/flow/route";
 import { Route as LayoutApprovalDelegationRouteRouteImport } from "./../pages/_layout/approval/delegation/route";
 import { Route as LayoutApprovalCategoryRouteRouteImport } from "./../pages/_layout/approval/category/route";
+import { Route as LayoutApprovalBusinessMeetingRouteRouteImport } from "./../pages/_layout/approval/business-meeting/route";
 import { Route as LayoutApprovalAdminRouteRouteImport } from "./../pages/_layout/approval/admin/route";
 
 const LayoutRouteRoute = LayoutRouteRouteImport.update({
@@ -275,6 +276,12 @@ const LayoutApprovalCategoryRouteRoute =
     path: "/category",
     getParentRoute: () => LayoutApprovalRouteRoute,
   } as any);
+const LayoutApprovalBusinessMeetingRouteRoute =
+  LayoutApprovalBusinessMeetingRouteRouteImport.update({
+    id: "/business-meeting",
+    path: "/business-meeting",
+    getParentRoute: () => LayoutApprovalRouteRoute,
+  } as any);
 const LayoutApprovalAdminRouteRoute =
   LayoutApprovalAdminRouteRouteImport.update({
     id: "/admin",
@@ -289,6 +296,7 @@ export interface FileRoutesByFullPath {
   "/login": typeof CommonLoginRoute;
   "/select-app": typeof CommonSelectAppRoute;
   "/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/approval/business-meeting": typeof LayoutApprovalBusinessMeetingRouteRoute;
   "/approval/category": typeof LayoutApprovalCategoryRouteRoute;
   "/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
   "/approval/flow": typeof LayoutApprovalFlowRouteRoute;
@@ -331,6 +339,7 @@ export interface FileRoutesByTo {
   "/login": typeof CommonLoginRoute;
   "/select-app": typeof CommonSelectAppRoute;
   "/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/approval/business-meeting": typeof LayoutApprovalBusinessMeetingRouteRoute;
   "/approval/category": typeof LayoutApprovalCategoryRouteRoute;
   "/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
   "/approval/flow": typeof LayoutApprovalFlowRouteRoute;
@@ -375,6 +384,7 @@ export interface FileRoutesById {
   "/_common/login": typeof CommonLoginRoute;
   "/_common/select-app": typeof CommonSelectAppRoute;
   "/_layout/approval/admin": typeof LayoutApprovalAdminRouteRoute;
+  "/_layout/approval/business-meeting": typeof LayoutApprovalBusinessMeetingRouteRoute;
   "/_layout/approval/category": typeof LayoutApprovalCategoryRouteRoute;
   "/_layout/approval/delegation": typeof LayoutApprovalDelegationRouteRoute;
   "/_layout/approval/flow": typeof LayoutApprovalFlowRouteRoute;
@@ -419,6 +429,7 @@ export interface FileRouteTypes {
     | "/login"
     | "/select-app"
     | "/approval/admin"
+    | "/approval/business-meeting"
     | "/approval/category"
     | "/approval/delegation"
     | "/approval/flow"
@@ -461,6 +472,7 @@ export interface FileRouteTypes {
     | "/login"
     | "/select-app"
     | "/approval/admin"
+    | "/approval/business-meeting"
     | "/approval/category"
     | "/approval/delegation"
     | "/approval/flow"
@@ -504,6 +516,7 @@ export interface FileRouteTypes {
     | "/_common/login"
     | "/_common/select-app"
     | "/_layout/approval/admin"
+    | "/_layout/approval/business-meeting"
     | "/_layout/approval/category"
     | "/_layout/approval/delegation"
     | "/_layout/approval/flow"
@@ -829,6 +842,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LayoutApprovalCategoryRouteRouteImport;
       parentRoute: typeof LayoutApprovalRouteRoute;
     };
+    "/_layout/approval/business-meeting": {
+      id: "/_layout/approval/business-meeting";
+      path: "/business-meeting";
+      fullPath: "/approval/business-meeting";
+      preLoaderRoute: typeof LayoutApprovalBusinessMeetingRouteRouteImport;
+      parentRoute: typeof LayoutApprovalRouteRoute;
+    };
     "/_layout/approval/admin": {
       id: "/_layout/approval/admin";
       path: "/admin";
@@ -841,6 +861,7 @@ declare module "@tanstack/react-router" {
 
 interface LayoutApprovalRouteRouteChildren {
   LayoutApprovalAdminRouteRoute: typeof LayoutApprovalAdminRouteRoute;
+  LayoutApprovalBusinessMeetingRouteRoute: typeof LayoutApprovalBusinessMeetingRouteRoute;
   LayoutApprovalCategoryRouteRoute: typeof LayoutApprovalCategoryRouteRoute;
   LayoutApprovalDelegationRouteRoute: typeof LayoutApprovalDelegationRouteRoute;
   LayoutApprovalFlowRouteRoute: typeof LayoutApprovalFlowRouteRoute;
@@ -851,6 +872,8 @@ interface LayoutApprovalRouteRouteChildren {
 
 const LayoutApprovalRouteRouteChildren: LayoutApprovalRouteRouteChildren = {
   LayoutApprovalAdminRouteRoute: LayoutApprovalAdminRouteRoute,
+  LayoutApprovalBusinessMeetingRouteRoute:
+    LayoutApprovalBusinessMeetingRouteRoute,
   LayoutApprovalCategoryRouteRoute: LayoutApprovalCategoryRouteRoute,
   LayoutApprovalDelegationRouteRoute: LayoutApprovalDelegationRouteRoute,
   LayoutApprovalFlowRouteRoute: LayoutApprovalFlowRouteRoute,

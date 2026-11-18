@@ -45,9 +45,11 @@ function createMockPicker(kind: PrincipalKind): FC<PickerProps> {
       <Select
         allowClear
         disabled={disabled}
+        maxTagCount={1}
         mode="multiple"
         options={MOCK_OPTIONS[kind]}
         placeholder={PLACEHOLDERS[kind]}
+        showSearch={{ optionFilterProp: "label" }}
         style={{ width: "100%" }}
         value={value}
         onChange={onChange}
