@@ -73,6 +73,17 @@ describe("business kind design", () => {
     expect(next).toBeEnabled();
   });
 
+  it("stops loading and explains a failed business catalog beside the picker", async () => {
+    const catalog = Promise.withResolvers<unknown>();
+    const apiClient = mockApprovalApi(({ action }) => action === "list_business_kinds" ? catalog.promise : []);
+    render(<FlowDesignerDrawer open tenantId="t" onClose={vi.fn()} />, { apiClient });
+    const picker = await screen.findByRole("combobox", { name: "业务类型" });
+    expect(picker).toHaveAttribute("aria-busy", "true");
+    catalog.reject(new Error("目录服务暂不可用"));
+    expect(await screen.findByText("业务类型加载失败：目录服务暂不可用")).toBeVisible();
+    expect(picker).toHaveAttribute("aria-busy", "false");
+  });
+
   it("checks a form title reference on the form step and allows advancing after correction", async () => {
     const user = userEvent.setup();
     const apiClient = mockApprovalApi(({ action }) => {

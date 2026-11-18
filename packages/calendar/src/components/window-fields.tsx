@@ -54,8 +54,7 @@ function Choices<T extends number | string>({
       display: columns ? "grid" : "flex",
       flexWrap: "wrap",
       gap: 4,
-      gridTemplateColumns: columns ? `repeat(${columns}, minmax(0, 1fr))` : undefined,
-      maxWidth: columns ? 384 : undefined
+      gridTemplateColumns: columns ? `repeat(${columns}, minmax(0, 1fr))` : undefined
     }}
     >
       {options.map(item => {
@@ -145,17 +144,19 @@ export function WindowFields({ value, onChange }: { value: Window; onChange: (ne
       <Labeled label="月份"><Choices options={MONTHS} value={value.months} onChange={v => update("months", v)} /></Labeled>
 
       <Labeled label="月日">
-        <Choices columns={7} options={DAYS} value={value.monthDays} wideOption={-1} onChange={v => update("monthDays", v)} />
+        <Stack gap={8} style={{ width: "100%", maxWidth: 384 }}>
+          <Choices columns={7} options={DAYS} value={value.monthDays} wideOption={-1} onChange={v => update("monthDays", v)} />
 
-        <Select<number[]>
-          aria-label="其他倒数日期"
-          mode="multiple"
-          options={BACKWARDS}
-          placeholder="其他倒数日期"
-          showSearch={{ optionFilterProp: "label" }}
-          value={value.monthDays?.filter(n => n < -1) ?? []}
-          onChange={v => update("monthDays", [...value.monthDays?.filter(n => n >= -1) ?? [], ...v])}
-        />
+          <Select<number[]>
+            aria-label="其他倒数日期"
+            mode="multiple"
+            options={BACKWARDS}
+            placeholder="其他倒数日期"
+            showSearch={{ optionFilterProp: "label" }}
+            value={value.monthDays?.filter(n => n < -1) ?? []}
+            onChange={v => update("monthDays", [...value.monthDays?.filter(n => n >= -1) ?? [], ...v])}
+          />
+        </Stack>
       </Labeled>
 
       <Labeled label="星期"><Choices options={WEEK} value={value.weekdays} onChange={v => update("weekdays", v)} /></Labeled>

@@ -126,7 +126,7 @@ export function useFlowApi(): FlowApi {
         listBusinessKinds: apiClient.createQueryFn<BusinessKindDescriptor[], Record<string, never>>(
           "approval_flow_list_business_kinds",
           ({ post }) => async () => {
-            const result = await post<BusinessKindDescriptor[]>(API_PATH, { data: createApiRequest(RESOURCE, "list_business_kinds", {}) });
+            const result = await post<BusinessKindDescriptor[]>(API_PATH, { data: createApiRequest(RESOURCE, "list_business_kinds", {}), skipErrorMessage: true });
 
             return result.data;
           }

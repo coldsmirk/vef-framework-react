@@ -93,6 +93,22 @@ describe("WindowPreview", () => {
     expect(await screen.findByText("此前已开放 · 长期开放")).toBeInTheDocument();
   });
 
+  it("skips previews for incomplete windows and equal endpoints, including blackouts", async () => {
+    const apiClient = createTestApiClient();
+    const post = vi.spyOn(Object.getPrototypeOf(apiClient[HTTP_CLIENT]), "post").mockResolvedValue({ data: { windows: [] } });
+    vi.useFakeTimers();
+    const { rerender } = render(<WindowPreview rule={{ windows: [] }} />, { apiClient });
+    const times = [{ startsAt: "09:00:00", endsAt: "09:00:00" }];
+    rerender(<WindowPreview rule={{ windows: [{ times }] }} />);
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    rerender(<WindowPreview rule={{ windows: [{}], blackouts: [{ times }] }} />);
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(post).not.toHaveBeenCalled();
+    rerender(<WindowPreview rule={{ windows: [{}] }} />);
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(post).toHaveBeenCalledExactlyOnceWith("/api", expect.objectContaining({ skipErrorMessage: true }));
+  });
+
   it("displays the server validation reason", async () => {
     const apiClient = createTestApiClient();
     vi.spyOn(Object.getPrototypeOf(apiClient[HTTP_CLIENT]), "post").mockRejectedValue(new Error("开始与结束时间不能相同"));

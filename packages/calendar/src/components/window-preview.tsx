@@ -5,6 +5,7 @@ import { useQueries, useQuery } from "@vef-framework-react/core";
 import { useEffect, useMemo, useState } from "react";
 
 import { useCalendarApi } from "../api";
+import { windowRuleIssue } from "./window-rule-issue";
 
 function calendarDateFormatter(timeZone?: string) {
   try {
@@ -105,6 +106,7 @@ export function WindowPreview({
   limit = 10
 }: { rule: WindowRule; from?: number; limit?: number }) {
   const api = useCalendarApi();
+  const issue = windowRuleIssue(rule);
   const ruleKey = JSON.stringify(rule);
   const [debouncedKey, setDebouncedKey] = useState(ruleKey);
   const debounced = useMemo(() => JSON.parse(debouncedKey) as WindowRule, [debouncedKey]);
@@ -134,18 +136,21 @@ export function WindowPreview({
         limit
       }
     ],
+    enabled: !issue && debouncedKey === ruleKey,
     retry: false
   });
 
   return (
     <Labeled label="开放时段预览">
-      {isLoading || debouncedKey !== ruleKey
-        ? <Spin size="small" />
-        : error
-          ? <Alert showIcon title={error.message} type="error" />
-          : data?.windows?.length
-            ? <PreviewIntervals from={from ?? dataUpdatedAt} timezone={debounced.timezone || undefined} windows={data.windows} />
-            : <Text type="secondary">近期没有开放时段</Text>}
+      {issue
+        ? <Text type="secondary">{`无法预览：${issue}`}</Text>
+        : isLoading || debouncedKey !== ruleKey
+          ? <Spin size="small" />
+          : error
+            ? <Alert showIcon title={error.message} type="error" />
+            : data?.windows?.length
+              ? <PreviewIntervals from={from ?? dataUpdatedAt} timezone={debounced.timezone || undefined} windows={data.windows} />
+              : <Text type="secondary">近期没有开放时段</Text>}
     </Labeled>
   );
 }

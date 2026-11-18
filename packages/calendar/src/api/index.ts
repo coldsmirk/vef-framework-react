@@ -8,13 +8,13 @@ import { useMemo } from "react";
 const RESOURCE = "sys/calendar";
 
 export async function findCalendarDays(http: Readonly<HttpClient>, params: DateRange): Promise<Day[]> {
-  const result = await http.post<Day[]>("/api", { data: createApiRequest(RESOURCE, "find_days", params) });
+  const result = await http.post<Day[]>("/api", { data: createApiRequest(RESOURCE, "find_days", params), skipErrorMessage: true });
 
   return result.data;
 }
 
 export async function previewWindows(http: Readonly<HttpClient>, params: PreviewWindowsParams): Promise<PreviewWindowsResult> {
-  const result = await http.post<PreviewWindowsResult>("/api", { data: createApiRequest(RESOURCE, "preview_windows", params) });
+  const result = await http.post<PreviewWindowsResult>("/api", { data: createApiRequest(RESOURCE, "preview_windows", params), skipErrorMessage: true });
 
   return result.data;
 }

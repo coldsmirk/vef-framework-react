@@ -1,5 +1,4 @@
 import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
-import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { Flow, InitiatorParams } from "../../../types";
@@ -7,6 +6,7 @@ import type { FlowDraft, FlowDraftBasic } from "./types";
 
 import { validateFlowDefinition } from "@vef-framework-react/approval-flow-editor";
 import { projectFormSchema, validateApprovalSchema } from "@vef-framework-react/approval-form-bridge";
+import { windowRuleIssue } from "@vef-framework-react/calendar";
 import { Button, Drawer, Flex, globalCssVars, showSuccessMessage, Spin, Steps, Text } from "@vef-framework-react/components";
 import { useMutation, useQuery } from "@vef-framework-react/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,16 +29,6 @@ const STEP_ITEMS = [
   { title: "流程设计" },
   { title: "审阅提交" }
 ];
-
-function initiationWindowIssue(rule?: WindowRule) {
-  if (rule?.windows.length === 0) {
-    return "请至少添加一个开放窗口";
-  }
-
-  if (rule && [...rule.windows, ...rule.blackouts ?? []].some(window => window.times?.some(range => range.startsAt === range.endsAt))) {
-    return "请修改发起时段中起止时间相同的时段";
-  }
-}
 
 export interface FlowDesignerDrawerProps {
   open: boolean;
@@ -117,7 +107,11 @@ function DesignerBody({
     staleTime: Infinity
   });
 
-  const { data: businessKinds } = useQuery({
+  const {
+    data: businessKinds,
+    isFetching: loadingBusinessKinds,
+    error: businessKindsError
+  } = useQuery({
     queryFn: flowApi.listBusinessKinds,
     queryKey: [flowApi.listBusinessKinds.key, {}],
     staleTime: Infinity
@@ -271,7 +265,7 @@ function DesignerBody({
   // type (state variables lose narrowing inside async closures).
   const currentDraft = draft;
   const { basic } = currentDraft;
-  const windowIssue = initiationWindowIssue(basic.initiationWindow);
+  const windowIssue = windowRuleIssue(basic.initiationWindow);
   const missingField = fields && missingTitleField(basic.instanceTitleTemplate, fields);
   const voidIssue = voidPolicyIssue(basic, isVoidable, selectedVoidFlow);
   const basicValid = !voidIssue && !windowIssue && basic.code.trim() !== ""
@@ -380,11 +374,13 @@ function DesignerBody({
       key="basic"
       basic={basic}
       businessKinds={businessKinds}
+      businessKindsError={businessKindsError?.message}
       categoryOptions={categoryOptions}
       initiatorKinds={kindOptions?.initiators}
       initiators={draft.initiators}
       isEditing={isEditing}
       isVoidable={isVoidable}
+      loadingBusinessKinds={loadingBusinessKinds}
       selectedVoidFlow={selectedVoidFlow}
       onBasicChange={handleBasicChange}
       onInitiatorsChange={handleInitiatorsChange}

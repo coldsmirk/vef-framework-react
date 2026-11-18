@@ -239,6 +239,8 @@ const EMPTY_BINDING: BusinessBindingConfig = {
 export interface BasicStepProps {
   basic: FlowDraftBasic;
   businessKinds?: BusinessKindDescriptor[];
+  loadingBusinessKinds: boolean;
+  businessKindsError?: string;
   isVoidable: boolean | undefined;
   selectedVoidFlow?: Flow | null;
   initiators: InitiatorParams[];
@@ -265,6 +267,8 @@ export interface BasicStepProps {
 export function BasicStep({
   basic,
   businessKinds,
+  loadingBusinessKinds,
+  businessKindsError,
   isVoidable,
   selectedVoidFlow,
   initiators,
@@ -445,8 +449,9 @@ export function BasicStep({
         <Stack gap={12}>
           <Select<string>
             allowClear
+            aria-busy={loadingBusinessKinds}
             aria-label="业务类型"
-            loading={businessKinds === undefined}
+            loading={loadingBusinessKinds}
             options={businessKinds?.map(item => { return { value: item.kind, label: item.label }; })}
             placeholder="使用流程表单"
             showSearch={{ optionFilterProp: "label" }}
@@ -460,6 +465,8 @@ export function BasicStep({
               });
             }}
           />
+
+          {businessKindsError && <Text role="alert" type="danger">{`业务类型加载失败：${businessKindsError}`}</Text>}
 
           {basic.businessKind && !businessKinds?.some(item => item.kind === basic.businessKind) && businessKinds
             && <Text type="danger">该业务类型已不可用，请重新选择。</Text>}
