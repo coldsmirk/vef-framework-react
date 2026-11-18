@@ -1,6 +1,7 @@
 import type { BusinessBindingConfig } from "../../../types";
 
 import { createEmptyDraft, initiatorsForSubmit, isBindingValid, missingTitleField } from "./types";
+import { voidPolicyIssue } from "./void-policy";
 
 function validBinding(): BusinessBindingConfig {
   return {
@@ -10,6 +11,27 @@ function validBinding(): BusinessBindingConfig {
     instanceIdColumn: "approval_instance_id"
   };
 }
+
+describe("void policy validation", () => {
+  const { basic } = createEmptyDraft("t");
+
+  it("only allows a request flow under the approval policy", () => {
+    expect(voidPolicyIssue({
+      ...basic,
+      voidPolicy: "disabled",
+      voidFlowCode: "void"
+    }, true)).toBeTruthy();
+    expect(voidPolicyIssue({
+      ...basic,
+      voidPolicy: "direct",
+      voidFlowCode: "void"
+    }, true)).toBeTruthy();
+    expect(voidPolicyIssue({ ...basic, voidPolicy: "approval" }, true)).toBeTruthy();
+    expect(voidPolicyIssue({ ...basic, voidPolicy: "direct" }, true)).toBeUndefined();
+    expect(voidPolicyIssue({ ...basic, voidPolicy: "direct" }, false)).toBeTruthy();
+    expect(voidPolicyIssue({ ...basic, voidPolicy: "disabled" }, false)).toBeUndefined();
+  });
+});
 
 describe("business title fields", () => {
   it("checks root-level field references against the selected catalog", () => {

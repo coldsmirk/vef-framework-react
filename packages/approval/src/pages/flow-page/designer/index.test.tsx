@@ -125,6 +125,7 @@ describe("business kind design", () => {
   it("replaces form design with the registered catalog and deploys only JSON storage", async () => {
     const user = userEvent.setup();
     const writes: ApiRequest[] = [];
+    const lookups: ApiRequest[] = [];
     const apiClient = mockApprovalApi(req => {
       if (["update", "deploy", "publish_version"].includes(req.action)) {
         writes.push(req);
@@ -132,6 +133,25 @@ describe("business kind design", () => {
       }
 
       switch (req.action) {
+        case "find_flows": {
+          lookups.push(req);
+          return {
+            total: 2,
+            items: [
+              {
+                code: "cancel",
+                name: "会议作废流程",
+                businessKind: "approval.void_request"
+              },
+              {
+                code: "leave",
+                name: "年假办理流程",
+                businessKind: "leave"
+              }
+            ]
+          };
+        }
+
         case "find_versions": { return [{ id: "v" }]; }
 
         case "get_graph": { return {
@@ -167,6 +187,7 @@ describe("business kind design", () => {
           {
             kind: "meeting",
             label: "会议预订",
+            isVoidable: true,
             formFields: [
               {
                 key: "chair",
@@ -191,6 +212,21 @@ describe("business kind design", () => {
     expect(await screen.findByText("表单设计")).toBeVisible();
     await user.click(screen.getByRole("combobox", { name: "业务类型" }));
     await user.click(await screen.findByText("会议预订"));
+    await user.click(screen.getByRole("radio", { name: "审批后作废" }));
+    expect(screen.getByRole("button", { name: "下一步" })).toBeDisabled();
+    await user.click(screen.getByRole("combobox", { name: "作废申请流程" }));
+    await user.type(screen.getByRole("combobox", { name: "作废申请流程" }), "会议");
+    expect(screen.queryByText("年假办理流程")).not.toBeInTheDocument();
+    await user.click(await screen.findByText("会议作废流程"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "下一步" })).toBeEnabled());
+    expect(lookups).toContainEqual(expect.objectContaining({
+      params: expect.objectContaining({
+        businessKind: "approval.void_request",
+        tenantId: "t",
+        includeShared: true,
+        keyword: "会议"
+      })
+    }));
     expect(screen.queryByText("流程表单编辑器")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "回写审批状态到业务表" })).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "下一步" }));
@@ -200,7 +236,11 @@ describe("business kind design", () => {
     await user.click(screen.getByRole("button", { name: "下一步" }));
     await user.click(screen.getByRole("button", { name: "部署并发布" }));
     await waitFor(() => expect(writes).toHaveLength(3));
-    expect(writes[0]?.params).toMatchObject({ businessKind: "meeting" });
+    expect(writes[0]?.params).toMatchObject({
+      businessKind: "meeting",
+      voidPolicy: "approval",
+      voidFlowCode: "cancel"
+    });
     expect(writes[1]?.params).toMatchObject({ storageMode: "json" });
     expect(writes[1]?.params?.formSchema).toBeUndefined();
     expect(writes[1]?.params?.flowDefinition).toMatchObject({ nodes: [{}, { id: "a", data: {} }, {}] });
