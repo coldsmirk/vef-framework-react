@@ -211,6 +211,8 @@ defineMock<ProcessTaskParams>("approval/instance", "process_task", ({ params }) 
   if (participant) {
     participant.status = detail.instance.status;
   }
+
+  return null;
 });
 defineMock<ResubmitInstanceParams>("approval/instance", "resubmit", ({ params }) => {
   const detail = get(params.instanceId);
@@ -226,6 +228,8 @@ defineMock<ResubmitInstanceParams>("approval/instance", "resubmit", ({ params })
       item.status = "published";
     }
   }
+
+  return null;
 });
 defineMock<SaveAnnotationParams>("approval/instance", "save_annotation", ({ params }) => {
   const response = "parentId" in params;
@@ -255,4 +259,6 @@ defineMock<{ id: string }>("approval/instance", "delete_annotation", ({ params }
   for (const detail of instances.values()) {
     detail.annotations = detail.annotations?.filter(item => item.id !== params.id);
   }
+
+  return null;
 });
