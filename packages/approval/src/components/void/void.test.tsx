@@ -103,12 +103,14 @@ it("displays voided as a neutral final instance status", () => {
 it("refreshes the direct plan for options and requires a reason and a clear plan before writing", async () => {
   const user = userEvent.setup();
   const plans: ApiRequest[] = [];
+  let views = 0;
   const writes = setup(<AdminInstanceDetailPanel instanceId="i" />, req => {
     if (req.action === "plan_void") {
       plans.push(req);
       return { policy: "direct", plan: { ...plan, blockers: (req.params?.options as { release?: boolean }).release ? [] : ["仍有签到记录"] } };
     }
 
+    views++;
     return {
       ...base,
       instance: {
@@ -135,6 +137,7 @@ it("refreshes the direct plan for options and requires a reason and a clear plan
   await user.type(dialog.getByLabelText("作废原因"), "会议取消");
   await user.click(submit);
   await waitFor(() => expect(writes).toHaveLength(1));
+  await waitFor(() => expect(views).toBeGreaterThan(1));
   expect(plans.map(p => p.resource)).toEqual(["approval/admin", "approval/admin"]);
   expect(writes[0]).toMatchObject({
     resource: "approval/admin",

@@ -4,33 +4,18 @@ import { Alert, showSuccessMessage, Stack } from "@vef-framework-react/component
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
-import { useAdminApprovalApi, useMyApprovalApi } from "../../api";
+import { useAdminApprovalApi } from "../../api";
 import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
 import { useVoidDraft, VoidFormFields } from "./form";
 import { TargetSummary } from "./summary";
+import { useRefreshVoidTarget } from "./use-refresh";
 
 function DirectVoidForm({ target, onClose }: { target: VoidTarget & { instanceId: string }; onClose: () => void }) {
   const draft = useVoidDraft(target, "admin");
   const admin = useAdminApprovalApi();
-  const my = useMyApprovalApi();
+  const refreshTarget = useRefreshVoidTarget();
   const [error, setError] = useState("");
-  const action = useMutation({
-    mutationFn: admin.voidInstance,
-    meta: {
-      shouldShowSuccessFeedback: false,
-      invalidates: [
-        [admin.getInstanceDetail.key, { instanceId: target.instanceId }],
-        [my.getInstanceDetail.key, { instanceId: target.instanceId }],
-        [admin.findInstances.key],
-        [admin.findActionLogs.key],
-        [admin.findBusinessProjections.key],
-        [admin.getMetrics.key],
-        [my.findInitiated.key],
-        [my.findCompletedTasks.key]
-      ]
-    }
-
-  });
+  const action = useMutation({ mutationFn: admin.voidInstance, meta: { shouldShowSuccessFeedback: false } });
   const confirm = useConfirm(onClose, e => {
     setError(e instanceof Error ? e.message : "作废失败，请重试");
     void draft.preview.refetch();
@@ -63,6 +48,7 @@ function DirectVoidForm({ target, onClose }: { target: VoidTarget & { instanceId
             attachments: draft.attachments,
             options: draft.options
           });
+          await refreshTarget(target.instanceId);
           showSuccessMessage("审批单已作废");
         })}
       />

@@ -24,7 +24,7 @@ import {
   Text,
   Title
 } from "@vef-framework-react/components";
-import { useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
+import { useMutation, useQuery } from "@vef-framework-react/core";
 import {
   CheckIcon,
   CornerUpLeftIcon,
@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
-import { useAdminApprovalApi, useInstanceApi, useMyApprovalApi } from "../../api";
+import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
 import { useApprovalPlugins } from "../../plugins";
 import { VOID_REQUEST_KIND } from "../../types";
@@ -51,6 +51,7 @@ import { formatTimestamp } from "../format";
 import { InstanceStatusTag } from "../status";
 import { UserLabel } from "../user";
 import { VoidBanners } from "../void/summary";
+import { useRefreshVoidTarget } from "../void/use-refresh";
 import { AddAssigneeModal, CCModal, ReasonModal, RemoveAssigneeModal, RollbackModal, TransferModal, UrgeModal } from "./action-modals";
 
 export type { UrgeTarget } from "./action-modals";
@@ -199,8 +200,7 @@ export interface InstanceDetailPanelProps {
  */
 export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceDetailPanelProps) {
   const api = useMyApprovalApi();
-  const admin = useAdminApprovalApi();
-  const client = useQueryClient();
+  const refreshVoidTarget = useRefreshVoidTarget();
   const instanceApi = useInstanceApi();
 
   const {
@@ -291,11 +291,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
       const targetId = (detail?.businessView as VoidRequestBusinessView | undefined)?.target?.instanceId;
 
       if (targetId) {
-        void client.invalidateQueries({ queryKey: [admin.getInstanceDetail.key, { instanceId: targetId }] });
-        void client.invalidateQueries({ queryKey: [api.getInstanceDetail.key, { instanceId: targetId }] });
-        void client.invalidateQueries({ queryKey: [admin.findInstances.key] });
-        void client.invalidateQueries({ queryKey: [admin.getMetrics.key] });
-        void client.invalidateQueries({ queryKey: [api.findInitiated.key] });
+        await refreshVoidTarget(targetId);
       }
     }
 
@@ -317,7 +313,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   }
 
   function refreshAfterRequest() {
-    void refetch();
+    void refreshVoidTarget(instanceId);
     onActionCompleted?.();
   }
 
