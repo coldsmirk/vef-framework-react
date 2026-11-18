@@ -41,11 +41,19 @@ function DirectoryPicker(props: PickerProps) {
   );
 }
 
-function setup(allowed = true) {
+function setup(permissions: string[] = [
+  APPROVAL_PERMISSIONS.instance.query,
+  APPROVAL_PERMISSIONS.instance.detail,
+  APPROVAL_PERMISSIONS.handover.apply
+]) {
   const respond = vi.fn(({ action, params }: ApiRequest) => {
     switch (action) {
       case "find_instances": {
         return { items: instances, total: instances.length };
+      }
+
+      case "find_tasks": {
+        return { items: [], total: 0 };
       }
 
       case "apply_handovers": {
@@ -83,34 +91,74 @@ function setup(allowed = true) {
     }
   });
 
-  const permissions = new Set<string>([APPROVAL_PERMISSIONS.instance.query, APPROVAL_PERMISSIONS.instance.detail]);
-
-  if (allowed) {
-    permissions.add(APPROVAL_PERMISSIONS.handover.apply);
-  }
-
   render(
     <ApprovalProvider plugins={{ pickers: { user: DirectoryPicker } }}>
       <ApprovalAdminPage />
     </ApprovalProvider>,
-    { apiClient: mockApprovalApi(respond), appContext: { hasPermission: code => permissions.has(code) } }
+    { apiClient: mockApprovalApi(respond), appContext: { hasPermission: code => permissions.includes(code) } }
   );
 
   return respond;
+}
+
+async function applyForFormer(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "按交接转移待办" }));
+  const modal = await screen.findByRole("dialog");
+  const dialog = within(modal);
+  await user.type(dialog.getByRole("combobox", { name: "搜索交接人员" }), "张");
+  await user.click(await screen.findByRole("option", { name: "张三" }));
+  await user.click(dialog.getByRole("button", { name: "执行交接" }));
+  await dialog.findByText("交接处理结果");
+
+  return modal;
 }
 
 describe("ApplyHandoversAction", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("hides the action when an instance administrator lacks the handover permission", async () => {
-    setup(false);
+    setup([APPROVAL_PERMISSIONS.instance.query, APPROVAL_PERMISSIONS.instance.detail]);
     await screen.findByText("差旅申请");
+    expect(screen.queryByRole("button", { name: "按交接转移待办" })).not.toBeInTheDocument();
+  });
+
+  it("opens from task management and identifies links to instances outside the list cache", async () => {
+    const user = userEvent.setup();
+    const respond = setup([APPROVAL_PERMISSIONS.task.query, APPROVAL_PERMISSIONS.handover.apply, APPROVAL_PERMISSIONS.instance.detail]);
+    expect(screen.getByRole("tab", { name: "任务管理" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "实例管理" })).not.toBeInTheDocument();
+
+    const report = within(await applyForFormer(user));
+    expect(report.getByRole("button", { name: "查看审批单（i1）" })).toBeInTheDocument();
+    expect(report.getByRole("button", { name: "查看审批单（i2）" })).toBeInTheDocument();
+    expect(report.getByRole("button", { name: "查看审批单（i3）" })).toBeInTheDocument();
+    expect(respond).not.toHaveBeenCalledWith(expect.objectContaining({ action: "find_instances" }));
+  });
+
+  it("lets handover-only operators distinguish uncached instances without querying their details", async () => {
+    const user = userEvent.setup();
+    const respond = setup([APPROVAL_PERMISSIONS.handover.apply]);
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByText("无访问权限")).not.toBeInTheDocument();
+
+    const report = within(await applyForFormer(user));
+    expect(report.getByText("审批单 i1（无详情权限）")).toBeVisible();
+    expect(report.getByText("审批单 i2（无详情权限）")).toBeVisible();
+    expect(report.getByText("审批单 i3（无详情权限）")).toBeVisible();
+    expect(report.queryByRole("button", { name: /审批单/ })).not.toBeInTheDocument();
+    expect(respond.mock.calls.map(([request]) => request.action)).toEqual(["apply_handovers"]);
+  });
+
+  it("keeps the console inaccessible without a tab or the handover permission", () => {
+    setup([]);
+    expect(screen.getByText("无访问权限")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "按交接转移待办" })).not.toBeInTheDocument();
   });
 
   it("applies the searched people and opens the matching instance from each result group", async () => {
     const user = userEvent.setup();
     const respond = setup();
+    await screen.findByText("差旅申请");
     await user.click(await screen.findByRole("button", { name: "按交接转移待办" }));
     const form = within(await screen.findByRole("dialog"));
     expect(form.getByText("按交接转移待办")).toBeInTheDocument();

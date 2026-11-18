@@ -33,8 +33,12 @@ describe("ApprovalTaskCenterPage", () => {
     });
 
     render(<ApprovalTaskCenterPage />, { apiClient });
-    expect(await within(screen.getByRole("tabpanel", { name: /待办/ })).findByText("接替 张三")).toBeInTheDocument();
+    const pending = within(screen.getByRole("tabpanel", { name: /待办/ }));
+    const pendingLabel = await pending.findByText("接替 张三");
+    expect(pendingLabel.closest("td")).toHaveTextContent(/^审核\s*接替 张三$/);
     await user.click(screen.getByRole("tab", { name: "已办" }));
-    expect(await within(screen.getByRole("tabpanel", { name: "已办" })).findByText("接替 王五")).toBeInTheDocument();
+    const completed = within(screen.getByRole("tabpanel", { name: "已办" }));
+    const completedLabel = await completed.findByText("接替 王五");
+    expect(completedLabel.closest("td")).toHaveTextContent(/^审核\s*接替 王五$/);
   });
 });

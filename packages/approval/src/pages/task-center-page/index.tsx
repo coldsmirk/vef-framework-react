@@ -50,13 +50,7 @@ function taskNode(name: string, row: PendingTask | CompletedTask) {
   return (
     <Flex align="center" gap={6} wrap="wrap">
       <Text>{name}</Text>
-
-      {row.predecessor && (
-        <span>
-          我
-          <PredecessorLabel user={row.predecessor} />
-        </span>
-      )}
+      {row.predecessor && <PredecessorLabel user={row.predecessor} />}
     </Flex>
   );
 }

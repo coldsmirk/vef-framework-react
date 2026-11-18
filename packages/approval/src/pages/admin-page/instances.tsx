@@ -3,7 +3,7 @@ import type { EmptyObject } from "@vef-framework-react/shared";
 
 import type { AdminInstance, AdminInstanceSearch } from "../../types";
 
-import { Crud, Drawer, Flex, OperationButton, PermissionGate, showSuccessMessage, Text, useFormContext } from "@vef-framework-react/components";
+import { Crud, Drawer, Flex, OperationButton, showSuccessMessage, Text, useFormContext } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
@@ -11,7 +11,6 @@ import { useAdminApprovalApi } from "../../api";
 import { AdminInstanceDetailPanel, formatTimestamp, InstanceStatusTag, UserLabel } from "../../components";
 import { ReasonModal } from "../../components/detail/action-modals";
 import { INSTANCE_STATUS_OPTIONS } from "../../components/status/labels";
-import { ApplyHandoversAction } from "./apply-handovers";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
 
@@ -88,7 +87,6 @@ function InstanceSearchFields() {
 export interface InstancesPanelProps {
   detailPermission: string;
   terminatePermission: string;
-  handoverPermission: string;
 }
 
 /**
@@ -97,8 +95,7 @@ export interface InstancesPanelProps {
  */
 export function InstancesPanel({
   detailPermission,
-  terminatePermission,
-  handoverPermission
+  terminatePermission
 }: InstancesPanelProps) {
   const api = useAdminApprovalApi();
   const [detailTarget, setDetailTarget] = useState<string | null>(null);
@@ -145,11 +142,6 @@ export function InstancesPanel({
             );
           }
         }}
-        toolbarActions={(
-          <PermissionGate requiredPermissions={handoverPermission}>
-            <ApplyHandoversAction detailPermission={detailPermission} />
-          </PermissionGate>
-        )}
       />
 
       <Drawer

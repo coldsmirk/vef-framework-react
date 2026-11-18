@@ -50,7 +50,7 @@ function InstanceTitle({ instanceId }: { instanceId: string }) {
     enabled: visible
   });
 
-  return <span ref={ref}>{data?.instance.title || data?.instance.instanceNo || "查看审批单"}</span>;
+  return <span ref={ref}>{data?.instance.title || data?.instance.instanceNo || `查看审批单（${instanceId}）`}</span>;
 }
 
 function Report({ report, canViewDetail }: { report: HandoverReport; canViewDetail: boolean }) {
@@ -77,7 +77,7 @@ function Report({ report, canViewDetail }: { report: HandoverReport; canViewDeta
 
     return canViewDetail
       ? <Button size="small" type="link" onClick={() => setInstanceId(id)}>{label || <InstanceTitle instanceId={id} />}</Button>
-      : <Text>{label || "审批单（无详情权限）"}</Text>;
+      : <Text>{label || `审批单 ${id}（无详情权限）`}</Text>;
   }
 
   function workItem(item: HandoverItem) {

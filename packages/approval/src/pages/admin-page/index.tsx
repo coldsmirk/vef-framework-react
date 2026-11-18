@@ -6,6 +6,7 @@ import { FlexTabs, globalCssVars, Page, Result, Title } from "@vef-framework-rea
 import { checkPermission, useAppContext } from "@vef-framework-react/core";
 
 import { APPROVAL_PERMISSIONS } from "../../permissions";
+import { ApplyHandoversAction } from "./apply-handovers";
 import { InstancesPanel } from "./instances";
 import { MetricsPanel } from "./metrics";
 import { ProjectionsPanel } from "./projections";
@@ -74,7 +75,7 @@ export function ApprovalAdminPage({
     items.push({
       key: "instances",
       label: "实例管理",
-      children: <InstancesPanel detailPermission={perms.instanceDetail} handoverPermission={perms.handoverApply} terminatePermission={perms.instanceTerminate} />
+      children: <InstancesPanel detailPermission={perms.instanceDetail} terminatePermission={perms.instanceTerminate} />
     });
   }
 
@@ -102,14 +103,18 @@ export function ApprovalAdminPage({
     });
   }
 
+  const handoverAction = checkPermission(hasPermission, perms.handoverApply)
+    ? <div><ApplyHandoversAction detailPermission={perms.instanceDetail} /></div>
+    : null;
+
   return (
     <Page margin>
       <div css={rootCss}>
         {title ? <Title level={4}>{title}</Title> : null}
 
         {items.length > 0
-          ? <FlexTabs defaultActiveKey={items[0]?.key} items={items} />
-          : <Result status="403" subTitle="你没有审批管理台的任何操作权限。" title="无访问权限" />}
+          ? <FlexTabs defaultActiveKey={items[0]?.key} items={items} tabBarExtraContent={handoverAction} />
+          : handoverAction ?? <Result status="403" subTitle="你没有审批管理台的任何操作权限。" title="无访问权限" />}
       </div>
     </Page>
   );
