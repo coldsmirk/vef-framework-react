@@ -1,4 +1,5 @@
 import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
+import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { Flow, InitiatorParams } from "../../../types";
@@ -25,6 +26,16 @@ const STEP_ITEMS = [
   { title: "流程设计" },
   { title: "审阅提交" }
 ];
+
+function initiationWindowIssue(rule?: WindowRule) {
+  if (rule?.windows.length === 0) {
+    return "请至少添加一个开放窗口";
+  }
+
+  if (rule && [...rule.windows, ...rule.blackouts ?? []].some(window => window.times?.some(range => range.startsAt === range.endsAt))) {
+    return "请修改发起时段中起止时间相同的时段";
+  }
+}
 
 export interface FlowDesignerDrawerProps {
   open: boolean;
@@ -207,7 +218,8 @@ function DesignerBody({
   // type (state variables lose narrowing inside async closures).
   const currentDraft = draft;
   const { basic } = currentDraft;
-  const basicValid = basic.code.trim() !== ""
+  const windowIssue = initiationWindowIssue(basic.initiationWindow);
+  const basicValid = !windowIssue && basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
@@ -225,7 +237,7 @@ function DesignerBody({
   // The issues themselves live in each editor's own diagnostics, which locate
   // them, so the step bodies keep their full height.
   const blockedReasons = [
-    "请先完善流程设置中的必填项",
+    windowIssue ?? "请先完善流程设置中的必填项",
     `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
     `流程存在 ${flowErrors.length} 个问题，可在画布工具栏的问题提示中查看并定位`,
     undefined

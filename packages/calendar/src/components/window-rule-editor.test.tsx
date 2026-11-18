@@ -81,6 +81,16 @@ describe("WindowRuleEditor", () => {
     expect(changed).toHaveBeenLastCalledWith({ windows: [{ times: [{ startsAt: "09:00:00", endsAt: "17:00:00" }] }] });
   });
 
+  it("explains identical endpoints inline and accepts a range crossing midnight", async () => {
+    const user = userEvent.setup();
+    render(<Field initial={{ windows: [{ times: [{ startsAt: "09:00:00", endsAt: "09:00:00" }] }] }} onChange={vi.fn()} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("开始与结束时间不能相同");
+    await user.clear(screen.getByLabelText("结束时间"));
+    await user.type(screen.getByLabelText("结束时间"), "08:00:00{Enter}");
+    expect(screen.queryByText("开始与结束时间不能相同")).not.toBeInTheDocument();
+    expect(screen.getByText("次日结束")).toBeVisible();
+  });
+
   it("commits a complete inclusive date range and preserves the selected timezone", async () => {
     const user = userEvent.setup();
     const changed = vi.fn();

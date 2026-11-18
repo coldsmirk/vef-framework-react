@@ -72,7 +72,11 @@ function DeadlineHint({ startsAtUnixMs, endsAtUnixMs: end }: Interval) {
     return <Text type="secondary">{startedEarlier ? "此前已开放 · 长期开放" : "长期开放"}</Text>;
   }
 
-  if (end > now && end - now < WARNING_PERIOD_MS) {
+  if (now >= end) {
+    return <Alert showIcon title="本次发起时段已截止" type="warning" />;
+  }
+
+  if (end - now < WARNING_PERIOD_MS) {
     const deadline = `发起时段将于 ${deadlineFormat.format(end)} 截止，请在截止前提交。`;
 
     return <Alert showIcon title={startedEarlier ? `此前已开放，${deadline}` : deadline} type="warning" />;

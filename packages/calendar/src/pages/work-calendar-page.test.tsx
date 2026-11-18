@@ -93,4 +93,22 @@ describe("WorkCalendarPage", () => {
       })
     })));
   });
+
+  it("keeps the highlighted range when the mouse is released outside the day buttons", async () => {
+    const user = userEvent.setup();
+    setup(true);
+    const days = await screen.findAllByRole("button", { name: /测试假日/ });
+    const heading = screen.getByRole("heading", { name: "工作日历" });
+    await user.pointer([
+      { keys: "[MouseLeft>]", target: days[2] },
+      { target: days[0] },
+      { target: heading },
+      { keys: "[/MouseLeft]" }
+    ]);
+    expect(screen.getByRole("button", { name: /保\s*存/ })).toBeEnabled();
+
+    for (const day of days) {
+      expect(day).toHaveAttribute("aria-pressed", "true");
+    }
+  });
 });

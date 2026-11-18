@@ -1,6 +1,6 @@
 import { HTTP_CLIENT } from "@vef-framework-react/core";
 
-import { createTestApiClient, render, screen } from "../../test-utils";
+import { act, createTestApiClient, render, screen } from "../../test-utils";
 import { WindowPreview } from "./window-preview";
 
 function rpc(action: string, params: object) {
@@ -15,7 +15,40 @@ function rpc(action: string, params: object) {
 }
 
 describe("WindowPreview", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("displays server-only timezones and looks up holiday dates in the browser timezone", async () => {
+    const apiClient = createTestApiClient();
+    const start = Date.UTC(2026, 0, 2, 0);
+    const date = new Intl.DateTimeFormat("en-CA");
+    const post = vi.spyOn(Object.getPrototypeOf(apiClient[HTTP_CLIENT]), "post")
+      .mockResolvedValueOnce({ data: { windows: [{ startsAtUnixMs: start }] } })
+      .mockResolvedValueOnce({ data: [] });
+    render(<WindowPreview rule={{ timezone: "localtime", windows: [{}] }} />, { apiClient });
+    expect(await screen.findByText(`显示时区：${date.resolvedOptions().timeZone}`)).toBeVisible();
+    expect(screen.getByText(/ · 长期开放/)).toBeVisible();
+    expect(post).toHaveBeenCalledWith("/api", rpc("find_days", { startsAt: date.format(start), endsAt: date.format(start) }));
+  });
+
+  it("keeps an equivalent rule visible and preserves a pending change's original debounce deadline", async () => {
+    const apiClient = createTestApiClient();
+    const post = vi.spyOn(Object.getPrototypeOf(apiClient[HTTP_CLIENT]), "post").mockResolvedValue({ data: { windows: [] } });
+    const { rerender } = render(<WindowPreview rule={{ windows: [{}] }} />, { apiClient });
+    expect(await screen.findByText("近期没有开放时段")).toBeVisible();
+    rerender(<WindowPreview rule={{ windows: [{}] }} />);
+    expect(screen.getByText("近期没有开放时段")).toBeVisible();
+    vi.useFakeTimers();
+    rerender(<WindowPreview rule={{ windows: [{ months: [1] }] }} />);
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    rerender(<WindowPreview rule={{ windows: [{ months: [1] }] }} />);
+    expect(post).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(150));
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith("/api", rpc("preview_windows", { rule: { windows: [{ months: [1] }] }, limit: 10 }));
+  });
 
   it("annotates server intervals with holidays through their last included date", async () => {
     const apiClient = createTestApiClient();

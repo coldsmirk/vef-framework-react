@@ -49,22 +49,6 @@ export function CalendarView({ selection }: { selection?: Selection }) {
   const [anchor, setAnchor] = useState(() => dayjs().startOf("month"));
   const [view, setView] = useState<"year" | "month">("month");
   const [drag, setDrag] = useState<{ from: string; to: string }>();
-  const dragging = drag !== undefined;
-  useEffect(() => {
-    if (!dragging) {
-      return;
-    }
-
-    function finishDrag() {
-      setDrag(undefined);
-    }
-
-    const events = new AbortController();
-    addEventListener("mouseup", finishDrag, { signal: events.signal });
-    window.addEventListener("blur", finishDrag, { signal: events.signal });
-
-    return () => events.abort();
-  }, [dragging]);
 
   const startsAt = anchor.startOf(view).format("YYYY-MM-DD");
   const endsAt = anchor.endOf(view).format("YYYY-MM-DD");
@@ -78,6 +62,29 @@ export function CalendarView({ selection }: { selection?: Selection }) {
   });
   const months = Map.groupBy(data ?? [], day => day.date.slice(0, 7));
   const compact = view === "year";
+
+  useEffect(() => {
+    if (!drag || !selection) {
+      return;
+    }
+
+    const events = new AbortController();
+    addEventListener("mouseup", event => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      if (drag.from !== drag.to) {
+        const range = (data ?? []).filter(day => between(day.date, drag.from, drag.to));
+        selection.onChange(new Set([...selection.dates, ...range.map(day => day.date)]));
+      }
+
+      setDrag(undefined);
+    }, { capture: true, signal: events.signal });
+    window.addEventListener("blur", () => setDrag(undefined), { signal: events.signal });
+
+    return () => events.abort();
+  }, [drag, selection, data]);
 
   function toggleDate(date: string) {
     if (!selection) {
@@ -138,14 +145,6 @@ export function CalendarView({ selection }: { selection?: Selection }) {
           if (drag && event.buttons === 1) {
             setDrag({ ...drag, to: day.date });
           }
-        }}
-        onMouseUp={() => {
-          if (drag && drag.from !== day.date) {
-            const range = (data ?? []).filter(d => between(d.date, drag.from, day.date));
-            selection.onChange(new Set([...selection.dates, ...range.map(d => d.date)]));
-          }
-
-          setDrag(undefined);
         }}
       >
         {content}

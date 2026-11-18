@@ -1,6 +1,6 @@
 import type { DayKind, TimeRange, Window } from "../types";
 
-import { Button, DatePicker, Flex, globalCssVars, Labeled, Select, Stack, TimePicker } from "@vef-framework-react/components";
+import { Button, DatePicker, Flex, globalCssVars, Labeled, Select, Stack, Text, TimePicker } from "@vef-framework-react/components";
 import dayjs from "dayjs";
 
 import { DAY_KINDS, WEEKDAYS } from "./format-window-rule";
@@ -39,11 +39,13 @@ const EMPTY_VALUES: never[] = [];
 function Choices<T extends number | string>({
   options,
   columns,
+  wideOption,
   value = EMPTY_VALUES,
   onChange
 }: {
   options: Array<{ value: T; label: string }>;
   columns?: number;
+  wideOption?: T;
   value?: T[];
   onChange: (next: T[]) => void;
 }) {
@@ -53,8 +55,7 @@ function Choices<T extends number | string>({
       flexWrap: "wrap",
       gap: 4,
       gridTemplateColumns: columns ? `repeat(${columns}, minmax(0, 1fr))` : undefined,
-      maxWidth: columns ? 384 : undefined,
-      "& > button:last-child": { gridColumn: "span 2" }
+      maxWidth: columns ? 384 : undefined
     }}
     >
       {options.map(item => {
@@ -66,7 +67,7 @@ function Choices<T extends number | string>({
             aria-pressed={selected}
             autoInsertSpace={false}
             size="small"
-            style={{ minWidth: 36 }}
+            style={{ minWidth: 36, gridColumn: item.value === wideOption ? "span 2" : undefined }}
             type={selected ? "primary" : "default"}
             onClick={() => onChange(selected ? value.filter(v => v !== item.value) : [...value, item.value])}
           >
@@ -116,6 +117,7 @@ function TimesEditor({ values = EMPTY_VALUES, onChange }: { values?: TimeRange[]
           />
 
           {range.endsAt < range.startsAt && <span style={{ color: globalCssVars.colorTextSecondary }}>次日结束</span>}
+          {range.startsAt === range.endsAt && <Text role="alert" type="danger">开始与结束时间不能相同</Text>}
           <Button size="small" type="text" onClick={() => onChange(values.filter((_, index) => index !== i))}>移除时段</Button>
         </Flex>
       ))}
@@ -143,7 +145,7 @@ export function WindowFields({ value, onChange }: { value: Window; onChange: (ne
       <Labeled label="月份"><Choices options={MONTHS} value={value.months} onChange={v => update("months", v)} /></Labeled>
 
       <Labeled label="月日">
-        <Choices columns={7} options={DAYS} value={value.monthDays} onChange={v => update("monthDays", v)} />
+        <Choices columns={7} options={DAYS} value={value.monthDays} wideOption={-1} onChange={v => update("monthDays", v)} />
 
         <Select<number[]>
           aria-label="其他倒数日期"

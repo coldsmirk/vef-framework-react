@@ -2,9 +2,22 @@ import type { DateRange, Day, Interval, WindowRule } from "../types";
 
 import { Alert, Flex, Labeled, Spin, Stack, Tag, Text } from "@vef-framework-react/components";
 import { useQueries, useQuery } from "@vef-framework-react/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useCalendarApi } from "../api";
+
+function calendarDateFormatter(timeZone?: string) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone });
+  } catch (error) {
+    if (!(error instanceof RangeError)) {
+      throw error;
+    }
+
+    // Go's zoneinfo can name zones the browser does not recognize.
+    return new Intl.DateTimeFormat("en-CA");
+  }
+}
 
 function PreviewIntervals({
   windows,
@@ -13,10 +26,9 @@ function PreviewIntervals({
 }: { windows: Interval[]; timezone?: string; from: number }) {
   const api = useCalendarApi();
   // Go also accepts Local for the server timezone. Show those instants in the viewer’s zone.
-  const timeZone = timezone === "Local" ? undefined : timezone;
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone });
+  const date = calendarDateFormatter(timezone === "Local" ? undefined : timezone);
   const display = new Intl.DateTimeFormat("zh-CN", {
-    timeZone,
+    timeZone: date.resolvedOptions().timeZone,
     month: "short",
     day: "numeric",
     weekday: "short",
@@ -93,13 +105,19 @@ export function WindowPreview({
   limit = 10
 }: { rule: WindowRule; from?: number; limit?: number }) {
   const api = useCalendarApi();
-  const [debounced, setDebounced] = useState(rule);
+  const ruleKey = JSON.stringify(rule);
+  const [debouncedKey, setDebouncedKey] = useState(ruleKey);
+  const debounced = useMemo(() => JSON.parse(debouncedKey) as WindowRule, [debouncedKey]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(rule), 350);
+    if (ruleKey === debouncedKey) {
+      return;
+    }
+
+    const timer = setTimeout(() => setDebouncedKey(ruleKey), 350);
 
     return () => clearTimeout(timer);
-  }, [rule]);
+  }, [ruleKey, debouncedKey]);
 
   const {
     data,
@@ -121,7 +139,7 @@ export function WindowPreview({
 
   return (
     <Labeled label="开放时段预览">
-      {isLoading || debounced !== rule
+      {isLoading || debouncedKey !== ruleKey
         ? <Spin size="small" />
         : error
           ? <Alert showIcon title={error.message} type="error" />
