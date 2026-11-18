@@ -7,6 +7,7 @@ import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { APPROVAL_PERMISSIONS } from "../../permissions";
 import { resolveBusinessRenderer, useApprovalPlugins } from "../../plugins";
 import { isMyInstanceDetail } from "../../types";
+import { isFieldAnchor } from "./field-anchor";
 
 export interface AnnotationThread {
   annotation: AnnotationView;
@@ -80,9 +81,18 @@ function groupThreads(detail: InstanceDetail): AnnotationGroup[] {
 
 export function matchesField(annotation: AnnotationView, location: FieldAnchor): boolean {
   const { anchor } = annotation;
-  return typeof anchor === "object" && anchor !== null && "field" in anchor && anchor.field === location.field
-    && (location.row === undefined || ("row" in anchor && anchor.row === location.row))
-    && (location.column === undefined || ("column" in anchor && anchor.column === location.column));
+  return isFieldAnchor(anchor) && anchor.field === location.field
+    && (location.row === undefined || anchor.row === location.row)
+    && (location.column === undefined || anchor.column === location.column);
+}
+
+export function matchesFieldSlot(annotation: AnnotationView, location: FieldAnchor): boolean {
+  if (location.row === undefined && location.column === undefined) {
+    return matchesField(annotation, location);
+  }
+
+  const { anchor } = annotation;
+  return isFieldAnchor(anchor) && anchor.field === location.field && anchor.row === location.row && anchor.column === location.column;
 }
 
 export function useAnnotations(detail: InstanceDetail) {

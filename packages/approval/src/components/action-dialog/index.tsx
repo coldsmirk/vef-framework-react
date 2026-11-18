@@ -2,8 +2,10 @@ import type { StackProps } from "@vef-framework-react/components";
 import type { ReactNode } from "react";
 
 import { css } from "@emotion/react";
-import { Button, Modal, Stack, Text } from "@vef-framework-react/components";
+import { Button, Stack, Text } from "@vef-framework-react/components";
 import { useId, useState } from "react";
+
+import { CappedModal } from "../capped-modal";
 
 const footerStyle = css({
   display: "flex",
@@ -41,29 +43,15 @@ export function ActionDialog({
   children
 }: ActionDialogProps) {
   return (
-    <Modal
-      centered
+    <CappedModal
       destroyOnHidden
       footer={null}
       open={open}
       title={title}
-      styles={{
-        container: {
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "calc(100dvh - 32px)"
-        },
-        header: { flexShrink: 0 },
-        body: {
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0
-        }
-      }}
       onCancel={onClose}
     >
       {children}
-    </Modal>
+    </CappedModal>
   );
 }
 

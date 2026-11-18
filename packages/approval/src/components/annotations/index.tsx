@@ -1,12 +1,14 @@
 import type { AnnotationView, FieldAnchor, InstanceDetail } from "../../types";
 import type { AnnotationGroup, AnnotationThread } from "./use-annotations";
 
-import { Alert, Button, Empty, Flex, globalCssVars, Modal, Stack, Text } from "@vef-framework-react/components";
+import { Alert, Button, Empty, Flex, globalCssVars, Stack, Text } from "@vef-framework-react/components";
 import { useMemo, useState } from "react";
 
+import { CappedModal } from "../capped-modal";
 import { InstanceTimeline } from "../timeline";
 import { AnnotationComposer, AnnotationResponseComposer } from "./composers";
-import { matchesField, useAnnotations } from "./use-annotations";
+import { anchorLabel, isFieldAnchor } from "./field-anchor";
+import { matchesField, matchesFieldSlot, useAnnotations } from "./use-annotations";
 
 export { AnnotationComposer, AnnotationResponseComposer } from "./composers";
 export { useAnnotations } from "./use-annotations";
@@ -24,7 +26,12 @@ const audiences = {
   users: "指定人员可见"
 };
 
-function AnnotationLine({ value, detail }: { value: AnnotationView; detail: InstanceDetail }) {
+function AnnotationLine({
+  value,
+  detail,
+  scope
+}: { value: AnnotationView; detail: InstanceDetail; scope?: FieldAnchor }) {
+  const location = anchorLabel(detail, value.anchor, scope);
   const { audience } = value;
   const names = audience.scope === "nodes"
     ? detail.flowGraph.nodes.filter(node => audience.nodeIds.includes(node.nodeId)).map(node => node.data.name).filter(Boolean)
@@ -38,6 +45,7 @@ function AnnotationLine({ value, detail }: { value: AnnotationView; detail: Inst
         <Text type="secondary">{names.length > 0 ? `指定节点可见（${names.join("、")}）` : audiences[audience.scope]}</Text>
       </Flex>
 
+      {location && <Text type="secondary">{location}</Text>}
       {value.content && <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{value.content}</Text>}
     </Stack>
   );
@@ -46,10 +54,12 @@ function AnnotationLine({ value, detail }: { value: AnnotationView; detail: Inst
 function Thread({
   detail,
   thread,
-  actions
+  actions,
+  scope
 }: {
   detail: InstanceDetail;
   thread: AnnotationThread;
+  scope?: FieldAnchor;
   actions: ReturnType<typeof useAnnotations>;
 }) {
   const { annotation, responses } = thread;
@@ -71,8 +81,8 @@ function Thread({
 
   return (
     <Stack gap={8} style={{ borderInlineStart: `2px solid ${globalCssVars.colorBorderSecondary}`, paddingInlineStart: 12 }}>
-      <AnnotationLine detail={detail} value={annotation} />
-      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} value={response} /></div>)}
+      <AnnotationLine detail={detail} scope={scope} value={annotation} />
+      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} scope={scope} value={response} /></div>)}
 
       {editing
         ? edit
@@ -97,17 +107,27 @@ function Thread({
 function ThreadGroup({
   group,
   detail,
-  actions
-}: { group: AnnotationGroup; detail: InstanceDetail; actions: ReturnType<typeof useAnnotations> }) {
-  return <Stack gap={12}>{group.threads.map(thread => <Thread key={thread.annotation.id} actions={actions} detail={detail} thread={thread} />)}</Stack>;
+  actions,
+  scope
+}: { group: AnnotationGroup; detail: InstanceDetail; actions: ReturnType<typeof useAnnotations>; scope?: FieldAnchor }) {
+  return <Stack gap={12}>{group.threads.map(thread => <Thread key={thread.annotation.id} actions={actions} detail={detail} scope={scope} thread={thread} />)}</Stack>;
 }
 
 export function AnnotationList({ detail, field }: { detail: InstanceDetail; field?: FieldAnchor }) {
+  return <AnnotationThreads detail={detail} field={field} />;
+}
+
+function AnnotationThreads({
+  detail,
+  field,
+  modalScope
+}: { detail: InstanceDetail; field?: FieldAnchor; modalScope?: FieldAnchor }) {
   const actions = useAnnotations(detail);
   const { groups } = actions;
+  const match = modalScope ? matchesFieldSlot : matchesField;
   const filtered = field
     ? groups.map(group => {
-        return { ...group, threads: group.threads.filter(t => matchesField(t.annotation, field)) };
+        return { ...group, threads: group.threads.filter(t => match(t.annotation, field)) };
       }).filter(g => g.threads.length)
     : groups;
   return filtered.length > 0
@@ -116,7 +136,7 @@ export function AnnotationList({ detail, field }: { detail: InstanceDetail; fiel
           {filtered.map(group => (
             <Stack key={group.threads[0]!.annotation.id} gap={8}>
               <Text strong>{group.name}</Text>
-              <ThreadGroup actions={actions} detail={detail} group={group} />
+              <ThreadGroup actions={actions} detail={detail} group={group} scope={modalScope} />
             </Stack>
           ))}
         </Stack>
@@ -181,56 +201,65 @@ export function DetailAnnotations({ detail }: { detail: InstanceDetail }) {
 }
 
 export function useFieldAnnotations(detail: InstanceDetail | undefined) {
-  const [selected, setSelected] = useState<{ anchor: FieldAnchor; label?: string }>();
+  const [selected, setSelected] = useState<FieldAnchor>();
   const annotations = detail?.annotations;
-  const byField = useMemo(() => {
-    const fields = new Map<string, AnnotationView[]>();
+  const counts = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    function increment(field: string, row?: number, column?: string) {
+      const key = JSON.stringify([field, row, column]);
+      totals.set(key, (totals.get(key) ?? 0) + 1);
+    }
 
     const items = annotations ?? [];
 
-    for (const value of items) {
-      if (value.parentId || !value.anchor || typeof value.anchor !== "object" || !("field" in value.anchor) || typeof value.anchor.field !== "string") {
+    for (const annotation of items) {
+      if (annotation.parentId || !isFieldAnchor(annotation.anchor)) {
         continue;
       }
 
-      const key = value.anchor.field;
-      const list = fields.get(key) ?? [];
-      list.push(value);
-      fields.set(key, list);
+      const {
+        field,
+        row,
+        column
+      } = annotation.anchor;
+      increment(field);
+
+      if (row !== undefined || column !== undefined) {
+        increment(field, row, column);
+      }
     }
 
-    return fields;
+    return totals;
   }, [annotations]);
   const renderFieldExtra = useMemo(() => {
-    if (byField.size === 0) {
+    if (counts.size === 0) {
       return;
     }
 
     return ({
       key,
-      label,
       row,
       column
-    }: { key: string; label?: string; row?: number; column?: string }) => {
+    }: { key: string; row?: number; column?: string }) => {
       const anchor = {
         field: key,
         row,
         column
       };
-      const count = byField.get(key)?.filter(a => matchesField(a, anchor)).length;
-      return count ? <Button size="small" type="link" onClick={() => setSelected({ anchor, label })}>{`${count} 条批注`}</Button> : null;
+      const count = counts.get(JSON.stringify([key, row, column]));
+      return count ? <Button size="small" type="link" onClick={() => setSelected(anchor)}>{`${count} 条批注`}</Button> : null;
     };
-  }, [byField]);
-  const dialog = selected && detail && (
-    <Modal
+  }, [counts]);
+  const dialog = selected && detail && !detail.instance.businessKind && (
+    <CappedModal
       open
       footer={null}
-      styles={{ body: { maxHeight: "65dvh", overflowY: "auto" } }}
-      title={selected.label ? `${selected.label} · 批注` : "字段批注"}
+      title={`${anchorLabel(detail, selected)} · 批注`}
       onCancel={() => setSelected(undefined)}
     >
-      <AnnotationList detail={detail} field={selected.anchor} />
-    </Modal>
+      <AnnotationThreads detail={detail} field={selected} modalScope={selected} />
+    </CappedModal>
   );
   return { renderFieldExtra, dialog };
 }

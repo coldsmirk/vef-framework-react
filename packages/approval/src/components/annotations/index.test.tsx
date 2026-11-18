@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { mockApprovalApi, render, screen, waitFor, within } from "../../../test-utils";
 import { InstanceDetailPanel } from "../detail";
 import { AnnotationList } from "./index";
-import { matchesField } from "./use-annotations";
+import { matchesField, matchesFieldSlot } from "./use-annotations";
 
 const author = { id: "u", name: "张三" };
 const published: AnnotationView = {
@@ -266,18 +266,111 @@ describe("instance annotations", () => {
     expect(await screen.findByText("已修改")).toBeVisible();
   });
 
+  it("labels the four form anchor levels from the instance schema", () => {
+    const annotations = [
+      { field: "lines" },
+      { field: "lines", row: 0 },
+      { field: "lines", column: "amount" },
+      {
+        field: "lines",
+        row: 1,
+        column: "amount"
+      },
+      { field: "legacy", column: "cost" }
+    ]
+      .map((anchor, index) => {
+        return {
+          ...published,
+          anchor,
+          id: String(index)
+        };
+      });
+    const formSchema: NonNullable<MyInstanceDetail["formSchema"]> = {
+      id: "f",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "lines",
+              type: "subform",
+              key: "lines",
+              label: "费用明细",
+              variant: "table",
+              template: [
+                {
+                  id: "amount",
+                  key: "amount",
+                  type: "number",
+                  label: "金额（元）"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+    render(
+      <AnnotationList detail={{
+        ...detail,
+        formSchema,
+        annotations
+      }}
+      />
+    );
+
+    for (const label of ["费用明细", "费用明细 · 第 1 行", "费用明细 · 金额（元）", "费用明细 · 第 2 行 · 金额（元）", "legacy · cost"]) {
+      expect(screen.getByText(label)).toBeVisible();
+    }
+  });
+
+  it("leaves host-defined business anchors unlabeled", () => {
+    render(
+      <AnnotationList detail={{
+        ...detail,
+        instance: { ...detail.instance, businessKind: "meeting" },
+        annotations: [published]
+      }}
+      />
+    );
+    expect(screen.getByText(published.content)).toBeVisible();
+    expect(screen.queryByText("预算")).not.toBeInTheDocument();
+  });
+
   it("opens a field's counted annotations read-only without write permission", async () => {
     const user = userEvent.setup();
     setup(false, false);
     await user.click(await screen.findByRole("button", { name: "2 条批注" }));
     const dialog = within(await screen.findByRole("dialog", { name: /预算/ }));
     expect(dialog.getByText("请补充预算")).toBeVisible();
+    expect(dialog.queryByText("预算")).not.toBeInTheDocument();
+    const scroller = dialog.getByText("请补充预算").closest("[style*=\"overflow-y\"]");
+    expect(scroller).toHaveStyle({ overflowY: "auto" });
+    expect(scroller?.parentElement).toHaveStyle({ maxHeight: "calc(100dvh - 32px)" });
+    expect(scroller).not.toContainElement(dialog.getByText("预算 · 批注"));
     expect(dialog.getByText("旧草稿")).toBeVisible();
     expect(screen.queryByRole("button", { name: "添加批注" })).not.toBeInTheDocument();
   });
 });
 
 describe("matchesField", () => {
+  it("counts only the exact row, column or cell slot while rolling up the whole field", () => {
+    const anchors = [
+      { field: "lines" },
+      { field: "lines", row: 0 },
+      { field: "lines", column: "amount" },
+      {
+        field: "lines",
+        row: 0,
+        column: "amount"
+      }
+    ];
+    const notes = anchors.map(anchor => {
+      return { ...published, anchor };
+    });
+    expect(anchors.map(anchor => notes.filter(note => matchesFieldSlot(note, anchor)).length)).toEqual([4, 1, 1, 1]);
+  });
+
   it("matches a row anchor without requiring a column", () => {
     const row = { field: "lines", row: 0 };
     expect(matchesField({ ...published, anchor: row }, row)).toBe(true);

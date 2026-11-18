@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 
 import type { AdminInstance, HandoverItem, HandoverReport } from "../../types";
 
-import { Alert, Button, Drawer, Flex, Labeled, Modal, PermissionGate, Stack, Text, Title } from "@vef-framework-react/components";
+import { Alert, Button, Drawer, Flex, Labeled, PermissionGate, Stack, Text, Title } from "@vef-framework-react/components";
 import { useInView, useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
 import { useId, useRef, useState } from "react";
 
 import { useAdminApprovalApi, useMyApprovalApi } from "../../api";
 import { AdminInstanceDetailPanel, PrincipalSelect } from "../../components";
+import { CappedModal } from "../../components/capped-modal";
 
 function ReportGroup({
   title,
@@ -142,8 +143,7 @@ function HandoverDialog({ detailPermission, onClose }: { detailPermission: strin
   });
 
   return (
-    <Modal
-      centered
+    <CappedModal
       open
       closable={!mutation.isPending}
       keyboard={!mutation.isPending}
@@ -157,16 +157,6 @@ function HandoverDialog({ detailPermission, onClose }: { detailPermission: strin
               <Button disabled={userIds.length === 0} loading={mutation.isPending} type="primary" onClick={() => mutation.mutate({ userIds })}>执行交接</Button>
             </>
           )}
-      styles={{
-        container: {
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "calc(100dvh - 32px)"
-        },
-        header: { flexShrink: 0 },
-        body: { minHeight: 0, overflowY: "auto" },
-        footer: { flexShrink: 0 }
-      }}
       onCancel={onClose}
     >
       {mutation.data
@@ -184,7 +174,7 @@ function HandoverDialog({ detailPermission, onClose }: { detailPermission: strin
               {mutation.error && <Alert showIcon title={mutation.error.message} type="error" />}
             </Stack>
           )}
-    </Modal>
+    </CappedModal>
   );
 }
 
