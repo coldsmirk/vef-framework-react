@@ -247,5 +247,5 @@ export function InstanceTimeline({ timeline, renderEntryExtra }: InstanceTimelin
     };
   });
 
-  return <Timeline items={items} mode="left" />;
+  return <Timeline items={items} mode="start" />;
 }
