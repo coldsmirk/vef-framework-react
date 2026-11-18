@@ -28,7 +28,6 @@ async function setup(initiationWindow: WindowRule) {
     isShared: false,
     code: "leave",
     name: "请假",
-    bindingMode: "standalone",
     adminUserIds: [],
     isAllInitiationAllowed: true,
     instanceTitleTemplate: "请假申请",
