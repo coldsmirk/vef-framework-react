@@ -11,7 +11,7 @@ import { Stack } from "../stack";
 import { Table } from "../table";
 import { AddRowButton } from "./components";
 import { useEditableActions, useEditableColumns } from "./hooks";
-import { EditableTableStoreProvider } from "./store";
+import { EditableTableStoreProvider, useEditableTableStore } from "./store";
 
 function makeGetKey<TRow extends AnyObject>(rowKey: EditableTableProps<TRow>["rowKey"]): (row: TRow) => string {
   if (isFunction(rowKey)) {
@@ -61,20 +61,22 @@ function EditableTableInner<TRow extends AnyObject>({
 
   const editablePredicate = useMemo(() => toPredicate(canEdit, true), [canEdit]);
   const deletablePredicate = useMemo(() => toPredicate(canDelete, false), [canDelete]);
+  const hasReadModeActions = canEdit !== false || Boolean(canDelete || renderRowActions);
+  const showOperation = useEditableTableStore(state => hasReadModeActions || state.editingKey !== null);
 
   const operation = useMemo(
     () => {
       return {
         deletable: deletablePredicate,
         editable: editablePredicate,
-        enabled: canEdit !== false || Boolean(canDelete || creatable || renderRowActions),
+        enabled: showOperation,
         extra: renderRowActions,
         texts: operationColumn?.texts,
         title: operationColumn?.title,
         width: operationColumn?.width ?? DEFAULT_OPERATION_COLUMN_WIDTH
       };
     },
-    [canDelete, canEdit, creatable, deletablePredicate, editablePredicate, operationColumn, renderRowActions]
+    [deletablePredicate, editablePredicate, operationColumn, renderRowActions, showOperation]
   );
 
   const tableColumns = useEditableColumns(columns, getKey, operation);

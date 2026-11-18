@@ -261,9 +261,11 @@ describe("EditableTable", () => {
     it("shows save and cancel for a newly added row when existing rows cannot be edited", async () => {
       const user = userEvent.setup();
       render(<Harness creatable canEdit={false} />);
+      expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: label("新增记录") }));
       expect(screen.getByRole("button", { name: label("保存") })).toBeVisible();
-      expect(screen.getByRole("button", { name: label("取消") })).toBeVisible();
+      await user.click(screen.getByRole("button", { name: label("取消") }));
+      expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     });
 
     it("defaults to a fixed width so the actions never stretch", () => {
