@@ -55,6 +55,9 @@ export const APPROVAL_PERMISSIONS = {
     create: "approval.delegation.create",
     update: "approval.delegation.update",
     delete: "approval.delegation.delete"
+  },
+  handover: {
+    apply: "approval.handover.apply"
   }
 } as const;
 
@@ -67,3 +70,4 @@ export type ActionLogPermissionCodes = ApprovalPermissions["actionLog"];
 export type MetricsPermissionCodes = ApprovalPermissions["metrics"];
 export type BindingPermissionCodes = ApprovalPermissions["binding"];
 export type DelegationPermissionCodes = ApprovalPermissions["delegation"];
+export type HandoverPermissionCodes = ApprovalPermissions["handover"];

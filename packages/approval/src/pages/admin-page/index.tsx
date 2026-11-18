@@ -31,6 +31,7 @@ export interface ApprovalAdminPageProps {
     bindingQuery?: string;
     bindingRetry?: string;
     metricsQuery?: string;
+    handoverApply?: string;
   };
   /**
    * Scope the metrics view to one tenant; omit for the caller's default
@@ -61,7 +62,8 @@ export function ApprovalAdminPage({
     taskReassign: permissions?.taskReassign ?? APPROVAL_PERMISSIONS.task.reassign,
     bindingQuery: permissions?.bindingQuery ?? APPROVAL_PERMISSIONS.binding.query,
     bindingRetry: permissions?.bindingRetry ?? APPROVAL_PERMISSIONS.binding.retry,
-    metricsQuery: permissions?.metricsQuery ?? APPROVAL_PERMISSIONS.metrics.query
+    metricsQuery: permissions?.metricsQuery ?? APPROVAL_PERMISSIONS.metrics.query,
+    handoverApply: permissions?.handoverApply ?? APPROVAL_PERMISSIONS.handover.apply
   };
 
   const { hasPermission = () => true } = useAppContext();
@@ -72,7 +74,7 @@ export function ApprovalAdminPage({
     items.push({
       key: "instances",
       label: "实例管理",
-      children: <InstancesPanel detailPermission={perms.instanceDetail} terminatePermission={perms.instanceTerminate} />
+      children: <InstancesPanel detailPermission={perms.instanceDetail} handoverPermission={perms.handoverApply} terminatePermission={perms.instanceTerminate} />
     });
   }
 

@@ -10,7 +10,9 @@ import type {
   AdminInstanceSearch,
   AdminTask,
   AdminTaskSearch,
+  ApplyHandoversParams,
   ApprovalMetrics,
+  HandoverReport,
   ReassignTaskParams,
   RetryBusinessProjectionParams,
   TerminateInstanceParams
@@ -38,6 +40,7 @@ export interface AdminApprovalApi {
   terminateInstance: MutationFunction<unknown, TerminateInstanceParams>;
   reassignTask: MutationFunction<unknown, ReassignTaskParams>;
   retryBusinessProjection: MutationFunction<unknown, RetryBusinessProjectionParams>;
+  applyHandovers: MutationFunction<HandoverReport, ApplyHandoversParams>;
 }
 
 /**
@@ -90,7 +93,15 @@ export function useAdminApprovalApi(): AdminApprovalApi {
         findBusinessProjections: pagedQuery<AdminBusinessProjection, AdminBusinessProjectionSearch>("find_business_projections"),
         terminateInstance: action<TerminateInstanceParams>("terminate_instance"),
         reassignTask: action<ReassignTaskParams>("reassign_task"),
-        retryBusinessProjection: action<RetryBusinessProjectionParams>("retry_business_projection")
+        retryBusinessProjection: action<RetryBusinessProjectionParams>("retry_business_projection"),
+        applyHandovers: apiClient.createMutationFn<HandoverReport, ApplyHandoversParams>(
+          "approval_admin_apply_handovers",
+          ({ post }) => async params => {
+            const result = await post<HandoverReport>(API_PATH, { data: createApiRequest(RESOURCE, "apply_handovers", params) });
+
+            return result.data;
+          }
+        )
       };
     },
     [apiClient]

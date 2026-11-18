@@ -9,6 +9,7 @@ export type {
   CategoryPermissionCodes,
   DelegationPermissionCodes,
   FlowPermissionCodes,
+  HandoverPermissionCodes,
   InstancePermissionCodes,
   MetricsPermissionCodes,
   TaskPermissionCodes

@@ -205,3 +205,21 @@ export interface ReassignTaskParams {
 export interface RetryBusinessProjectionParams {
   projectionId: string;
 }
+
+export interface ApplyHandoversParams {
+  userIds: string[];
+}
+
+export interface HandoverItem {
+  instanceId: string;
+  taskId?: string;
+  ccRecordId?: string;
+  predecessor: UserInfo;
+  successor?: UserInfo;
+}
+
+export interface HandoverReport {
+  transferred: HandoverItem[];
+  unassigned: HandoverItem[];
+  awaitingApplicant: string[];
+}
