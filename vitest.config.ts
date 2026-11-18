@@ -13,6 +13,7 @@ export default defineConfig({
   cacheDir: resolve(rootDirectory, "node_modules/.vite"),
   resolve: {
     alias: {
+      "@vef-framework-react/calendar": resolve(rootDirectory, "./packages/calendar/src"),
       "@vef-framework-react/shared": resolve(rootDirectory, "./packages/shared/src"),
       "@vef-framework-react/hooks": resolve(rootDirectory, "./packages/hooks/src"),
       "@vef-framework-react/core": resolve(rootDirectory, "./packages/core/src"),
