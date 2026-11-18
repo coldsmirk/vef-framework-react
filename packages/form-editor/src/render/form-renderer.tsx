@@ -134,6 +134,12 @@ export interface FormRendererProps {
    * native viewport-anchored overlay behavior is correct.
    */
   containOverlays?: boolean;
+  /**
+   * Content beside a visible keyed field. A subform is addressed once by its key.
+   * Stacked rows also expose their zero-based row and column under the subform key.
+   * Desktop table cells use the editable table renderer and expose only the whole subform.
+   */
+  renderFieldExtra?: (field: { key: string; type: Block["type"]; label?: string; row?: number; column?: string }) => ReactNode;
 }
 
 /**
@@ -182,6 +188,8 @@ const EvaluationScopeContext = createContext<EvaluationContext | undefined>(unde
 EvaluationScopeContext.displayName = "EvaluationScopeContext";
 
 interface RenderCtx {
+  renderFieldExtra?: FormRendererProps["renderFieldExtra"];
+  rowLocation?: { key: string; row: number };
   /**
    * Whether the schema binds any data-source parameter to the form. Threaded
    * down so each subform row's controller publishes its own parameter scope —
@@ -400,6 +408,7 @@ function FormRendererEmpty(): ReactElement {
 }
 
 interface FormRendererInnerProps {
+  renderFieldExtra?: FormRendererProps["renderFieldExtra"];
   runtimeSchema: RuntimeSchema;
   defaultValues?: RuntimeFormValues;
   disabled?: boolean;
@@ -430,6 +439,7 @@ function FormRendererInner({
   evaluationContext: hostContext,
   fieldPermissions,
   onSubmit,
+  renderFieldExtra,
   runtimeSchema
 }: FormRendererInnerProps): ReactElement {
   // Depend on the host context's individual slots, not the wrapper object: a host
@@ -597,11 +607,12 @@ function FormRendererInner({
         form,
         gutter: resolveStackGap(runtimeSchema.gap, DEFAULT_STACK_GAP),
         namePrefix: "",
+        renderFieldExtra,
         sinks,
         boundParams
       };
     },
-    [boundParams, disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, runtimeSchema.gap, sinks]
+    [boundParams, disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, renderFieldExtra, runtimeSchema.gap, sinks]
   );
 
   return (
@@ -682,6 +693,27 @@ function BlockBody({
   ctx: RenderCtx;
   runtimeState: RuntimeFieldState;
 }): ReactElement | null {
+  function withExtra(content: ReactElement, field: FormField | SubformNode) {
+    if (!ctx.renderFieldExtra || !("key" in field) || !field.key) {
+      return content;
+    }
+
+    const extra = ctx.renderFieldExtra({
+      key: ctx.rowLocation?.key ?? field.key,
+      type: field.type,
+      label: field.label,
+      ...ctx.rowLocation && { row: ctx.rowLocation.row, column: field.key }
+    });
+    return extra === null || extra === undefined
+      ? content
+      : (
+          <div>
+            {content}
+            {extra}
+          </div>
+        );
+  }
+
   switch (block.type) {
     case "section": {
       return <SectionFlow ctx={withRuntimeDisabled(ctx, runtimeState)} section={block} />;
@@ -692,7 +724,7 @@ function BlockBody({
     }
 
     case "subform": {
-      return <SubformFlow ctx={withRuntimeDisabled(ctx, runtimeState)} subform={block} />;
+      return withExtra(<SubformFlow ctx={withRuntimeDisabled(ctx, runtimeState)} subform={block} />, block);
     }
 
     case "flex": {
@@ -704,7 +736,7 @@ function BlockBody({
     }
 
     default: {
-      return <FieldSlot ctx={ctx} field={block} runtimeState={runtimeState} />;
+      return withExtra(<FieldSlot ctx={ctx} field={block} runtimeState={runtimeState} />, block);
     }
   }
 }
@@ -1090,10 +1122,11 @@ function SubformRowBase({
       return {
         ...ctx,
         namePrefix: rowPrefix,
+        rowLocation: { key: subform.key, row: index },
         fieldPermissions: undefined
       };
     },
-    [ctx, rowPrefix]
+    [ctx, rowPrefix, subform.key, index]
   );
 
   return (

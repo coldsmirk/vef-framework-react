@@ -108,6 +108,40 @@ function renderRuntime(children: ReactNode): void {
   );
 }
 
+describe("FormRenderer field extras", () => {
+  it("renders the normal field with no extra slot", () => {
+    renderRuntime(<FormRenderer schema={stack(field("name"))} />);
+    expect(screen.getByRole("textbox", { name: "name" })).toBeVisible();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("decorates only visible fields and addresses the whole table once", () => {
+    const extra = vi.fn(({ key }: { key: string }) => <span role="note">{key}</span>);
+    renderRuntime(
+      <FormRenderer
+        fieldPermissions={{ secret: "hidden" }}
+        renderFieldExtra={extra}
+        schema={stack(field("name"), field("secret"), tableSubform())}
+      />
+    );
+    expect(screen.getAllByRole("note").map(el => el.textContent)).toEqual(["name", "lines"]);
+    expect(extra.mock.calls.map(([item]) => item.key)).not.toContain("secret");
+    expect(extra.mock.calls.filter(([item]) => item.key === "lines")).toHaveLength(1);
+  });
+
+  it("identifies visible stacked cells by table key, row and column", () => {
+    const extra = vi.fn(() => null);
+    renderRuntime(<FormRenderer defaultValues={{ lines: [{ amount: "1" }] }} renderFieldExtra={extra} schema={stack(stackSubform())} />);
+    expect(extra).toHaveBeenCalledWith({
+      key: "lines",
+      type: "textfield",
+      label: "amount",
+      row: 0,
+      column: "amount"
+    });
+  });
+});
+
 describe("FormRenderer field permissions", () => {
   it("does not mount a hidden-clamped field and drops its value from the payload", async () => {
     const user = userEvent.setup();
