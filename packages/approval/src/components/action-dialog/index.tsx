@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
 import { css } from "@emotion/react";
-import { Button, Modal } from "@vef-framework-react/components";
-import { useState } from "react";
+import { Button, Modal, Text } from "@vef-framework-react/components";
+import { useId, useState } from "react";
 
 const footerStyle = css({
   display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
   justifyContent: "flex-end",
   gap: 8,
   marginTop: 12
@@ -53,6 +55,7 @@ export interface ActionFooterProps {
   submitting: boolean;
   onCancel: () => void;
   onOk: () => void;
+  disabledReason?: string;
 }
 
 /**
@@ -64,12 +67,25 @@ export function ActionFooter({
   disabled,
   submitting,
   onCancel,
-  onOk
+  onOk,
+  disabledReason
 }: ActionFooterProps) {
+  const reasonId = useId();
   return (
     <div css={footerStyle}>
+      {disabled && disabledReason && <Text id={reasonId} type="secondary">{disabledReason}</Text>}
       <Button onClick={onCancel}>取消</Button>
-      <Button danger={danger} disabled={disabled} loading={submitting} type="primary" onClick={onOk}>{okText}</Button>
+
+      <Button
+        aria-describedby={disabled && disabledReason ? reasonId : undefined}
+        danger={danger}
+        disabled={disabled}
+        loading={submitting}
+        type="primary"
+        onClick={onOk}
+      >
+        {okText}
+      </Button>
     </div>
   );
 }

@@ -37,7 +37,7 @@ import {
   UserPlusIcon,
   XIcon
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
@@ -226,7 +226,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const [modal, setModal] = useState<DetailModal | null>(null);
   const [opinion, setOpinion] = useState("");
   const [acting, setActing] = useState(false);
-  const [businessReady, setBusinessReady] = useState(true);
+  const reasonId = useId();
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
 
@@ -475,7 +475,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const formTab = (
     <Stack gap={16}>
       {instance.businessKind
-        ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} myTask={myTask} view={detail.businessView} onAvailabilityChange={setBusinessReady} /> : <MissingBusinessKind />
+        ? business.renderer ? <business.renderer.DetailView detail={detail} handle={business.handle} myTask={myTask} view={detail.businessView} onAvailabilityChange={business.onAvailabilityChange} /> : <MissingBusinessKind />
         : (
             <InstanceFormPanel
               apiRef={formApiRef}
@@ -538,15 +538,20 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
             )}
 
             {canResubmit && (
-              <Button
-                disabled={missingRenderer || !businessReady}
-                icon={<Icon component={SendIcon} />}
-                loading={acting}
-                type="primary"
-                onClick={() => void submitViaForm("resubmit")}
-              >
-                重新提交
-              </Button>
+              <>
+                {business.blockedReason && <Text id={reasonId} type="secondary">{business.blockedReason}</Text>}
+
+                <Button
+                  aria-describedby={business.blockedReason ? reasonId : undefined}
+                  disabled={missingRenderer || !business.ready}
+                  icon={<Icon component={SendIcon} />}
+                  loading={acting}
+                  type="primary"
+                  onClick={() => void submitViaForm("resubmit")}
+                >
+                  重新提交
+                </Button>
+              </>
             )}
 
             <Space wrap size={8}>{secondaryButtons}</Space>

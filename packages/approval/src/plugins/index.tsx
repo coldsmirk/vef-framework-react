@@ -16,9 +16,9 @@ export interface BusinessFormHandle {
 }
 
 export interface BusinessKindRenderer {
-  StartForm: FC<{ flow: StartForm; businessRef?: string; handle: Ref<BusinessFormHandle>; voidTarget?: VoidTarget; onAvailabilityChange?: (available: boolean) => void }>;
+  StartForm: FC<{ flow: StartForm; businessRef?: string; handle: Ref<BusinessFormHandle>; voidTarget?: VoidTarget; onAvailabilityChange?: (available: boolean, reason?: string) => void }>;
   VoidOptions?: FC<{ value: VoidOptions; onChange: (value: VoidOptions) => void }>;
-  DetailView: FC<{ detail: InstanceDetail; view: unknown; myTask?: ViewerTask; handle: Ref<BusinessFormHandle>; onAvailabilityChange?: (available: boolean) => void }>;
+  DetailView: FC<{ detail: InstanceDetail; view: unknown; myTask?: ViewerTask; handle: Ref<BusinessFormHandle>; onAvailabilityChange?: (available: boolean, reason?: string) => void }>;
 }
 
 /**

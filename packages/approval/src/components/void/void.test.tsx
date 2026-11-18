@@ -128,13 +128,18 @@ it("refreshes the direct plan for options and requires a reason and a clear plan
   expect(dialog.getByText("释放会议室")).toBeVisible();
   expect(dialog.getByText("通知参会人")).toBeVisible();
   const submit = dialog.getByRole("button", { name: "确认作废" });
+  const footer = within(submit.parentElement!);
+  expect(footer.getByText("请先处理阻止事项")).toBeVisible();
+  expect(submit).toHaveAccessibleDescription("请先处理阻止事项");
   await user.type(dialog.getByLabelText("作废原因"), "变更");
   expect(submit).toBeDisabled();
   await user.clear(dialog.getByLabelText("作废原因"));
   await user.click(dialog.getByRole("checkbox", { name: "释放预订" }));
   await waitFor(() => expect(dialog.queryByText("仍有签到记录")).not.toBeInTheDocument());
+  expect(await footer.findByText("请填写作废原因")).toBeVisible();
   expect(submit).toBeDisabled();
   await user.type(dialog.getByLabelText("作废原因"), "会议取消");
+  expect(submit).not.toHaveAttribute("aria-describedby");
   await user.click(submit);
   await waitFor(() => expect(writes).toHaveLength(1));
   await waitFor(() => expect(views).toBeGreaterThan(1));
@@ -183,7 +188,7 @@ it("starts the configured void request through one ordinary approval start", asy
       return {
         policy: "approval",
         voidFlowCode: "void-flow",
-        plan
+        plan: { ...plan, blockers: (req.params?.options as { release?: boolean }).release ? [] : ["场地仍被占用"] }
       };
     }
 
@@ -193,9 +198,16 @@ it("starts the configured void request through one ordinary approval start", asy
   const drawer = within(await screen.findByRole("dialog", { name: "申请作废" }));
   expect(await drawer.findByText("释放会议室")).toBeVisible();
   expect(drawer.getByText("预算会议")).toBeVisible();
-  expect(drawer.getByRole("button", { name: "提交审批" })).toBeDisabled();
+  const submit = drawer.getByRole("button", { name: "提交审批" });
+  const footer = within(submit.parentElement!);
+  expect(submit).toBeDisabled();
+  expect(await footer.findByText("请先处理阻止事项")).toBeVisible();
+  expect(submit).toHaveAccessibleDescription("请先处理阻止事项");
+  await user.click(drawer.getByRole("checkbox", { name: "释放预订" }));
+  expect(await footer.findByText("请填写作废原因")).toBeVisible();
   await user.type(drawer.getByLabelText("作废原因"), "设备维修");
-  await user.click(drawer.getByRole("button", { name: "提交审批" }));
+  expect(submit).not.toHaveAttribute("aria-describedby");
+  await user.click(submit);
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(reads).toContainEqual(expect.objectContaining({
     resource: "approval/my",
@@ -211,7 +223,7 @@ it("starts the configured void request through one ordinary approval start", asy
         targetInstanceId: "i",
         reason: "设备维修",
         attachments: [],
-        options: {}
+        options: { release: true }
       }
     }
   });
@@ -236,11 +248,18 @@ it("replans a returned request with its new options before resubmission", async 
   });
   expect(await screen.findByText("需释放预订")).toBeVisible();
   expect(screen.getByLabelText("作废原因")).toHaveValue("场地变更");
-  await user.click(screen.getByRole("button", { name: "重新提交" }));
+  const submit = screen.getByRole("button", { name: "重新提交" });
+  const footer = within(submit.parentElement!);
+  expect(await footer.findByText("请先处理阻止事项")).toBeVisible();
+  expect(submit).toHaveAccessibleDescription("请先处理阻止事项");
+  expect(submit).toBeDisabled();
+  await user.click(submit);
   expect(writes).toHaveLength(0);
   await user.click(screen.getByRole("checkbox", { name: "释放预订" }));
   await waitFor(() => expect(screen.queryByText("需释放预订")).not.toBeInTheDocument());
-  await user.click(screen.getByRole("button", { name: "重新提交" }));
+  await waitFor(() => expect(submit).toBeEnabled());
+  expect(submit).not.toHaveAttribute("aria-describedby");
+  await user.click(submit);
   await waitFor(() => expect(writes[0]).toMatchObject({ action: "resubmit", params: { instanceId: "req", formData: { targetInstanceId: "i", options: { release: true } } } }));
 });
 
@@ -263,8 +282,54 @@ it("opens the linked returned request and shows its target, live plan and record
   await user.click(screen.getByRole("button", { name: "查看作废申请 作废-9" }));
   const drawer = within(await screen.findByRole("dialog", { name: "作废申请详情" }));
   expect(await drawer.findByText("作废原因：场地变更")).toBeVisible();
+  expect(drawer.getByText("将撤销的事项")).toBeVisible();
   expect(drawer.getByText("预算会议")).toBeVisible();
   expect(drawer.getByText("通知参会人")).toBeVisible();
+});
+
+it("shows the executed outcome after approval without presenting it as a future plan", async () => {
+  setup(<InstanceDetailPanel instanceId="req" />, () => {
+    return {
+      ...request,
+      instance: { ...request.instance, status: "approved" },
+      businessView: {
+        target,
+        plan,
+        record: {
+          ...record,
+          status: "voided",
+          reversals: ["已释放会议室"],
+          followUps: ["发送取消通知"]
+        }
+      }
+    };
+  });
+  expect(await screen.findByText("已撤销的事项")).toBeVisible();
+  expect(screen.getByText("已释放会议室")).toBeVisible();
+  expect(screen.getByText("发送取消通知")).toBeVisible();
+  expect(screen.queryByText("将撤销的事项")).not.toBeInTheDocument();
+  expect(screen.queryByText("通知参会人")).not.toBeInTheDocument();
+});
+
+it("shows a dismissed request without the empty-plan preview", async () => {
+  setup(<InstanceDetailPanel instanceId="req" />, () => {
+    return {
+      ...request,
+      instance: { ...request.instance, status: "rejected" },
+      businessView: {
+        target,
+        plan: {
+          blockers: [],
+          reversals: [],
+          followUps: []
+        },
+        record: { ...record, status: "dismissed" }
+      }
+    };
+  });
+  expect(await screen.findByText("作废申请已结束")).toBeVisible();
+  expect(screen.getByText("作废原因：场地变更")).toBeVisible();
+  expect(screen.queryByText("本次作废没有需撤销或跟进的事项。")).not.toBeInTheDocument();
 });
 
 it("shows the executed record on a voided target and allows the host to override the request renderer", async () => {

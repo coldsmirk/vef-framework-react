@@ -6,7 +6,7 @@ import type { VoidTarget } from "../../types";
 import { Alert, Button, Drawer, Empty, Flex, globalCssVars, Icon, showSuccessMessage, showWarningMessage, Spin, Stack, Text } from "@vef-framework-react/components";
 import { isBusinessError, useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
 import { SendIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { InstanceFormPanel } from "../../components";
@@ -101,7 +101,7 @@ function StartDrawerBody({
   const myApi = useMyApprovalApi();
   const instanceApi = useInstanceApi();
   const formApiRef = useRef<FormRendererApi | null>(null);
-  const [businessReady, setBusinessReady] = useState(true);
+  const reasonId = useId();
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -205,7 +205,7 @@ function StartDrawerBody({
       {startForm.initiationWindow?.open && startForm.initiationWindow.current && <DeadlineHint {...startForm.initiationWindow.current} />}
 
       {startForm.businessKind
-        ? business.renderer ? <business.renderer.StartForm businessRef={businessRef} flow={startForm} handle={business.handle} voidTarget={voidTarget} onAvailabilityChange={setBusinessReady} /> : <MissingBusinessKind />
+        ? business.renderer ? <business.renderer.StartForm businessRef={businessRef} flow={startForm} handle={business.handle} voidTarget={voidTarget} onAvailabilityChange={business.onAvailabilityChange} /> : <MissingBusinessKind />
         : (
             <InstanceFormPanel
               apiRef={formApiRef}
@@ -219,11 +219,17 @@ function StartDrawerBody({
       {submitError && <Alert showIcon title={submitError} type="error" />}
 
       <Flex
+        align="center"
+        gap="small"
         justify="flex-end"
         style={{ borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`, paddingTop: 16 }}
+        wrap="wrap"
       >
+        {business.blockedReason && <Text id={reasonId} type="secondary">{business.blockedReason}</Text>}
+
         <Button
-          disabled={Boolean(startForm.businessKind && (!business.renderer || !businessReady))}
+          aria-describedby={business.blockedReason ? reasonId : undefined}
+          disabled={Boolean(startForm.businessKind && (!business.renderer || !business.ready))}
           icon={<Icon component={SendIcon} />}
           loading={submitting}
           type="primary"

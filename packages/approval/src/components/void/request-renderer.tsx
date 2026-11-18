@@ -21,11 +21,11 @@ function RequestForm({
   target: VoidTarget & { instanceId: string };
   record?: VoidRecord;
   handle: Ref<BusinessFormHandle>;
-  onAvailabilityChange?: (available: boolean) => void;
+  onAvailabilityChange?: (available: boolean, reason?: string) => void;
 }) {
   const draft = useVoidDraft(target, "requester", record);
   useEffect(() => {
-    onAvailabilityChange?.(!draft.issue);
+    onAvailabilityChange?.(!draft.issue, draft.issue);
   }, [draft.issue, onAvailabilityChange]);
   useImperativeHandle(handle, () => {
     return {
@@ -58,7 +58,7 @@ export const VoidRequestStartForm: BusinessKindRenderer["StartForm"] = ({
 }) => {
   useEffect(() => {
     if (!voidTarget?.instanceId) {
-      onAvailabilityChange?.(false);
+      onAvailabilityChange?.(false, "请从需要作废的审批单详情申请作废");
     }
   }, [voidTarget, onAvailabilityChange]);
   return voidTarget?.instanceId
@@ -79,7 +79,7 @@ export const VoidRequestDetailView: BusinessKindRenderer["DetailView"] = ({
   const editable = canResubmit && Boolean(targetId) && data?.record.reason !== undefined;
   useEffect(() => {
     if (canResubmit && !editable) {
-      onAvailabilityChange?.(false);
+      onAvailabilityChange?.(false, "当前可见信息不足，无法重新提交作废申请");
     }
   }, [editable, canResubmit, onAvailabilityChange]);
   // A review decision carries no business edits. A returned request installs its editable handle below.
@@ -108,7 +108,7 @@ export const VoidRequestDetailView: BusinessKindRenderer["DetailView"] = ({
           )}
 
           {canResubmit && !editable && <Alert showIcon title="当前可见信息不足，无法重新提交作废申请" type="warning" />}
-          <PlanSummary plan={data.plan} />
+          {data.record.status === "requested" && <PlanSummary plan={data.plan} />}
           <VoidRecordSummary record={data.record} />
         </Stack>
       );

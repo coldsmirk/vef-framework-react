@@ -1,7 +1,7 @@
 import type { BusinessFormHandle } from "../plugins";
 
 import { Alert, showWarningMessage } from "@vef-framework-react/components";
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { resolveBusinessRenderer, useApprovalPlugins } from "../plugins";
 
@@ -13,6 +13,12 @@ export function useBusinessForm(kind?: string) {
   const { businessKinds } = useApprovalPlugins();
   const handle = useRef<BusinessFormHandle>(null);
   const renderer = resolveBusinessRenderer(businessKinds, kind);
+  const [ready, setReady] = useState(true);
+  const [blockedReason, setBlockedReason] = useState<string>();
+  const onAvailabilityChange = useCallback((available: boolean, reason?: string) => {
+    setReady(available);
+    setBlockedReason(available ? undefined : reason);
+  }, []);
 
   async function collect() {
     try {
@@ -30,6 +36,9 @@ export function useBusinessForm(kind?: string) {
   return {
     renderer,
     handle,
+    ready,
+    blockedReason,
+    onAvailabilityChange,
     collect
   };
 }

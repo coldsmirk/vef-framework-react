@@ -38,6 +38,7 @@ function DirectVoidForm({ target, onClose }: { target: VoidTarget & { instanceId
       <ActionFooter
         danger
         disabled={Boolean(draft.issue)}
+        disabledReason={draft.issue}
         okText="确认作废"
         submitting={confirm.submitting}
         onCancel={onClose}
