@@ -47,7 +47,7 @@ import { AnnotationTimeline, DetailAnnotations, useFieldAnnotations } from "../a
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
-import { formatTimestamp } from "../format";
+import { displayInstanceTitle, formatTimestamp } from "../format";
 import { InstanceStatusTag } from "../status";
 import { UserLabel } from "../user";
 import { VoidBanners } from "../void/summary";
@@ -156,7 +156,7 @@ export function InstanceHeader({
   return (
     <Stack gap={12}>
       <Flex align="center" gap="middle" wrap="wrap">
-        <Title level={4} style={{ margin: 0 }}>{title}</Title>
+        <Title level={4} style={{ margin: 0 }}>{displayInstanceTitle(title, instanceNo)}</Title>
         <InstanceStatusTag status={status} />
       </Flex>
 

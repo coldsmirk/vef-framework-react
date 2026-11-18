@@ -5,7 +5,7 @@ import type { VoidPlan, VoidRecord, VoidRequestSummary, VoidTarget } from "../..
 import { Alert, Button, Drawer, Flex, Stack, StoredFileUpload, Text } from "@vef-framework-react/components";
 import { useState } from "react";
 
-import { formatTimestamp } from "../format";
+import { displayInstanceTitle, formatTimestamp } from "../format";
 
 function Items({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) {
@@ -32,12 +32,13 @@ export function PlanSummary({ plan }: { plan: VoidPlan }) {
 }
 
 export function TargetSummary({ target }: { target: VoidTarget }) {
+  const title = displayInstanceTitle(target.title, target.instanceNo);
   return (
     <Stack gap={4}>
-      {target.title && <Text strong>{target.title}</Text>}
+      {title && <Text strong>{title}</Text>}
 
       <Flex gap="small" wrap="wrap">
-        {target.instanceNo && <Text>{target.instanceNo}</Text>}
+        {target.instanceNo && target.instanceNo !== title && <Text>{target.instanceNo}</Text>}
         {target.flowName && <Text>{target.flowName}</Text>}
         {target.applicant && <Text>{`申请人 ${target.applicant.name}`}</Text>}
         {target.applicant?.departmentName && <Text>{target.applicant.departmentName}</Text>}

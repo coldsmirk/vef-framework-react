@@ -15,11 +15,11 @@ const other = { id: "other", name: "陈晨" };
 const instances = [
   { instanceId: "i1", title: "差旅申请" },
   { instanceId: "i2", title: "采购申请" },
-  { instanceId: "i3", title: "费用报销" }
+  { instanceId: "i3", title: "" }
 ].map(row => {
   return {
     ...row,
-    instanceNo: row.instanceId,
+    instanceNo: row.instanceId === "i3" ? "BX-2026-016" : row.instanceId,
     flowName: "审批流程",
     applicant: former,
     status: "running",
@@ -185,10 +185,11 @@ describe("ApplyHandoversAction", () => {
     expect(unassigned).toHaveTextContent("陈晨");
 
     for (const [region, row] of [[moved, instances[0]!], [unassigned, instances[1]!], [awaiting, instances[2]!]] as const) {
-      await user.click(within(region).getByRole("button", { name: row.title }));
+      const label = row.instanceId === "i3" ? "BX-2026-016" : row.title;
+      await user.click(within(region).getByRole("button", { name: label }));
       const heading = await screen.findByText("审批详情");
       const detail = within(heading.closest<HTMLElement>("[role=\"dialog\"]")!);
-      expect(await detail.findByText(row.title)).toBeInTheDocument();
+      expect(await detail.findByRole("heading", { name: label })).toBeInTheDocument();
       expect(respond).toHaveBeenCalledWith(expect.objectContaining({ action: "get_instance_detail", params: { instanceId: row.instanceId } }));
       await user.keyboard("{Escape}");
     }

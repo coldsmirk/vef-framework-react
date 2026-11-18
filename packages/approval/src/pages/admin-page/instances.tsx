@@ -3,13 +3,14 @@ import type { EmptyObject } from "@vef-framework-react/shared";
 
 import type { AdminInstance, AdminInstanceSearch } from "../../types";
 
-import { Crud, Drawer, Flex, OperationButton, showSuccessMessage, Text, useFormContext } from "@vef-framework-react/components";
+import { Crud, Drawer, OperationButton, showSuccessMessage, useFormContext } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
 import { AdminInstanceDetailPanel, formatTimestamp, InstanceStatusTag, UserLabel } from "../../components";
 import { ReasonModal } from "../../components/detail/action-modals";
+import { InstanceListTitle } from "../../components/instance-list-title";
 import { INSTANCE_STATUS_OPTIONS } from "../../components/status/labels";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
@@ -18,12 +19,8 @@ const COLUMNS: Array<TableColumn<AdminInstance>> = [
   {
     title: "审批单",
     dataIndex: "title",
-    render: (value: string, row) => (
-      <Flex vertical gap={2}>
-        <Text>{value}</Text>
-        <Text copyable style={{ fontSize: 12 }} type="secondary">{row.instanceNo}</Text>
-      </Flex>
-    )
+    render: (value: string, row) => <InstanceListTitle instanceNo={row.instanceNo} title={value} />
+
   },
   {
     title: "所属流程",

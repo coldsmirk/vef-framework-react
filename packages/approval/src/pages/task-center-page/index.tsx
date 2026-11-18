@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useMyApprovalApi } from "../../api";
 import { formatTimestamp, InstanceDetailDrawer, TaskStatusTag, UserLabel } from "../../components";
 import { FlowIcon } from "../../components/icon";
+import { InstanceListTitle } from "../../components/instance-list-title";
 import { PredecessorLabel } from "../../components/user";
 import {
   CompletedTaskAdvancedSearchFields,
@@ -36,11 +37,7 @@ function instanceTitleColumn<TRow extends { instanceTitle: string; instanceNo: s
     render: (value: string, row) => (
       <Flex align="center" gap="small">
         <FlowIcon name={row.flowIcon} />
-
-        <Flex vertical gap={2}>
-          <Text>{value}</Text>
-          <Text copyable style={{ fontSize: 12 }} type="secondary">{row.instanceNo}</Text>
-        </Flex>
+        <InstanceListTitle instanceNo={row.instanceNo} title={value} />
       </Flex>
     )
   };

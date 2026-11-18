@@ -13,8 +13,9 @@ describe("TasksPanel", () => {
         items: [
           {
             taskId: "task",
-            instanceTitle: "差旅申请",
+            instanceTitle: "",
             assignee: { id: "new", name: "李四" },
+            instanceNo: "BX-2026-016",
             predecessor: { id: "old", name: "张三" },
             status: "pending"
           }
@@ -25,6 +26,7 @@ describe("TasksPanel", () => {
     render(<TasksPanel reassignPermission="approval.task.reassign" />, { apiClient });
 
     const cell = await screen.findByRole("cell", { name: /李四.*接替 张三/ });
+    expect(screen.getByText("BX-2026-016")).toBeVisible();
     expect(within(cell).getByText("李四")).toBeVisible();
     expect(within(cell).getByText("接替 张三")).toBeVisible();
   });

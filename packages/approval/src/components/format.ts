@@ -1,5 +1,9 @@
 import dayjs from "dayjs";
 
+export function displayInstanceTitle(title?: string, instanceNo?: string): string {
+  return title?.trim() || instanceNo || "";
+}
+
 /**
  * Format a backend timestamp (`YYYY-MM-DD HH:mm:ss`) for display, or a dash
  * when empty.

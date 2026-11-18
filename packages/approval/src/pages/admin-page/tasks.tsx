@@ -21,6 +21,7 @@ import { useAdminApprovalApi } from "../../api";
 import { formatTimestamp, TaskStatusTag, UserLabel } from "../../components";
 import { ActionBody, ActionDialog, ActionFooter } from "../../components/action-dialog";
 import { UserActionField, useUserAction } from "../../components/action-dialog/user-selection";
+import { displayInstanceTitle } from "../../components/format";
 import { TASK_STATUS_OPTIONS } from "../../components/status/labels";
 import { PredecessorLabel } from "../../components/user";
 
@@ -30,7 +31,7 @@ const COLUMNS: Array<TableColumn<AdminTask>> = [
   {
     title: "审批单",
     dataIndex: "instanceTitle",
-    render: (value: string) => <Text>{value}</Text>
+    render: (value: string, row) => <Text>{displayInstanceTitle(value, row.instanceNo)}</Text>
   },
   {
     title: "所属流程",

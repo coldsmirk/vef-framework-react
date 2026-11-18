@@ -5,13 +5,14 @@ import type { ReactNode } from "react";
 import type { InitiatedInstance, InitiatedInstanceSearch, MyCCRecord, MyCCRecordSearch } from "../../types";
 
 import { css } from "@emotion/react";
-import { Badge, Crud, Flex, FlexTabs, globalCssVars, OperationButton, Page, Tag, Text, Title, useFormContext } from "@vef-framework-react/components";
+import { Badge, Crud, Flex, FlexTabs, globalCssVars, OperationButton, Page, Title, useFormContext } from "@vef-framework-react/components";
 import { useMutation, useQuery } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { formatTimestamp, InstanceDetailDrawer, InstanceStatusTag, UserLabel } from "../../components";
 import { FlowIcon } from "../../components/icon";
+import { InstanceListTitle } from "../../components/instance-list-title";
 import { INSTANCE_STATUS_OPTIONS } from "../../components/status/labels";
 
 type SceneValues = CrudBasicSceneFormValues<EmptyObject, EmptyObject>;
@@ -30,11 +31,7 @@ const INITIATED_COLUMNS: Array<TableColumn<InitiatedInstance>> = [
     render: (value: string, row) => (
       <Flex align="center" gap="small">
         <FlowIcon name={row.flowIcon} />
-
-        <Flex vertical gap={2}>
-          <Text>{value}</Text>
-          <Text copyable style={{ fontSize: 12 }} type="secondary">{row.instanceNo}</Text>
-        </Flex>
+        <InstanceListTitle instanceNo={row.instanceNo} title={value} />
       </Flex>
     )
   },
@@ -76,15 +73,7 @@ const CC_COLUMNS: Array<TableColumn<MyCCRecord>> = [
     render: (value: string, row) => (
       <Flex align="center" gap="small">
         <FlowIcon name={row.flowIcon} />
-
-        <Flex vertical gap={2}>
-          <Flex align="center" gap="small">
-            <Text strong={!row.isRead}>{value}</Text>
-            {!row.isRead && <Tag color="processing">未读</Tag>}
-          </Flex>
-
-          <Text copyable style={{ fontSize: 12 }} type="secondary">{row.instanceNo}</Text>
-        </Flex>
+        <InstanceListTitle instanceNo={row.instanceNo} title={value} unread={!row.isRead} />
       </Flex>
     )
   },

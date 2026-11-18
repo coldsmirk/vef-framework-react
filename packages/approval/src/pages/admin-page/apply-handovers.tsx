@@ -10,6 +10,7 @@ import { useId, useRef, useState } from "react";
 import { useAdminApprovalApi, useMyApprovalApi } from "../../api";
 import { AdminInstanceDetailPanel, PrincipalSelect } from "../../components";
 import { CappedModal } from "../../components/capped-modal";
+import { displayInstanceTitle } from "../../components/format";
 
 function ReportGroup({
   title,
@@ -51,7 +52,7 @@ function InstanceTitle({ instanceId }: { instanceId: string }) {
     enabled: visible
   });
 
-  return <span ref={ref}>{data?.instance.title || data?.instance.instanceNo || `查看审批单（${instanceId}）`}</span>;
+  return <span ref={ref}>{displayInstanceTitle(data?.instance.title, data?.instance.instanceNo) || `查看审批单（${instanceId}）`}</span>;
 }
 
 function Report({ report, canViewDetail }: { report: HandoverReport; canViewDetail: boolean }) {
@@ -69,7 +70,7 @@ function Report({ report, canViewDetail }: { report: HandoverReport; canViewDeta
     const instances = page?.items ?? [];
 
     for (const instance of instances) {
-      names.set(instance.instanceId, instance.title || instance.instanceNo);
+      names.set(instance.instanceId, displayInstanceTitle(instance.title, instance.instanceNo));
     }
   }
 
