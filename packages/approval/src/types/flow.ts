@@ -1,4 +1,5 @@
 import type { AssigneeKind, CcKind, FlowDefinition, FormFieldDefinition, KindDescriptor } from "@vef-framework-react/approval-flow-editor";
+import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FullAudited } from "./base";
@@ -64,6 +65,7 @@ export interface Flow extends FullAudited {
   instanceTitleTemplate: string;
   isActive: boolean;
   currentVersion: number;
+  initiationWindow?: WindowRule | null;
 }
 
 /**
@@ -162,6 +164,7 @@ export interface CreateFlowParams {
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;
   initiators?: InitiatorParams[];
+  initiationWindow?: WindowRule | null;
 }
 
 /**
@@ -180,6 +183,7 @@ export interface UpdateFlowParams {
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;
   initiators?: InitiatorParams[];
+  initiationWindow?: WindowRule | null;
 }
 
 /**

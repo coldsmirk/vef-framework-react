@@ -131,7 +131,8 @@ function DesignerBody({
         businessBinding: flow.businessBinding ?? undefined,
         adminUserIds: flow.adminUserIds,
         isAllInitiationAllowed: flow.isAllInitiationAllowed,
-        instanceTitleTemplate: flow.instanceTitleTemplate
+        instanceTitleTemplate: flow.instanceTitleTemplate,
+        initiationWindow: flow.initiationWindow ?? undefined
       },
       initiators: initiatorRows.map<InitiatorParams>(row => {
         return { kind: row.kind, ids: row.ids };
@@ -259,7 +260,8 @@ function DesignerBody({
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
           instanceTitleTemplate: basic.instanceTitleTemplate,
-          initiators
+          initiators,
+          initiationWindow: basic.initiationWindow ?? null
         });
         flowId = created.id;
       } else {
@@ -274,7 +276,8 @@ function DesignerBody({
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
           instanceTitleTemplate: basic.instanceTitleTemplate,
-          initiators
+          initiators,
+          initiationWindow: basic.initiationWindow ?? null
         });
         flowId = updated.id;
       }

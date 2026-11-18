@@ -1,9 +1,10 @@
+import type { Interval } from "@vef-framework-react/calendar";
 import type { FormRendererApi } from "@vef-framework-react/form-editor";
 
-import { Button, Drawer, Empty, Flex, globalCssVars, Icon, showSuccessMessage, Spin, Stack, Text } from "@vef-framework-react/components";
-import { useMutation, useQuery } from "@vef-framework-react/core";
+import { Alert, Button, Drawer, Empty, Flex, globalCssVars, Icon, showSuccessMessage, showWarningMessage, Spin, Stack, Text } from "@vef-framework-react/components";
+import { isBusinessError, useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
 import { SendIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { InstanceFormPanel } from "../../components";
@@ -24,14 +25,70 @@ export interface StartInstanceDrawerProps {
    * Fired with the submission acknowledged, after the drawer closes.
    */
   onStarted?: () => void;
+  /**
+   * Presents the server's reason after a closed initiation window dismisses the drawer.
+   */
+  onWindowClosed?: (message: string) => void;
+}
+
+const WARNING_PERIOD_MS = 30 * 60_000;
+const deadlineFormat = new Intl.DateTimeFormat("zh-CN", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23"
+});
+
+function DeadlineHint({ startsAtUnixMs, endsAtUnixMs: end }: Interval) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (end === undefined) {
+      return;
+    }
+
+    let timer: ReturnType<typeof setTimeout>;
+    const deadline = end;
+
+    function tick() {
+      const clock = Date.now();
+      setNow(clock);
+      const remaining = deadline - clock;
+
+      if (remaining > 0) {
+        const delay = remaining >= WARNING_PERIOD_MS ? remaining - WARNING_PERIOD_MS + 1 : remaining;
+        timer = setTimeout(tick, Math.min(delay, 2_147_483_647));
+      }
+    }
+
+    tick();
+
+    return () => clearTimeout(timer);
+  }, [end]);
+
+  const startedEarlier = startsAtUnixMs === undefined;
+
+  if (end === undefined) {
+    return <Text type="secondary">{startedEarlier ? "此前已开放 · 长期开放" : "长期开放"}</Text>;
+  }
+
+  if (end > now && end - now < WARNING_PERIOD_MS) {
+    const deadline = `发起时段将于 ${deadlineFormat.format(end)} 截止，请在截止前提交。`;
+
+    return <Alert showIcon title={startedEarlier ? `此前已开放，${deadline}` : deadline} type="warning" />;
+  }
+
+  return startedEarlier ? <Text type="secondary">此前已开放</Text> : null;
 }
 
 function StartDrawerBody({
   flowCode,
   businessRef,
   onClose,
-  onStarted
+  onStarted,
+  onWindowClosed
 }: { flowCode: string } & Omit<StartInstanceDrawerProps, "flowCode">) {
+  const queryClient = useQueryClient();
   const myApi = useMyApprovalApi();
   const instanceApi = useInstanceApi();
   const formApiRef = useRef<FormRendererApi | null>(null);
@@ -39,10 +96,35 @@ function StartDrawerBody({
 
   // The load is gated exactly like starting: a rendered form implies a
   // startable flow (active, permitted, published).
-  const { data: startForm, isLoading } = useQuery({
+  const {
+    data: startForm,
+    error,
+    isLoading,
+    isFetchedAfterMount
+  } = useQuery({
     queryFn: myApi.getStartForm,
-    queryKey: [myApi.getStartForm.key, { flowCode }]
+    queryKey: [myApi.getStartForm.key, { flowCode }],
+    staleTime: 0,
+    refetchOnMount: "always"
   });
+
+  const handled = useRef<Error | null>(null);
+  const handleClosedWindow = useCallback((reason: unknown) => {
+    if (!(isBusinessError(reason) && reason.code === 40_027) || handled.current === reason) {
+      return;
+    }
+
+    handled.current = reason;
+    (onWindowClosed ?? showWarningMessage)(reason.message);
+    onClose();
+    void queryClient.invalidateQueries({ queryKey: [myApi.findAvailableFlows.key] });
+  }, [myApi, onClose, onWindowClosed, queryClient]);
+
+  useEffect(() => {
+    if (isFetchedAfterMount) {
+      handleClosedWindow(error);
+    }
+  }, [error, handleClosedWindow, isFetchedAfterMount]);
 
   const start = useMutation({
     mutationFn: instanceApi.start,
@@ -61,8 +143,8 @@ function StartDrawerBody({
       showSuccessMessage("已提交审批");
       onClose();
       onStarted?.();
-    } catch {
-      /* surfaced by the http client */
+    } catch (error_) {
+      handleClosedWindow(error_);
     } finally {
       setSubmitting(false);
     }
@@ -80,7 +162,7 @@ function StartDrawerBody({
     await submitStart(undefined);
   }
 
-  if (isLoading) {
+  if (isLoading || !isFetchedAfterMount) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: 240 }}>
         <Spin />
@@ -102,6 +184,8 @@ function StartDrawerBody({
 
       {startForm.description !== undefined && startForm.description !== ""
         && <Text type="secondary">{startForm.description}</Text>}
+
+      {startForm.initiationWindow?.open && startForm.initiationWindow.current && <DeadlineHint {...startForm.initiationWindow.current} />}
 
       <InstanceFormPanel
         apiRef={formApiRef}
@@ -137,7 +221,8 @@ export function StartInstanceDrawer({
   flowCode,
   businessRef,
   onClose,
-  onStarted
+  onStarted,
+  onWindowClosed
 }: StartInstanceDrawerProps) {
   return (
     <Drawer
@@ -150,10 +235,12 @@ export function StartInstanceDrawer({
     >
       {flowCode !== null && (
         <StartDrawerBody
+          key={flowCode}
           businessRef={businessRef}
           flowCode={flowCode}
           onClose={onClose}
           onStarted={onStarted}
+          onWindowClosed={onWindowClosed}
         />
       )}
     </Drawer>

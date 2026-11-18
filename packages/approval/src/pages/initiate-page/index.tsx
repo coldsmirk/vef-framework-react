@@ -1,7 +1,9 @@
 import type { AvailableFlow } from "../../types";
 
 import { css } from "@emotion/react";
+import { WindowStatusTag } from "@vef-framework-react/calendar";
 import {
+  Alert,
   Card,
   Empty,
   Flex,
@@ -41,7 +43,7 @@ const iconTileCss = css({
 
 const flowGridCss = css({
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
   gap: 12
 });
 
@@ -65,31 +67,56 @@ export interface ApprovalInitiatePageProps {
  * One initiable flow as a clickable card.
  */
 function FlowCard({ flow, onClick }: { flow: AvailableFlow; onClick: () => void }) {
+  const closed = flow.initiationWindow?.open === false;
+
   return (
-    <Card
-      hoverable
-      size="small"
-      style={{ width: "100%" }}
+    <button
+      aria-label={flow.flowName}
+      disabled={closed}
+      type="button"
+      css={{
+        minWidth: 0,
+        padding: 0,
+        border: 0,
+        borderRadius: globalCssVars.borderRadius,
+        background: "transparent",
+        textAlign: "start",
+        cursor: "pointer",
+        "&:disabled": { cursor: "not-allowed", filter: "grayscale(1)" },
+        "&:focus-visible": { outline: `2px solid ${globalCssVars.colorPrimary}` }
+      }}
       onClick={onClick}
     >
-      <Flex align="flex-start" gap="middle">
-        <div css={iconTileCss}>
-          <FlowIcon name={flow.flowIcon ?? "file-check"} size={20} />
-        </div>
+      <Card
+        hoverable={!closed}
+        size="small"
+        style={{
+          width: "100%",
+          height: "100%",
+          background: closed ? globalCssVars.colorFillQuaternary : undefined
+        }}
+      >
+        <Flex align="flex-start" gap="middle">
+          <div css={iconTileCss}>
+            <FlowIcon name={flow.flowIcon ?? "file-check"} size={20} />
+          </div>
 
-        <Stack gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis strong>{flow.flowName}</Text>
+          <Stack gap={2} style={{ minWidth: 0 }}>
+            <Text ellipsis strong>{flow.flowName}</Text>
 
-          <Text
-            ellipsis
-            style={{ fontSize: globalCssVars.fontSizeSm }}
-            type="secondary"
-          >
-            {flow.description ?? flow.flowCode}
-          </Text>
-        </Stack>
-      </Flex>
-    </Card>
+            <Text
+              ellipsis
+              style={{ fontSize: globalCssVars.fontSizeSm }}
+              type="secondary"
+            >
+              {flow.description ?? flow.flowCode}
+            </Text>
+
+            {flow.initiationWindow && <WindowStatusTag status={flow.initiationWindow} />}
+          </Stack>
+        </Flex>
+      </Card>
+    </button>
   );
 }
 
@@ -106,6 +133,7 @@ export function ApprovalInitiatePage({
 }: ApprovalInitiatePageProps) {
   const api = useMyApprovalApi();
 
+  const [closedMessage, setClosedMessage] = useState("");
   const [keyword, setKeyword] = useState("");
   const [labelFilter, setLabelFilter] = useState<Record<string, string>>();
   const [page, setPage] = useState(1);
@@ -130,7 +158,22 @@ export function ApprovalInitiatePage({
         [SYMBOL_PAGINATION]: { page, size: PAGE_SIZE }
       }
     ],
-    placeholderData: keepPreviousData
+    placeholderData: keepPreviousData,
+    refetchInterval: query => {
+      const edges = (query.state.data?.items ?? []).flatMap(({ initiationWindow: status }) => {
+        const edge = status?.open ? status.current?.endsAtUnixMs : status?.next?.startsAtUnixMs;
+
+        return edge === undefined ? [] : [edge];
+      });
+
+      if (edges.length === 0) {
+        return false;
+      }
+
+      const delay = Math.min(...edges) - Date.now();
+
+      return delay > 0 ? Math.min(delay + 1, 2_147_483_647) : 30_000;
+    }
   });
 
   const flows = useMemo(() => data?.items ?? [], [data]);
@@ -175,6 +218,8 @@ export function ApprovalInitiatePage({
           </Flex>
         </Flex>
 
+        {closedMessage && <Alert showIcon closable={{ onClose: () => setClosedMessage("") }} title={closedMessage} type="warning" />}
+
         {isLoading
           ? (
               <Flex align="center" justify="center" style={{ minHeight: 240 }}>
@@ -188,7 +233,16 @@ export function ApprovalInitiatePage({
                   <Text strong type="secondary">{group.name}</Text>
 
                   <div css={flowGridCss}>
-                    {group.flows.map(flow => <FlowCard key={flow.flowId} flow={flow} onClick={() => setStartTarget(flow.flowCode)} />)}
+                    {group.flows.map(flow => (
+                      <FlowCard
+                        key={flow.flowId}
+                        flow={flow}
+                        onClick={() => {
+                          setClosedMessage("");
+                          setStartTarget(flow.flowCode);
+                        }}
+                      />
+                    ))}
                   </div>
                 </Stack>
               ))}
@@ -209,6 +263,7 @@ export function ApprovalInitiatePage({
           flowCode={startTarget}
           onClose={() => setStartTarget(null)}
           onStarted={onStarted}
+          onWindowClosed={setClosedMessage}
         />
       </Stack>
     </Page>

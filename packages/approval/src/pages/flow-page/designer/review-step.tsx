@@ -2,6 +2,7 @@ import type { ApprovalFormField } from "@vef-framework-react/approval-form-bridg
 
 import type { FlowDraft } from "./types";
 
+import { WindowRuleSummary } from "@vef-framework-react/calendar";
 import {
   Card,
   Descriptions,
@@ -86,6 +87,11 @@ export function ReviewStep({
               children: basic.isAllInitiationAllowed
                 ? "所有人可发起"
                 : `${initiatorsForSubmit(draft).length} 条发起规则`
+            },
+            {
+              key: "window",
+              label: "发起时段",
+              children: <WindowRuleSummary rule={basic.initiationWindow} />
             },
             {
               key: "labels",

@@ -1,4 +1,5 @@
 import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
+import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { BindingMode, BusinessBindingConfig, InitiatorParams, StorageMode } from "../../../types";
@@ -24,6 +25,7 @@ export interface FlowDraftBasic {
   adminUserIds: string[];
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;
+  initiationWindow?: WindowRule;
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { WindowStatus } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FormData, UserInfo } from "./base";
@@ -17,6 +18,7 @@ export interface AvailableFlow {
   labels?: Record<string, string>;
   categoryId: string;
   categoryName: string;
+  initiationWindow?: WindowStatus | null;
 }
 
 /**
@@ -44,6 +46,7 @@ export interface StartForm {
    * the form's `$globals`. Absent when the flow exposes none.
    */
   globals?: Record<string, unknown>;
+  initiationWindow?: WindowStatus | null;
 }
 
 /**

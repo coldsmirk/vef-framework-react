@@ -4,6 +4,7 @@ import type { BusinessBindingConfig, InitiatorKind, InitiatorParams, InstanceSta
 import type { CategoryTreeOption } from "../../category-page/form";
 import type { FlowDraftBasic } from "./types";
 
+import { WindowPreview, WindowRuleEditor } from "@vef-framework-react/calendar";
 import {
   Button,
   Card,
@@ -24,6 +25,7 @@ import {
   TreeSelect
 } from "@vef-framework-react/components";
 import { PlusIcon, Trash2Icon } from "lucide-react";
+import { useRef } from "react";
 
 import { PrincipalSelect } from "../../../components";
 import { INSTANCE_STATUS_LABELS } from "../../../components/status/labels";
@@ -265,6 +267,8 @@ export function BasicStep({
   onBasicChange,
   onInitiatorsChange
 }: BasicStepProps) {
+  const previousWindow = useRef(basic.initiationWindow);
+
   return (
     <Stack
       gap={16}
@@ -403,6 +407,28 @@ export function BasicStep({
                 onChange={onInitiatorsChange}
               />
             )}
+        </Stack>
+      </Card>
+
+      <Card title="发起时段">
+        <Stack gap={12}>
+          <Radio.Group
+            aria-label="发起时段"
+            options={[{ label: "不限", value: "any" }, { label: "限定时段", value: "limited" }]}
+            optionType="button"
+            value={basic.initiationWindow ? "limited" : "any"}
+            onChange={event => {
+              previousWindow.current = basic.initiationWindow ?? previousWindow.current;
+              onBasicChange({ initiationWindow: event.target.value === "limited" ? previousWindow.current ?? { windows: [{}] } : undefined });
+            }}
+          />
+
+          {basic.initiationWindow && (
+            <>
+              <WindowRuleEditor value={basic.initiationWindow} onChange={initiationWindow => onBasicChange({ initiationWindow })} />
+              <WindowPreview rule={basic.initiationWindow} />
+            </>
+          )}
         </Stack>
       </Card>
 
