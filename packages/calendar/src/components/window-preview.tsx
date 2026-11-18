@@ -72,6 +72,7 @@ function PreviewIntervals({
   const results = useQueries({
     queries: years.values().map(range => {
       return {
+        meta: { shouldShowErrorFeedback: false },
         queryFn: api.findCalendarDays,
         queryKey: [api.findCalendarDays.key, range] as const
       };
@@ -127,6 +128,7 @@ export function WindowPreview({
     isLoading,
     dataUpdatedAt
   } = useQuery({
+    meta: { shouldShowErrorFeedback: false },
     queryFn: api.previewWindows,
     queryKey: [
       api.previewWindows.key,

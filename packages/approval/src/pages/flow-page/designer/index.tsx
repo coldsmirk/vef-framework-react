@@ -112,6 +112,7 @@ function DesignerBody({
     isFetching: loadingBusinessKinds,
     error: businessKindsError
   } = useQuery({
+    meta: { shouldShowErrorFeedback: false },
     queryFn: flowApi.listBusinessKinds,
     queryKey: [flowApi.listBusinessKinds.key, {}],
     staleTime: Infinity

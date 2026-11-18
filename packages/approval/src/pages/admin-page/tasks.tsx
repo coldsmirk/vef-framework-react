@@ -164,13 +164,17 @@ export interface TasksPanelProps {
  * Cross-user task supervision with admin reassignment for pending tasks.
  */
 export function TasksPanel({ reassignPermission }: TasksPanelProps) {
-  const api = useAdminApprovalApi({ inlineReassignErrors: true });
+  const api = useAdminApprovalApi();
   const [reassignTarget, setReassignTarget] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
   const reassign = useMutation({
     mutationFn: api.reassignTask,
-    meta: { shouldShowSuccessFeedback: false, invalidates: [[api.findTasks.key] as const] }
+    meta: {
+      shouldShowSuccessFeedback: false,
+      shouldShowErrorFeedback: false,
+      invalidates: [[api.findTasks.key] as const]
+    }
   });
 
   return (

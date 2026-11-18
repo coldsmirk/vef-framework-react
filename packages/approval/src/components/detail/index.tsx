@@ -201,7 +201,7 @@ export interface InstanceDetailPanelProps {
 export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceDetailPanelProps) {
   const api = useMyApprovalApi();
   const refreshVoidTarget = useRefreshVoidTarget();
-  const instanceApi = useInstanceApi({ inlineUserErrors: true });
+  const instanceApi = useInstanceApi();
 
   const {
     data: detail,
@@ -215,12 +215,14 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   // The panel shows its own action-specific success messages, so the generic
   // backend feedback is suppressed on every action mutation.
   const suppressFeedback = { meta: { shouldShowSuccessFeedback: false } } as const;
+  const pickerFeedback = { meta: { shouldShowSuccessFeedback: false, shouldShowErrorFeedback: false } } as const;
+  const transfer = useMutation({ mutationFn: instanceApi.processTask, ...pickerFeedback });
   const processTask = useMutation({ mutationFn: instanceApi.processTask, ...suppressFeedback });
   const resubmit = useMutation({ mutationFn: instanceApi.resubmit, ...suppressFeedback });
   const withdraw = useMutation({ mutationFn: instanceApi.withdraw, ...suppressFeedback });
-  const addAssignee = useMutation({ mutationFn: instanceApi.addAssignee, ...suppressFeedback });
+  const addAssignee = useMutation({ mutationFn: instanceApi.addAssignee, ...pickerFeedback });
   const removeAssignee = useMutation({ mutationFn: instanceApi.removeAssignee, ...suppressFeedback });
-  const addCC = useMutation({ mutationFn: instanceApi.addCC, ...suppressFeedback });
+  const addCC = useMutation({ mutationFn: instanceApi.addCC, ...pickerFeedback });
   const urgeTask = useMutation({ mutationFn: instanceApi.urgeTask, ...suppressFeedback });
 
   const [modal, setModal] = useState<DetailModal | null>(null);
@@ -608,7 +610,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
             return;
           }
 
-          await processTask.mutateAsync({
+          await transfer.mutateAsync({
             taskId: myTask.taskId,
             action: "transfer",
             formData: instance.businessKind ? await business.collect({ inlineError: true }) : undefined,

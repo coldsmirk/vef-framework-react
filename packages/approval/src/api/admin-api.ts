@@ -51,7 +51,7 @@ export interface AdminApprovalApi {
 /**
  * Supervision API for approval administrators.
  */
-export function useAdminApprovalApi({ inlineReassignErrors = false } = {}): AdminApprovalApi {
+export function useAdminApprovalApi(): AdminApprovalApi {
   const apiClient = useApiClient();
 
   return useMemo<AdminApprovalApi>(
@@ -82,10 +82,10 @@ export function useAdminApprovalApi({ inlineReassignErrors = false } = {}): Admi
         );
       }
 
-      function action<TParams extends object>(name: string, skipErrorMessage = false): MutationFunction<unknown, TParams> {
+      function action<TParams extends object>(name: string): MutationFunction<unknown, TParams> {
         return apiClient.createMutationFn<unknown, TParams>(
           `approval_admin_${name}`,
-          ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, name, params), ...skipErrorMessage && { skipErrorMessage } })
+          ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, name, params) })
         );
       }
 
@@ -99,7 +99,7 @@ export function useAdminApprovalApi({ inlineReassignErrors = false } = {}): Admi
         planVoid: detailQuery<PlanVoidResult, PlanVoidParams>("plan_void"),
         voidInstance: action<VoidInstanceParams>("void_instance"),
         terminateInstance: action<TerminateInstanceParams>("terminate_instance"),
-        reassignTask: action<ReassignTaskParams>("reassign_task", inlineReassignErrors),
+        reassignTask: action<ReassignTaskParams>("reassign_task"),
         retryBusinessProjection: action<RetryBusinessProjectionParams>("retry_business_projection"),
         applyHandovers: apiClient.createMutationFn<HandoverReport, ApplyHandoversParams>(
           "approval_admin_apply_handovers",
@@ -111,6 +111,6 @@ export function useAdminApprovalApi({ inlineReassignErrors = false } = {}): Admi
         )
       };
     },
-    [apiClient, inlineReassignErrors]
+    [apiClient]
   );
 }

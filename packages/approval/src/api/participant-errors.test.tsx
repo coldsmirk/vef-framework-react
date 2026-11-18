@@ -6,10 +6,11 @@ import { useInstanceApi } from "./instance-api";
 describe("participant action error reporting", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lets the picker own transfer, add-assignee and CC errors while preserving other task error messages", async () => {
+  it("honors the caller’s feedback choice for transfer, add-assignee and CC", async () => {
     const apiClient = mockApprovalApi(() => null);
-    const { result } = renderHook(() => useInstanceApi({ inlineUserErrors: true }), { apiClient });
+    const { result } = renderHook(() => useInstanceApi(), { apiClient });
     await apiClient.executeMutation({
+      meta: { shouldShowErrorFeedback: false },
       mutationFn: result.current.processTask,
       params: {
         taskId: "t",
@@ -18,6 +19,7 @@ describe("participant action error reporting", () => {
       }
     });
     await apiClient.executeMutation({
+      meta: { shouldShowErrorFeedback: false },
       mutationFn: result.current.addAssignee,
       params: {
         taskId: "t",
@@ -25,7 +27,11 @@ describe("participant action error reporting", () => {
         addType: "after"
       }
     });
-    await apiClient.executeMutation({ mutationFn: result.current.addCC, params: { instanceId: "i", ccUserIds: ["user"] } });
+    await apiClient.executeMutation({
+      meta: { shouldShowErrorFeedback: false },
+      mutationFn: result.current.addCC,
+      params: { instanceId: "i", ccUserIds: ["user"] }
+    });
     await apiClient.executeMutation({ mutationFn: result.current.processTask, params: { taskId: "t", action: "approve" } });
     const { post } = Object.getPrototypeOf(apiClient[HTTP_CLIENT]);
 

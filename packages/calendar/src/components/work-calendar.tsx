@@ -57,6 +57,7 @@ export function CalendarView({ selection }: { selection?: Selection }) {
     error,
     isLoading
   } = useQuery({
+    meta: { shouldShowErrorFeedback: false },
     queryFn: api.findCalendarDays,
     queryKey: [api.findCalendarDays.key, { startsAt, endsAt }]
   });

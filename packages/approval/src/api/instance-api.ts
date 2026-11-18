@@ -43,15 +43,15 @@ export interface InstanceApi {
 /**
  * Runtime action API for approval instances and tasks.
  */
-export function useInstanceApi({ inlineUserErrors = false } = {}): InstanceApi {
+export function useInstanceApi(): InstanceApi {
   const apiClient = useApiClient();
 
   return useMemo<InstanceApi>(
     () => {
-      function action<TParams extends object>(name: string, handlesError?: (params: TParams) => boolean): MutationFunction<unknown, TParams> {
+      function action<TParams extends object>(name: string): MutationFunction<unknown, TParams> {
         return apiClient.createMutationFn<unknown, TParams>(
           `approval_instance_${name}`,
-          ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, name, params), ...inlineUserErrors && handlesError?.(params) && { skipErrorMessage: true } })
+          ({ post }) => params => post(API_PATH, { data: createApiRequest(RESOURCE, name, params) })
         );
       }
 
@@ -66,16 +66,16 @@ export function useInstanceApi({ inlineUserErrors = false } = {}): InstanceApi {
         ),
         deleteAnnotation: action<{ id: string }>("delete_annotation"),
         start: action<StartInstanceParams>("start"),
-        processTask: action<ProcessTaskParams>("process_task", params => params.action === "transfer"),
+        processTask: action<ProcessTaskParams>("process_task"),
         withdraw: action<WithdrawInstanceParams>("withdraw"),
         resubmit: action<ResubmitInstanceParams>("resubmit"),
-        addCC: action<AddCCParams>("add_cc", () => true),
+        addCC: action<AddCCParams>("add_cc"),
         markCCRead: action<MarkCCReadParams>("mark_cc_read"),
-        addAssignee: action<AddAssigneeParams>("add_assignee", () => true),
+        addAssignee: action<AddAssigneeParams>("add_assignee"),
         removeAssignee: action<RemoveAssigneeParams>("remove_assignee"),
         urgeTask: action<UrgeTaskParams>("urge_task")
       };
     },
-    [apiClient, inlineUserErrors]
+    [apiClient]
   );
 }
