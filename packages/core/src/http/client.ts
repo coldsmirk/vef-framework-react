@@ -70,6 +70,11 @@ function isArrayBuffer(value: unknown): value is ArrayBuffer {
   return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
 }
 
+// Axios keeps custom options on the request config through interceptors and retries.
+function skipsErrorMessage(config?: AxiosRequestConfig & Pick<RequestOptions, "skipErrorMessage">): boolean {
+  return config?.skipErrorMessage === true;
+}
+
 function readHeader(headers: AxiosResponse<unknown>["headers"], name: string): unknown {
   const get = Reflect.get(headers, "get");
 
@@ -223,7 +228,7 @@ export class HttpClient {
     const message = error instanceof Error ? error.message : String(error);
     const errorText = `发起请求失败: ${message || "未知错误"}`;
 
-    if (showErrorMessage) {
+    if (showErrorMessage && !(axios.isAxiosError(error) && skipsErrorMessage(error.config))) {
       showErrorMessage(errorText);
     } else {
       console.error(`[HttpClient] ${errorText}`);
@@ -268,7 +273,7 @@ export class HttpClient {
     const { response } = error;
 
     if (!response) {
-      this.logError(`请求失败: ${error.message || "未知错误"}`);
+      this.logError(`请求失败: ${error.message || "未知错误"}`, undefined, error.config);
       throw error;
     }
 
@@ -288,7 +293,7 @@ export class HttpClient {
 
     switch (status) {
       case 400: {
-        this.logWarning(message, `${requestInfo} 参数错误: ${message}`);
+        this.logWarning(message, `${requestInfo} 参数错误: ${message}`, config);
         break;
       }
 
@@ -306,14 +311,17 @@ export class HttpClient {
       }
 
       case 403: {
-        this.#options.showWarningMessage?.(`${message}, 请联系管理员为您开通`);
+        if (!skipsErrorMessage(config)) {
+          this.#options.showWarningMessage?.(`${message}, 请联系管理员为您开通`);
+        }
+
         console.warn(`[HttpClient] ${requestInfo} 访问被拒绝: ${message}`);
         await this.#options.onAccessDenied?.();
         break;
       }
 
       default: {
-        this.logError(message, `${requestInfo} 返回错误: ${message}`);
+        this.logError(message, `${requestInfo} 返回错误: ${message}`, config);
       }
     }
 
@@ -368,8 +376,8 @@ export class HttpClient {
   /**
    * Log warning message using configured handler or console.
    */
-  private logWarning(userMessage: string, consoleMessage?: string): void {
-    if (this.#options.showWarningMessage) {
+  private logWarning(userMessage: string, consoleMessage?: string, config?: AxiosRequestConfig): void {
+    if (this.#options.showWarningMessage && !skipsErrorMessage(config)) {
       this.#options.showWarningMessage(userMessage);
     } else {
       console.warn(`[HttpClient] ${consoleMessage ?? userMessage}`);
@@ -379,8 +387,8 @@ export class HttpClient {
   /**
    * Log error message using configured handler or console.
    */
-  private logError(userMessage: string, consoleMessage?: string): void {
-    if (this.#options.showErrorMessage) {
+  private logError(userMessage: string, consoleMessage?: string, config?: AxiosRequestConfig): void {
+    if (this.#options.showErrorMessage && !skipsErrorMessage(config)) {
       this.#options.showErrorMessage(userMessage);
     } else {
       console.error(`[HttpClient] ${consoleMessage ?? userMessage}`);
@@ -700,7 +708,7 @@ export class HttpClient {
    * Apply the configured business-code handling to an API response envelope.
    */
   private assertBusinessSuccess(result: ApiResult, config: AxiosRequestConfig): void {
-    const { showWarningMessage, okCode = 0 } = this.#options;
+    const { okCode = 0 } = this.#options;
     const {
       code,
       message,
@@ -711,11 +719,7 @@ export class HttpClient {
       return;
     }
 
-    if (showWarningMessage) {
-      showWarningMessage(message);
-    } else {
-      console.warn(`[HttpClient] [${config.method}: ${config.url}] 返回错误: ${message}`);
-    }
+    this.logWarning(message, `[${config.method}: ${config.url}] 返回错误: ${message}`, config);
 
     throw new BusinessError(code, message, data);
   }

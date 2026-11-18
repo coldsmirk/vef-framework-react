@@ -163,4 +163,8 @@ export interface RequestOptions {
    * The headers for the request.
    */
   headers?: RawAxiosRequestHeaders;
+  /**
+   * The caller displays this request's failure inline. Authentication handling still runs.
+   */
+  skipErrorMessage?: boolean;
 }

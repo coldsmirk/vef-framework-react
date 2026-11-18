@@ -483,6 +483,18 @@ describe("http/HttpClient", () => {
       );
     });
 
+    it("preserves business errors for inline callers without notifying other requests", async () => {
+      silenceConsole("warn");
+      const showWarningMessage = vi.fn();
+      const { handlers } = buildHttpClient({ showWarningMessage });
+      const inline = makeOkResponse(null, 2800, "Invalid rule");
+      Object.assign(inline.config, { skipErrorMessage: true });
+      await expect(handlers.responseSuccess(inline)).rejects.toMatchObject({ code: 2800, message: "Invalid rule" });
+      expect(showWarningMessage).not.toHaveBeenCalled();
+      await expect(handlers.responseSuccess(makeOkResponse(null, 2800, "Another request"))).rejects.toThrow("Another request");
+      expect(showWarningMessage).toHaveBeenCalledWith("Another request");
+    });
+
     it("accepts an array of okCodes", async () => {
       const { handlers } = buildHttpClient({ okCode: [0, 200] });
 
@@ -570,6 +582,33 @@ describe("http/HttpClient", () => {
       } as AxiosError<ApiResult>;
 
       await expect(handlers.responseError(error)).rejects.toBe(error);
+    });
+
+    it("lets the caller display HTTP failures while preserving access-denied handling", async () => {
+      silenceConsole("warn");
+      const onAccessDenied = vi.fn();
+      const showWarningMessage = vi.fn();
+      const { handlers } = buildHttpClient({ onAccessDenied, showWarningMessage });
+      const error = makeAxiosError(403, {
+        code: 403,
+        message: "Forbidden",
+        data: null
+      });
+      Object.assign(error.response!.config, { skipErrorMessage: true });
+      await expect(handlers.responseError(error)).rejects.toBe(error);
+      expect(onAccessDenied).toHaveBeenCalledOnce();
+      expect(showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it("lets the caller display a network failure", async () => {
+      silenceConsole("error");
+      const showErrorMessage = vi.fn();
+      const { handlers } = buildHttpClient({ showErrorMessage });
+      const error = makeAxiosError(500, null);
+      delete error.response;
+      Object.assign(error.config!, { skipErrorMessage: true });
+      await expect(handlers.responseError(error)).rejects.toBe(error);
+      expect(showErrorMessage).not.toHaveBeenCalled();
     });
 
     it("decrypts a protected HTTP error before reporting its API message", async () => {
