@@ -4,6 +4,7 @@ import type { AnnotationView } from "./annotation";
 import type { FormData, UserInfo } from "./base";
 import type { InstanceFlowGraph, TimelineEntry } from "./detail";
 import type { ActionType, BindingProjectionStatus, InstanceStatus, TaskStatus } from "./enums";
+import type { VoidPolicy, VoidRecord, VoidRequestSummary } from "./void";
 
 /**
  * An approval instance in the admin view, mirroring `admin.Instance`.
@@ -60,6 +61,8 @@ export interface AdminInstanceInfo {
   currentNodeName?: string;
   businessKind?: string;
   businessRef?: string;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string | null;
   formData?: FormData;
   /**
    * The form-visible part of the instance's globals snapshot — the form's
@@ -80,6 +83,9 @@ export interface AdminInstanceDetail {
   formSchema?: FormSchema;
   businessView?: unknown;
   annotations?: AnnotationView[];
+  voidRecord?: VoidRecord;
+  voidRequest?: VoidRequestSummary;
+  availableActions?: Array<"void">;
   timeline: TimelineEntry[];
   flowGraph: InstanceFlowGraph;
 }

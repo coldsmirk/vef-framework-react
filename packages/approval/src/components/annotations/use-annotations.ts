@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { APPROVAL_PERMISSIONS } from "../../permissions";
 import { resolveBusinessRenderer, useApprovalPlugins } from "../../plugins";
+import { isMyInstanceDetail } from "../../types";
 
 export interface AnnotationThread {
   annotation: AnnotationView;
@@ -92,7 +93,7 @@ export function useAnnotations(detail: InstanceDetail) {
   const kind = detail.instance.businessKind;
   const writable = (hasPermission?.(APPROVAL_PERMISSIONS.annotation.write) ?? true)
     && (!kind || Boolean(resolveBusinessRenderer(businessKinds, kind)));
-  const mine = "availableActions" in detail ? detail : undefined;
+  const mine = isMyInstanceDetail(detail) ? detail : undefined;
   const task = writable ? mine?.myTask : undefined;
   const canRespond = writable && detail.instance.status === "returned" && Boolean(mine?.availableActions.includes("resubmit"));
   const client = useQueryClient();

@@ -5,6 +5,7 @@ import type { FormSchema } from "@vef-framework-react/form-editor";
 
 import type { FullAudited } from "./base";
 import type { InitiatorKind, InstanceStatus, StorageMode, VersionStatus } from "./enums";
+import type { VoidPolicy } from "./void";
 
 /**
  * Optional projection for a business-kind flow, mirroring the Go
@@ -67,6 +68,8 @@ export interface Flow extends FullAudited {
   isActive: boolean;
   currentVersion: number;
   initiationWindow?: WindowRule | null;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string | null;
 }
 
 /**
@@ -130,6 +133,7 @@ export interface BusinessKindDescriptor {
   kind: string;
   label: string;
   formFields: ApprovalFormField[];
+  isVoidable: boolean;
 }
 
 /**
@@ -173,6 +177,8 @@ export interface CreateFlowParams {
   instanceTitleTemplate: string;
   initiators?: InitiatorParams[];
   initiationWindow?: WindowRule | null;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string | null;
 }
 
 /**
@@ -192,6 +198,8 @@ export interface UpdateFlowParams {
   instanceTitleTemplate: string;
   initiators?: InitiatorParams[];
   initiationWindow?: WindowRule | null;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string | null;
 }
 
 /**
@@ -239,6 +247,7 @@ export interface FlowSearch {
    * that tenant, which is what a picker of a tenant's usable flows needs.
    */
   includeShared?: boolean;
+  businessKind?: string;
   categoryId?: string;
   keyword?: string;
   isActive?: boolean;

@@ -13,9 +13,12 @@ import type {
   ApplyHandoversParams,
   ApprovalMetrics,
   HandoverReport,
+  PlanVoidParams,
+  PlanVoidResult,
   ReassignTaskParams,
   RetryBusinessProjectionParams,
-  TerminateInstanceParams
+  TerminateInstanceParams,
+  VoidInstanceParams
 } from "../types";
 
 import { createApiRequest, useApiClient } from "@vef-framework-react/core";
@@ -40,6 +43,8 @@ export interface AdminApprovalApi {
   terminateInstance: MutationFunction<unknown, TerminateInstanceParams>;
   reassignTask: MutationFunction<unknown, ReassignTaskParams>;
   retryBusinessProjection: MutationFunction<unknown, RetryBusinessProjectionParams>;
+  planVoid: QueryFunction<PlanVoidResult, PlanVoidParams>;
+  voidInstance: MutationFunction<unknown, VoidInstanceParams>;
   applyHandovers: MutationFunction<HandoverReport, ApplyHandoversParams>;
 }
 
@@ -91,6 +96,8 @@ export function useAdminApprovalApi(): AdminApprovalApi {
         findActionLogs: pagedQuery<AdminActionLog, { instanceId: string; tenantId?: string }>("find_action_logs"),
         getMetrics: detailQuery<ApprovalMetrics, { tenantId?: string }>("get_metrics"),
         findBusinessProjections: pagedQuery<AdminBusinessProjection, AdminBusinessProjectionSearch>("find_business_projections"),
+        planVoid: detailQuery<PlanVoidResult, PlanVoidParams>("plan_void"),
+        voidInstance: action<VoidInstanceParams>("void_instance"),
         terminateInstance: action<TerminateInstanceParams>("terminate_instance"),
         reassignTask: action<ReassignTaskParams>("reassign_task"),
         retryBusinessProjection: action<RetryBusinessProjectionParams>("retry_business_projection"),

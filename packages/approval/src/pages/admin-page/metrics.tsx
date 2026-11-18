@@ -13,7 +13,7 @@ import {
   TASK_STATUS_LABELS
 } from "../../components/status/labels";
 
-const INSTANCE_ORDER: readonly InstanceStatus[] = ["running", "approved", "rejected", "returned", "withdrawn", "terminated"];
+const INSTANCE_ORDER: readonly InstanceStatus[] = ["running", "approved", "rejected", "returned", "withdrawn", "terminated", "voided"];
 const TASK_ORDER: readonly TaskStatus[] = ["pending", "waiting", "approved", "rejected", "handled", "transferred"];
 
 const scrollFillCss = css({

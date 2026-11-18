@@ -5,6 +5,7 @@ import type { AnnotationView } from "./annotation";
 import type { FormData, UserInfo } from "./base";
 import type { InstanceFlowGraph, TimelineEntry } from "./detail";
 import type { AddAssigneeType, FieldPermission, InstanceAction, InstanceStatus, TaskStatus } from "./enums";
+import type { VoidPolicy, VoidRecord, VoidRequestSummary } from "./void";
 
 /**
  * A flow the current user is allowed to initiate, mirroring
@@ -151,6 +152,8 @@ export interface MyInstanceInfo {
   currentNodeName?: string;
   businessKind?: string;
   businessRef?: string;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string | null;
   formData?: FormData;
   /**
    * The form-visible part of the instance's globals snapshot — the form's
@@ -206,6 +209,8 @@ export interface MyInstanceDetail {
   formSchema?: FormSchema;
   businessView?: unknown;
   annotations?: AnnotationView[];
+  voidRecord?: VoidRecord;
+  voidRequest?: VoidRequestSummary;
   timeline: TimelineEntry[];
   flowGraph: InstanceFlowGraph;
   availableActions: InstanceAction[];

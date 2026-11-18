@@ -10,12 +10,12 @@ import type { KindDescriptor } from "@vef-framework-react/approval-flow-editor";
 /**
  * Lifecycle status of an approval instance.
  */
-export type InstanceStatus = "running" | "approved" | "rejected" | "withdrawn" | "returned" | "terminated";
+export type InstanceStatus = "running" | "approved" | "rejected" | "withdrawn" | "returned" | "terminated" | "voided";
 
 /**
- * The instance statuses that are final — no further transition can occur.
+ * The instance statuses that are final for approval processing.
  */
-export const FINAL_INSTANCE_STATUSES = ["approved", "rejected", "terminated"] as const satisfies readonly InstanceStatus[];
+export const FINAL_INSTANCE_STATUSES = ["approved", "rejected", "terminated", "voided"] as const satisfies readonly InstanceStatus[];
 
 /**
  * Whether an instance status is final, mirroring `InstanceStatus.IsFinal`.
@@ -68,7 +68,8 @@ export type ActionType
     | "reassign"
     | "terminate"
     | "add_cc"
-    | "handover";
+    | "handover"
+    | "void";
 
 /**
  * The activity vocabulary of timeline / flow-graph projections: every
@@ -158,4 +159,5 @@ export type InstanceAction
     | "add_assignee"
     | "remove_assignee"
     | "add_cc"
-    | "urge";
+    | "urge"
+    | "request_void";

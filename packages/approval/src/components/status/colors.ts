@@ -14,7 +14,8 @@ export const INSTANCE_STATUS_COLORS: Record<InstanceStatus, string> = {
   rejected: "error",
   withdrawn: "default",
   returned: "warning",
-  terminated: "error"
+  terminated: "error",
+  voided: "default"
 };
 
 export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {

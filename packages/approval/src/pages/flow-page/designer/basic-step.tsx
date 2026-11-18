@@ -109,7 +109,7 @@ function InitiatorsEditor({
   );
 }
 
-const PROJECTABLE_STATUSES: readonly InstanceStatus[] = ["running", "approved", "rejected", "withdrawn", "returned", "terminated"];
+const PROJECTABLE_STATUSES: readonly InstanceStatus[] = ["running", "approved", "rejected", "withdrawn", "returned", "terminated", "voided"];
 
 /**
  * The business write-back configuration. Key columns must exactly match a

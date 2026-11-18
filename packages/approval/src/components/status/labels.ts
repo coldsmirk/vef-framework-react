@@ -20,7 +20,8 @@ export const INSTANCE_STATUS_LABELS: Record<InstanceStatus, string> = {
   rejected: "已拒绝",
   withdrawn: "已撤回",
   returned: "已退回",
-  terminated: "已终止"
+  terminated: "已终止",
+  voided: "已作废"
 };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
@@ -73,6 +74,7 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
   resubmit: "重新提交",
   reassign: "改派",
   terminate: "终止",
+  void: "作废",
   add_cc: "抄送",
   handover: "工作交接",
   urge: "催办"
@@ -86,7 +88,7 @@ export const PROCESS_TASK_ACTION_LABELS: Record<ProcessTaskAction, string> = {
   rollback: "回退"
 };
 
-const INSTANCE_STATUS_ORDER: readonly InstanceStatus[] = ["running", "approved", "rejected", "returned", "withdrawn", "terminated"];
+const INSTANCE_STATUS_ORDER: readonly InstanceStatus[] = ["running", "approved", "rejected", "returned", "withdrawn", "terminated", "voided"];
 
 const TASK_STATUS_ORDER: readonly TaskStatus[] = [
   "pending",

@@ -7,6 +7,10 @@ import type { MyInstanceDetail } from "./my";
 
 export type InstanceDetail = MyInstanceDetail | AdminInstanceDetail;
 
+export function isMyInstanceDetail(detail: InstanceDetail): detail is MyInstanceDetail {
+  return !("tenantId" in detail.instance);
+}
+
 /**
  * One assignee's involvement at an approval/handle node during a single
  * visit, mirroring the Go `approval.NodeParticipant`. `taskId` is what task
@@ -64,7 +68,7 @@ export interface CCRecipient {
  * milestone the way withdraw and terminate do, and a rejection stops on the
  * approval node with a `rejected` visit instead of traversing to the end.
  */
-export type TimelineEntryKind = "start" | "approval" | "handle" | "cc" | "end" | "withdraw" | "terminate";
+export type TimelineEntryKind = "start" | "approval" | "handle" | "cc" | "end" | "withdraw" | "terminate" | "void";
 
 /**
  * One step of the instance timeline — the chronological, node-by-node account

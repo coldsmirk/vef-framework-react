@@ -14,6 +14,8 @@ import type {
   PendingCounts,
   PendingTask,
   PendingTaskSearch,
+  PlanVoidParams,
+  RequesterVoidPlanResult,
   StartForm
 } from "../types";
 
@@ -31,6 +33,7 @@ const RESOURCE = "approval/my";
  */
 export interface MyApprovalApi {
   findAvailableFlows: QueryFunction<PaginationResult<AvailableFlow>, PaginatedQueryParams<AvailableFlowSearch>>;
+  planVoidAsRequester: QueryFunction<RequesterVoidPlanResult, PlanVoidParams>;
   getStartForm: QueryFunction<StartForm, { flowCode: string }>;
   findInitiated: QueryFunction<PaginationResult<InitiatedInstance>, PaginatedQueryParams<InitiatedInstanceSearch>>;
   findPendingTasks: QueryFunction<PaginationResult<PendingTask>, PaginatedQueryParams<PendingTaskSearch>>;
@@ -76,6 +79,7 @@ export function useMyApprovalApi(): MyApprovalApi {
 
       return {
         findAvailableFlows: pagedQuery<AvailableFlow, AvailableFlowSearch>("find_available_flows"),
+        planVoidAsRequester: detailQuery<RequesterVoidPlanResult, PlanVoidParams>("plan_void"),
         getStartForm: detailQuery<StartForm, { flowCode: string }>("get_start_form"),
         findInitiated: pagedQuery<InitiatedInstance, InitiatedInstanceSearch>("find_initiated"),
         findPendingTasks: pagedQuery<PendingTask, PendingTaskSearch>("find_pending_tasks"),

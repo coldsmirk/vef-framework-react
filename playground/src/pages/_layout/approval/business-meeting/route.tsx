@@ -2,7 +2,7 @@ import type { BusinessFormHandle, BusinessKindRenderer } from "@vef-framework-re
 import type { Ref } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
-import { ApprovalProvider, InstanceDetailPanel, StartInstanceDrawer, useApprovalPlugins, useMyApprovalApi } from "@vef-framework-react/approval";
+import { ApprovalProvider, InstanceDetailPanel, isMyInstanceDetail, StartInstanceDrawer, useApprovalPlugins, useMyApprovalApi } from "@vef-framework-react/approval";
 import { Button, Card, Flex, Input, Labeled, Page, Segmented, Stack, Text } from "@vef-framework-react/components";
 import { useQueryClient } from "@vef-framework-react/core";
 import { useImperativeHandle, useState } from "react";
@@ -58,7 +58,7 @@ const renderer: BusinessKindRenderer = {
     myTask
   }) => {
     const meeting = view as Meeting;
-    return <MeetingForm key={meeting.id} handle={handle} value={meeting} writable={Boolean(myTask || ("availableActions" in detail && detail.availableActions.includes("resubmit")))} />;
+    return <MeetingForm key={meeting.id} handle={handle} value={meeting} writable={Boolean(myTask || (isMyInstanceDetail(detail) && detail.availableActions.includes("resubmit")))} />;
   }
 };
 

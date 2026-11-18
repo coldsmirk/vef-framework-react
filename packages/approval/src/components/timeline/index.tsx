@@ -143,7 +143,7 @@ function CCRecipientsRow({ recipients }: { recipients: CCRecipient[] }) {
 }
 
 function entryDotColor(entry: TimelineEntry): string {
-  if (entry.kind === "withdraw") {
+  if (entry.kind === "withdraw" || entry.kind === "void") {
     return "gray";
   }
 
@@ -163,7 +163,7 @@ function entryTitle(entry: TimelineEntry): string {
     return "终止";
   }
 
-  return entry.name ?? "";
+  return entry.kind === "void" ? "作废" : entry.name ?? "";
 }
 
 /**

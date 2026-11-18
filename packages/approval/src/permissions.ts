@@ -30,7 +30,8 @@ export const APPROVAL_PERMISSIONS = {
     withdraw: "approval.instance.withdraw",
     resubmit: "approval.instance.resubmit",
     cc: "approval.instance.cc",
-    terminate: "approval.instance.terminate"
+    terminate: "approval.instance.terminate",
+    void: "approval.instance.void"
   },
   task: {
     query: "approval.task.query",
