@@ -1,8 +1,10 @@
 import type { EditableColumn } from "@vef-framework-react/components";
+import type { ReactNode } from "react";
 
-import type { Block, FieldOption, FieldOptionSource, KeyedFormField } from "../types";
+import type { Block, FieldOption, FieldOptionSource, KeyedFormField, SubformNode } from "../types";
+import type { FormRendererProps } from "./form-renderer";
 
-import { createEditableColumn, filterOptionByLabel } from "@vef-framework-react/components";
+import { createEditableColumn, filterOptionByLabel, Flex, Text } from "@vef-framework-react/components";
 import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
@@ -56,20 +58,14 @@ function isRequired(field: KeyedFormField): boolean {
 }
 
 /**
- * Map one template field to an `EditableTable` column, or `null` when it cannot
- * be a column (a non-keyed presentation / action field — the `table` variant's
- * validation rejects these, but the renderer skips them defensively too).
+ * Map one keyed template field to its table column.
  *
  * The per-type editor switch below is mirrored (statically) by the canvas
  * preview's `SampleCell` (`editor/canvas/subform-table-cell.tsx`) — `field.type`
  * is host-extensible, so neither switch can be exhaustive; when adding a type
  * here, add its preview there too or the canvas degrades to a muted dash.
  */
-function columnFor(field: Block, codeSets: CodeSetOptions): EditableColumn<Row> | null {
-  if (isContainerNode(field) || !isKeyedField(field)) {
-    return null;
-  }
-
+function columnFor(field: KeyedFormField, codeSets: CodeSetOptions): EditableColumn<Row> {
   const title = field.label ?? field.key;
   // Fixed pixel width when the author set one; `undefined` lets the column
   // auto-distribute the table's remaining width (the `EditableTable` default).
@@ -200,6 +196,84 @@ function columnFor(field: Block, codeSets: CodeSetOptions): EditableColumn<Row> 
  * Build the `EditableTable` columns for a subform template, one per keyed leaf
  * field in document order. Non-keyed blocks are dropped.
  */
-export function buildSubformColumns(template: Block[], codeSets?: CodeSetOptions): Array<EditableColumn<Row>> {
-  return template.map(block => columnFor(block, codeSets)).filter((column): column is EditableColumn<Row> => column !== null);
+export function buildSubformColumns(
+  template: Block[],
+  codeSets?: CodeSetOptions,
+  extras?: { subform: SubformNode; render: NonNullable<FormRendererProps["renderFieldExtra"]> }
+): Array<EditableColumn<Row>> {
+  const columns: Array<EditableColumn<Row>> = [];
+
+  for (const field of template) {
+    if (isContainerNode(field) || !isKeyedField(field)) {
+      continue;
+    }
+
+    const column = columnFor(field, codeSets);
+
+    if (!extras) {
+      columns.push(column);
+      continue;
+    }
+
+    const { subform, render } = extras;
+    const leading = columns.length === 0;
+    const location = {
+      key: subform.key,
+      column: field.key,
+      type: field.type,
+      label: field.label
+    };
+    const header = render(location);
+    const editor = column.renderEditor;
+
+    function cell(value: ReactNode, row: number) {
+      const heading = leading && subformRowHeading(subform, row, render);
+      const extra = render({ ...location, row });
+
+      if (!heading && (extra === null || extra === undefined)) {
+        return value;
+      }
+
+      return (
+        <>
+          {heading}
+          {value}
+          {extra}
+        </>
+      );
+    }
+
+    columns.push({
+      ...column,
+      title: header === null || header === undefined
+        ? column.title
+        : (
+            <>
+              {field.label ?? field.key}
+              {header}
+            </>
+          ),
+      renderView: (value, record, index) => cell(column.renderView ? column.renderView(value, record, index) : value as ReactNode, index),
+      renderEditor: editor && ((bound, context) => cell(editor(bound, context), context.index))
+    });
+  }
+
+  return columns;
+}
+
+export function subformRowHeading(subform: SubformNode, row: number, render?: FormRendererProps["renderFieldExtra"]) {
+  const extra = render?.({
+    key: subform.key,
+    type: subform.type,
+    label: subform.label,
+    row
+  });
+  return (extra === null || extra === undefined)
+    ? null
+    : (
+        <Flex align="center" gap={4} wrap="wrap">
+          <Text strong>{`第 ${row + 1} 行`}</Text>
+          {extra}
+        </Flex>
+      );
 }

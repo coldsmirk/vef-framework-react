@@ -56,7 +56,7 @@ import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
 import { DEFAULT_STACK_GAP, resolveStackGap, stackSlotStyle } from "./stack-style";
-import { buildSubformColumns } from "./subform-columns";
+import { buildSubformColumns, subformRowHeading } from "./subform-columns";
 import {
   blankSubformRow,
   buildRuntimeFormId,
@@ -136,8 +136,8 @@ export interface FormRendererProps {
   containOverlays?: boolean;
   /**
    * Content beside a visible keyed field. A subform is addressed once by its key.
-   * Stacked rows also expose their zero-based row and column under the subform key.
-   * Desktop table cells use the editable table renderer and expose only the whole subform.
+   * Both layouts expose row headings and cells with a zero-based row. Desktop tables
+   * also expose column headers. All use the subform key and optional column key.
    */
   renderFieldExtra?: (field: { key: string; type: Block["type"]; label?: string; row?: number; column?: string }) => ReactNode;
 }
@@ -931,7 +931,7 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
   const wrappedRowsRef = useRef(new WeakMap<Record<string, unknown>, Record<string, unknown>>());
 
   const { options: codeSetOptions } = useCodeSetState();
-  const columns = useMemo(() => buildSubformColumns(subform.template, codeSetOptions), [subform.template, codeSetOptions]);
+  const columns = useMemo(() => buildSubformColumns(subform.template, codeSetOptions, ctx.renderFieldExtra && { subform, render: ctx.renderFieldExtra }), [subform, codeSetOptions, ctx.renderFieldExtra]);
   const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
 
   return (
@@ -1131,6 +1131,8 @@ function SubformRowBase({
 
   return (
     <chrome.SubformRow removeControl={canRemove ? <chrome.RemoveButton onClick={() => onRemove(index)} /> : undefined}>
+      {subformRowHeading(subform, index, ctx.renderFieldExtra)}
+
       <SubformRowScope ctx={ctx} prefix={rowPrefix} templateSchema={templateSchema}>
         <BlockStack blocks={subform.template} ctx={rowCtx} gap={subform.variant === "stack" ? subform.gap : undefined} />
       </SubformRowScope>

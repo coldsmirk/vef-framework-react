@@ -11,7 +11,7 @@ import type {
   SubformNode,
   TextfieldField
 } from "../types";
-import type { FormRendererApi } from "./form-renderer";
+import type { FormRendererApi, FormRendererProps } from "./form-renderer";
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -108,6 +108,8 @@ function renderRuntime(children: ReactNode): void {
   );
 }
 
+const renderLocation: NonNullable<FormRendererProps["renderFieldExtra"]> = ({ row, column }) => <span>{`${row ?? "all"}-${column ?? "all"}`}</span>;
+
 describe("FormRenderer field extras", () => {
   it("renders the normal field with no extra slot", () => {
     renderRuntime(<FormRenderer schema={stack(field("name"))} />);
@@ -116,7 +118,7 @@ describe("FormRenderer field extras", () => {
   });
 
   it("decorates only visible fields and addresses the whole table once", () => {
-    const extra = vi.fn(({ key }: { key: string }) => <span role="note">{key}</span>);
+    const extra = vi.fn((slot: { key: string; row?: number; column?: string }) => slot.row === undefined && slot.column === undefined ? <span role="note">{slot.key}</span> : null);
     renderRuntime(
       <FormRenderer
         fieldPermissions={{ secret: "hidden" }}
@@ -126,7 +128,20 @@ describe("FormRenderer field extras", () => {
     );
     expect(screen.getAllByRole("note").map(el => el.textContent)).toEqual(["name", "lines"]);
     expect(extra.mock.calls.map(([item]) => item.key)).not.toContain("secret");
-    expect(extra.mock.calls.filter(([item]) => item.key === "lines")).toHaveLength(1);
+    expect(extra.mock.calls.filter(([item]) => item.key === "lines" && item.column === undefined && item.row === undefined)).toHaveLength(1);
+  });
+
+  it("places row, column and cell extras in their respective table cells", async () => {
+    const user = userEvent.setup();
+    renderRuntime(<FormRenderer defaultValues={{ lines: [{ amount: "7" }] }} renderFieldExtra={renderLocation} schema={stack(tableSubform())} />);
+    expect(screen.getByRole("columnheader", { name: /all-amount/ })).toHaveTextContent("amount");
+    const cell = screen.getByText("0-amount").closest("td");
+    expect(cell).toHaveTextContent("7");
+    expect(cell).toContainElement(screen.getByText("0-all"));
+    const rollup = screen.getByText("all-all");
+    expect(rollup.closest("table")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /编\s*辑/ }));
+    expect(screen.getByText("0-amount").closest("td")).toContainElement(screen.getByRole("textbox"));
   });
 
   it("identifies visible stacked cells by table key, row and column", () => {
