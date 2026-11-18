@@ -5,12 +5,13 @@ import type { FlowDraftBasic } from "./types";
 
 import { Card, Labeled, Radio, Select, Stack, SYMBOL_PAGINATION, Text } from "@vef-framework-react/components";
 import { useApiClient, useInfiniteQuery, useQuery } from "@vef-framework-react/core";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { fetchFlows } from "../../../api/flow-api";
 import { VOID_REQUEST_KIND } from "../../../types";
 
 const PAGE_SIZE = 30;
+const MAX_LIST_HEIGHT = 256;
 const policies: Array<{ label: string; value: VoidPolicy }> = [
   { label: "不允许作废", value: "disabled" },
   { label: "直接作废", value: "direct" },
@@ -56,12 +57,22 @@ export function useSelectedVoidFlow(tenantId: string, code?: string) {
   });
 }
 
+function subscribeViewport(notify: () => void) {
+  window.addEventListener("resize", notify);
+  return () => window.removeEventListener("resize", notify);
+}
+
 function VoidFlowPicker({
   tenantId,
   selected,
   onChange
 }: { tenantId: string; selected?: Flow | null; onChange: (code: string) => void }) {
   const api = useApiClient();
+  const listHeight = useSyncExternalStore(
+    subscribeViewport,
+    () => Math.min(MAX_LIST_HEIGHT, Math.floor(window.innerHeight * 0.45)),
+    () => MAX_LIST_HEIGHT
+  );
   const search = useMemo(() => api.createQueryFn<PaginationResult<Flow>, { tenantId: string; keyword: string }, number>(
     "approval_void_flow_options",
     ({ post }) => (params, page) => fetchFlows(post, filter(params.tenantId, params.keyword, page))
@@ -88,6 +99,7 @@ function VoidFlowPicker({
     <Select<string>
       aria-label="作废申请流程"
       labelRender={() => selected?.name ?? "请选择作废申请流程"}
+      listHeight={listHeight}
       loading={choices.isFetching}
       options={[...options].map(([value, label]) => { return { value, label }; })}
       placeholder="搜索作废申请流程"
