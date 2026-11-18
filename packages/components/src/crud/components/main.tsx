@@ -73,6 +73,8 @@ export const Main = memo(<
   return (
     <FlexCard
       css={styles.main}
+      // Keep the table header, a usable row and the pager together when filters wrap.
+      styles={{ root: { overflowY: "auto" }, body: { minHeight: "14rem" } }}
       title={(
         <Toolbar
           advancedSearch={advancedSearch}
