@@ -43,7 +43,7 @@ export function useEditableColumns<TRow extends AnyObject>(
         ellipsis: column.ellipsis,
         fixed: column.fixed,
         key: column.key ?? (column.dataIndex as Key),
-        minWidth: column.minWidth,
+        minWidth: column.minWidth ?? (typeof column.width === "number" ? column.width : undefined),
         title: column.title,
         width: column.width,
         render: (value: unknown, row: TRow, index: number): ReactNode => <EditableCell column={column} index={index} row={row} rowKey={getKey(row)} value={value} />
@@ -55,6 +55,7 @@ export function useEditableColumns<TRow extends AnyObject>(
       compiled.push({
         align: "center",
         key: "__editable_operations",
+        minWidth: typeof operation.width === "number" ? operation.width : undefined,
         title: operation.title ?? "操作",
         width: operation.width,
         render: (_value: unknown, row: TRow, index: number): ReactNode => (

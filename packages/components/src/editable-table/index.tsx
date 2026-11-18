@@ -101,6 +101,7 @@ function EditableTableInner<TRow extends AnyObject>({
           pagination={pagination ?? false}
           rowKey={getKey}
           size={size}
+          tableLayout="auto"
         />
 
         {creatable ? <AddRowButton /> : null}

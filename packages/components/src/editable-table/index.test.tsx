@@ -275,9 +275,10 @@ describe("EditableTable", () => {
     });
 
     it("honors an explicit operationColumn.width override", () => {
-      const { container } = render(<Harness operationColumn={{ width: 220 }} />);
+      const { container } = render(<Harness columns={[{ ...columns[0]!, width: 180 }]} operationColumn={{ width: 220 }} />);
 
-      expect(operationCol(container), "operation column should use the configured width").toHaveStyle({ width: "220px" });
+      expect(container.querySelector("col")).toHaveStyle({ width: "180px", minWidth: "180px" });
+      expect(operationCol(container)).toHaveStyle({ width: "220px", minWidth: "220px" });
     });
   });
 });
