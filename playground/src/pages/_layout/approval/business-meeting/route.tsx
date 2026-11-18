@@ -2,8 +2,8 @@ import type { BusinessFormHandle, BusinessKindRenderer } from "@vef-framework-re
 import type { Ref } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
-import { ApprovalProvider, InstanceDetailPanel, isMyInstanceDetail, StartInstanceDrawer, useApprovalPlugins, useMyApprovalApi } from "@vef-framework-react/approval";
-import { Button, Card, Flex, Input, Labeled, Page, Segmented, Stack, Text } from "@vef-framework-react/components";
+import { AdminInstanceDetailPanel, ApprovalProvider, InstanceDetailPanel, isMyInstanceDetail, StartInstanceDrawer, useApprovalPlugins, useMyApprovalApi } from "@vef-framework-react/approval";
+import { Button, Card, Checkbox, Flex, Input, Labeled, Page, Select, Stack, Text } from "@vef-framework-react/components";
 import { useQueryClient } from "@vef-framework-react/core";
 import { useImperativeHandle, useState } from "react";
 
@@ -50,6 +50,7 @@ function MeetingForm({
 }
 
 const renderer: BusinessKindRenderer = {
+  VoidOptions: ({ value, onChange }) => <Checkbox checked={value.releaseRoom === true} onChange={event => onChange({ releaseRoom: event.target.checked })}>同时释放会议室时段</Checkbox>,
   StartForm: ({ handle }) => <MeetingForm writable handle={handle} value={blank} />,
   DetailView: ({
     detail,
@@ -69,7 +70,16 @@ function MeetingPage() {
   const [instance, setInstance] = useState("meeting-review");
   const [started, setStarted] = useState(false);
   const [open, setOpen] = useState(false);
-  const options = [{ label: "待我审核", value: "meeting-review" }, { label: "退回待修改", value: "meeting-returned" }];
+  const options = [
+    { label: "待我审核", value: "meeting-review" },
+    { label: "退回待修改", value: "meeting-returned" },
+    { label: "直接作废", value: "meeting-direct" },
+    { label: "作废被阻止", value: "meeting-blocked" },
+    { label: "申请作废", value: "meeting-requestable" },
+    { label: "作废申请审批中", value: "meeting-pending" },
+    { label: "作废申请已退回", value: "meeting-revision" },
+    { label: "已作废", value: "meeting-voided" }
+  ];
 
   if (started) {
     options.push({ label: "新发起的预订", value: "meeting-new" });
@@ -80,8 +90,18 @@ function MeetingPage() {
       <Page margin scrollable>
         <Card extra={<Button type="primary" onClick={() => setOpen(true)}>发起会议预订</Button>} title="会议室预订">
           <Flex vertical gap="middle">
-            <Segmented options={options} style={{ alignSelf: "flex-start" }} value={instance} onChange={setInstance} />
-            <InstanceDetailPanel key={instance} instanceId={instance} />
+            <Labeled label="演示场景">
+              <Select
+                aria-label="演示场景"
+                options={options}
+                showSearch={{ optionFilterProp: "label" }}
+                style={{ width: 240, maxWidth: "100%" }}
+                value={instance}
+                onChange={setInstance}
+              />
+            </Labeled>
+
+            {instance === "meeting-direct" || instance === "meeting-blocked" ? <AdminInstanceDetailPanel key={instance} instanceId={instance} /> : <InstanceDetailPanel key={instance} instanceId={instance} />}
           </Flex>
 
           <StartInstanceDrawer

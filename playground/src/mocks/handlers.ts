@@ -3,6 +3,7 @@ import type { ApiRequest } from "@vef-framework-react/core";
 import { http, HttpResponse } from "msw";
 
 import { MockBusinessError, resolveMock } from "./define-mock";
+import { getDemoAttachment, storeAttachmentPart } from "./modules/void-attachments";
 
 import "./modules";
 
@@ -32,7 +33,32 @@ function fail(code: number, message: string, data: unknown = null): ApiResultBod
 }
 
 export const handlers = [
+  http.get("*/storage/files/priv/meeting-demo/*", ({ request }) => {
+    const file = getDemoAttachment(request.url);
+    return new HttpResponse(file ?? null, {
+      status: file ? 200 : 404,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": "attachment",
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+  }),
   http.post("*/api", async ({ request }) => {
+    if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+      const form = await request.formData();
+
+      if (form.get("resource") === "sys/storage" && form.get("action") === "upload_part") {
+        try {
+          return HttpResponse.json(ok(storeAttachmentPart(form)));
+        } catch (error) {
+          return HttpResponse.json(fail(400, error instanceof Error ? error.message : "附件上传失败"));
+        }
+      }
+
+      return HttpResponse.json(fail(MOCK_NOT_FOUND, "不支持的演示文件请求"));
+    }
+
     const envelope = await request.json() as ApiRequest;
     const handler = resolveMock(envelope.resource, envelope.action);
 

@@ -1,6 +1,9 @@
 import type { AnnotationView, MyInstanceDetail, ProcessTaskParams, ResubmitInstanceParams, SaveAnnotationParams, StartInstanceParams } from "@vef-framework-react/approval";
 
+import { VOID_REQUEST_KIND } from "@vef-framework-react/approval";
+
 import { defineMock, MockBusinessError } from "../define-mock";
+import { setupMeetingVoids } from "./meeting-void";
 
 const applicant = { id: "u_1", name: "张三" };
 const reviewer = { id: "u_2", name: "李四" };
@@ -176,9 +179,14 @@ function record(detail: MyInstanceDetail, data?: Record<string, unknown>) {
   detail.instance.title = String(data?.subject ?? detail.instance.title);
 }
 
-defineMock("approval/my", "get_start_form", () => start);
+const voids = setupMeetingVoids(instances, meeting);
+defineMock<{ flowCode: string }>("approval/my", "get_start_form", ({ params }) => params.flowCode === voids.flowCode ? voids.startForm : start);
 defineMock<{ instanceId: string }>("approval/my", "get_instance_detail", ({ params }) => get(params.instanceId));
 defineMock<StartInstanceParams>("approval/instance", "start", ({ params }) => {
+  if (params.flowCode === voids.flowCode) {
+    return voids.start(params.formData);
+  }
+
   const detail = meeting("meeting-new");
   detail.annotations = [];
   detail.instance.instanceNo = "HY-2026-020";
@@ -193,7 +201,12 @@ defineMock<ProcessTaskParams>("approval/instance", "process_task", ({ params }) 
     throw new MockBusinessError(404, "演示待办不存在");
   }
 
-  record(detail, params.formData);
+  if (detail.instance.businessKind === VOID_REQUEST_KIND) {
+    voids.decide(detail, params.action);
+  } else {
+    record(detail, params.formData);
+  }
+
   detail.instance.status = params.action === "reject" ? "rejected" : "approved";
   detail.instance.currentNodeName = undefined;
   detail.availableActions = [];
@@ -229,7 +242,13 @@ defineMock<ProcessTaskParams>("approval/instance", "process_task", ({ params }) 
 });
 defineMock<ResubmitInstanceParams>("approval/instance", "resubmit", ({ params }) => {
   const detail = get(params.instanceId);
-  record(detail, params.formData);
+
+  if (detail.instance.businessKind === VOID_REQUEST_KIND) {
+    voids.resubmit(detail, params.formData);
+  } else {
+    record(detail, params.formData);
+  }
+
   detail.instance.status = "running";
   detail.instance.currentNodeName = "会务审核";
   detail.availableActions = [];
