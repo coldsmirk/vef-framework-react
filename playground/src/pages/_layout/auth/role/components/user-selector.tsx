@@ -7,7 +7,6 @@ import { CheckIcon } from "lucide-react";
 import { useCallback, useImperativeHandle, useRef, useState } from "react";
 import { addRoleUsers, findRoleAvailableUsers } from "~apis";
 
-import classes from "../styles/index.module.scss";
 import { UserSearch } from "./user-search";
 
 interface UserSelectorProps {
@@ -130,12 +129,12 @@ export function UserSelector({
       ref={tableRef}
       isPaginated
       rowSelection
-      className={classes.userSelectorTable}
       columns={columns}
       queryFn={findRoleAvailableUsers}
       queryParams={{ ...userSearch, roleId }}
       rowKey="userId"
       selectedRowKeys={selectedRowKeys}
+      style={{ height: "50vh" }}
       header={(
         <Group justify="space-between">
           <UserSearch value={userSearch} onChange={setUserSearch} />

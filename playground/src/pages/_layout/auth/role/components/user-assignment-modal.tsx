@@ -7,7 +7,6 @@ import { PlusIcon, TrashIcon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { findRoleUsers, removeRoleUsers } from "~apis";
 
-import classes from "../styles/index.module.scss";
 import { UserSearch } from "./user-search";
 import { UserSelector } from "./user-selector";
 
@@ -191,7 +190,6 @@ export function UserAssignmentModal() {
     >
       <ProTable
         isPaginated
-        className={classes.userAssignmentModalBody}
         columns={columns}
         columnSettings={false}
         header={<UserSearch value={userSearch} onChange={setUserSearch} />}
@@ -199,6 +197,7 @@ export function UserAssignmentModal() {
         queryFn={findRoleUsers}
         queryParams={{ ...userSearch, roleId }}
         rowKey="userId"
+        style={{ height: "60vh" }}
         footer={(
           <ProTableSubscriber selector={state => state.refetch}>
             {refetch => renderFooter(refetch)}
