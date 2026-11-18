@@ -147,7 +147,6 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
   const {
     formFields,
     businessKind,
-    globalSubjects,
     assigneeKinds,
     ccKinds
   } = useEditorPlugins();
@@ -156,12 +155,11 @@ const EditorInner: FC<ApprovalFlowEditorProps> = ({
       return {
         formFields,
         businessKind,
-        globalSubjects,
         assigneeKinds,
         ccKinds
       };
     },
-    [formFields, globalSubjects, assigneeKinds, ccKinds, businessKind]
+    [formFields, assigneeKinds, ccKinds, businessKind]
   );
 
   const { onDragOver, onDrop } = useDrop();

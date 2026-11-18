@@ -177,7 +177,7 @@ export function useApprovalPlugins(): ResolvedApprovalPlugins {
  */
 export function toEditorPlugins(
   plugins: ResolvedApprovalPlugins,
-  formFields: FormFieldDefinition[],
+  formFields: FormFieldDefinition[] | undefined,
   kindOptions?: KindOptions
 ): EditorPlugins {
   return {

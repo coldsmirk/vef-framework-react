@@ -630,6 +630,11 @@ function aggregateBranch(condition: Record<string, unknown>) {
 }
 
 describe("validateFlowDefinition branch condition structure", () => {
+  it("accepts a scalar subject supplied by host globals at runtime", () => {
+    const definition = conditionFlowWith(aggregateBranch({ subject: "regionalBudget" }));
+    expect(codesOf(definition, [])).toEqual([]);
+  });
+
   it("rejects a non-default branch without condition groups", () => {
     const codes = codesOf(conditionFlowWith([
       {
@@ -659,6 +664,66 @@ describe("validateFlowDefinition branch condition structure", () => {
 });
 
 describe("validateFlowDefinition aggregate conditions", () => {
+  it("uses a form table for aggregates even when a scalar global has the same key", () => {
+    const definition = conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "qty" }));
+    expect(validateFlowDefinition(definition, {
+      formFields: [
+        {
+          key: "items",
+          label: "明细",
+          kind: "table",
+          columns: [
+            {
+              key: "qty",
+              label: "数量",
+              kind: "number"
+            }
+          ]
+        }
+      ],
+      globalSubjects: [
+        {
+          key: "items",
+          label: "业务参数",
+          kind: "input"
+        }
+      ]
+    })).toEqual([]);
+  });
+
+  it("rejects an aggregate over a global table absent from the form inventory", () => {
+    const definition = conditionFlowWith(aggregateBranch({ aggregate: "count" }));
+    expect(validateFlowDefinition(definition, {
+      formFields: [],
+      globalSubjects: [
+        {
+          key: "items",
+          label: "全局明细",
+          kind: "table"
+        }
+      ]
+    }).map(issue => issue.code)).toContain("unknown_catalog_field");
+  });
+
+  it("rejects a form table column that is not numeric", () => {
+    const definition = conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "name" }));
+    expect(codesOf(definition, [
+      {
+        key: "items",
+        label: "明细",
+        kind: "table",
+        columns: [
+          {
+            key: "name",
+            label: "名称",
+            kind: "input"
+          }
+        ]
+      }
+    ]))
+      .toContain("invalid_aggregate_reference");
+  });
+
   it("checks the chosen business catalog for condition and personnel references", () => {
     const fields: FormFieldDefinition[] = [
       {

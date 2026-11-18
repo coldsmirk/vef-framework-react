@@ -31,7 +31,6 @@ import {
   BUILTIN_CC_KINDS,
   CONDITION_OPERATORS as CONDITION_OPERATOR_LIST
 } from "../types";
-import { BUILT_IN_SUBJECT_FIELDS } from "./condition-subjects";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -258,28 +257,15 @@ export interface FlowValidationError {
 export interface FlowValidationContext {
   businessKind?: string;
   /**
-   * The form's top-level field inventory — the same list
-   * `EditorPlugins.formFields` feeds to the condition editor and the
-   * field-permission table — used to cross-check every node's
-   * `fieldPermissions` keys. It is tri-state, and the two "no fields" states
-   * are deliberately distinct:
-   * - omitted — the inventory is UNAVAILABLE, e.g. a host that renders the
-   * flow editor without any form-editor integration. Only the key-existence
-   * check (`field_permission_key_unknown`) is skipped, since there is
-   * nothing to check keys against; the enum-validity check and the CC
-   * visible/hidden-subset check still run — neither needs the inventory. A
-   * definition with dangling `fieldPermissions` keys is NOT flagged in this
-   * state, so omitting it never falsely blocks a host that genuinely has no
-   * form integration to supply the list.
-   * - `[]` (an explicit empty array) — the form is known to have NO fields:
-   * every `fieldPermissions` entry is a dangling reference, mirroring the
-   * backend's "flow whose form has zero fields" case.
-   *
-   * The wizard call sites always pass the projection's real `formFields`
-   * array (populated or `[]`, never omitted); a host with no form-editor
-   * integration at all should omit it rather than pass `[]`.
+   * Top-level form fields used to validate aggregates, form-field personnel
+   * rules and field permissions. Omit an unavailable inventory, including a
+   * business catalog still loading, to defer these membership checks.
+   * Pass an empty array for a known empty form. Structural checks always run.
    */
   formFields?: FormFieldDefinition[];
+  /**
+   * Host globals resolve at runtime and are never part of the deploy-time field inventory.
+   */
   globalSubjects?: FormFieldDefinition[];
   /**
    * The assignee kinds this application accepts.
@@ -318,10 +304,7 @@ export function validateFlowDefinition(
 
   const { formFields } = context;
 
-  // undefined stays undefined (inventory unavailable, key-existence check
-  // skipped); an explicit array — including [] — becomes a lookup Set.
-  const formFieldKeys = formFields ? new Set(formFields.map(field => field.key)) : undefined;
-  const subjects = formFields && new Map([...formFields, ...context.globalSubjects ?? [], ...BUILT_IN_SUBJECT_FIELDS].map(field => [field.key, field]));
+  const fieldsByKey = formFields && new Map(formFields.map(field => [field.key, field]));
   const vocabulary: KindVocabulary = {
     assignees: selectionIndex(context.assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS),
     ccs: selectionIndex(context.ccKinds ?? BUILTIN_CC_KINDS)
@@ -385,13 +368,13 @@ export function validateFlowDefinition(
 
     if (node.kind === "condition") {
       conditionBranches.set(node.id, node.data?.branches);
-      validateBranchConditions(node.id, node.data?.branches, errors, subjects);
+      validateBranchConditions(node.id, node.data?.branches, errors, fieldsByKey);
       continue;
     }
 
     if (node.kind === "approval") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
+      validateTaskNodeConfig(node.id, node.data, fieldsByKey, vocabulary, errors);
       validateApprovalNodeConfig(node.id, node.data, errors);
 
       if (node.data?.rollbackTargetKeys?.length) {
@@ -403,15 +386,15 @@ export function validateFlowDefinition(
 
     if (node.kind === "handle") {
       taskNodeIds.add(node.id);
-      validateTaskNodeConfig(node.id, node.data, formFieldKeys, vocabulary, errors);
+      validateTaskNodeConfig(node.id, node.data, fieldsByKey, vocabulary, errors);
       validateHandleNodeConfig(node.id, node.data, errors);
 
       continue;
     }
 
     if (node.kind === "cc") {
-      validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors, formFieldKeys);
-      validateFieldPermissions(node.id, node.data?.fieldPermissions, true, formFieldKeys, errors);
+      validateCcDefinitions(node.id, node.data?.ccs, vocabulary, errors, fieldsByKey);
+      validateFieldPermissions(node.id, node.data?.fieldPermissions, true, fieldsByKey, errors);
     }
   }
 
@@ -612,7 +595,7 @@ export function validateFlowDefinition(
 function validateTaskNodeConfig(
   nodeId: string,
   data: TaskNodeData | undefined,
-  formFieldKeys: Set<string> | undefined,
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined,
   vocabulary: KindVocabulary,
   errors: FlowValidationError[]
 ): void {
@@ -662,7 +645,7 @@ function validateTaskNodeConfig(
       });
     }
 
-    if (selection === "form_field" && assignee.formField && formFieldKeys && !formFieldKeys.has(assignee.formField)) {
+    if (selection === "form_field" && assignee.formField && fieldsByKey && !fieldsByKey.has(assignee.formField)) {
       errors.push({
         code: "unknown_catalog_field",
         nodeId,
@@ -705,8 +688,8 @@ function validateTaskNodeConfig(
     });
   }
 
-  validateCcDefinitions(nodeId, data?.ccs, vocabulary, errors, formFieldKeys);
-  validateFieldPermissions(nodeId, data?.fieldPermissions, false, formFieldKeys, errors);
+  validateCcDefinitions(nodeId, data?.ccs, vocabulary, errors, fieldsByKey);
+  validateFieldPermissions(nodeId, data?.fieldPermissions, false, fieldsByKey, errors);
   validateRequiredFieldTimeoutAutoPass(nodeId, data, errors);
 }
 
@@ -866,7 +849,7 @@ function validateCcDefinitions(
   ccs: CcDefinition[] | undefined,
   vocabulary: KindVocabulary,
   errors: FlowValidationError[],
-  formFieldKeys: Set<string> | undefined
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   const ccItems = ccs ?? [];
 
@@ -890,7 +873,7 @@ function validateCcDefinitions(
       });
     }
 
-    if (selection === "form_field" && cc.formField && formFieldKeys && !formFieldKeys.has(cc.formField)) {
+    if (selection === "form_field" && cc.formField && fieldsByKey && !fieldsByKey.has(cc.formField)) {
       errors.push({
         code: "unknown_catalog_field",
         nodeId,
@@ -926,7 +909,7 @@ function validateCcDefinitions(
  * `ValidateFieldPermissions` / `validateFieldPermissionEntry`, except every
  * violation is collected instead of stopping at the first.
  *
- * `formFieldKeys` is `undefined` when the caller has no field inventory to
+ * `fieldsByKey` is `undefined` when the caller has no field inventory to
  * check against (see {@link validateFlowDefinition}'s `formFields` tri-state
  * doc) — the key-existence check is skipped in that case, while the
  * enum-validity and CC-subset checks below still run since neither needs it.
@@ -935,7 +918,7 @@ function validateFieldPermissions(
   nodeId: string,
   fieldPermissions: Record<string, string> | undefined,
   isCC: boolean,
-  formFieldKeys: Set<string> | undefined,
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined,
   errors: FlowValidationError[]
 ): void {
   const entries = Object.entries(fieldPermissions ?? {});
@@ -951,7 +934,7 @@ function validateFieldPermissions(
       });
     }
 
-    if (formFieldKeys && !formFieldKeys.has(key)) {
+    if (fieldsByKey && !fieldsByKey.has(key)) {
       errors.push({
         code: "field_permission_key_unknown",
         message: `表单权限引用了不存在的表单字段：${key}`,
@@ -1010,7 +993,7 @@ function validateConditionGroup(
   branch: ConditionBranchDefinition,
   group: ConditionGroup,
   errors: FlowValidationError[],
-  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   if (group.conditions.length === 0) {
     errors.push({
@@ -1024,7 +1007,7 @@ function validateConditionGroup(
   }
 
   for (const condition of group.conditions) {
-    validateBranchCondition(nodeId, branch, condition, errors, subjects);
+    validateBranchCondition(nodeId, branch, condition, errors, fieldsByKey);
   }
 }
 
@@ -1098,7 +1081,7 @@ function validateBranchConditions(
   nodeId: string,
   branches: ConditionBranchDefinition[] | undefined,
   errors: FlowValidationError[],
-  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   const seenPriorities = new Set<number>();
   const conditionBranches = branches ?? [];
@@ -1136,7 +1119,7 @@ function validateBranchConditions(
     }
 
     for (const group of conditionGroups) {
-      validateConditionGroup(nodeId, branch, group, errors, subjects);
+      validateConditionGroup(nodeId, branch, group, errors, fieldsByKey);
     }
   }
 }
@@ -1146,7 +1129,7 @@ function validateBranchCondition(
   branch: ConditionBranchDefinition,
   condition: ConditionDefinition,
   errors: FlowValidationError[],
-  subjects: ReadonlyMap<string, FormFieldDefinition> | undefined
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
 ): void {
   switch (condition.kind) {
     case "field": {
@@ -1166,8 +1149,8 @@ function validateBranchCondition(
         });
       }
 
-      if (subjects && condition.subject) {
-        const field = subjects.get(condition.subject);
+      if (condition.aggregate !== undefined && fieldsByKey && condition.subject) {
+        const field = fieldsByKey.get(condition.subject);
 
         if (!field) {
           errors.push({
@@ -1176,7 +1159,7 @@ function validateBranchCondition(
             branchId: branch.id,
             message: `条件字段「${condition.subject}」不在字段目录中`
           });
-        } else if (condition.aggregate && (field.kind !== "table" || (condition.column && !field.columns?.some(col => col.key === condition.column && col.kind === "number")))) {
+        } else if (field.kind !== "table" || (condition.column && !field.columns?.some(col => col.key === condition.column && col.kind === "number"))) {
           errors.push({
             code: "invalid_aggregate_reference",
             nodeId,

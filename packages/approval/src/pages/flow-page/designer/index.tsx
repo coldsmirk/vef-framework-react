@@ -182,25 +182,27 @@ function DesignerBody({
     () => draft?.formSchema ? validateApprovalSchema(draft.formSchema, plugins.registries) : null,
     [draft?.formSchema, plugins.registries]
   );
-  const fields = draft?.basic.businessKind ? kind?.formFields : projection?.formFields;
+  const fields = useMemo(
+    () => draft?.basic.businessKind ? kind?.formFields : projection?.formFields ?? [],
+    [draft?.basic.businessKind, kind, projection]
+  );
   const flowErrors = useMemo(
     () => draft
       ? validateFlowDefinition(draft.flowDefinition, {
-          formFields: fields ?? [],
-          globalSubjects: plugins.globalSubjects,
+          formFields: fields,
           businessKind: draft.basic.businessKind,
           assigneeKinds: kindOptions?.assignees,
           ccKinds: kindOptions?.ccs
         })
       : [],
-    [draft, fields, kindOptions, plugins.globalSubjects]
+    [draft, fields, kindOptions]
   );
   // A shared flow routes work to people of other tenants, so the editor asks
   // for the tenant before it lists users or departments.
   const editorPlugins = useMemo(
     () => {
       return {
-        ...toEditorPlugins(plugins, fields ?? [], kindOptions),
+        ...toEditorPlugins(plugins, fields, kindOptions),
         shared: isShared,
         businessKind: draft?.basic.businessKind
       };
@@ -263,18 +265,17 @@ function DesignerBody({
   const currentDraft = draft;
   const { basic } = currentDraft;
   const windowIssue = initiationWindowIssue(basic.initiationWindow);
-  const missingField = kind && missingTitleField(basic.instanceTitleTemplate, kind.formFields);
+  const missingField = fields && missingTitleField(basic.instanceTitleTemplate, fields);
   const basicValid = !windowIssue && basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
-    && !missingField
-    && (!basic.businessKind || kind !== undefined)
+    && (!basic.businessKind || (kind !== undefined && !missingField))
     && (!basic.businessBinding || Boolean(kind && isBindingValid(basic.businessBinding)))
     && (basic.isAllInitiationAllowed || initiatorsForSubmit(draft).length > 0);
   const stepValid = [
     basicValid,
-    Boolean(kind) || formGate === null || formGate.valid,
+    Boolean(kind) || (!missingField && (formGate === null || formGate.valid)),
     flowErrors.length === 0,
     true
   ];
@@ -284,8 +285,8 @@ function DesignerBody({
   // The issues themselves live in each editor's own diagnostics, which locate
   // them, so the step bodies keep their full height.
   const blockedReasons = [
-    missingField ? `单据标题引用的字段「${missingField}」不在业务字段目录中` : windowIssue ?? "请先完善流程设置中的必填项",
-    `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
+    basic.businessKind && missingField ? `单据标题引用的字段「${missingField}」不在业务字段目录中` : windowIssue ?? "请先完善流程设置中的必填项",
+    missingField ? `单据标题引用的字段「${missingField}」不在表单中` : `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
     `流程存在 ${flowErrors.length} 个问题，可在画布工具栏的问题提示中查看并定位`,
     undefined
   ];

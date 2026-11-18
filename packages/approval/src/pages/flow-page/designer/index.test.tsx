@@ -18,28 +18,112 @@ vi.mock("@vef-framework-react/form-editor", async importOriginal => {
 vi.mock("@vef-framework-react/approval-flow-editor", async importOriginal => {
   return {
     ...await importOriginal<typeof FlowEditorModule>(),
-    ApprovalFlowEditor: () => null
+    ApprovalFlowEditor: ({ plugins }: FlowEditorModule.ApprovalFlowEditorProps) => <div>{plugins?.formFields === undefined ? "目录尚未加载" : `目录已加载（${plugins.formFields.length}）`}</div>
+
   };
 });
+
+const flow: Flow = {
+  id: "f",
+  tenantId: "t",
+  isShared: false,
+  code: "meet",
+  name: "会议",
+  categoryId: "c",
+  adminUserIds: [],
+  isAllInitiationAllowed: true,
+  instanceTitleTemplate: "会议申请",
+  isActive: true,
+  currentVersion: 1
+};
 
 describe("business kind design", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("preserves an unavailable business catalog until the server returns its fields", async () => {
+    const catalog = Promise.withResolvers<unknown>();
+    const apiClient = mockApprovalApi(({ action }) => {
+      if (action === "list_business_kinds") {
+        return catalog.promise;
+      }
+
+      return action === "list_kind_options"
+        ? {
+            assignees: [],
+            ccs: [],
+            initiators: []
+          }
+        : [];
+    });
+    render(<FlowDesignerDrawer open flow={{ ...flow, businessKind: "meeting" }} tenantId="t" onClose={vi.fn()} />, { apiClient });
+    expect(await screen.findByText("目录尚未加载")).toBeInTheDocument();
+    const next = screen.getByText("下一步").closest("button");
+    expect(next).toBeDisabled();
+    catalog.resolve([
+      {
+        kind: "meeting",
+        label: "会议预订",
+        formFields: []
+      }
+    ]);
+    expect(await screen.findByText("目录已加载（0）")).toBeInTheDocument();
+    expect(next).toBeEnabled();
+  });
+
+  it("checks a form title reference on the form step and allows advancing after correction", async () => {
+    const user = userEvent.setup();
+    const apiClient = mockApprovalApi(({ action }) => {
+      switch (action) {
+        case "find_versions": { return [{ id: "v" }]; }
+
+        case "get_graph": { return {
+          version: {
+            formSchema: {
+              version: 2,
+              id: "form",
+              presentations: {
+                pc: {
+                  children: [
+                    {
+                      id: "name",
+                      key: "name",
+                      label: "名称",
+                      type: "textfield"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }; }
+
+        case "list_kind_options": { return {
+          assignees: [],
+          ccs: [],
+          initiators: []
+        }; }
+
+        default: { return []; }
+      }
+    });
+    render(<FlowDesignerDrawer open flow={{ ...flow, instanceTitleTemplate: "{{.formData.typo}}" }} tenantId="t" onClose={vi.fn()} />, { apiClient });
+    const nextLabel = await screen.findByText("下一步");
+    const next = nextLabel.closest("button")!;
+    expect(next).toBeEnabled();
+    await user.click(next);
+    expect(screen.getByText("单据标题引用的字段「typo」不在表单中")).toBeVisible();
+    expect(next).toBeDisabled();
+    await user.click(screen.getByText("上一步"));
+    const title = screen.getByDisplayValue("{{.formData.typo}}");
+    await user.clear(title);
+    await user.paste("{{.formData.name}}");
+    await user.click(next);
+    expect(next).toBeEnabled();
+    expect(screen.queryByText(/字段「typo」/)).not.toBeInTheDocument();
+  });
+
   it("replaces form design with the registered catalog and deploys only JSON storage", async () => {
     const user = userEvent.setup();
-    const flow: Flow = {
-      id: "f",
-      tenantId: "t",
-      isShared: false,
-      code: "meet",
-      name: "会议",
-      categoryId: "c",
-      adminUserIds: [],
-      isAllInitiationAllowed: true,
-      instanceTitleTemplate: "会议申请",
-      isActive: true,
-      currentVersion: 1
-    };
     const writes: ApiRequest[] = [];
     const apiClient = mockApprovalApi(req => {
       if (["update", "deploy", "publish_version"].includes(req.action)) {
