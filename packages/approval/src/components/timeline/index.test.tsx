@@ -38,6 +38,30 @@ describe("InstanceTimeline", () => {
     expect(screen.getByText("（受 李四 委托）")).toBeVisible();
   });
 
+  it("groups a node header, its participants and its annotations in one column", () => {
+    render(
+      <InstanceTimeline
+        renderEntryExtra={() => <div>请补充单据</div>}
+        timeline={[
+          entry({
+            participants: [
+              {
+                taskId: "t",
+                user: { id: "r", name: "陈晨" },
+                status: "pending"
+              }
+            ]
+          })
+        ]}
+      />
+    );
+    const note = screen.getByText("请补充单据");
+    const column = note.parentElement!;
+    expect(column.children[0]).toContainElement(screen.getByText("审批节点"));
+    expect(column.children[1]).toContainElement(screen.getByText("陈晨"));
+    expect(column.children[2]).toBe(note);
+  });
+
   it("renders an empty state when there are no entries", () => {
     render(<InstanceTimeline timeline={[]} />);
 

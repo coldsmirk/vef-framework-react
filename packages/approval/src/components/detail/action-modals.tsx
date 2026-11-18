@@ -1,9 +1,9 @@
 import type { AddAssigneeType, RemovableAssignee, RollbackTarget } from "../../types";
 
-import { Input, Labeled, Radio, Select, Stack } from "@vef-framework-react/components";
+import { Input, Labeled, Radio, Select } from "@vef-framework-react/components";
 import { useState } from "react";
 
-import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
+import { ActionBody, ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
 import { UserActionField, useUserAction } from "../action-dialog/user-selection";
 import { isTaskStatus } from "../status";
 import { TASK_STATUS_LABELS } from "../status/labels";
@@ -37,7 +37,7 @@ function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) 
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <UserActionField label="转办给" maxCount={1} selection={selection} />
 
         <Labeled label="转办说明">
@@ -49,7 +49,7 @@ function TransferForm({ onClose, onConfirm }: Omit<TransferModalProps, "open">) 
             onChange={event => setOpinion(event.target.value)}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={transferToId === undefined || Boolean(selection.message)}
@@ -93,7 +93,7 @@ function RollbackForm({
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="回退至">
           <Select
             placeholder="选择回退节点"
@@ -115,7 +115,7 @@ function RollbackForm({
             onChange={event => setOpinion(event.target.value)}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={targetNodeId === undefined}
@@ -168,7 +168,7 @@ function AddAssigneeForm({
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <UserActionField label="加签人员" maxCount={50} selection={selection} />
 
         <Labeled label="加签方式">
@@ -186,7 +186,7 @@ function AddAssigneeForm({
             }}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={userIds.length === 0 || addType === undefined || Boolean(selection.message)}
@@ -238,7 +238,7 @@ function RemoveAssigneeForm({
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <Labeled hint="移除后该审批人不再参与本节点审批。" label="移除审批人">
           <Select
             placeholder="选择要移除的审批人"
@@ -255,7 +255,7 @@ function RemoveAssigneeForm({
             onChange={setTaskId}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         danger
@@ -299,9 +299,9 @@ function CCForm({ onClose, onConfirm }: Omit<CCModalProps, "open">) {
 
   return (
     <>
-      <Stack gap={4} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={4} style={{ paddingBlock: 8 }}>
         <UserActionField label="抄送给" maxCount={50} selection={selection} />
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={userIds.length === 0 || Boolean(selection.message)}
@@ -354,7 +354,7 @@ function UrgeForm({
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <Labeled label="催办对象">
           <Select
             placeholder="选择待处理任务"
@@ -376,7 +376,7 @@ function UrgeForm({
             onChange={event => setMessage(event.target.value)}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={taskId === undefined}
@@ -428,7 +428,7 @@ function ReasonForm({
 
   return (
     <>
-      <Stack gap={4} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={4} style={{ paddingBlock: 8 }}>
         <Input.TextArea
           maxLength={2000}
           placeholder={placeholder ?? "请输入原因（可选）"}
@@ -436,7 +436,7 @@ function ReasonForm({
           value={reason}
           onChange={event => setReason(event.target.value)}
         />
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         danger={danger}

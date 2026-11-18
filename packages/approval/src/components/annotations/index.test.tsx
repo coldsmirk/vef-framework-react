@@ -210,6 +210,7 @@ describe("instance annotations", () => {
     ]);
     const form = within(await screen.findByRole("tabpanel", { name: "审批表单" }));
     await user.click(form.getByRole("button", { name: "添加批注" }));
+    expect(form.getByRole("button", { name: "保存草稿" }).parentElement).toContainElement(form.getByRole("button", { name: /^取\s*消$/ }));
     await user.type(form.getByRole("textbox", { name: "批注内容" }), "检查预算");
     await user.click(form.getByRole("button", { name: "保存草稿" }));
     expect(await form.findByText("草稿")).toBeVisible();
@@ -239,6 +240,7 @@ describe("instance annotations", () => {
     const user = userEvent.setup();
     const writes = setup(true);
     await user.click(await screen.findByRole("button", { name: "回应批注" }));
+    expect(screen.getByRole("button", { name: "保存草稿" }).parentElement).toContainElement(screen.getByRole("button", { name: /^取\s*消$/ }));
     await user.click(screen.getByRole("radio", { name: "不采纳" }));
     expect(screen.getByRole("button", { name: "保存草稿" })).toBeDisabled();
     await user.type(screen.getByLabelText("回应说明"), "已包含在总额中");

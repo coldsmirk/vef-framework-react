@@ -11,6 +11,7 @@ interface ComposerProps {
   detail: InstanceDetail;
   draft?: AnnotationView;
   onDone?: () => void;
+  onCancel?: () => void;
 }
 
 const scopes: Array<{ label: string; value: AnnotationAudience["scope"] }> = [
@@ -109,20 +110,23 @@ function DraftActions({
   draft,
   disabled,
   actions,
-  save
+  save,
+  onCancel
 }: {
   draft?: AnnotationView;
   disabled: boolean;
   actions: ReturnType<typeof useDraftActions>;
   save: () => Promise<unknown>;
+  onCancel?: () => void;
 }) {
   return (
     <>
       {actions.error && <Alert showIcon title={actions.error} type="error" />}
 
-      <Flex gap="small">
+      <Flex gap="small" wrap="wrap">
         <Button disabled={disabled} loading={actions.pending} type="primary" onClick={() => void actions.run(save)}>保存草稿</Button>
         {draft && <Button danger disabled={actions.pending} onClick={() => void actions.run(() => actions.remove({ id: draft.id }))}>删除草稿</Button>}
+        {onCancel && <Button disabled={actions.pending} onClick={onCancel}>取消</Button>}
       </Flex>
     </>
   );
@@ -132,7 +136,8 @@ export function AnnotationComposer({
   detail,
   anchor,
   draft,
-  onDone
+  onDone,
+  onCancel
 }: ComposerProps & { anchor?: unknown }) {
   const actions = useDraftActions(detail, onDone);
   const [content, setContent] = useState(draft?.content ?? "");
@@ -177,6 +182,7 @@ export function AnnotationComposer({
           audience,
           anchor: draft ? draft.anchor : anchor ?? (field ? { field } : undefined)
         })}
+        onCancel={onCancel}
       />
     </Stack>
   );
@@ -186,7 +192,8 @@ export function AnnotationResponseComposer({
   detail,
   parent,
   draft,
-  onDone
+  onDone,
+  onCancel
 }: ComposerProps & { parent: AnnotationView }) {
   const actions = useDraftActions(detail, onDone);
   const [content, setContent] = useState(draft?.content ?? "");
@@ -219,6 +226,7 @@ export function AnnotationResponseComposer({
           resolution,
           content
         })}
+        onCancel={onCancel}
       />
     </Stack>
   );

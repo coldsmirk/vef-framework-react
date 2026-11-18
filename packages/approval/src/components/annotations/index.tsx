@@ -75,15 +75,10 @@ function Thread({
       {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} value={response} /></div>)}
 
       {editing
-        ? (
-            <>
-              {edit
-                ? <AnnotationComposer detail={detail} draft={annotation} onDone={() => setEditing(false)} />
-                : <AnnotationResponseComposer detail={detail} draft={draftResponse} parent={annotation} onDone={() => setEditing(false)} />}
+        ? edit
+          ? <AnnotationComposer detail={detail} draft={annotation} onCancel={() => setEditing(false)} onDone={() => setEditing(false)} />
+          : <AnnotationResponseComposer detail={detail} draft={draftResponse} parent={annotation} onCancel={() => setEditing(false)} onDone={() => setEditing(false)} />
 
-              <Button size="small" style={{ alignSelf: "flex-start" }} type="text" onClick={() => setEditing(false)}>取消</Button>
-            </>
-          )
         : (edit || respond) && (
             <Flex gap="small">
               <Button disabled={actions.pending} size="small" type="link" onClick={() => setEditing(true)}>
@@ -178,12 +173,8 @@ export function DetailAnnotations({ detail }: { detail: InstanceDetail }) {
       {drafts?.map(annotation => <Thread key={annotation.id} actions={actions} detail={detail} thread={{ annotation, responses: [] }} />)}
 
       {composing
-        ? (
-            <>
-              <AnnotationComposer detail={detail} onDone={() => setComposing(false)} />
-              <Button size="small" style={{ alignSelf: "flex-start" }} type="text" onClick={() => setComposing(false)}>取消</Button>
-            </>
-          )
+        ? <AnnotationComposer detail={detail} onCancel={() => setComposing(false)} onDone={() => setComposing(false)} />
+
         : <Button style={{ alignSelf: "flex-start" }} onClick={() => setComposing(true)}>添加批注</Button>}
     </Stack>
   );

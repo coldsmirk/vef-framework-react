@@ -1,7 +1,8 @@
+import type { StackProps } from "@vef-framework-react/components";
 import type { ReactNode } from "react";
 
 import { css } from "@emotion/react";
-import { Button, Modal, Text } from "@vef-framework-react/components";
+import { Button, Modal, Stack, Text } from "@vef-framework-react/components";
 import { useId, useState } from "react";
 
 const footerStyle = css({
@@ -10,6 +11,7 @@ const footerStyle = css({
   flexWrap: "wrap",
   justifyContent: "flex-end",
   gap: 8,
+  flexShrink: 0,
   marginTop: 12
 });
 
@@ -39,9 +41,45 @@ export function ActionDialog({
   children
 }: ActionDialogProps) {
   return (
-    <Modal destroyOnHidden footer={null} open={open} title={title} onCancel={onClose}>
+    <Modal
+      centered
+      destroyOnHidden
+      footer={null}
+      open={open}
+      title={title}
+      styles={{
+        container: {
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "calc(100dvh - 32px)"
+        },
+        header: { flexShrink: 0 },
+        body: {
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0
+        }
+      }}
+      onCancel={onClose}
+    >
       {children}
     </Modal>
+  );
+}
+
+/**
+ * The scrollable part of an action form, between the pinned title and buttons.
+ */
+export function ActionBody({ style, ...props }: StackProps) {
+  return (
+    <Stack
+      {...props}
+      style={{
+        minHeight: 0,
+        overflowY: "auto",
+        ...style
+      }}
+    />
   );
 }
 

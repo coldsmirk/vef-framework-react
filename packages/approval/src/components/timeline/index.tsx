@@ -237,12 +237,12 @@ export function InstanceTimeline({ timeline, renderEntryExtra }: InstanceTimelin
     return {
       key: String(index),
       color: entryDotColor(entry),
-      title: <EntryHeader entry={entry} />,
       content: (
-        <>
+        <Stack gap={8}>
+          <EntryHeader entry={entry} />
           <EntryBody entry={entry} />
           {renderEntryExtra?.(entry)}
-        </>
+        </Stack>
       )
     };
   });

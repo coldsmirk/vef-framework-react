@@ -10,7 +10,7 @@ import {
   Labeled,
   OperationButton,
   showSuccessMessage,
-  Stack,
+
   Text,
   useFormContext
 } from "@vef-framework-react/components";
@@ -19,7 +19,7 @@ import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
 import { formatTimestamp, TaskStatusTag, UserLabel } from "../../components";
-import { ActionDialog, ActionFooter } from "../../components/action-dialog";
+import { ActionBody, ActionDialog, ActionFooter } from "../../components/action-dialog";
 import { UserActionField, useUserAction } from "../../components/action-dialog/user-selection";
 import { TASK_STATUS_OPTIONS } from "../../components/status/labels";
 import { PredecessorLabel } from "../../components/user";
@@ -115,7 +115,7 @@ function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) 
 
   return (
     <>
-      <Stack gap={12} style={{ paddingBlock: 8 }}>
+      <ActionBody gap={12} style={{ paddingBlock: 8 }}>
         <UserActionField label="改派给" maxCount={1} selection={selection} />
 
         <Labeled label="改派原因">
@@ -127,7 +127,7 @@ function ReassignForm({ onClose, onConfirm }: Omit<ReassignModalProps, "open">) 
             onChange={event => setReason(event.target.value)}
           />
         </Labeled>
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         disabled={newAssigneeId === undefined || Boolean(selection.message)}

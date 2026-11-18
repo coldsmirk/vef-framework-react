@@ -1,11 +1,11 @@
 import type { VoidTarget } from "../../types";
 
-import { Alert, showSuccessMessage, Stack } from "@vef-framework-react/components";
+import { Alert, showSuccessMessage } from "@vef-framework-react/components";
 import { useMutation } from "@vef-framework-react/core";
 import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
-import { ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
+import { ActionBody, ActionDialog, ActionFooter, useConfirm } from "../action-dialog";
 import { useVoidDraft, VoidFormFields } from "./form";
 import { TargetSummary } from "./summary";
 import { useRefreshVoidTarget } from "./use-refresh";
@@ -22,18 +22,11 @@ function DirectVoidForm({ target, onClose }: { target: VoidTarget & { instanceId
   });
   return (
     <>
-      <Stack
-        gap={16}
-        style={{
-          maxHeight: "max(15dvh, calc(100dvh - 200px))",
-          overflowY: "auto",
-          paddingInlineEnd: 4
-        }}
-      >
+      <ActionBody gap={16}>
         <TargetSummary target={target} />
         <VoidFormFields draft={draft} target={target} />
         {error && <Alert showIcon title={error} type="error" />}
-      </Stack>
+      </ActionBody>
 
       <ActionFooter
         danger

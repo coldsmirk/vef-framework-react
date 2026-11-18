@@ -128,6 +128,11 @@ it("refreshes the direct plan for options and requires a reason and a clear plan
   expect(dialog.getByText("释放会议室")).toBeVisible();
   expect(dialog.getByText("通知参会人")).toBeVisible();
   const submit = dialog.getByRole("button", { name: "确认作废" });
+  const frame = submit.closest("[style*=\"max-height\"]");
+  expect(frame).toHaveStyle({ maxHeight: "calc(100dvh - 32px)" });
+  const scroller = dialog.getByLabelText("作废原因").closest("[style*=\"overflow-y\"]");
+  expect(scroller).toHaveStyle({ overflowY: "auto" });
+  expect(scroller).not.toContainElement(submit);
   const footer = within(submit.parentElement!);
   expect(footer.getByText("请先处理阻止事项")).toBeVisible();
   expect(submit).toHaveAccessibleDescription("请先处理阻止事项");
