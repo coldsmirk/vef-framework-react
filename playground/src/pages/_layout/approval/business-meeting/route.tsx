@@ -3,13 +3,14 @@ import type { Ref } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { ApprovalProvider, InstanceDetailPanel, StartInstanceDrawer, useApprovalPlugins, useMyApprovalApi } from "@vef-framework-react/approval";
-import { Button, Card, Flex, Input, Labeled, Segmented, Stack, Text } from "@vef-framework-react/components";
+import { Button, Card, Flex, Input, Labeled, Page, Segmented, Stack, Text } from "@vef-framework-react/components";
 import { useQueryClient } from "@vef-framework-react/core";
 import { useImperativeHandle, useState } from "react";
 
-interface Meeting { room: string; agenda: string; subject: string; writes: number }
+interface Meeting { id: string; room: string; agenda: string; subject: string; writes: number }
 
 const blank: Meeting = {
+  id: "",
   room: "三楼 · 松林会议室",
   agenda: "",
   subject: "",
@@ -55,7 +56,10 @@ const renderer: BusinessKindRenderer = {
     view,
     handle,
     myTask
-  }) => <MeetingForm handle={handle} value={view as Meeting} writable={Boolean(myTask || ("availableActions" in detail && detail.availableActions.includes("resubmit")))} />
+  }) => {
+    const meeting = view as Meeting;
+    return <MeetingForm key={meeting.id} handle={handle} value={meeting} writable={Boolean(myTask || ("availableActions" in detail && detail.availableActions.includes("resubmit")))} />;
+  }
 };
 
 function MeetingPage() {
@@ -73,22 +77,24 @@ function MeetingPage() {
 
   return (
     <ApprovalProvider plugins={{ ...host, businessKinds: { ...host.businessKinds, "office.meeting": renderer } }}>
-      <Card extra={<Button type="primary" onClick={() => setOpen(true)}>发起会议预订</Button>} title="会议室预订">
-        <Flex vertical gap="middle">
-          <Segmented options={options} style={{ alignSelf: "flex-start" }} value={instance} onChange={setInstance} />
-          <InstanceDetailPanel key={instance} instanceId={instance} />
-        </Flex>
+      <Page margin scrollable>
+        <Card extra={<Button type="primary" onClick={() => setOpen(true)}>发起会议预订</Button>} title="会议室预订">
+          <Flex vertical gap="middle">
+            <Segmented options={options} style={{ alignSelf: "flex-start" }} value={instance} onChange={setInstance} />
+            <InstanceDetailPanel key={instance} instanceId={instance} />
+          </Flex>
 
-        <StartInstanceDrawer
-          flowCode={open ? "meeting" : null}
-          onClose={() => setOpen(false)}
-          onStarted={() => {
-            void client.invalidateQueries({ queryKey: [getInstanceDetail.key, { instanceId: "meeting-new" }] });
-            setStarted(true);
-            setInstance("meeting-new");
-          }}
-        />
-      </Card>
+          <StartInstanceDrawer
+            flowCode={open ? "meeting" : null}
+            onClose={() => setOpen(false)}
+            onStarted={() => {
+              void client.invalidateQueries({ queryKey: [getInstanceDetail.key, { instanceId: "meeting-new" }] });
+              setStarted(true);
+              setInstance("meeting-new");
+            }}
+          />
+        </Card>
+      </Page>
     </ApprovalProvider>
   );
 }

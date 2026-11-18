@@ -51,6 +51,7 @@ function meeting(id: string, returned = false): MyInstanceDetail {
       businessKind: kind
     },
     businessView: {
+      id: crypto.randomUUID(),
       subject: "季度预算讨论会",
       room: "三楼 · 松林会议室",
       agenda: "讨论下一季度预算及人员安排。",
@@ -206,7 +207,19 @@ defineMock<ProcessTaskParams>("approval/instance", "process_task", ({ params }) 
     }
   }
 
-  const participant = detail.timeline.at(-1)?.participants?.[0];
+  const visit = detail.timeline.at(-1);
+  const review = detail.flowGraph.nodes.find(node => node.nodeId === "review");
+  const status = params.action === "reject" ? "rejected" : "passed";
+
+  if (review) {
+    review.data.status = status;
+  }
+
+  if (visit) {
+    visit.status = status;
+  }
+
+  const participant = visit?.participants?.[0];
 
   if (participant) {
     participant.status = detail.instance.status;
@@ -220,6 +233,27 @@ defineMock<ResubmitInstanceParams>("approval/instance", "resubmit", ({ params })
   detail.instance.status = "running";
   detail.instance.currentNodeName = "会务审核";
   detail.availableActions = [];
+
+  const review = detail.flowGraph.nodes.find(node => node.nodeId === "review");
+
+  if (review) {
+    review.data.status = "active";
+  }
+
+  detail.timeline.push({
+    kind: "approval",
+    name: "会务审核",
+    visitId: "review-2",
+    startedAt: new Date().toISOString(),
+    status: "active",
+    participants: [
+      {
+        taskId: `${params.instanceId}-review-2`,
+        user: reviewer,
+        status: "pending"
+      }
+    ]
+  });
 
   const notes = detail.annotations ?? [];
 
