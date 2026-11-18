@@ -1,5 +1,5 @@
 import type { PaginatedQueryParams } from "@vef-framework-react/components";
-import type { MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
+import type { HttpClient, MutationFunction, PaginationResult, QueryFunction } from "@vef-framework-react/core";
 
 import type {
   BusinessKindDescriptor,
@@ -23,6 +23,11 @@ import { useMemo } from "react";
 import { API_PATH, toPagedParams } from "./query";
 
 const RESOURCE = "approval/flow";
+
+export async function fetchFlows(post: HttpClient["post"], params: PaginatedQueryParams<FlowSearch>) {
+  const result = await post<PaginationResult<Flow>>(API_PATH, { data: createApiRequest(RESOURCE, "find_flows", toPagedParams(params)) });
+  return result.data;
+}
 
 /**
  * The management API of flow definitions: the paginated list plus the
@@ -60,13 +65,7 @@ export function useFlowApi(): FlowApi {
       return {
         findFlows: apiClient.createQueryFn<PaginationResult<Flow>, PaginatedQueryParams<FlowSearch>>(
           "approval_flow_find_flows",
-          ({ post }) => async queryParams => {
-            const result = await post<PaginationResult<Flow>>(API_PATH, {
-              data: createApiRequest(RESOURCE, "find_flows", toPagedParams(queryParams))
-            });
-
-            return result.data;
-          }
+          ({ post }) => params => fetchFlows(post, params)
         ),
         create: apiClient.createMutationFn<Flow, CreateFlowParams>(
           "approval_flow_create",

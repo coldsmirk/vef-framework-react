@@ -2,7 +2,7 @@ import type { FlowDefinition } from "@vef-framework-react/approval-flow-editor";
 import type { WindowRule } from "@vef-framework-react/calendar";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
-import type { BusinessBindingConfig, InitiatorParams, StorageMode } from "../../../types";
+import type { BusinessBindingConfig, InitiatorParams, StorageMode, VoidPolicy } from "../../../types";
 
 /**
  * The flow-settings half of the designer draft — everything
@@ -26,6 +26,8 @@ export interface FlowDraftBasic {
   isAllInitiationAllowed: boolean;
   instanceTitleTemplate: string;
   initiationWindow?: WindowRule;
+  voidPolicy?: VoidPolicy;
+  voidFlowCode?: string;
 }
 
 /**

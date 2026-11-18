@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useCategoryApi, useFlowApi } from "../../../api";
 import { toEditorPlugins, useApprovalPlugins } from "../../../plugins";
+import { VOID_REQUEST_KIND } from "../../../types";
 import { buildCategoryTreeOptions } from "../../category-page/form";
 import { BasicStep } from "./basic-step";
 import { FieldCatalog } from "./field-catalog";
@@ -20,6 +21,7 @@ import { FlowStep } from "./flow-step";
 import { FormStep } from "./form-step";
 import { ReviewStep } from "./review-step";
 import { createEmptyDraft, EMPTY_FLOW_DEFINITION, initiatorsForSubmit, isBindingValid, missingTitleField } from "./types";
+import { useSelectedVoidFlow, voidPolicyIssue } from "./void-policy";
 
 const STEP_ITEMS = [
   { title: "流程设置" },
@@ -122,6 +124,9 @@ function DesignerBody({
   });
   const kind = businessKinds?.find(item => item.kind === draft?.basic.businessKind);
 
+  const isVoidable = !draft?.basic.businessKind || (kind?.isVoidable === true && kind.kind !== VOID_REQUEST_KIND);
+  const { data: selectedVoidFlow } = useSelectedVoidFlow(flowTenantId, draft?.basic.voidPolicy === "approval" ? draft.basic.voidFlowCode : undefined);
+
   useEffect(() => {
     if (!isEditing || draft !== null || versions === undefined || initiatorRows === undefined) {
       return;
@@ -147,6 +152,8 @@ function DesignerBody({
         description: flow.description ?? undefined,
         labels: flow.labels ?? {},
         businessKind: flow.businessKind,
+        voidPolicy: flow.voidPolicy ?? "disabled",
+        voidFlowCode: flow.voidFlowCode ?? undefined,
         businessBinding: flow.businessBinding ?? undefined,
         adminUserIds: flow.adminUserIds,
         isAllInitiationAllowed: flow.isAllInitiationAllowed,
@@ -266,7 +273,8 @@ function DesignerBody({
   const { basic } = currentDraft;
   const windowIssue = initiationWindowIssue(basic.initiationWindow);
   const missingField = fields && missingTitleField(basic.instanceTitleTemplate, fields);
-  const basicValid = !windowIssue && basic.code.trim() !== ""
+  const voidIssue = voidPolicyIssue(basic, isVoidable, selectedVoidFlow);
+  const basicValid = !voidIssue && !windowIssue && basic.code.trim() !== ""
     && basic.name.trim() !== ""
     && basic.categoryId !== ""
     && basic.instanceTitleTemplate.trim() !== ""
@@ -285,7 +293,7 @@ function DesignerBody({
   // The issues themselves live in each editor's own diagnostics, which locate
   // them, so the step bodies keep their full height.
   const blockedReasons = [
-    basic.businessKind && missingField ? `单据标题引用的字段「${missingField}」不在业务字段目录中` : windowIssue ?? "请先完善流程设置中的必填项",
+    voidIssue ?? windowIssue ?? (basic.businessKind && missingField ? `单据标题引用的字段「${missingField}」不在业务字段目录中` : "请先完善流程设置中的必填项"),
     missingField ? `单据标题引用的字段「${missingField}」不在表单中` : `表单存在 ${formErrorCount} 个错误，可在编辑器底部的问题提示中查看并定位`,
     `流程存在 ${flowErrors.length} 个问题，可在画布工具栏的问题提示中查看并定位`,
     undefined
@@ -317,6 +325,8 @@ function DesignerBody({
           labels: basic.labels,
           businessKind,
           businessBinding,
+          voidPolicy: basic.voidPolicy ?? "disabled",
+          voidFlowCode: basic.voidFlowCode,
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
           instanceTitleTemplate: basic.instanceTitleTemplate,
@@ -333,6 +343,8 @@ function DesignerBody({
           labels: basic.labels,
           businessKind,
           businessBinding,
+          voidPolicy: basic.voidPolicy ?? "disabled",
+          voidFlowCode: basic.voidFlowCode,
           adminUserIds: basic.adminUserIds,
           isAllInitiationAllowed: basic.isAllInitiationAllowed,
           instanceTitleTemplate: basic.instanceTitleTemplate,
@@ -372,6 +384,8 @@ function DesignerBody({
       initiatorKinds={kindOptions?.initiators}
       initiators={draft.initiators}
       isEditing={isEditing}
+      isVoidable={isVoidable}
+      selectedVoidFlow={selectedVoidFlow}
       onBasicChange={handleBasicChange}
       onInitiatorsChange={handleInitiatorsChange}
     />,

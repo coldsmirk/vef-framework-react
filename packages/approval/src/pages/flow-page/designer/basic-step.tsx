@@ -1,6 +1,6 @@
 import type { KindDescriptor } from "@vef-framework-react/approval-flow-editor";
 
-import type { BusinessBindingConfig, BusinessKindDescriptor, InitiatorKind, InitiatorParams, InstanceStatus } from "../../../types";
+import type { BusinessBindingConfig, BusinessKindDescriptor, Flow, InitiatorKind, InitiatorParams, InstanceStatus } from "../../../types";
 import type { CategoryTreeOption } from "../../category-page/form";
 import type { FlowDraftBasic } from "./types";
 
@@ -29,7 +29,8 @@ import { useRef } from "react";
 
 import { PrincipalSelect } from "../../../components";
 import { INSTANCE_STATUS_LABELS } from "../../../components/status/labels";
-import { BUILTIN_INITIATOR_KINDS } from "../../../types";
+import { BUILTIN_INITIATOR_KINDS, VOID_REQUEST_KIND } from "../../../types";
+import { VoidPolicySection } from "./void-policy";
 
 /**
  * The initiator rule rows: each row is one kind plus the ids it selects;
@@ -238,6 +239,8 @@ const EMPTY_BINDING: BusinessBindingConfig = {
 export interface BasicStepProps {
   basic: FlowDraftBasic;
   businessKinds?: BusinessKindDescriptor[];
+  isVoidable: boolean;
+  selectedVoidFlow?: Flow | null;
   initiators: InitiatorParams[];
   /**
    * The initiator kinds this application registers, from
@@ -262,6 +265,8 @@ export interface BasicStepProps {
 export function BasicStep({
   basic,
   businessKinds,
+  isVoidable,
+  selectedVoidFlow,
   initiators,
   initiatorKinds,
   categoryOptions,
@@ -412,6 +417,8 @@ export function BasicStep({
         </Stack>
       </Card>
 
+      <VoidPolicySection basic={basic} isVoidable={isVoidable} selected={selectedVoidFlow} onChange={onBasicChange} />
+
       <Card title="发起时段">
         <Stack gap={12}>
           <Radio.Group
@@ -444,7 +451,14 @@ export function BasicStep({
             placeholder="使用流程表单"
             showSearch={{ optionFilterProp: "label" }}
             value={basic.businessKind}
-            onChange={businessKind => onBasicChange({ businessKind, businessBinding: undefined })}
+            onChange={businessKind => {
+              const supported = !businessKind || (businessKind !== VOID_REQUEST_KIND && businessKinds?.some(item => item.kind === businessKind && item.isVoidable));
+              onBasicChange({
+                businessKind,
+                businessBinding: undefined,
+                ...!supported && { voidPolicy: "disabled", voidFlowCode: undefined }
+              });
+            }}
           />
 
           {basic.businessKind && !businessKinds?.some(item => item.kind === basic.businessKind) && businessKinds
