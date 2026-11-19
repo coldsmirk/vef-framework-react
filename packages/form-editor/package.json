@@ -12,6 +12,11 @@
     "low-code"
   ],
   "homepage": "https://vef.ilxqx.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coldsmirk/vef-framework-react.git",
+    "directory": "packages/form-editor"
+  },
   "license": "Apache-2.0",
   "author": {
     "name": "Venus",
