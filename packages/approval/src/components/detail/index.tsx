@@ -2,10 +2,11 @@ import type { DescriptionsItem } from "@vef-framework-react/components";
 import type { FormRendererApi } from "@vef-framework-react/form-editor";
 import type { ReactNode } from "react";
 
-import type { InstanceAction, MyInstanceDetail, ProcessTaskAction, UserInfo, VoidRequestBusinessView } from "../../types";
+import type { InstanceAction, MyInstanceDetail, ProcessTaskAction, ResubmitInstanceParams, UserInfo, VoidRequestBusinessView } from "../../types";
 import type { UrgeTarget } from "./action-modals";
 
 import {
+  Alert,
   Button,
   Descriptions,
   Empty,
@@ -40,6 +41,7 @@ import {
 import { useId, useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
+import { useSubmissionSession } from "../../api/use-submission-session";
 import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
 import { useApprovalPlugins, useFormSchema } from "../../plugins";
 import { VOID_REQUEST_KIND } from "../../types";
@@ -215,19 +217,21 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   // The panel shows its own action-specific success messages, so the generic
   // backend feedback is suppressed on every action mutation.
   const suppressFeedback = { meta: { shouldShowSuccessFeedback: false } } as const;
-  const pickerFeedback = { meta: { shouldShowSuccessFeedback: false, shouldShowErrorFeedback: false } } as const;
-  const transfer = useMutation({ mutationFn: instanceApi.processTask, ...pickerFeedback });
+  const inlineFeedback = { meta: { shouldShowSuccessFeedback: false, shouldShowErrorFeedback: false } } as const;
+  const transfer = useMutation({ mutationFn: instanceApi.processTask, ...inlineFeedback });
   const processTask = useMutation({ mutationFn: instanceApi.processTask, ...suppressFeedback });
-  const resubmit = useMutation({ mutationFn: instanceApi.resubmit, ...suppressFeedback });
+  const resubmit = useMutation({ mutationFn: instanceApi.resubmit, ...inlineFeedback });
   const withdraw = useMutation({ mutationFn: instanceApi.withdraw, ...suppressFeedback });
-  const addAssignee = useMutation({ mutationFn: instanceApi.addAssignee, ...pickerFeedback });
+  const addAssignee = useMutation({ mutationFn: instanceApi.addAssignee, ...inlineFeedback });
   const removeAssignee = useMutation({ mutationFn: instanceApi.removeAssignee, ...suppressFeedback });
-  const addCC = useMutation({ mutationFn: instanceApi.addCC, ...pickerFeedback });
+  const addCC = useMutation({ mutationFn: instanceApi.addCC, ...inlineFeedback });
   const urgeTask = useMutation({ mutationFn: instanceApi.urgeTask, ...suppressFeedback });
 
   const [modal, setModal] = useState<DetailModal | null>(null);
   const [opinion, setOpinion] = useState("");
-  const [acting, setActing] = useState(false);
+  const [actingOnTask, setActing] = useState(false);
+  const submission = useSubmissionSession<ResubmitInstanceParams>(detail?.availableActions.includes("resubmit") ? instanceId : undefined);
+  const acting = actingOnTask || submission.pending;
   const reasonId = useId();
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
@@ -367,9 +371,10 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   async function dispatchFormSubmit(mode: FormSubmitMode, values: Record<string, unknown> | undefined): Promise<void> {
     if (mode === "resubmit") {
-      await runAction(
-        async () => resubmit.mutateAsync({ instanceId, formData: instance.businessKind ? await business.collect() : values }),
-        "已重新提交"
+      await submission.submit(
+        async () => { return { instanceId, formData: instance.businessKind ? await business.collect({ inlineError: true }) : values }; },
+        resubmit.mutateAsync,
+        () => completeAction("已重新提交")
       );
 
       return;
@@ -514,6 +519,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
               />
             </Labeled>
           )}
+
+          {canResubmit && submission.error && <Alert showIcon title={submission.error} type="error" />}
 
           <Flex align="center" gap="small" wrap="wrap">
             {canDecide && (

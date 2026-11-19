@@ -1,7 +1,7 @@
 import type { Interval } from "@vef-framework-react/calendar";
 import type { FormRendererApi } from "@vef-framework-react/form-editor";
 
-import type { VoidTarget } from "../../types";
+import type { StartInstanceParams, VoidTarget } from "../../types";
 
 import { Alert, Button, Drawer, Empty, Flex, globalCssVars, Icon, showSuccessMessage, showWarningMessage, Spin, Stack, Text } from "@vef-framework-react/components";
 import { isBusinessError, useMutation, useQuery, useQueryClient } from "@vef-framework-react/core";
@@ -9,6 +9,7 @@ import { SendIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
+import { useSubmissionSession } from "../../api/use-submission-session";
 import { InstanceFormPanel } from "../../components";
 import { MissingBusinessKind, useBusinessForm } from "../../components/business-form";
 import { FlowIcon } from "../../components/icon";
@@ -103,8 +104,7 @@ function StartDrawerBody({
   const instanceApi = useInstanceApi();
   const formApiRef = useRef<FormRendererApi | null>(null);
   const reasonId = useId();
-  const [submitError, setSubmitError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const submission = useSubmissionSession<StartInstanceParams>(flowCode);
 
   // The load is gated exactly like starting: a rendered form implies a
   // startable flow (active, permitted, published).
@@ -124,14 +124,19 @@ function StartDrawerBody({
   const business = useBusinessForm(startForm?.businessKind);
   const handled = useRef<Error | null>(null);
   const handleClosedWindow = useCallback((reason: unknown) => {
-    if (!(isBusinessError(reason) && reason.code === 40_027) || handled.current === reason) {
-      return;
+    if (!(isBusinessError(reason) && reason.code === 40_027)) {
+      return false;
+    }
+
+    if (handled.current === reason) {
+      return true;
     }
 
     handled.current = reason;
     (onWindowClosed ?? showWarningMessage)(reason.message);
     onClose();
     void queryClient.invalidateQueries({ queryKey: [myApi.findAvailableFlows.key] });
+    return true;
   }, [myApi, onClose, onWindowClosed, queryClient]);
 
   useEffect(() => {
@@ -142,31 +147,30 @@ function StartDrawerBody({
 
   const start = useMutation({
     mutationFn: instanceApi.start,
-    meta: { shouldShowSuccessFeedback: false, invalidates: [[myApi.findInitiated.key] as const] }
+    meta: {
+      shouldShowSuccessFeedback: false,
+      shouldShowErrorFeedback: false,
+      invalidates: [[myApi.findInitiated.key] as const]
+    }
   });
 
   async function submitStart(values: Record<string, unknown> | undefined): Promise<void> {
-    setSubmitting(true);
-    setSubmitError("");
-
-    try {
-      await start.mutateAsync({
-        flowCode,
-        businessRef,
-        formData: startForm?.businessKind ? await business.collect() : values
-      });
-      showSuccessMessage("已提交审批");
-      onClose();
-      onStarted?.();
-    } catch (error_) {
-      handleClosedWindow(error_);
-
-      if (voidTarget && error_ instanceof Error) {
-        setSubmitError(error_.message);
-      }
-    } finally {
-      setSubmitting(false);
-    }
+    await submission.submit(
+      async () => {
+        return {
+          flowCode,
+          businessRef,
+          formData: startForm?.businessKind ? await business.collect({ inlineError: true }) : values
+        };
+      },
+      start.mutateAsync,
+      () => {
+        showSuccessMessage("已提交审批");
+        onClose();
+        onStarted?.();
+      },
+      handleClosedWindow
+    );
   }
 
   async function handleSubmitClick(): Promise<void> {
@@ -218,7 +222,7 @@ function StartDrawerBody({
             />
           )}
 
-      {submitError && <Alert showIcon title={submitError} type="error" />}
+      {submission.error && <Alert showIcon title={submission.error} type="error" />}
 
       <Flex
         align="center"
@@ -233,7 +237,7 @@ function StartDrawerBody({
           aria-describedby={business.blockedReason ? reasonId : undefined}
           disabled={Boolean(startForm.businessKind && (!business.renderer || !business.ready))}
           icon={<Icon component={SendIcon} />}
-          loading={submitting}
+          loading={submission.pending}
           type="primary"
           onClick={() => void handleSubmitClick()}
         >

@@ -47,5 +47,6 @@ export const APPROVAL_ERROR_CODES = {
   instanceNotVoidable: 40_037,
   voidBlocked: 40_038,
   voidRequestPending: 40_039,
-  voidPolicyInvalid: 40_040
+  voidPolicyInvalid: 40_040,
+  idempotencyConflict: 40_041
 } as const;

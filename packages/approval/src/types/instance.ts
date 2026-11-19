@@ -14,6 +14,10 @@ export interface StartInstanceParams {
    */
   businessRef?: string;
   formData?: Record<string, unknown>;
+  /**
+   * Tenant-scoped, up to 128 characters. Replaying the same start returns the original instance in its current state. A different payload, applicant or operation conflicts (40041).
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -50,6 +54,10 @@ export interface WithdrawInstanceParams {
 export interface ResubmitInstanceParams {
   instanceId: string;
   formData?: Record<string, unknown>;
+  /**
+   * Tenant-scoped, up to 128 characters. Replaying the same resubmission returns empty success. A different payload, applicant or operation conflicts (40041).
+   */
+  idempotencyKey?: string;
 }
 
 /**
