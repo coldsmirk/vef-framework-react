@@ -48,6 +48,8 @@ Publishing is **CI-triggered by pushing a `v*` tag** (`.github/workflows/release
 - Land feature commits **before** the `chore(release)` commit so git-cliff picks them up.
 - **Don't publish with `pnpm pub` / `pnpm release:*` for a real release** — they publish from your machine (local npm auth, skipping CI gates) and double-publish if combined with the tag flow; a published version can't be re-published.
 - A failed CI gate blocks the publish but the tag remains — delete the tag, fix, re-tag.
+- CI authenticates by **npm trusted publishing** (the job's OIDC token; no npm token secret exists). Each package's npm settings name `coldsmirk/vef-framework-react` / `release.yml` as its trusted publisher, and npm attaches provenance, which rejects a `package.json` without `repository` (keep `url` and `directory`). A new package needs its trusted publisher configured on npmjs.com before CI can publish it; npm offers that setting only once the package exists, so a new package's first version is published by hand.
+- If one package's publish fails mid-run (for example a transient Sigstore `TLOG_CREATE_ENTRY_ERROR (409)`), re-run the failed job: `pnpm publish -r` skips versions already on the registry.
 
 Scripts: `pnpm version:patch|minor|major` (bump only) · `pnpm release:patch|minor|major` (local bump + build + publish, the non-CI path) · `pnpm pub` (local publish, no bump) · `pnpm unpub` (roll back, see `scripts/unpublish.ts`).
 

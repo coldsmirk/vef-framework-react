@@ -15,7 +15,7 @@ concurrency:
 
 permissions:
   contents: write # create the GitHub Release
-  id-token: write # OIDC for npm (enables trusted publishing later; npm provenance needs a public repo)
+  id-token: write # npm trusted publishing: the job's OIDC token authenticates the publish and signs provenance
 
 jobs:
   release:
@@ -34,7 +34,6 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: "https://registry.npmjs.org" # writes .npmrc so pnpm publish authenticates
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -60,11 +59,11 @@ jobs:
         run: pnpm build
 
       - name: Publish to npm
-        # No --provenance: npm provenance requires a public source repo. Add it back
-        # if the GitHub repo is public.
+        # Trusted publishing: pnpm exchanges the job's OIDC token for a short-lived
+        # npm token per package, and npm attaches provenance, so no long-lived token
+        # is stored. Provenance verification requires every package.json to keep its
+        # `repository` (with `directory`).
         run: pnpm --filter="./packages/*" publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Generate release notes
         id: changelog
