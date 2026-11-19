@@ -1,7 +1,7 @@
 import type { ApprovalFormField } from "@vef-framework-react/approval-form-bridge";
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
-import type { FieldAnchor, InstanceDetail } from "../../types";
+import type { FieldAnchor } from "../../types";
 
 import { projectFormSchema } from "@vef-framework-react/approval-form-bridge";
 
@@ -24,12 +24,12 @@ export function isFieldAnchor(anchor: unknown): anchor is FieldAnchor {
     && (!("column" in anchor) || anchor.column === undefined || typeof anchor.column === "string");
 }
 
-export function anchorLabel(detail: InstanceDetail, anchor: unknown, scope?: FieldAnchor) {
-  if (detail.instance.businessKind || !isFieldAnchor(anchor)) {
+export function anchorLabel(schema: FormSchema | undefined, anchor: unknown, scope?: FieldAnchor) {
+  if (!isFieldAnchor(anchor)) {
     return;
   }
 
-  const field = detail.formSchema && fieldDefinition(detail.formSchema, anchor.field);
+  const field = schema && fieldDefinition(schema, anchor.field);
   const parts: string[] = [];
 
   if (scope?.field !== anchor.field) {

@@ -143,10 +143,10 @@ export function AnnotationComposer({
   const [content, setContent] = useState(draft?.content ?? "");
   const [audience, setAudience] = useState<AnnotationAudience>(draft?.audience ?? { scope: "participants" });
   const [field, setField] = useState<string>();
-  const fields = useMemo(() => !detail.instance.businessKind && detail.formSchema
-    ? projectFormSchema(detail.formSchema).fields.filter(f => !("fieldPermissions" in detail) || detail.fieldPermissions?.[f.key] !== "hidden")
-    : [], [detail]);
-  const { task } = actions;
+  const { formSchema, task } = actions;
+  const fields = useMemo(() => formSchema
+    ? projectFormSchema(formSchema).fields.filter(f => !("fieldPermissions" in detail) || detail.fieldPermissions?.[f.key] !== "hidden")
+    : [], [formSchema, detail]);
 
   if (!task || (draft && (draft.status !== "draft" || draft.taskId !== task.taskId || draft.parentId))) {
     return null;

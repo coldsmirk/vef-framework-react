@@ -1,5 +1,5 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps, TenantOption } from "@vef-framework-react/approval-flow-editor";
-import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, LinkageEvaluators } from "@vef-framework-react/form-editor";
+import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, FormSchema, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode, Ref } from "react";
 
 import type { InstanceDetail, KindOptions, StartForm, ViewerTask, VoidOptions, VoidTarget } from "../types";
@@ -111,6 +111,14 @@ export interface ApprovalPlugins {
    * plain text.
    */
   renderBusinessRef?: (businessRef: string) => ReactNode;
+  /**
+   * Converts a pinned version's stored form document for runtime forms and
+   * annotations. Hosts using Go's `vef.ProvideApprovalFormSchemaParser`
+   * can store their own document format. Return a renderer schema unchanged
+   * when already native, or undefined for an unsupported document.
+   * The built-in flow designer edits its native format and does not use this adapter.
+   */
+  formSchemaAdapter?: (document: unknown) => FormSchema | undefined;
 }
 
 /**
@@ -169,6 +177,20 @@ export function useApprovalPlugins(): ResolvedApprovalPlugins {
     () => fromContext ?? { ...FALLBACK_PLUGINS, registries: defaultRegistries },
     [fromContext, defaultRegistries]
   );
+}
+
+/**
+ * Resolves a version's form document for rendering without changing cached API data.
+ */
+export function useFormSchema(document: unknown): FormSchema | undefined {
+  const adapter = use(ApprovalPluginsContext)?.formSchemaAdapter;
+  return useMemo(() => {
+    if (document === undefined || document === null) {
+      return;
+    }
+
+    return adapter ? adapter(document) : document as FormSchema;
+  }, [adapter, document]);
 }
 
 /**

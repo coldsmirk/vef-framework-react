@@ -12,6 +12,7 @@ import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { InstanceFormPanel } from "../../components";
 import { MissingBusinessKind, useBusinessForm } from "../../components/business-form";
 import { FlowIcon } from "../../components/icon";
+import { useFormSchema } from "../../plugins";
 
 export interface StartInstanceDrawerProps {
   /**
@@ -119,6 +120,7 @@ function StartDrawerBody({
     refetchOnMount: "always"
   });
 
+  const schema = useFormSchema(startForm?.businessKind ? undefined : startForm?.formSchema);
   const business = useBusinessForm(startForm?.businessKind);
   const handled = useRef<Error | null>(null);
   const handleClosedWindow = useCallback((reason: unknown) => {
@@ -168,7 +170,7 @@ function StartDrawerBody({
   }
 
   async function handleSubmitClick(): Promise<void> {
-    if (!startForm?.businessKind && startForm?.formSchema) {
+    if (schema) {
       // The renderer's validation pipeline gates submission; onSubmit below
       // only fires when it passes.
       await formApiRef.current?.submit();
@@ -211,7 +213,7 @@ function StartDrawerBody({
               apiRef={formApiRef}
               applicant={startForm.applicant}
               globals={startForm.globals}
-              schema={startForm.formSchema}
+              schema={schema}
               onSubmit={values => void submitStart(values)}
             />
           )}

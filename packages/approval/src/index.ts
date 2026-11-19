@@ -14,7 +14,7 @@ export type {
   MetricsPermissionCodes,
   TaskPermissionCodes
 } from "./permissions";
-export { ApprovalProvider, toEditorPlugins, useApprovalPlugins } from "./plugins";
+export { ApprovalProvider, toEditorPlugins, useApprovalPlugins, useFormSchema } from "./plugins";
 export type { ApprovalPlugins, ApprovalProviderProps, BusinessFormHandle, BusinessKindRenderer, ResolvedApprovalPlugins } from "./plugins";
 export type { FormGlobalDefinition } from "./plugins/form-context";
 export * from "./types";

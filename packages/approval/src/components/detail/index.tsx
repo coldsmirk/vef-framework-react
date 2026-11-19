@@ -41,7 +41,7 @@ import { useId, useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
-import { useApprovalPlugins } from "../../plugins";
+import { useApprovalPlugins, useFormSchema } from "../../plugins";
 import { VOID_REQUEST_KIND } from "../../types";
 import { AnnotationTimeline, DetailAnnotations, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
@@ -232,7 +232,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
 
-  const fieldAnnotations = useFieldAnnotations(detail);
+  const schema = useFormSchema(detail?.instance.businessKind ? undefined : detail?.formSchema);
+  const fieldAnnotations = useFieldAnnotations(detail, schema);
   const business = useBusinessForm(detail?.instance.businessKind);
   const missingRenderer = Boolean(detail?.instance.businessKind && !business.renderer);
   const actions = useMemo(() => new Set<InstanceAction>(detail?.availableActions), [detail]);
@@ -339,7 +340,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
       return;
     }
 
-    if (detail?.instance.businessKind || !detail?.formSchema) {
+    if (!schema) {
       await dispatchFormSubmit(mode, undefined);
 
       return;
@@ -487,7 +488,7 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
               formData={instance.formData}
               globals={instance.globals}
               renderFieldExtra={fieldAnnotations.renderFieldExtra}
-              schema={detail.formSchema}
+              schema={schema}
               onSubmit={onFormSubmit}
             />
           )}

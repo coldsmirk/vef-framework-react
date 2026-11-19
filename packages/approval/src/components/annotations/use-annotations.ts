@@ -5,7 +5,7 @@ import { useMemo } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
 import { APPROVAL_PERMISSIONS } from "../../permissions";
-import { resolveBusinessRenderer, useApprovalPlugins } from "../../plugins";
+import { resolveBusinessRenderer, useApprovalPlugins, useFormSchema } from "../../plugins";
 import { isMyInstanceDetail } from "../../types";
 import { isFieldAnchor } from "./field-anchor";
 
@@ -101,6 +101,7 @@ export function useAnnotations(detail: InstanceDetail) {
   const { hasPermission } = useAppContext();
   const { businessKinds } = useApprovalPlugins();
   const kind = detail.instance.businessKind;
+  const formSchema = useFormSchema(kind ? undefined : detail.formSchema);
   const writable = (hasPermission?.(APPROVAL_PERMISSIONS.annotation.write) ?? true)
     && (!kind || Boolean(resolveBusinessRenderer(businessKinds, kind)));
   const mine = isMyInstanceDetail(detail) ? detail : undefined;
@@ -122,6 +123,7 @@ export function useAnnotations(detail: InstanceDetail) {
   const groups = useMemo(() => groupThreads(detail), [detail]);
   return {
     groups,
+    formSchema,
     task,
     canRespond,
     save: save.mutateAsync,

@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { useAdminApprovalApi } from "../../api";
 import { APPROVAL_PERMISSIONS } from "../../permissions";
+import { useFormSchema } from "../../plugins";
 import { AnnotationTimeline, useFieldAnnotations } from "../annotations";
 import { MissingBusinessKind, useBusinessForm } from "../business-form";
 import { InstanceFlowGraphViewer } from "../flow-graph";
@@ -113,7 +114,8 @@ export function AdminInstanceDetailPanel({ instanceId, voidPermission = APPROVAL
   });
 
   const [voidOpen, setVoidOpen] = useState(false);
-  const fieldAnnotations = useFieldAnnotations(detail);
+  const schema = useFormSchema(detail?.instance.businessKind ? undefined : detail?.formSchema);
+  const fieldAnnotations = useFieldAnnotations(detail, schema);
   const business = useBusinessForm(detail?.instance.businessKind);
 
   if (isLoading) {
@@ -171,7 +173,7 @@ export function AdminInstanceDetailPanel({ instanceId, voidPermission = APPROVAL
                     formData={instance.formData}
                     globals={instance.globals}
                     renderFieldExtra={fieldAnnotations.renderFieldExtra}
-                    schema={detail.formSchema}
+                    schema={schema}
                   />
                 )
           },

@@ -1,3 +1,5 @@
+import type { FormSchema } from "@vef-framework-react/form-editor";
+
 import type { AnnotationView, FieldAnchor, InstanceDetail } from "../../types";
 import type { AnnotationGroup, AnnotationThread } from "./use-annotations";
 
@@ -29,9 +31,10 @@ const audiences = {
 function AnnotationLine({
   value,
   detail,
+  schema,
   scope
-}: { value: AnnotationView; detail: InstanceDetail; scope?: FieldAnchor }) {
-  const location = anchorLabel(detail, value.anchor, scope);
+}: { value: AnnotationView; detail: InstanceDetail; schema?: FormSchema; scope?: FieldAnchor }) {
+  const location = !detail.instance.businessKind && anchorLabel(schema, value.anchor, scope);
   const { audience } = value;
   const names = audience.scope === "nodes"
     ? detail.flowGraph.nodes.filter(node => audience.nodeIds.includes(node.nodeId)).map(node => node.data.name).filter(Boolean)
@@ -81,8 +84,8 @@ function Thread({
 
   return (
     <Stack gap={8} style={{ borderInlineStart: `2px solid ${globalCssVars.colorBorderSecondary}`, paddingInlineStart: 12 }}>
-      <AnnotationLine detail={detail} scope={scope} value={annotation} />
-      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} scope={scope} value={response} /></div>)}
+      <AnnotationLine detail={detail} schema={actions.formSchema} scope={scope} value={annotation} />
+      {responses.map(response => <div key={response.id} style={{ paddingInlineStart: 12 }}><AnnotationLine detail={detail} schema={actions.formSchema} scope={scope} value={response} /></div>)}
 
       {editing
         ? edit
@@ -200,7 +203,7 @@ export function DetailAnnotations({ detail }: { detail: InstanceDetail }) {
   );
 }
 
-export function useFieldAnnotations(detail: InstanceDetail | undefined) {
+export function useFieldAnnotations(detail: InstanceDetail | undefined, schema: FormSchema | undefined) {
   const [selected, setSelected] = useState<FieldAnchor>();
   const annotations = detail?.annotations;
   const counts = useMemo(() => {
@@ -255,7 +258,7 @@ export function useFieldAnnotations(detail: InstanceDetail | undefined) {
     <CappedModal
       open
       footer={null}
-      title={`${anchorLabel(detail, selected)} · 批注`}
+      title={`${anchorLabel(schema, selected)} · 批注`}
       onCancel={() => setSelected(undefined)}
     >
       <AnnotationThreads detail={detail} field={selected} modalScope={selected} />
