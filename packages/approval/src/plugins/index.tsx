@@ -116,6 +116,8 @@ export interface ApprovalPlugins {
    * annotations. Hosts using Go's `vef.ProvideApprovalFormSchemaParser`
    * can store their own document format. Return a renderer schema unchanged
    * when already native, or undefined for an unsupported document.
+   * Pass a stable function reference and leave the input document immutable.
+   * The provider caches the result by document identity for all consumers.
    * The built-in flow designer edits its native format and does not use this adapter.
    */
   formSchemaAdapter?: (document: unknown) => FormSchema | undefined;
@@ -137,6 +139,12 @@ const FALLBACK_PLUGINS: ApprovalPlugins = { businessKinds: { [VOID_REQUEST_KIND]
 const ApprovalPluginsContext = createContext<ResolvedApprovalPlugins | null>(null);
 ApprovalPluginsContext.displayName = "ApprovalPluginsContext";
 
+const FormSchemaContext = createContext<{
+  adapter: NonNullable<ApprovalPlugins["formSchemaAdapter"]>;
+  cache: WeakMap<object, FormSchema | undefined>;
+} | null>(null);
+FormSchemaContext.displayName = "FormSchemaContext";
+
 export interface ApprovalProviderProps extends PropsWithChildren {
   plugins?: ApprovalPlugins;
 }
@@ -150,6 +158,8 @@ export function ApprovalProvider({ plugins, children }: ApprovalProviderProps) {
   // Registries are stateful class instances — create the fallback once so the
   // context value cannot churn field registrations across re-renders.
   const [defaultRegistries] = useState(createApprovalRegistries);
+  const adapter = plugins?.formSchemaAdapter;
+  const schemas = useMemo(() => adapter ? { adapter, cache: new WeakMap<object, FormSchema | undefined>() } : null, [adapter]);
 
   const value = useMemo<ResolvedApprovalPlugins>(
     () => {
@@ -162,7 +172,11 @@ export function ApprovalProvider({ plugins, children }: ApprovalProviderProps) {
     [plugins, defaultRegistries]
   );
 
-  return <ApprovalPluginsContext value={value}>{children}</ApprovalPluginsContext>;
+  return (
+    <ApprovalPluginsContext value={value}>
+      <FormSchemaContext value={schemas}>{children}</FormSchemaContext>
+    </ApprovalPluginsContext>
+  );
 }
 
 /**
@@ -183,14 +197,35 @@ export function useApprovalPlugins(): ResolvedApprovalPlugins {
  * Resolves a version's form document for rendering without changing cached API data.
  */
 export function useFormSchema(document: unknown): FormSchema | undefined {
-  const adapter = use(ApprovalPluginsContext)?.formSchemaAdapter;
+  const schemas = use(FormSchemaContext);
   return useMemo(() => {
     if (document === undefined || document === null) {
       return;
     }
 
-    return adapter ? adapter(document) : document as FormSchema;
-  }, [adapter, document]);
+    if (!schemas) {
+      return document as FormSchema;
+    }
+
+    const { adapter, cache } = schemas;
+
+    if (typeof document !== "object") {
+      return adapter(document);
+    }
+
+    if (cache.has(document)) {
+      return cache.get(document);
+    }
+
+    const resolved = adapter(document);
+    cache.set(document, resolved);
+
+    if (typeof resolved === "object" && resolved !== null && resolved !== document) {
+      cache.set(resolved, resolved);
+    }
+
+    return resolved;
+  }, [schemas, document]);
 }
 
 /**

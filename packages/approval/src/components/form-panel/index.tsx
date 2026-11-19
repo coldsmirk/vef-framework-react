@@ -7,14 +7,14 @@ import { Empty } from "@vef-framework-react/components";
 import { FormRenderer, RegistryProvider } from "@vef-framework-react/form-editor";
 import { useMemo } from "react";
 
-import { useApprovalPlugins } from "../../plugins";
+import { useApprovalPlugins, useFormSchema } from "../../plugins";
 import { toFormEvaluationContext } from "../../plugins/form-context";
 
 export interface InstanceFormPanelProps {
   renderFieldExtra?: FormRendererProps["renderFieldExtra"];
   /**
-   * The version-pinned host form-designer document. Absent for flows without
-   * a form — renders an empty state.
+   * The version-pinned host form-designer document, resolved through
+   * `ApprovalPlugins.formSchemaAdapter`. Absent or unsupported documents render an empty state.
    */
   schema?: FormSchema;
   /**
@@ -75,9 +75,10 @@ export function InstanceFormPanel({
     evaluators,
     registries
   } = useApprovalPlugins();
+  const resolvedSchema = useFormSchema(schema);
   const evaluationContext = useMemo(() => toFormEvaluationContext(applicant, globals), [applicant, globals]);
 
-  if (!schema) {
+  if (!resolvedSchema) {
     return <Empty description="该流程未配置表单" />;
   }
 
@@ -93,7 +94,7 @@ export function InstanceFormPanel({
         evaluators={evaluators}
         fieldPermissions={fieldPermissions}
         renderFieldExtra={renderFieldExtra}
-        schema={schema}
+        schema={resolvedSchema}
         onSubmit={onSubmit}
       />
     </RegistryProvider>
