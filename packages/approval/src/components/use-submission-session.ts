@@ -3,9 +3,11 @@ import type { ResubmitInstanceParams, StartInstanceParams } from "../types";
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { useEffect, useRef, useState } from "react";
 
+type Payload<T> = Omit<T, "idempotencyKey">;
+
 interface Session<T> {
   key: string;
-  previous?: T;
+  previous?: Payload<T>;
   busy: boolean;
 }
 
@@ -41,8 +43,8 @@ export function useSubmissionSession<T extends StartInstanceParams | ResubmitIns
   }, [scope]);
 
   async function submit(
-    collect: () => Promise<T>,
-    send: (params: T) => Promise<unknown>,
+    collect: () => Promise<Payload<T> & { idempotencyKey?: never }>,
+    send: (params: Payload<T> & { idempotencyKey: string }) => Promise<unknown>,
     onSuccess: () => void | Promise<void>,
     handleError?: (cause: unknown) => boolean
   ) {
@@ -66,7 +68,7 @@ export function useSubmissionSession<T extends StartInstanceParams | ResubmitIns
 
       // Snapshot the wire representation, including toJSON conversions and omitted fields.
       const json = JSON.stringify(values);
-      const params: T = JSON.parse(json);
+      const params: Payload<T> = JSON.parse(json);
       const snapshot = { ...params, formData: params.formData ?? {} };
 
       if (current.previous && !isDeepEqual(current.previous, snapshot)) {

@@ -41,7 +41,6 @@ import {
 import { useId, useMemo, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
-import { useSubmissionSession } from "../../api/use-submission-session";
 import { StartInstanceDrawer } from "../../pages/initiate-page/start-drawer";
 import { useApprovalPlugins, useFormSchema } from "../../plugins";
 import { VOID_REQUEST_KIND } from "../../types";
@@ -51,6 +50,7 @@ import { InstanceFlowGraphViewer } from "../flow-graph";
 import { InstanceFormPanel } from "../form-panel";
 import { displayInstanceTitle, formatTimestamp } from "../format";
 import { InstanceStatusTag } from "../status";
+import { useSubmissionSession } from "../use-submission-session";
 import { UserLabel } from "../user";
 import { VoidBanners } from "../void/summary";
 import { useRefreshVoidTarget } from "../void/use-refresh";
@@ -230,7 +230,10 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const [modal, setModal] = useState<DetailModal | null>(null);
   const [opinion, setOpinion] = useState("");
   const [actingOnTask, setActing] = useState(false);
-  const submission = useSubmissionSession<ResubmitInstanceParams>(detail?.availableActions.includes("resubmit") ? instanceId : undefined);
+  // The same instance can return for editing again without this panel ever observing its running state.
+  const submission = useSubmissionSession<ResubmitInstanceParams>(detail?.availableActions.includes("resubmit")
+    ? JSON.stringify([instanceId, detail.instance.status, detail.timeline.length])
+    : undefined);
   const acting = actingOnTask || submission.pending;
   const reasonId = useId();
   const formApiRef = useRef<FormRendererApi | null>(null);

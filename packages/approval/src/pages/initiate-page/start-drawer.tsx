@@ -9,10 +9,10 @@ import { SendIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useInstanceApi, useMyApprovalApi } from "../../api";
-import { useSubmissionSession } from "../../api/use-submission-session";
 import { InstanceFormPanel } from "../../components";
 import { MissingBusinessKind, useBusinessForm } from "../../components/business-form";
 import { FlowIcon } from "../../components/icon";
+import { useSubmissionSession } from "../../components/use-submission-session";
 import { useFormSchema } from "../../plugins";
 
 export interface StartInstanceDrawerProps {
@@ -104,7 +104,7 @@ function StartDrawerBody({
   const instanceApi = useInstanceApi();
   const formApiRef = useRef<FormRendererApi | null>(null);
   const reasonId = useId();
-  const submission = useSubmissionSession<StartInstanceParams>(flowCode);
+  const submission = useSubmissionSession<StartInstanceParams>(JSON.stringify([flowCode, businessRef, voidTarget?.instanceId]));
 
   // The load is gated exactly like starting: a rendered form implies a
   // startable flow (active, permitted, published).
