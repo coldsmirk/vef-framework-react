@@ -1,6 +1,6 @@
 {
   "name": "@vef-framework-react/cron",
-  "version": "2.31.1",
+  "version": "2.32.0",
   "private": false,
   "description": "Durable cron schedule management pages for VEF framework",
   "keywords": [
