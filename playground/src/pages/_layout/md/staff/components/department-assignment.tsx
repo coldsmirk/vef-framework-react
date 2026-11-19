@@ -110,19 +110,21 @@ function DepartmentTransferSelector({ orgId }: DepartmentTransferSelectorProps):
   const { AppField, setFieldValue } = useFormContext<StaffDepartmentParams>();
   const staffId = useStaffCrudPageStore(state => (state.defaultFormValues as StaffDepartmentParams).staffId);
 
-  const departmentsResult = useQuery({
+  const { data: departments } = useQuery({
     queryKey: [findStaffDepartments.key, { orgId, staffId }],
     queryFn: findStaffDepartments,
     enabled: Boolean(orgId)
   });
 
-  const setInitialDepartments = useEffectEvent((departments: StaffDepartmentItem[]) => {
-    setFieldValue("departments", normalizeDepartments(departments));
+  const setInitialDepartments = useEffectEvent((items: StaffDepartmentItem[]) => {
+    setFieldValue("departments", normalizeDepartments(items));
   });
 
   useEffect(() => {
-    departmentsResult.promise.then(setInitialDepartments);
-  }, [departmentsResult.promise]);
+    if (orgId && staffId && departments !== undefined) {
+      setInitialDepartments(departments);
+    }
+  }, [orgId, staffId, departments]);
 
   const {
     treeProps,

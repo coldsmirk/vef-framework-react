@@ -6,7 +6,7 @@ import type { SelectProps } from "..";
 import type { GetProp } from "../../_base";
 
 import { useDataOptionsQuery } from "@vef-framework-react/hooks";
-import { useEffect, useEffectEvent, useMemo } from "react";
+import { useMemo } from "react";
 
 import { Loader } from "../../loader";
 
@@ -21,10 +21,6 @@ export type UseDataOptionsSelectOptions<
    * @default false
    */
   filterable?: boolean;
-  /**
-   * Callback function invoked after data is fetched
-   */
-  onFetch?: (data: TData[]) => void;
 };
 
 const fieldNames: GetProp<SelectProps, "fieldNames"> = {
@@ -53,14 +49,9 @@ export function useDataOptionsSelect<
   TParams = never
 >({
   filterable = false,
-  onFetch,
   ...queryOptions
 }: UseDataOptionsSelectOptions<TQueryFnData, TData, TParams>) {
-  const {
-    options,
-    isFetching,
-    promise
-  } = useDataOptionsQuery({
+  const { options, isFetching } = useDataOptionsQuery({
     ...queryOptions,
     withPinyin: true
   });
@@ -77,14 +68,6 @@ export function useDataOptionsSelect<
       filterOption: filterable && filterOption
     };
   }, [isFetching, options, filterable]);
-
-  const onFetchFn = useEffectEvent((data: TData[]) => {
-    onFetch?.(data);
-  });
-
-  useEffect(() => {
-    promise.then(onFetchFn);
-  }, [promise]);
 
   return selectProps;
 }

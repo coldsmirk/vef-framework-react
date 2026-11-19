@@ -7,7 +7,7 @@ import type { GetProp } from "../../_base";
 
 import { useDataOptionsQuery } from "@vef-framework-react/hooks";
 import { isString } from "@vef-framework-react/shared";
-import { useEffect, useEffectEvent, useMemo } from "react";
+import { useMemo } from "react";
 
 import { Loader } from "../../loader";
 
@@ -22,10 +22,6 @@ export type UseDataOptionsTreeSelectOptions<
    * @default false
    */
   filterable?: boolean;
-  /**
-   * Callback function invoked after data is fetched
-   */
-  onFetch?: (data: TData[]) => void;
 };
 
 const fieldNames: GetProp<TreeSelectProps, "fieldNames"> = {
@@ -53,14 +49,9 @@ export function useDataOptionsTreeSelect<
   TParams = never
 >({
   filterable = false,
-  onFetch,
   ...queryOptions
 }: UseDataOptionsTreeSelectOptions<TQueryFnData, TData, TParams>) {
-  const {
-    options,
-    isFetching,
-    promise
-  } = useDataOptionsQuery({
+  const { options, isFetching } = useDataOptionsQuery({
     ...queryOptions,
     withPinyin: true
   });
@@ -82,14 +73,6 @@ export function useDataOptionsTreeSelect<
       }
     };
   }, [isFetching, options, filterable]);
-
-  const onFetchFn = useEffectEvent((data: TData[]) => {
-    onFetch?.(data);
-  });
-
-  useEffect(() => {
-    promise.then(onFetchFn);
-  }, [promise]);
 
   return treeSelectProps;
 }

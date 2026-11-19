@@ -1,9 +1,9 @@
 import type { DataOption, DataOptionWithPinyin, UseQueryOptions, UseQueryResult } from "@vef-framework-react/core";
-import type { EmptyObject, Except, Key, MaybeUndefined, Simplify } from "@vef-framework-react/shared";
+import type { EmptyObject, Key, MaybeUndefined, Simplify } from "@vef-framework-react/shared";
 
 import { useQuery } from "@vef-framework-react/core";
 import { get, isEmpty, isFunction, isNullish, withPinyin as withPinyinInternal } from "@vef-framework-react/shared";
-import { useMemo } from "react";
+import { useEffect, useEffectEvent, useMemo } from "react";
 
 // ============================================================================
 // Types
@@ -64,6 +64,10 @@ export type UseDataOptionsQueryOptions<
    * Options for fetching data using regular query
    */
   queryOptions: UseQueryOptions<TQueryFnData[], TData[], TParams>;
+  /**
+   * Called with the selected rows when data becomes available or changes, including on a cache hit.
+   */
+  onFetch?: (data: TData[]) => void;
 };
 
 /**
@@ -103,19 +107,19 @@ function extractField<TData, TValue>(
  */
 function transformDataItem<TData = EmptyObject>(
   item: TData,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: false
 ): DataOption<TData>;
 
 function transformDataItem<TData = EmptyObject>(
   item: TData,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: true
 ): DataOptionWithPinyin<TData>;
 
 function transformDataItem<TData = EmptyObject>(
   item: TData,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: boolean
 ): DataOption<TData> | DataOptionWithPinyin<TData> {
   const {
@@ -163,19 +167,19 @@ function transformDataItem<TData = EmptyObject>(
  */
 function transformData<TData>(
   data: TData[] | undefined,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: false
 ): Array<DataOption<TData>>;
 
 function transformData<TData>(
   data: TData[] | undefined,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: true
 ): Array<DataOptionWithPinyin<TData>>;
 
 function transformData<TData>(
   data: TData[] | undefined,
-  options: Except<UseDataOptionsQueryOptions<unknown, TData>, "queryOptions">,
+  options: DataOptionsFieldMapping<TData>,
   withPinyin: boolean
 ): Array<DataOption<TData>> | Array<DataOptionWithPinyin<TData>> {
   if (!data || isEmpty(data)) {
@@ -218,6 +222,7 @@ export function useDataOptionsQuery<
 >(
   {
     queryOptions,
+    onFetch,
     labelKey,
     valueKey,
     disabledKey,
@@ -233,7 +238,14 @@ export function useDataOptionsQuery<
     withPinyin?: boolean;
   }
 ): UseDataOptionsQueryResult<TData, DataOption<TData> | DataOptionWithPinyin<TData>> {
-  const { data, ...result } = useQuery(queryOptions);
+  const query = useQuery(queryOptions);
+  const { data } = query;
+  const notifyFetch = useEffectEvent((rows: TData[]) => onFetch?.(rows));
+  useEffect(() => {
+    if (data !== undefined) {
+      notifyFetch(data);
+    }
+  }, [data]);
 
   // Transform data - memoize to prevent unnecessary recalculations
   const fieldMappingOptions = useMemo(
@@ -254,5 +266,14 @@ export function useDataOptionsQuery<
     [data, fieldMappingOptions, withPinyin]
   );
 
-  return { options, ...result };
+  // Keep TanStack's property tracking lazy when replacing data with options.
+  const descriptors: PropertyDescriptorMap = { options: { value: options, enumerable: true } };
+
+  for (const key of Object.keys(query)) {
+    if (key !== "data") {
+      descriptors[key] = { enumerable: true, get: () => Reflect.get(query, key) };
+    }
+  }
+
+  return Object.create(Object.prototype, descriptors) as UseDataOptionsQueryResult<TData, DataOption<TData> | DataOptionWithPinyin<TData>>;
 }

@@ -6,18 +6,13 @@ import type { GetProp } from "../../_base";
 
 import { useDataOptionsQuery } from "@vef-framework-react/hooks";
 import { filterTreeWithAncestors, isString } from "@vef-framework-react/shared";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export type UseDataOptionsTreeOptions<
   TQueryFnData = unknown,
   TData = TQueryFnData,
   TParams = never
-> = UseDataOptionsQueryOptions<TQueryFnData, TData, TParams> & {
-  /**
-   * Callback function invoked after data is fetched successfully
-   */
-  onFetch?: (data: TData[]) => void;
-};
+> = UseDataOptionsQueryOptions<TQueryFnData, TData, TParams>;
 
 const fieldNames: GetProp<TreeProps, "fieldNames"> = {
   title: "label",
@@ -29,15 +24,8 @@ export function useDataOptionsTree<
   TQueryFnData = unknown,
   TData = TQueryFnData,
   TParams = never
->({
-  onFetch,
-  ...queryOptions
-}: UseDataOptionsTreeOptions<TQueryFnData, TData, TParams>) {
-  const {
-    options,
-    isFetching,
-    promise
-  } = useDataOptionsQuery({
+>(queryOptions: UseDataOptionsTreeOptions<TQueryFnData, TData, TParams>) {
+  const { options, isFetching } = useDataOptionsQuery({
     ...queryOptions,
     withPinyin: true
   });
@@ -85,14 +73,6 @@ export function useDataOptionsTree<
       filterTreeNode
     };
   }, [filterTreeNode, treeData]);
-
-  const onFetchFn = useEffectEvent((data: TData[]) => {
-    onFetch?.(data);
-  });
-
-  useEffect(() => {
-    promise.then(onFetchFn);
-  }, [promise]);
 
   return {
     treeProps,

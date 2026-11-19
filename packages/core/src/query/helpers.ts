@@ -43,10 +43,7 @@ export function createQueryClient(options?: QueryClientOptions): QueryClient {
         refetchOnReconnect: true,
         refetchOnWindowFocus: true,
         retryOnMount: true,
-        queryKeyHashFn: hashKey,
-
-        // eslint-disable-next-line @typescript-eslint/naming-convention -- documented upstream TanStack Query option name
-        experimental_prefetchInRender: true
+        queryKeyHashFn: hashKey
       },
       mutations: {
         gcTime,

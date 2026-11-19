@@ -76,12 +76,16 @@ export function Authorization() {
     setFieldValue,
     reset
   } = useFormContext();
-  const defaultFormValues = useRolePageStore(state => state.defaultFormValues) as RolePermissionParams;
+  const roleId = useRolePageStore(state => (state.defaultFormValues as RolePermissionParams).roleId);
 
-  const results = useQueries({
+  const {
+    isFetching,
+    rolePermissions,
+    permissionOptions
+  } = useQueries({
     queries: [
       {
-        queryKey: [findRolePermissions.key, defaultFormValues.roleId],
+        queryKey: [findRolePermissions.key, roleId],
         queryFn: findRolePermissions
       },
       {
@@ -93,13 +97,12 @@ export function Authorization() {
       return {
         isFetching: rolePermissionsResult.isFetching || permissionOptionsResult.isFetching,
         rolePermissions: rolePermissionsResult.data,
-        permissionOptions: permissionOptionsResult.data,
-        promise: Promise.all([rolePermissionsResult.promise, permissionOptionsResult.promise])
+        permissionOptions: permissionOptionsResult.data
       };
     }
   });
 
-  const setNormalizedPermissions = useEffectEvent(([permissions, options]: [RolePermission[], DataOption[]]) => {
+  const setNormalizedPermissions = useEffectEvent((id: string, permissions: RolePermission[], options: DataOption[]) => {
     const normalizedPermissions: Record<string, RolePermissionItem> = {};
 
     for (const permission of permissions) {
@@ -130,14 +133,16 @@ export function Authorization() {
     });
 
     reset({
-      roleId: defaultFormValues.roleId,
+      roleId: id,
       permissions: normalizedPermissions
     });
   });
 
   useEffect(() => {
-    results.promise.then(setNormalizedPermissions);
-  }, [results.promise]);
+    if (rolePermissions !== undefined && permissionOptions !== undefined) {
+      setNormalizedPermissions(roleId, rolePermissions, permissionOptions);
+    }
+  }, [roleId, rolePermissions, permissionOptions]);
 
   const authorizationColumns = useMemo<Array<TableColumn<DataOption>>>(() => [
     {
@@ -211,12 +216,12 @@ export function Authorization() {
 
   return (
     <div style={{ height: "100%" }}>
-      {results.isFetching
+      {isFetching
         ? <Loader />
         : (
             <Table
               columns={authorizationColumns}
-              dataSource={results.permissionOptions}
+              dataSource={permissionOptions}
               expandable={{ defaultExpandAllRows: true }}
               indentSize={32}
               pagination={false}
