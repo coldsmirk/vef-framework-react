@@ -4,7 +4,7 @@ import type * as FormEditorModule from "@vef-framework-react/form-editor";
 
 import type { Flow } from "../../../types";
 
-import userEvent from "@testing-library/user-event";
+import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 
 import { mockApprovalApi, render, screen, waitFor } from "../../../../test-utils";
 import { FlowDesignerDrawer } from "./index";
@@ -36,6 +36,113 @@ const flow: Flow = {
   isActive: true,
   currentVersion: 1
 };
+
+function renderBusinessDesigner(initialFlow: Flow) {
+  const writes: ApiRequest[] = [];
+  const lookups: ApiRequest[] = [];
+  const apiClient = mockApprovalApi(req => {
+    if (["update", "deploy", "publish_version"].includes(req.action)) {
+      writes.push(req);
+      return { id: "f" };
+    }
+
+    switch (req.action) {
+      case "find_flows": {
+        lookups.push(req);
+        const flows = [
+          {
+            code: "meet",
+            name: "会议共享作废",
+            businessKind: "approval.void_request"
+          },
+          {
+            code: "leave",
+            name: "年假办理流程",
+            businessKind: "leave"
+          },
+          ...Array.from({ length: 30 }, (_, index) => {
+            return {
+              code: `void-${index}`,
+              name: `其他作废流程 ${index + 1}`,
+              businessKind: "approval.void_request"
+            };
+          }),
+          {
+            code: "cancel",
+            name: "会议作废流程",
+            businessKind: "approval.void_request"
+          }
+        ];
+        const {
+          keyword,
+          businessKind,
+          page,
+          pageSize
+        } = req.params!;
+        const matches = flows.filter(item => item.businessKind === businessKind && item.name.includes(String(keyword ?? "")));
+        const offset = (Number(page) - 1) * Number(pageSize);
+        return { total: matches.length, items: matches.slice(offset, offset + Number(pageSize)) };
+      }
+
+      case "find_versions": { return [{ id: "v" }]; }
+
+      case "get_graph": { return {
+        version: {
+          storageMode: "table",
+          flowSchema: {
+            nodes: [
+              { id: "start", kind: "start" },
+              {
+                id: "a",
+                kind: "approval",
+                data: { rollbackDataStrategy: "keep" }
+              },
+              { id: "end", kind: "end" }
+            ],
+            edges: [
+              {
+                id: "edge",
+                source: "start",
+                target: "a"
+              },
+              {
+                id: "edge-2",
+                source: "a",
+                target: "end"
+              }
+            ]
+          }
+        }
+      }; }
+
+      case "list_business_kinds": { return [
+        {
+          kind: "meeting",
+          label: "会议预订",
+          isVoidable: true,
+          formFields: [
+            {
+              key: "chair",
+              kind: "input",
+              label: "主持人",
+              sortOrder: 0
+            }
+          ]
+        }
+      ]; }
+
+      case "list_kind_options": { return {
+        assignees: [],
+        ccs: [],
+        initiators: []
+      }; }
+
+      default: { return []; }
+    }
+  });
+  render(<FlowDesignerDrawer open flow={initialFlow} tenantId="t" onClose={vi.fn()} />, { apiClient });
+  return { writes, lookups };
+}
 
 describe("business kind design", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -136,123 +243,20 @@ describe("business kind design", () => {
     expect(screen.queryByText(/字段「typo」/)).not.toBeInTheDocument();
   });
 
-  it("replaces form design with the registered catalog and deploys only JSON storage", async () => {
-    const user = userEvent.setup();
-    const writes: ApiRequest[] = [];
-    const lookups: ApiRequest[] = [];
-    const apiClient = mockApprovalApi(req => {
-      if (["update", "deploy", "publish_version"].includes(req.action)) {
-        writes.push(req);
-        return { id: "f" };
-      }
-
-      switch (req.action) {
-        case "find_flows": {
-          lookups.push(req);
-          const flows = [
-            {
-              code: "meet",
-              name: "会议共享作废",
-              businessKind: "approval.void_request"
-            },
-            {
-              code: "leave",
-              name: "年假办理流程",
-              businessKind: "leave"
-            },
-            ...Array.from({ length: 30 }, (_, index) => {
-              return {
-                code: `void-${index}`,
-                name: `其他作废流程 ${index + 1}`,
-                businessKind: "approval.void_request"
-              };
-            }),
-            {
-              code: "cancel",
-              name: "会议作废流程",
-              businessKind: "approval.void_request"
-            }
-          ];
-          const {
-            keyword,
-            businessKind,
-            page,
-            pageSize
-          } = req.params!;
-          const matches = flows.filter(item => item.businessKind === businessKind && item.name.includes(String(keyword ?? "")));
-          const offset = (Number(page) - 1) * Number(pageSize);
-          return { total: matches.length, items: matches.slice(offset, offset + Number(pageSize)) };
-        }
-
-        case "find_versions": { return [{ id: "v" }]; }
-
-        case "get_graph": { return {
-          version: {
-            storageMode: "table",
-            flowSchema: {
-              nodes: [
-                { id: "start", kind: "start" },
-                {
-                  id: "a",
-                  kind: "approval",
-                  data: { rollbackDataStrategy: "keep" }
-                },
-                { id: "end", kind: "end" }
-              ],
-              edges: [
-                {
-                  id: "edge",
-                  source: "start",
-                  target: "a"
-                },
-                {
-                  id: "edge-2",
-                  source: "a",
-                  target: "end"
-                }
-              ]
-            }
-          }
-        }; }
-
-        case "list_business_kinds": { return [
-          {
-            kind: "meeting",
-            label: "会议预订",
-            isVoidable: true,
-            formFields: [
-              {
-                key: "chair",
-                kind: "input",
-                label: "主持人",
-                sortOrder: 0
-              }
-            ]
-          }
-        ]; }
-
-        case "list_kind_options": { return {
-          assignees: [],
-          ccs: [],
-          initiators: []
-        }; }
-
-        default: { return []; }
-      }
-    });
-    render(<FlowDesignerDrawer open flow={flow} tenantId="t" onClose={vi.fn()} />, { apiClient });
-    expect(await screen.findByText("表单设计")).toBeVisible();
-    await user.click(screen.getByRole("combobox", { name: "业务类型" }));
-    await user.click(await screen.findByText("会议预订"));
-    await user.click(screen.getByRole("radio", { name: "审批后作废" }));
-    expect(screen.getByRole("button", { name: "下一步" })).toBeDisabled();
-    await user.click(screen.getByRole("combobox", { name: "作废申请流程" }));
-    await user.type(screen.getByRole("combobox", { name: "作废申请流程" }), "会议");
+  it("keeps the selected void flow across searches and resolves its code across pages", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const { lookups } = renderBusinessDesigner({ ...flow, businessKind: "meeting" });
+    await user.click(await screen.findByLabelText("审批后作废"));
+    const next = screen.getByText("下一步").closest("button")!;
+    expect(next).toBeDisabled();
+    const picker = screen.getByLabelText("作废申请流程");
+    await user.click(picker);
+    await user.paste("会议");
     const option = await screen.findByText("会议作废流程");
     expect(screen.queryByText("会议共享作废")).not.toBeInTheDocument();
     expect(screen.queryByText("年假办理流程")).not.toBeInTheDocument();
     await user.click(option);
-    await waitFor(() => expect(screen.getByRole("button", { name: "下一步" })).toBeEnabled());
+    await waitFor(() => expect(next).toBeEnabled());
     expect(lookups).toContainEqual(expect.objectContaining({
       params: expect.objectContaining({
         businessKind: "approval.void_request",
@@ -262,20 +266,33 @@ describe("business kind design", () => {
       })
     }));
     expect(lookups).toContainEqual(expect.objectContaining({ params: expect.objectContaining({ page: 2, businessKind: "approval.void_request" }) }));
-    const picker = screen.getByRole("combobox", { name: "作废申请流程" });
     await user.click(picker);
-    await user.type(picker, "其他");
+    await user.paste("其他");
     await screen.findByText("其他作废流程 1");
     expect(screen.getByRole("option", { name: "会议作废流程" })).toHaveAttribute("aria-selected", "true");
     await user.keyboard("{Escape}");
+  });
+
+  it("replaces form design with the registered catalog and deploys only JSON storage", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const { writes } = renderBusinessDesigner({
+      ...flow,
+      voidPolicy: "approval",
+      voidFlowCode: "cancel"
+    });
+    expect(await screen.findByText("表单设计")).toBeVisible();
+    await user.click(screen.getByLabelText("业务类型"));
+    await user.click(await screen.findByText("会议预订"));
+    const next = screen.getByText("下一步").closest("button")!;
+    await waitFor(() => expect(next).toBeEnabled());
     expect(screen.queryByText("流程表单编辑器")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "回写审批状态到业务表" })).not.toBeChecked();
-    await user.click(screen.getByRole("button", { name: "下一步" }));
+    await user.click(next);
     expect(screen.getByText("业务字段目录")).toBeVisible();
     expect(screen.getAllByText("主持人")[0]).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "下一步" }));
-    await user.click(screen.getByRole("button", { name: "下一步" }));
-    await user.click(screen.getByRole("button", { name: "部署并发布" }));
+    await user.click(next);
+    await user.click(next);
+    await user.click(screen.getByText("部署并发布"));
     await waitFor(() => expect(writes).toHaveLength(3));
     expect(writes[0]?.params).toMatchObject({
       businessKind: "meeting",

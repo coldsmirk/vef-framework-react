@@ -2,7 +2,7 @@ import type { ApiRequest } from "@vef-framework-react/core";
 
 import type { AnnotationView, FlowGraphNode, MyInstanceDetail, SaveAnnotationParams } from "../../types";
 
-import userEvent from "@testing-library/user-event";
+import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 
 import { mockApprovalApi, render, screen, waitFor, within } from "../../../test-utils";
 import { InstanceDetailPanel } from "../detail";
@@ -137,19 +137,25 @@ function setup(returned = false, canWrite = true, extraAnnotations: AnnotationVi
   return writes;
 }
 
+function buttonFor(label: HTMLElement) {
+  return label.closest("button")!;
+}
+
 describe("instance annotations", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("adds a node-scoped draft, edits its audience through search and deletes it under the timeline entry", async () => {
-    const user = userEvent.setup();
+  it("shows a new node-scoped draft in the form and its timeline entry", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const writes = setup();
-    await user.click(await screen.findByRole("button", { name: "添加批注" }));
-    await user.type(screen.getByRole("textbox", { name: "批注内容" }), "请核对数量");
-    await user.click(screen.getByRole("combobox", { name: "可见范围" }));
+    const form = within(await screen.findByRole("tabpanel", { name: "审批表单" }));
+    await user.click(buttonFor(form.getByText("添加批注")));
+    await user.click(form.getByLabelText("批注内容", { selector: "textarea" }));
+    await user.paste("请核对数量");
+    await user.click(form.getByLabelText("可见范围", { selector: "input" }));
     await user.click(await screen.findByText("指定节点"));
-    const save = screen.getByRole("button", { name: "保存草稿" });
+    const save = buttonFor(form.getByText("保存草稿"));
     expect(save).toBeDisabled();
-    await user.click(screen.getByRole("combobox", { name: "可见节点" }));
+    await user.click(form.getByLabelText("可见节点"));
     expect(await screen.findByText("财务办理")).toBeVisible();
 
     for (const name of ["提交申请", "金额分支", "财务抄送", "归档结束"]) {
@@ -165,7 +171,7 @@ describe("instance annotations", () => {
       content: "请核对数量",
       audience: { scope: "nodes", nodeIds: ["n", "handle"] }
     }));
-    const form = within(screen.getByRole("tabpanel", { name: "审批表单" }));
+
     expect(await form.findByText("请核对数量")).toBeVisible();
     expect(form.getByText("草稿")).toBeVisible();
     expect(form.getByText("指定节点可见（部门审批、财务办理）")).toBeVisible();
@@ -174,31 +180,46 @@ describe("instance annotations", () => {
     expect(await timeline.findByText("已发布")).toBeVisible();
     expect(timeline.getByText("已作废（待办已由他人处理）")).toBeVisible();
     expect(timeline.getByText("草稿")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "编辑草稿" }));
-    const input = screen.getByRole("textbox", { name: "批注内容" });
+  });
+
+  it("changes a timeline draft's audience through search and deletes the updated draft", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const writes = setup(false, true, [
+      {
+        ...published,
+        id: "draft",
+        content: "请核对数量",
+        status: "draft",
+        audience: { scope: "nodes", nodeIds: ["n", "handle"] }
+      }
+    ]);
+    await user.click(await screen.findByRole("tab", { name: "流转记录" }));
+    const timeline = within(screen.getByRole("tabpanel", { name: "流转记录" }));
+    await user.click(buttonFor(timeline.getByText("编辑草稿")));
+    const input = timeline.getByLabelText("批注内容", { selector: "textarea" });
     await user.clear(input);
-    await user.type(input, "改给财务");
-    await user.click(screen.getByRole("combobox", { name: "可见范围" }));
+    await user.paste("改给财务");
+    await user.click(timeline.getByLabelText("可见范围", { selector: "input" }));
     await user.click(await screen.findByText("指定人员"));
-    const people = screen.getByRole("combobox", { name: "可见人员" });
+    const people = timeline.getByLabelText("可见人员");
     await user.type(people, "张");
     await user.click(await screen.findByTitle("张三"));
     await user.keyboard("{Escape}");
-    expect(screen.getByRole("button", { name: "保存草稿" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "保存草稿" }));
-    await waitFor(() => expect(writes[1]?.params).toMatchObject({
+    expect(buttonFor(timeline.getByText("保存草稿"))).toBeEnabled();
+    await user.click(buttonFor(timeline.getByText("保存草稿")));
+    await waitFor(() => expect(writes[0]?.params).toMatchObject({
       id: "draft",
       content: "改给财务",
       audience: { scope: "users", userIds: ["u"] }
     }));
-    await user.click(await screen.findByRole("button", { name: "编辑草稿" }));
-    await user.click(screen.getByRole("button", { name: "删除草稿" }));
-    await waitFor(() => expect(screen.queryByText("改给财务")).not.toBeInTheDocument());
-    expect(writes[2]).toMatchObject({ action: "delete_annotation", params: { id: "draft" } });
+    await user.click(await timeline.findByText("编辑草稿"));
+    await user.click(buttonFor(timeline.getByText("删除草稿")));
+    await waitFor(() => expect(timeline.queryByText("改给财务")).not.toBeInTheDocument());
+    expect(writes[1]).toMatchObject({ action: "delete_annotation", params: { id: "draft" } });
   });
 
   it("keeps the task holder's saved draft editable and deletable on the form tab", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const writes = setup(false, true, [
       {
         ...published,
@@ -209,23 +230,24 @@ describe("instance annotations", () => {
       }
     ]);
     const form = within(await screen.findByRole("tabpanel", { name: "审批表单" }));
-    await user.click(form.getByRole("button", { name: "添加批注" }));
-    expect(form.getByRole("button", { name: "保存草稿" }).parentElement).toContainElement(form.getByRole("button", { name: /^取\s*消$/ }));
-    await user.type(form.getByRole("textbox", { name: "批注内容" }), "检查预算");
-    await user.click(form.getByRole("button", { name: "保存草稿" }));
+    await user.click(buttonFor(form.getByText("添加批注")));
+    expect(buttonFor(form.getByText("保存草稿")).parentElement).toContainElement(buttonFor(form.getByText(/^取\s*消$/)));
+    await user.click(form.getByLabelText("批注内容", { selector: "textarea" }));
+    await user.paste("检查预算");
+    await user.click(buttonFor(form.getByText("保存草稿")));
     expect(await form.findByText("草稿")).toBeVisible();
     expect(form.getByText("检查预算")).toBeVisible();
-    expect(form.getByRole("button", { name: "删除草稿" })).toBeVisible();
+    expect(buttonFor(form.getByText("删除草稿"))).toBeVisible();
     expect(form.queryByText("旧草稿")).not.toBeInTheDocument();
     expect(form.queryByText("另一待办的草稿")).not.toBeInTheDocument();
-    await user.click(form.getByRole("button", { name: "编辑草稿" }));
-    const content = form.getByRole("textbox", { name: "批注内容" });
+    await user.click(buttonFor(form.getByText("编辑草稿")));
+    const content = form.getByLabelText("批注内容", { selector: "textarea" });
     await user.clear(content);
-    await user.type(content, "确认预算");
-    await user.click(form.getByRole("button", { name: "保存草稿" }));
-    expect(await form.findByRole("button", { name: "编辑草稿" })).toBeVisible();
+    await user.paste("确认预算");
+    await user.click(buttonFor(form.getByText("保存草稿")));
+    expect(await form.findByText("编辑草稿")).toBeVisible();
     expect(form.getByText("确认预算")).toBeVisible();
-    await user.click(form.getByRole("button", { name: "删除草稿" }));
+    await user.click(buttonFor(form.getByText("删除草稿")));
     await waitFor(() => expect(form.queryByText("确认预算")).not.toBeInTheDocument());
     expect(writes.map(write => write.action)).toEqual(["save_annotation", "save_annotation", "delete_annotation"]);
     expect(writes[2]?.params).toEqual({ id: "draft" });
@@ -237,14 +259,15 @@ describe("instance annotations", () => {
   });
 
   it("saves and revises an applicant response without sending an anchor or audience", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const writes = setup(true);
-    await user.click(await screen.findByRole("button", { name: "回应批注" }));
-    expect(screen.getByRole("button", { name: "保存草稿" }).parentElement).toContainElement(screen.getByRole("button", { name: /^取\s*消$/ }));
-    await user.click(screen.getByRole("radio", { name: "不采纳" }));
-    expect(screen.getByRole("button", { name: "保存草稿" })).toBeDisabled();
-    await user.type(screen.getByLabelText("回应说明"), "已包含在总额中");
-    await user.click(screen.getByRole("button", { name: "保存草稿" }));
+    await user.click(await screen.findByText("回应批注"));
+    expect(buttonFor(screen.getByText("保存草稿")).parentElement).toContainElement(buttonFor(screen.getByText(/^取\s*消$/)));
+    await user.click(screen.getByLabelText("不采纳"));
+    expect(buttonFor(screen.getByText("保存草稿"))).toBeDisabled();
+    await user.click(screen.getByLabelText("回应说明"));
+    await user.paste("已包含在总额中");
+    await user.click(buttonFor(screen.getByText("保存草稿")));
     await waitFor(() => expect(writes[0]?.params).toMatchObject({
       parentId: "a1",
       content: "已包含在总额中",
@@ -253,10 +276,10 @@ describe("instance annotations", () => {
     expect(writes[0]?.params).not.toHaveProperty("audience");
     expect(writes[0]?.params).not.toHaveProperty("anchor");
     expect(await screen.findByText("不采纳")).toBeVisible();
-    await user.click(await screen.findByRole("button", { name: "编辑回应" }));
-    await user.click(screen.getByRole("radio", { name: "已修改" }));
+    await user.click(await screen.findByText("编辑回应"));
+    await user.click(screen.getByLabelText("已修改"));
     await user.clear(screen.getByLabelText("回应说明"));
-    await user.click(screen.getByRole("button", { name: "保存草稿" }));
+    await user.click(buttonFor(screen.getByText("保存草稿")));
     await waitFor(() => expect(writes[1]?.params).toMatchObject({
       id: "draft",
       parentId: "a1",

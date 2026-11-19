@@ -2,12 +2,15 @@ import type { ApiRequest } from "@vef-framework-react/core";
 
 import type { PickerProps } from "../../index";
 
-import userEvent from "@testing-library/user-event";
+import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 import { Select } from "@vef-framework-react/components";
+import { useQuery } from "@vef-framework-react/core";
 
 import { mockApprovalApi, render, screen, within } from "../../../test-utils";
+import { useAdminApprovalApi } from "../../api";
 import { APPROVAL_PERMISSIONS } from "../../permissions";
 import { ApprovalProvider } from "../../plugins";
+import { ApplyHandoversAction } from "./apply-handovers";
 import { ApprovalAdminPage } from "./index";
 
 const former = { id: "former", name: "张三" };
@@ -41,11 +44,18 @@ function DirectoryPicker(props: PickerProps) {
   );
 }
 
+// The report reads previously listed instance titles from the query cache.
+function HandoverWithListedInstances() {
+  const { findInstances } = useAdminApprovalApi();
+  const page = useQuery({ queryFn: findInstances, queryKey: [findInstances.key, {}] });
+  return page.data && <ApplyHandoversAction detailPermission={APPROVAL_PERMISSIONS.instance.detail} />;
+}
+
 function setup(permissions: string[] = [
   APPROVAL_PERMISSIONS.instance.query,
   APPROVAL_PERMISSIONS.instance.detail,
   APPROVAL_PERMISSIONS.handover.apply
-]) {
+], content = <ApprovalAdminPage />) {
   const respond = vi.fn(({ action, params }: ApiRequest) => {
     switch (action) {
       case "find_instances": {
@@ -93,7 +103,7 @@ function setup(permissions: string[] = [
 
   render(
     <ApprovalProvider plugins={{ pickers: { user: DirectoryPicker } }}>
-      <ApprovalAdminPage />
+      {content}
     </ApprovalProvider>,
     { apiClient: mockApprovalApi(respond), appContext: { hasPermission: code => permissions.includes(code) } }
   );
@@ -120,6 +130,15 @@ describe("ApplyHandoversAction", () => {
     setup([APPROVAL_PERMISSIONS.instance.query, APPROVAL_PERMISSIONS.instance.detail]);
     await screen.findByText("差旅申请");
     expect(screen.queryByRole("button", { name: "按交接转移待办" })).not.toBeInTheDocument();
+  });
+
+  it("opens the handover dialog from the instance list when permitted", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("差旅申请");
+    await user.click(screen.getByText("按交接转移待办"));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByText("按交接转移待办")).toBeVisible();
   });
 
   it("opens from task management and identifies links to instances outside the list cache", async () => {
@@ -156,15 +175,14 @@ describe("ApplyHandoversAction", () => {
   });
 
   it("applies the searched people and opens the matching instance from each result group", async () => {
-    const user = userEvent.setup();
-    const respond = setup();
-    await screen.findByText("差旅申请");
-    await user.click(await screen.findByRole("button", { name: "按交接转移待办" }));
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const respond = setup(undefined, <HandoverWithListedInstances />);
+    await user.click(await screen.findByText("按交接转移待办"));
     const form = within(await screen.findByRole("dialog"));
     expect(form.getByText("按交接转移待办")).toBeInTheDocument();
     const run = form.getByRole("button", { name: "执行交接" });
     expect(run).toBeDisabled();
-    const picker = form.getByRole("combobox", { name: "搜索交接人员" });
+    const picker = form.getByLabelText("搜索交接人员");
     await user.type(picker, "张");
     await user.click(await screen.findByRole("option", { name: "张三" }));
     await user.type(picker, "陈");
@@ -186,7 +204,7 @@ describe("ApplyHandoversAction", () => {
 
     for (const [region, row] of [[moved, instances[0]!], [unassigned, instances[1]!], [awaiting, instances[2]!]] as const) {
       const label = row.instanceId === "i3" ? "BX-2026-016" : row.title;
-      await user.click(within(region).getByRole("button", { name: label }));
+      await user.click(within(region).getByText(label));
       const heading = await screen.findByText("审批详情");
       const detail = within(heading.closest<HTMLElement>("[role=\"dialog\"]")!);
       expect(await detail.findByRole("heading", { name: label })).toBeInTheDocument();

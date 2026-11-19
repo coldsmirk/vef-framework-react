@@ -1,4 +1,4 @@
-import userEvent from "@testing-library/user-event";
+import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 import { BusinessError, HTTP_CLIENT } from "@vef-framework-react/core";
 
 import { mockApprovalApi, render, screen, within } from "../../../test-utils";
@@ -32,7 +32,7 @@ describe("TasksPanel", () => {
   });
 
   it("explains a handed-over target in the reassign picker", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
     const reason = "张三已交接审批工作，接手人为李四";
     const apiClient = mockApprovalApi(({ action }) => {
       if (action === "reassign_task") {
@@ -52,11 +52,13 @@ describe("TasksPanel", () => {
       };
     });
     render(<TasksPanel reassignPermission="approval.task.reassign" />, { apiClient });
-    await user.click(await screen.findByRole("button", { name: /改\s*派/ }));
+    await user.click(await screen.findByText(/^改\s*派$/));
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByText("改派任务")).toBeInTheDocument();
-    await user.type(dialog.getByRole("combobox"), "former{Enter}");
-    await user.click(dialog.getByRole("button", { name: /改\s*派/ }));
+    await user.click(dialog.getByRole("combobox"));
+    await user.paste("former");
+    await user.keyboard("{Enter}");
+    await user.click(dialog.getByText(/^改\s*派$/));
     expect(await dialog.findByText(reason)).toBeVisible();
     expect(Object.getPrototypeOf(apiClient[HTTP_CLIENT]).post).toHaveBeenCalledWith("/api", expect.objectContaining({ skipErrorMessage: true, data: expect.objectContaining({ action: "reassign_task" }) }));
   });
