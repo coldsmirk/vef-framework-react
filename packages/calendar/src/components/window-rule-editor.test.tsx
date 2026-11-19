@@ -23,15 +23,24 @@ function Field({ initial = INITIAL, onChange }: { initial?: WindowRule; onChange
 }
 
 describe("WindowRuleEditor", () => {
-  it("adds and removes open windows and blackouts independently", async () => {
+  it("appends an open window or blackout without changing the other list", async () => {
     const user = userEvent.setup();
     const changed = vi.fn();
-    render(<Field initial={{ windows: [{ dayKinds: ["holiday"] }] }} onChange={changed} />);
-    await user.click(screen.getByRole("button", { name: "添加开放窗口" }));
-    await user.click(screen.getByRole("button", { name: "添加例外关闭窗口" }));
-    await user.click(screen.getByRole("button", { name: "删除开放窗口 1" }));
+    const value: WindowRule = { windows: [{ dayKinds: ["holiday"] }], blackouts: [{}] };
+    render(<WindowRuleEditor value={value} onChange={changed} />);
+    await user.click(screen.getByText("添加开放窗口"));
+    expect(changed).toHaveBeenLastCalledWith({ ...value, windows: [...value.windows, {}] });
+    await user.click(screen.getByText("添加例外关闭窗口"));
+    expect(changed).toHaveBeenLastCalledWith({ ...value, blackouts: [{}, {}] });
+  });
+
+  it("preserves the remaining open window when removing a sibling and the last blackout", async () => {
+    const user = userEvent.setup();
+    const changed = vi.fn();
+    render(<Field initial={{ windows: [{ dayKinds: ["holiday"] }, {}], blackouts: [{}] }} onChange={changed} />);
+    await user.click(screen.getByLabelText("删除开放窗口 1"));
     expect(changed).toHaveBeenLastCalledWith({ windows: [{}], blackouts: [{}] });
-    await user.click(screen.getByRole("button", { name: "删除例外关闭窗口 1" }));
+    await user.click(screen.getByLabelText("删除例外关闭窗口 1"));
     expect(changed).toHaveBeenLastCalledWith({ windows: [{}], blackouts: undefined });
   });
 
