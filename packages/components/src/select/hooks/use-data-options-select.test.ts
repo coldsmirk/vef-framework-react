@@ -1,17 +1,11 @@
-import { createTestApiClient, renderHook, waitFor } from "../test-utils";
-import { useDataOptionsSelect } from "./select";
-import { useDataOptionsTree } from "./tree";
-import { useDataOptionsTreeSelect } from "./tree-select";
+import { createTestApiClient, renderHook, waitFor } from "../../../test-utils";
+import { useDataOptionsSelect } from "./use-data-options-select";
 
-describe.each([
-  { name: "useDataOptionsSelect", useOptions: useDataOptionsSelect },
-  { name: "useDataOptionsTree", useOptions: useDataOptionsTree },
-  { name: "useDataOptionsTreeSelect", useOptions: useDataOptionsTreeSelect }
-])("$name onFetch", ({ useOptions }) => {
+describe("useDataOptionsSelect onFetch", () => {
   it("delivers an empty result", async () => {
     const onFetch = vi.fn();
     const apiClient = createTestApiClient();
-    renderHook(() => useOptions({
+    renderHook(() => useDataOptionsSelect({
       queryOptions: { queryKey: ["empty"], queryFn: () => [] },
       onFetch
     }), { apiClient });
@@ -22,7 +16,7 @@ describe.each([
   it("delivers the selected rows before option normalization", async () => {
     const onFetch = vi.fn();
     const apiClient = createTestApiClient();
-    renderHook(() => useOptions({
+    renderHook(() => useDataOptionsSelect({
       queryOptions: {
         queryKey: ["people"],
         queryFn: () => [{ id: "ada", name: "Ada" }],
@@ -48,10 +42,10 @@ describe.each([
     const first = vi.fn();
     const second = vi.fn();
 
-    const { unmount } = renderHook(() => useOptions({ queryOptions, onFetch: first }), { apiClient });
+    const { unmount } = renderHook(() => useDataOptionsSelect({ queryOptions, onFetch: first }), { apiClient });
     await waitFor(() => expect(first).toHaveBeenCalledExactlyOnceWith(rows));
     unmount();
-    renderHook(() => useOptions({ queryOptions, onFetch: second }), { apiClient });
+    renderHook(() => useDataOptionsSelect({ queryOptions, onFetch: second }), { apiClient });
 
     expect(second).toHaveBeenCalledExactlyOnceWith(rows);
     expect(queryFn).toHaveBeenCalledTimes(1);

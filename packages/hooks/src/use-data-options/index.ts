@@ -2,7 +2,7 @@ import type { DataOption, DataOptionWithPinyin, UseQueryOptions, UseQueryResult 
 import type { EmptyObject, Key, MaybeUndefined, Simplify } from "@vef-framework-react/shared";
 
 import { useQuery } from "@vef-framework-react/core";
-import { get, isEmpty, isFunction, isNullish, withPinyin as withPinyinInternal } from "@vef-framework-react/shared";
+import { get, hashKey, isEmpty, isFunction, isNullish, withPinyin as withPinyinInternal } from "@vef-framework-react/shared";
 import { useEffect, useEffectEvent, useMemo } from "react";
 
 // ============================================================================
@@ -65,7 +65,8 @@ export type UseDataOptionsQueryOptions<
    */
   queryOptions: UseQueryOptions<TQueryFnData[], TData[], TParams>;
   /**
-   * Called with the selected rows when data becomes available or changes, including on a cache hit.
+   * Called with the current key's selected rows when data becomes available or changes,
+   * including on a cache hit. Placeholder rows are only used to display options.
    */
   onFetch?: (data: TData[]) => void;
 };
@@ -239,13 +240,14 @@ export function useDataOptionsQuery<
   }
 ): UseDataOptionsQueryResult<TData, DataOption<TData> | DataOptionWithPinyin<TData>> {
   const query = useQuery(queryOptions);
-  const { data } = query;
+  const { data, isPlaceholderData } = query;
+  const queryKeyHash = (queryOptions.queryKeyHashFn ?? hashKey)(queryOptions.queryKey);
   const notifyFetch = useEffectEvent((rows: TData[]) => onFetch?.(rows));
   useEffect(() => {
-    if (data !== undefined) {
+    if (data !== undefined && !isPlaceholderData) {
       notifyFetch(data);
     }
-  }, [data]);
+  }, [queryKeyHash, data, isPlaceholderData]);
 
   // Transform data - memoize to prevent unnecessary recalculations
   const fieldMappingOptions = useMemo(
