@@ -137,6 +137,22 @@ describe("MobileDateInput", () => {
   it("rejects a value from another granularity on the trigger", () => {
     render(<MobileDateInput domId="d-q" field={makeField({ granularity: "quarter" })} value="2026-04-15" onChange={vi.fn()} />);
 
-    expect(screen.getByText("请选择日期")).toBeInTheDocument();
+    expect(screen.getByText("请选择季度")).toBeInTheDocument();
+  });
+
+  it("shows granularity-aware default placeholders matching PC", () => {
+    for (const { expected, granularity } of [
+      { granularity: "year" as const, expected: "请选择年份" },
+      { granularity: "quarter" as const, expected: "请选择季度" },
+      { granularity: "month" as const, expected: "请选择月份" },
+      { granularity: "day" as const, expected: "请选择日期" }
+    ]) {
+      const { unmount } = render(
+        <MobileDateInput domId={`d-${granularity}`} field={makeField({ granularity })} value="" onChange={vi.fn()} />
+      );
+
+      expect(screen.getByText(expected)).toBeInTheDocument();
+      unmount();
+    }
   });
 });

@@ -134,6 +134,27 @@ describe("useFieldOptions", () => {
       await screen.findByText("c");
       expect(resolver.resolve).toHaveBeenCalledTimes(1);
     });
+
+    it("deduplicates concurrent in-flight fetches for the same resolved request", async () => {
+      const deferred = Promise.withResolvers<Array<{ label: string; value: string }>>();
+      const resolver: DataSourceResolver = { resolve: vi.fn(() => deferred.promise) };
+      const source: FieldOptionSource = { kind: "remote", request: { resource: "sys/role", action: "find_options" } };
+
+      render(
+        <DataSourceProvider resolver={resolver}>
+          <Probe source={source} />
+          <Probe source={source} />
+          <Probe source={source} />
+        </DataSourceProvider>
+      );
+
+      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+
+      deferred.resolve([{ label: "Admin", value: "admin" }]);
+
+      expect(await screen.findAllByText("admin")).toHaveLength(3);
+      expect(resolver.resolve).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("refresh versions", () => {

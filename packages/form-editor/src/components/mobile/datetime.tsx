@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { formatTrigger, fromPickerDate, PICKER_MAX_DATE, PICKER_MIN_DATE, toPickerDate } from "./date-adapters";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
@@ -33,7 +34,7 @@ export function MobileDatetimeInput({
   const getContainer = useMobileScopeContainer();
 
   const display = formatTrigger(value, DEFAULT_DATETIME_FORMAT);
-  const placeholder = field.placeholder ?? "请选择日期时间";
+  const placeholder = resolveFieldPlaceholder(field);
 
   return (
     <FieldShell

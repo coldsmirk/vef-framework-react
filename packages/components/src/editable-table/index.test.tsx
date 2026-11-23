@@ -206,6 +206,16 @@ describe("EditableTable", () => {
       expect(onChange.mock.lastCall?.[0]).toHaveLength(3);
       expect(screen.getByRole("button", { name: label("保存") })).toBeInTheDocument();
     });
+
+    it("renders a custom addLabel when provided", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<Harness creatable addLabel="新增问题" onChange={onChange} />);
+
+      await user.click(screen.getByRole("button", { name: label("新增问题") }));
+
+      expect(onChange.mock.lastCall?.[0]).toHaveLength(3);
+    });
   });
 
   describe("deleting", () => {

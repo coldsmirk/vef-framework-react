@@ -64,6 +64,10 @@ export interface EditableTableProps<TRow extends AnyObject> {
    */
   creatable?: boolean;
   /**
+   * Label for the add-row button when {@link creatable} is enabled. Defaults to `"新增记录"`.
+   */
+  addLabel?: ReactNode;
+  /**
    * Factory for a new row's default values when adding.
    */
   createRecord?: () => Partial<TRow>;

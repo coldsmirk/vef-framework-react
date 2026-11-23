@@ -351,4 +351,96 @@ describe("date fields", () => {
     expect(idsOf(dateRangeFieldDefinition)).toContain("granularity");
     expect(idsOf(datetimeFieldDefinition)).not.toContain("granularity");
   });
+
+  it("shows unified granularity-aware default placeholders on PC date, datetime, and daterange fields", () => {
+    const DateComp = dateFieldDefinition.Component!;
+    const DatetimeComp = datetimeFieldDefinition.Component!;
+    const RangeComp = dateRangeFieldDefinition.Component!;
+
+    const dateCases = [
+      { granularity: "year" as const, expected: "请选择年份" },
+      { granularity: "quarter" as const, expected: "请选择季度" },
+      { granularity: "month" as const, expected: "请选择月份" },
+      { granularity: "day" as const, expected: "请选择日期" }
+    ];
+
+    for (const { expected, granularity } of dateCases) {
+      const { unmount } = render(
+        <DateComp
+          domId={`p-${granularity}`}
+          value=""
+          field={{
+            id: `D_${granularity}`,
+            type: "date",
+            key: `d_${granularity}`,
+            granularity
+          }}
+          onChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", expected);
+      unmount();
+    }
+
+    const { unmount: unmountCustom } = render(
+      <DateComp
+        domId="p-custom"
+        value=""
+        field={{
+          id: "D_custom",
+          type: "date",
+          key: "d_custom",
+          granularity: "month",
+          placeholder: "选年月"
+        }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "选年月");
+    unmountCustom();
+
+    const { unmount: unmountDatetime } = render(
+      <DatetimeComp
+        domId="p-dt"
+        value=""
+        field={{
+          id: "DT_1",
+          type: "datetime",
+          key: "dt"
+        }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "请选择日期时间");
+    unmountDatetime();
+
+    const rangeCases = [
+      { granularity: "year" as const, expected: ["开始年份", "结束年份"] },
+      { granularity: "quarter" as const, expected: ["开始季度", "结束季度"] },
+      { granularity: "month" as const, expected: ["开始月份", "结束月份"] },
+      { granularity: "day" as const, expected: ["开始日期", "结束日期"] }
+    ];
+
+    for (const { expected, granularity } of rangeCases) {
+      const { unmount } = render(
+        <RangeComp
+          domId={`pr-${granularity}`}
+          value={[]}
+          field={{
+            id: `R_${granularity}`,
+            type: "daterange",
+            key: `r_${granularity}`,
+            granularity
+          }}
+          onChange={vi.fn()}
+        />
+      );
+
+      const inputs = screen.getAllByRole("textbox");
+      expect(inputs[0]).toHaveAttribute("placeholder", expected[0]);
+      expect(inputs[1]).toHaveAttribute("placeholder", expected[1]);
+      unmount();
+    }
+  });
 });

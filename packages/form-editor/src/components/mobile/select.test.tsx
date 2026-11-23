@@ -33,6 +33,12 @@ function makeField(overrides: Partial<SelectField> = {}): SelectField {
 }
 
 describe("MobileSelectInput", () => {
+  it("shows 请选择 as the default placeholder when none is configured", () => {
+    render(<MobileSelectInput domId="field-s" field={makeField()} value={undefined} onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择")).toBeInTheDocument();
+  });
+
   it("shows the placeholder when no value is selected", () => {
     render(
       <MobileSelectInput

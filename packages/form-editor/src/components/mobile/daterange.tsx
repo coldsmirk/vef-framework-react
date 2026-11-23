@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import {
   currentGranularityValue,
   formatGranularityTrigger,
@@ -209,7 +210,7 @@ export function MobileDateRangeInput({
         display={display}
         domId={domId}
         hasError={Boolean(errors?.length)}
-        placeholder="请选择日期区间"
+        placeholder={resolveFieldPlaceholder(field)}
         trailing={<EditorIcon name="calendar-range" />}
         // Clearable by default, matching the PC RangePicker (allowClear default-on);
         // a stored `allowClear: false` drops the affordance. Clearing commits the

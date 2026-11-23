@@ -6,6 +6,7 @@ import { filterOptionByLabel, Select } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, requiredEntry, sizeEntry } from "../field-entries";
 
@@ -48,7 +49,7 @@ const MultiSelectInput: FC<FieldComponentProps<MultiSelectField, Array<string | 
         mode="multiple"
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
         options={options}
-        placeholder={field.placeholder}
+        placeholder={resolveFieldPlaceholder(field)}
         showSearch={field.showSearch === true}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}

@@ -13,6 +13,7 @@ import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
 import { OptionsStatus } from "../../render/parts/options-status";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
 
@@ -105,7 +106,7 @@ export const MobileMultiSelectInput: FC<FieldComponentProps<MultiSelectField, Ar
     : "";
   const hasError = (errors?.length ?? 0) > 0 || error;
 
-  let triggerPlaceholder = field.placeholder ?? "请选择";
+  let triggerPlaceholder = resolveFieldPlaceholder(field);
 
   if (loading) {
     triggerPlaceholder = "加载中…";

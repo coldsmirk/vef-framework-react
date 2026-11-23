@@ -144,4 +144,20 @@ describe("MobileDateRangeInput", () => {
     expect(screen.getByRole("button", { name: "确定" })).toBeDisabled();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("shows granularity-aware default placeholders for every date range granularity", () => {
+    for (const { expected, granularity } of [
+      { granularity: "year" as const, expected: "请选择年份区间" },
+      { granularity: "quarter" as const, expected: "请选择季度区间" },
+      { granularity: "month" as const, expected: "请选择月份区间" },
+      { granularity: "day" as const, expected: "请选择日期区间" }
+    ]) {
+      const { unmount } = render(
+        <MobileDateRangeInput domId={`r-${granularity}`} field={makeField({ granularity })} value={[]} onChange={vi.fn()} />
+      );
+
+      expect(screen.getByText(expected)).toBeInTheDocument();
+      unmount();
+    }
+  });
 });

@@ -34,6 +34,12 @@ interface DataSourceContextValue {
    * `refresh_data_source` bump changes the key and still forces a fetch.
    */
   cache: Map<string, FieldOption[]>;
+  /**
+   * In-flight remote fetches keyed by the same `cacheKey` as {@link cache}, so
+   * concurrent consumers (e.g. multiple rows of a subform sharing one remote
+   * option column) share a single resolver call instead of fanning out N times.
+   */
+  inflight: Map<string, Promise<FieldOption[]>>;
 }
 
 const EMPTY_VERSIONS: Record<string, number> = {};
@@ -43,12 +49,14 @@ const EMPTY_VERSIONS: Record<string, number> = {};
 const EMPTY_DATA_SOURCES: FormDataSource[] = [];
 // Cache backing the provider-less default context (noop resolver only).
 const DEFAULT_CACHE = new Map<string, FieldOption[]>();
+const DEFAULT_INFLIGHT = new Map<string, Promise<FieldOption[]>>();
 
 const DataSourceContext = createContext<DataSourceContextValue>({
   dataSources: EMPTY_DATA_SOURCES,
   resolver: noopDataSourceResolver,
   versions: EMPTY_VERSIONS,
-  cache: DEFAULT_CACHE
+  cache: DEFAULT_CACHE,
+  inflight: DEFAULT_INFLIGHT
 });
 DataSourceContext.displayName = "DataSourceContext";
 
@@ -74,18 +82,20 @@ export function DataSourceProvider({
    */
   versions?: Record<string, number>;
 }): ReactElement {
-  // One cache per provider lifetime — survives consumer remounts by design.
+  // One cache + in-flight map per provider lifetime — survives consumer remounts by design.
   const [cache] = useState(() => new Map<string, FieldOption[]>());
+  const [inflight] = useState(() => new Map<string, Promise<FieldOption[]>>());
   const value = useMemo<DataSourceContextValue>(
     () => {
       return {
         dataSources: dataSources ?? EMPTY_DATA_SOURCES,
         resolver: resolver ?? noopDataSourceResolver,
         versions: versions ?? EMPTY_VERSIONS,
-        cache
+        cache,
+        inflight
       };
     },
-    [dataSources, resolver, versions, cache]
+    [dataSources, resolver, versions, cache, inflight]
   );
 
   return <DataSourceContext value={value}>{children}</DataSourceContext>;
@@ -169,6 +179,7 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
   const {
     cache,
     dataSources,
+    inflight,
     resolver,
     versions
   } = use(DataSourceContext);
@@ -249,10 +260,36 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
       };
     });
 
-    resolver.resolve(currentRequest, mapping)
-      .then(options => {
-        cache.set(cacheKey, options);
+    let pending = inflight.get(cacheKey);
 
+    if (!pending) {
+      pending = resolver.resolve(currentRequest, mapping)
+        .then(options => {
+          cache.set(cacheKey, options);
+
+          return options;
+        })
+        .catch((error: unknown) => {
+          // Dev-visible signal logged once per failed request (not once per
+          // waiting cell): a silently empty select after a resolver failure is
+          // otherwise indistinguishable from a legitimately empty source.
+          console.warn(
+            `[form-editor] data source "${refreshId ?? "(inline remote)"}" failed to resolve:`,
+            error
+          );
+
+          throw error;
+        })
+        .finally(() => {
+          if (inflight.get(cacheKey) === pending) {
+            inflight.delete(cacheKey);
+          }
+        });
+      inflight.set(cacheKey, pending);
+    }
+
+    pending
+      .then(options => {
         if (!cancelled) {
           setRemote({
             options,
@@ -261,17 +298,11 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
           });
         }
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (cancelled) {
           return;
         }
 
-        // Dev-visible signal: a silently empty select after a resolver failure
-        // is otherwise indistinguishable from a legitimately empty source.
-        console.warn(
-          `[form-editor] data source "${refreshId ?? "(inline remote)"}" failed to resolve:`,
-          error
-        );
         setRemote(prev => {
           return {
             options: prev.options,
@@ -287,7 +318,7 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     // `resolved` is deliberately absent: its mapping and refresh id are both
     // folded into `cacheKey`, and including the object would reintroduce the
     // per-render identity churn this fix removes.
-  }, [cache, cacheKey, mapping, refreshId, resolver]);
+  }, [cache, cacheKey, inflight, mapping, refreshId, resolver]);
 
   switch (resolved.kind) {
     case "static": {

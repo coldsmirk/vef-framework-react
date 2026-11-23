@@ -18,7 +18,7 @@ import { collectCodeSets } from "../../engine/code-sets";
 import { isValidatableField } from "../../engine/keys";
 import { resolvePresentation } from "../../engine/schema/presentation";
 import {
-  DEFAULT_DYNAMIC_ADD_LABEL,
+  dynamicAddRowLabel,
   fixedRowHeaderTitle,
   getDynamicSubformRows,
   isFixedSubform,
@@ -1208,7 +1208,7 @@ function SubformTablePreview({ subform }: { subform: TableSubform }): ReactEleme
         : (
             <span aria-hidden css={subformAddRowCss}>
               <EditorIcon name="plus" />
-              {dynamic.addLabel ?? DEFAULT_DYNAMIC_ADD_LABEL}
+              {dynamicAddRowLabel(dynamic)}
             </span>
           )}
     </chrome.Subform>
@@ -1227,7 +1227,7 @@ function SubformColumn({ field }: { field: KeyedFormField }): ReactElement {
     <div css={subformColumnCss}>
       <div css={subformColumnHeaderCss}>
         <span css={subformColumnTitleCss}>{field.label ?? field.key}</span>
-        {required ? <span css={subformColumnRequiredCss}>*</span> : null}
+        {required ? <span aria-hidden="true" css={subformColumnRequiredCss}>*</span> : null}
       </div>
 
       <div css={subformColumnCellCss}>

@@ -46,7 +46,7 @@ import {
 } from "../engine/linkage";
 import { toRuntimeSchema } from "../engine/schema/presentation";
 import {
-  DEFAULT_DYNAMIC_ADD_LABEL,
+  dynamicAddRowLabel,
   fixedRowItemLabel,
   getDynamicSubformRows,
   isFixedSubform
@@ -57,13 +57,13 @@ import { resolveScopeValues } from "../runtime/resolve-scope-values";
 import { useRuntimeFieldState } from "../runtime/runtime-context";
 import { RuntimeStateController, SubformRowController } from "../runtime/runtime-state-controller";
 import { DeviceProvider, useContainerChrome, useDevice } from "../store/engine-provider";
-import { CodeSetProvider, useCodeSetState } from "./code-set-context";
+import { CodeSetProvider } from "./code-set-context";
 import { DataSourceProvider } from "./data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
 import { DEFAULT_STACK_GAP, resolveStackGap, stackSlotStyle } from "./stack-style";
-import { buildSubformColumns, subformRowHeading } from "./subform-columns";
+import { buildSubformColumns, SUBFORM_ROW_ID, subformRowHeading } from "./subform-columns";
 import {
   blankSubformRow,
   buildRuntimeFormId,
@@ -891,11 +891,6 @@ function reconcileRowKeys(keys: string[], length: number, seed: RefObject<number
   }
 }
 
-// Per-row identity for the table variant's EditableTable. Lives ONLY in the
-// table's view value — stripped before the committed form value — so it never
-// reaches submitted data or exported JSON.
-const SUBFORM_ROW_ID = "__rid";
-
 /**
  * Subform dispatch. The `table` variant renders through the components
  * `EditableTable` on PC; everything else — the `stack` variant, or `table` on
@@ -923,9 +918,11 @@ function SubformFlow({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode })
  * it for a freshly added row); it is injected into the view value and stripped
  * on write, so form state stays the clean record the schema / submit expect.
  *
- * Per-row linkage / evaluation scope is intentionally NOT wired here (those live
- * in the stack variant's per-row controllers) — the table targets straightforward
- * tabular entry.
+ * Per-row linkage rules are intentionally NOT wired here (those live in the
+ * stack variant's per-row controllers) — the table targets straightforward
+ * tabular entry. Selection columns still resolve through the shared
+ * `useFieldOptions` pipeline with a per-row data-source parameter scope (live
+ * draft values while editing, committed row values in read mode).
  */
 function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform }): ReactElement {
   const chrome = useContainerChrome();
@@ -960,15 +957,12 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
   // safe because it is a pure idempotent memo (same row + id ⇒ equal wrapper).
   const wrappedRowsRef = useRef(new WeakMap<Record<string, unknown>, Record<string, unknown>>());
 
-  const { options: codeSetOptions } = useCodeSetState();
   const columns = useMemo(
-    () => buildSubformColumns(
-      subform.template,
-      codeSetOptions,
-      ctx.renderFieldExtra && { subform, render: ctx.renderFieldExtra },
-      fixed
-    ),
-    [subform, codeSetOptions, ctx.renderFieldExtra, fixed]
+    () => buildSubformColumns(subform.template, {
+      extras: ctx.renderFieldExtra && { subform, render: ctx.renderFieldExtra },
+      fixedRows: fixed
+    }),
+    [subform, ctx.renderFieldExtra, fixed]
   );
   const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
 
@@ -1030,6 +1024,7 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
 
           return (
             <EditableTable<Record<string, unknown>>
+              addLabel={dynamicAddRowLabel(dynamic)}
               canDelete={!fixed && !ctx.disabled && rows.length > minRows}
               canEdit={!ctx.disabled}
               columns={columns}
@@ -1141,7 +1136,7 @@ function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }
               {canAdd
                 ? (
                     <chrome.AddButton
-                      label={dynamic.addLabel ?? DEFAULT_DYNAMIC_ADD_LABEL}
+                      label={dynamicAddRowLabel(dynamic)}
                       onClick={handleAdd}
                     />
                   )

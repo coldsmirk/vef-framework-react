@@ -1,12 +1,38 @@
-import type { Block, FormSchema } from "../types";
+import type { Block, DataSourceResolver, FieldOption, FormSchema } from "../types";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormRenderer } from "./form-renderer";
 import { buildSubformColumns } from "./subform-columns";
+
+function renderForm(
+  schema: FormSchema,
+  options: {
+    dataSourceResolver?: DataSourceResolver;
+    defaultValues?: Record<string, unknown>;
+    evaluationContext?: { applicant?: { departmentId?: string } };
+    onSubmit?: (values: Record<string, unknown>) => void;
+    renderFieldExtra?: Parameters<typeof FormRenderer>[0]["renderFieldExtra"];
+  } = {}
+) {
+  const registry = createDefaultRegistry();
+
+  return render(
+    <RegistryProvider registries={{ pc: registry, mobile: registry }}>
+      <FormRenderer
+        dataSourceResolver={options.dataSourceResolver}
+        defaultValues={options.defaultValues}
+        evaluationContext={options.evaluationContext}
+        renderFieldExtra={options.renderFieldExtra}
+        schema={schema}
+        onSubmit={options.onSubmit}
+      />
+    </RegistryProvider>
+  );
+}
 
 /**
  * A table subform whose single column is a searchable select — the runtime
@@ -201,13 +227,13 @@ describe("buildSubformColumns", () => {
           label: "说明"
         }
       ],
-      undefined,
-      undefined,
       {
-        mode: "fixed",
-        itemKey: "item",
-        headerWidth: 240,
-        source: { kind: "static", options: [{ label: "第一项", value: "a" }] }
+        fixedRows: {
+          mode: "fixed",
+          itemKey: "item",
+          headerWidth: 240,
+          source: { kind: "static", options: [{ label: "第一项", value: "a" }] }
+        }
       }
     );
 
@@ -222,18 +248,14 @@ describe("buildSubformColumns", () => {
   });
 });
 
-describe("subform table select column", () => {
-  it("filters the cell dropdown by the option label", async () => {
+describe("subform table runtime behavior", () => {
+  it("filters the select cell dropdown by the option label and shows default placeholder", async () => {
     const user = userEvent.setup();
-    const registry = createDefaultRegistry();
+    renderForm(selectColumnSchema());
 
-    render(
-      <RegistryProvider registries={{ pc: registry, mobile: registry }}>
-        <FormRenderer schema={selectColumnSchema()} />
-      </RegistryProvider>
-    );
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
 
-    await user.click(screen.getByRole("button", { name: /新增记录/ }));
+    expect(screen.getByText("请选择")).toBeInTheDocument();
 
     const combobox = screen.getByRole("combobox");
     await user.click(combobox);
@@ -241,5 +263,448 @@ describe("subform table select column", () => {
 
     expect(await screen.findByRole("option", { name: "北京" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "上海" })).not.toBeInTheDocument();
+  });
+
+  it("honors dynamic rows.addLabel on the runtime table add button", async () => {
+    const user = userEvent.setup();
+    const schema: FormSchema = {
+      id: "Form_add_label",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_dyn",
+              type: "subform",
+              variant: "table",
+              key: "extra",
+              label: "其他问题",
+              rows: { mode: "dynamic", addLabel: "新增问题" },
+              template: [
+                {
+                  id: "C_title",
+                  type: "textfield",
+                  key: "title",
+                  label: "问题"
+                },
+                {
+                  id: "C_month",
+                  type: "date",
+                  key: "foundMonth",
+                  label: "发现月份",
+                  granularity: "month"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    renderForm(schema);
+
+    expect(screen.queryByRole("button", { name: /新增记录/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /新增问题/ }));
+
+    expect(screen.getByPlaceholderText("请选择月份")).toBeInTheDocument();
+  });
+
+  it("displays required markers on required column headers, including alongside renderFieldExtra", () => {
+    const schema: FormSchema = {
+      id: "Form_req",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_req",
+              type: "subform",
+              variant: "table",
+              key: "checks",
+              label: "自查",
+              template: [
+                {
+                  id: "C_req",
+                  type: "textfield",
+                  key: "problem",
+                  label: "存在问题",
+                  validate: { required: true }
+                },
+                {
+                  id: "C_opt",
+                  type: "textfield",
+                  key: "note",
+                  label: "备注"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    const { unmount } = renderForm(schema);
+
+    const reqHeader = screen.getByRole("columnheader", { name: "存在问题" });
+    const optHeader = screen.getByRole("columnheader", { name: "备注" });
+
+    expect(within(reqHeader).getByText("*")).toHaveAttribute("aria-hidden", "true");
+    expect(within(optHeader).queryByText("*")).not.toBeInTheDocument();
+
+    unmount();
+
+    renderForm(schema, {
+      renderFieldExtra: ({ column, row }) => column === "problem" && row === undefined ? <span>批注(1)</span> : null
+    });
+
+    const withExtraHeader = screen.getByRole("columnheader", { name: /存在问题/ });
+
+    expect(within(withExtraHeader).getByText("*")).toBeInTheDocument();
+    expect(within(withExtraHeader).getByText("批注(1)")).toBeInTheDocument();
+  });
+
+  it("resolves ref (static & remote) and inline remote option sources in table columns and displays labels after save", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const resolve = vi.fn((req: { resource: string }): Promise<FieldOption[]> => {
+      if (req.resource === "sys/role") {
+        return Promise.resolve([
+          { label: "管理员", value: "admin" },
+          { label: "审计员", value: "auditor" }
+        ]);
+      }
+
+      if (req.resource === "sys/tag") {
+        return Promise.resolve([
+          { label: "紧急", value: "urgent" },
+          { label: "常规", value: "normal" }
+        ]);
+      }
+
+      return Promise.resolve([]);
+    });
+
+    const schema: FormSchema = {
+      id: "Form_sources",
+      version: 2,
+      dataSources: [
+        {
+          id: "DS_status",
+          name: "状态",
+          kind: "static",
+          options: [
+            { label: "正常", value: "ok" },
+            { label: "异常", value: "err" }
+          ]
+        },
+        {
+          id: "DS_roles",
+          name: "角色",
+          kind: "remote",
+          request: { resource: "sys/role", action: "find_options" }
+        }
+      ],
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_tbl",
+              type: "subform",
+              variant: "table",
+              key: "items",
+              label: "核查明细",
+              template: [
+                {
+                  id: "C_status",
+                  type: "radio",
+                  key: "status",
+                  label: "状态",
+                  dataSource: { kind: "ref", dataSourceId: "DS_status" }
+                },
+                {
+                  id: "C_role",
+                  type: "select",
+                  key: "role",
+                  label: "责任角色",
+                  dataSource: { kind: "ref", dataSourceId: "DS_roles" }
+                },
+                {
+                  id: "C_tags",
+                  type: "checkbox-group",
+                  key: "tags",
+                  label: "标签",
+                  dataSource: {
+                    kind: "remote",
+                    request: { resource: "sys/tag", action: "find_options" }
+                  }
+                }
+              ]
+            },
+            {
+              id: "Btn_submit",
+              type: "button",
+              label: "提交",
+              action: "submit"
+            }
+          ]
+        }
+      }
+    };
+
+    renderForm(schema, { dataSourceResolver: { resolve }, onSubmit });
+
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
+
+    // Static ref radio, remote ref select, and inline remote checkbox-group all populate.
+    await user.click(await screen.findByRole("radio", { name: "异常" }));
+    await user.click(await screen.findByRole("checkbox", { name: "紧急" }));
+
+    const roleCombobox = screen.getByRole("combobox");
+    await user.click(roleCombobox);
+    await user.click(await screen.findByText("审计员"));
+
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+
+    // Saved read mode shows resolved labels instead of raw values.
+    expect(await screen.findByText("异常")).toBeInTheDocument();
+    expect(screen.getByText("审计员")).toBeInTheDocument();
+    expect(screen.getByText("紧急")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        items: [
+          {
+            status: "err",
+            role: "auditor",
+            tags: ["urgent"]
+          }
+        ]
+      });
+    });
+  });
+
+  it("evaluates bound remote params against live in-row fields and host context", async () => {
+    const user = userEvent.setup();
+    const resolve = vi.fn((req: { params?: Record<string, unknown> }): Promise<FieldOption[]> => {
+      if (req.params?.dept === "D1") {
+        return Promise.resolve([{ label: "一病区", value: "W1" }]);
+      }
+
+      if (req.params?.dept === "D2") {
+        return Promise.resolve([{ label: "二病区", value: "W2" }]);
+      }
+
+      return Promise.resolve([]);
+    });
+
+    const schema: FormSchema = {
+      id: "Form_cascade",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_tbl",
+              type: "subform",
+              variant: "table",
+              key: "lines",
+              label: "科室病区",
+              template: [
+                {
+                  id: "C_dept",
+                  type: "textfield",
+                  key: "dept",
+                  label: "科室编码"
+                },
+                {
+                  id: "C_ward",
+                  type: "select",
+                  key: "ward",
+                  label: "病区",
+                  dataSource: {
+                    kind: "remote",
+                    request: {
+                      resource: "hosp/ward",
+                      action: "find_options",
+                      params: {
+                        dept: { kind: "expression", source: "$form.dept" },
+                        applicantDept: { kind: "expression", source: "$applicant.departmentId" }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    renderForm(schema, {
+      dataSourceResolver: { resolve },
+      evaluationContext: { applicant: { departmentId: "dept-hq" } }
+    });
+
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
+
+    const deptInput = screen.getByRole("textbox");
+    await user.type(deptInput, "D1");
+
+    await waitFor(() => {
+      expect(resolve).toHaveBeenCalledWith(
+        {
+          resource: "hosp/ward",
+          action: "find_options",
+          params: { dept: "D1", applicantDept: "dept-hq" }
+        },
+        undefined
+      );
+    });
+
+    await user.click(screen.getByRole("combobox"));
+    expect(await screen.findByRole("option", { name: "一病区" })).toBeInTheDocument();
+
+    // Editing the sibling in-row field live-cascades before clicking Save.
+    await user.clear(deptInput);
+    await user.type(deptInput, "D2");
+
+    await waitFor(() => {
+      expect(resolve).toHaveBeenCalledWith(
+        {
+          resource: "hosp/ward",
+          action: "find_options",
+          params: { dept: "D2", applicantDept: "dept-hq" }
+        },
+        undefined
+      );
+    });
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText("二病区"));
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+
+    expect(await screen.findByText("二病区")).toBeInTheDocument();
+  });
+
+  it("preserves numeric option values without string coercion across select, multi-select, radio, and checkbox-group", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema: FormSchema = {
+      id: "Form_numeric_opts",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_num",
+              type: "subform",
+              variant: "table",
+              key: "scores",
+              label: "评分表",
+              template: [
+                {
+                  id: "C_level",
+                  type: "select",
+                  key: "level",
+                  label: "等级",
+                  dataSource: {
+                    kind: "static",
+                    options: [
+                      { label: "零级", value: 0 },
+                      { label: "一级", value: 1 }
+                    ]
+                  }
+                },
+                {
+                  id: "C_levels",
+                  type: "multi-select",
+                  key: "levels",
+                  label: "关联项",
+                  dataSource: {
+                    kind: "static",
+                    options: [
+                      { label: "十", value: 10 },
+                      { label: "二十", value: 20 }
+                    ]
+                  }
+                },
+                {
+                  id: "C_pass",
+                  type: "radio",
+                  key: "pass",
+                  label: "结论",
+                  dataSource: {
+                    kind: "static",
+                    options: [
+                      { label: "通过", value: 1 },
+                      { label: "不通过", value: 2 }
+                    ]
+                  }
+                },
+                {
+                  id: "C_flags",
+                  type: "checkbox-group",
+                  key: "flags",
+                  label: "标记",
+                  dataSource: {
+                    kind: "static",
+                    options: [
+                      { label: "甲", value: 100 },
+                      { label: "乙", value: 200 }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              id: "Btn_submit",
+              type: "button",
+              label: "提交",
+              action: "submit"
+            }
+          ]
+        }
+      }
+    };
+
+    renderForm(schema, { onSubmit });
+
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
+
+    const comboboxes = screen.getAllByRole("combobox");
+    await user.click(comboboxes[0] as HTMLElement);
+    await user.click(await screen.findByText("零级"));
+
+    await user.click(comboboxes[1] as HTMLElement);
+    await user.click(await screen.findByText("十"));
+    await user.click(screen.getByText("二十"));
+
+    await user.click(screen.getByRole("radio", { name: "不通过" }));
+    await user.click(screen.getByRole("checkbox", { name: "乙" }));
+
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+
+    // Read mode displays labels for numeric values too.
+    expect(await screen.findByText("零级")).toBeInTheDocument();
+    expect(screen.getByText("十、二十")).toBeInTheDocument();
+    expect(screen.getByText("不通过")).toBeInTheDocument();
+    expect(screen.getByText("乙")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        scores: [
+          {
+            level: 0,
+            levels: [10, 20],
+            pass: 2,
+            flags: [200]
+          }
+        ]
+      });
+    });
   });
 });

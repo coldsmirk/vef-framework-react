@@ -31,6 +31,12 @@ function makeField(overrides: Partial<MultiSelectField> = {}): MultiSelectField 
 }
 
 describe("MobileMultiSelectInput", () => {
+  it("shows 请选择 as the default placeholder when none is configured", () => {
+    render(<MobileMultiSelectInput domId="field-ms" field={makeField()} value={[]} onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择")).toBeInTheDocument();
+  });
+
   it("shows the placeholder when no value is selected", () => {
     render(
       <MobileMultiSelectInput

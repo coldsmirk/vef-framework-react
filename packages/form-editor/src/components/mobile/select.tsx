@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
 
@@ -52,7 +53,7 @@ export const MobileSelectInput: FC<FieldComponentProps<SelectField, string | num
   // The closed trigger is the only on-screen surface, so it carries the remote
   // source's transient state: a muted loading hint, or a failure note when the
   // resolver rejected and left nothing to pick.
-  let triggerPlaceholder = field.placeholder ?? "请选择";
+  let triggerPlaceholder = resolveFieldPlaceholder(field);
 
   if (loading) {
     triggerPlaceholder = "加载中…";

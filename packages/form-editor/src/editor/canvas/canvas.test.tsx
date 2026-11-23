@@ -443,6 +443,67 @@ describe("Canvas", () => {
       const cell = screen.getByText("年龄").closest("div[style*=\"width\"]");
       expect(cell).toHaveStyle({ width: "200px" });
     });
+
+    it("resolves ref-to-static options and unified default placeholders in table sample cells", () => {
+      setupCanvas({
+        schema: {
+          id: "Form_ref_cells",
+          version: 2,
+          dataSources: [
+            {
+              id: "DS_yesno",
+              name: "是否",
+              kind: "static",
+              options: [
+                { label: "是", value: 1 },
+                { label: "否", value: 0 }
+              ]
+            }
+          ],
+          presentations: {
+            pc: {
+              children: [
+                {
+                  id: "Subform_T",
+                  type: "subform",
+                  variant: "table",
+                  key: "rows",
+                  label: "表格子表单",
+                  template: [
+                    {
+                      id: "Col_radio",
+                      type: "radio",
+                      key: "ok",
+                      label: "合规",
+                      dataSource: { kind: "ref", dataSourceId: "DS_yesno" }
+                    },
+                    {
+                      id: "Col_select",
+                      type: "select",
+                      key: "role",
+                      label: "角色",
+                      dataSource: { kind: "static", options: [] }
+                    },
+                    {
+                      id: "Col_month",
+                      type: "date",
+                      key: "month",
+                      label: "月份",
+                      granularity: "month"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      expect(screen.getByRole("radio", { name: "是" })).toBeDisabled();
+      expect(screen.getByRole("radio", { name: "否" })).toBeDisabled();
+      expect(screen.getByText("请选择")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("请选择月份")).toBeInTheDocument();
+    });
   });
 
   describe("drop zones", () => {

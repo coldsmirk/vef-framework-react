@@ -1,14 +1,23 @@
 import type { ReactElement } from "react";
 
-import type { KeyedFormField } from "../../types";
+import type {
+  CheckboxGroupField,
+  KeyedFormField,
+  MultiSelectField,
+  RadioField,
+  SelectField
+} from "../../types";
 
 import { css } from "@emotion/react";
 import { Checkbox, DatePicker, globalCssVars, Input, InputNumber, Radio, Select, Switch } from "@vef-framework-react/components";
 import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framework-react/shared";
 
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
-import { useCodeSetState } from "../../render/code-set-context";
-import { columnOptions } from "../../render/subform-columns";
+import { useFieldOptions } from "../../render/data-source-context";
+import { OptionsStatus } from "../../render/parts/options-status";
+import { resolveDateRangePlaceholderPair, resolveFieldPlaceholder } from "../../render/parts/placeholder";
+
+type SampleSelectionField = SelectField | MultiSelectField | RadioField | CheckboxGroupField;
 
 const fullWidthStyle = { width: "100%" } as const;
 
@@ -16,6 +25,59 @@ const unsupportedCss = css({
   fontSize: globalCssVars.fontSizeSm,
   color: globalCssVars.colorTextTertiary
 });
+
+/**
+ * Sample cell for selection columns (`select` / `multi-select` / `radio` /
+ * `checkbox-group`), reading options through the shared `useFieldOptions` hook
+ * so `static`, `ref`, `codeSet`, and `remote` sources all behave identically
+ * to top-level canvas fields without coercing option values to strings.
+ */
+function SampleSelectionCell({ field }: { field: SampleSelectionField }): ReactElement {
+  const {
+    error,
+    loading,
+    options
+  } = useFieldOptions(field.dataSource);
+
+  switch (field.type) {
+    case "select": {
+      return (
+        <Select
+          disabled
+          loading={loading}
+          options={options}
+          placeholder={resolveFieldPlaceholder(field)}
+          style={fullWidthStyle}
+        />
+      );
+    }
+
+    case "multi-select": {
+      return (
+        <Select
+          disabled
+          loading={loading}
+          mode="multiple"
+          options={options}
+          placeholder={resolveFieldPlaceholder(field)}
+          style={fullWidthStyle}
+        />
+      );
+    }
+
+    case "radio": {
+      return options.length > 0
+        ? <Radio.Group disabled options={options} />
+        : <OptionsStatus error={error} loading={loading} />;
+    }
+
+    case "checkbox-group": {
+      return options.length > 0
+        ? <Checkbox.Group disabled options={options} />
+        : <OptionsStatus error={error} loading={loading} />;
+    }
+  }
+}
 
 /**
  * A disabled, value-less control standing in for one table column's cell editor,
@@ -26,46 +88,33 @@ const unsupportedCss = css({
  * code-editor) falls back to a muted dash.
  */
 export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
-  // The options the runtime cell shows (`render/subform-columns.tsx`): a static
-  // list or a data dictionary the canvas has loaded. A remote / `ref` source
-  // shows none, exactly as the runtime table cell would until its data loads.
-  const { options: codeSetOptions } = useCodeSetState();
-
   switch (field.type) {
     case "textfield": {
-      return <Input disabled placeholder={field.placeholder} style={fullWidthStyle} />;
+      return <Input disabled placeholder={resolveFieldPlaceholder(field)} style={fullWidthStyle} />;
     }
 
     case "textarea": {
-      return <Input.TextArea autoSize disabled placeholder={field.placeholder} />;
+      return <Input.TextArea autoSize disabled placeholder={resolveFieldPlaceholder(field)} />;
     }
 
     case "number": {
-      return <InputNumber disabled placeholder={field.placeholder} style={fullWidthStyle} />;
+      return <InputNumber disabled placeholder={resolveFieldPlaceholder(field)} style={fullWidthStyle} />;
     }
 
     case "select": {
-      return <Select disabled options={columnOptions(field.dataSource, codeSetOptions)} placeholder={field.placeholder} style={fullWidthStyle} />;
+      return <SampleSelectionCell field={field} />;
     }
 
     case "multi-select": {
-      return (
-        <Select
-          disabled
-          mode="multiple"
-          options={columnOptions(field.dataSource, codeSetOptions)}
-          placeholder={field.placeholder}
-          style={fullWidthStyle}
-        />
-      );
+      return <SampleSelectionCell field={field} />;
     }
 
     case "radio": {
-      return <Radio.Group disabled options={columnOptions(field.dataSource, codeSetOptions)} />;
+      return <SampleSelectionCell field={field} />;
     }
 
     case "checkbox-group": {
-      return <Checkbox.Group disabled options={columnOptions(field.dataSource, codeSetOptions)} />;
+      return <SampleSelectionCell field={field} />;
     }
 
     case "switch": {
@@ -78,14 +127,22 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
           disabled
           format={getDateGranularityFormat(field.granularity)}
           picker={antdPickerForGranularity(field.granularity)}
-          placeholder={field.placeholder}
+          placeholder={resolveFieldPlaceholder(field)}
           style={fullWidthStyle}
         />
       );
     }
 
     case "datetime": {
-      return <DatePicker disabled showTime format={DEFAULT_DATETIME_FORMAT} placeholder={field.placeholder} style={fullWidthStyle} />;
+      return (
+        <DatePicker
+          disabled
+          showTime
+          format={DEFAULT_DATETIME_FORMAT}
+          placeholder={resolveFieldPlaceholder(field)}
+          style={fullWidthStyle}
+        />
+      );
     }
 
     case "daterange": {
@@ -94,6 +151,7 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
           disabled
           format={getDateGranularityFormat(field.granularity)}
           picker={antdPickerForGranularity(field.granularity)}
+          placeholder={resolveDateRangePlaceholderPair(field.granularity)}
           style={fullWidthStyle}
         />
       );

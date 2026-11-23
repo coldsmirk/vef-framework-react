@@ -465,7 +465,7 @@ describe("FormRenderer field permissions", () => {
       // controls below cannot pass vacuously.
       expect(screen.getByText("42"), "the table renders its rows for display").toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: /新增记录/ }),
+        screen.queryByRole("button", { name: /新增一行/ }),
         "a read-only table subform offers no add control"
       ).not.toBeInTheDocument();
       expect(

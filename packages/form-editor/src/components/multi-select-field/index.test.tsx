@@ -131,4 +131,15 @@ describe("multi-select field", () => {
 
     expect(screen.getByRole("combobox")).toHaveAttribute("readonly");
   });
+
+  it("shows 请选择 as the default placeholder and honors an explicit override", () => {
+    const Component = multiSelectFieldDefinition.Component!;
+    const { rerender } = render(<Component domId="field-ms" field={makeField()} value={[]} onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择")).toBeInTheDocument();
+
+    rerender(<Component domId="field-ms" field={makeField({ placeholder: "请选择多个城市" })} value={[]} onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择多个城市")).toBeInTheDocument();
+  });
 });

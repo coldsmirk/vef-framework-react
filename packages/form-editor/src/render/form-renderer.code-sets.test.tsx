@@ -160,7 +160,7 @@ describe("FormRenderer code sets", () => {
 
     renderForm(<FormRenderer schema={stack(lines)} />, { apiClient, appContext: { codeSetQueryFn: queryFn } });
 
-    await user.click(screen.getByRole("button", { name: /新增记录/ }));
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
 
     expect(await screen.findByRole("radio", { name: "男" })).toBeInTheDocument();
   });

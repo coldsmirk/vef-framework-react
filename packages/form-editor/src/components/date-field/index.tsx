@@ -22,6 +22,7 @@ import {
 
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveDateRangePlaceholderPair, resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { dateGranularityEntry, requiredEntry } from "../field-entries";
 
@@ -72,7 +73,7 @@ function SingleDateInput({
         format={format}
         id={domId}
         picker={showTime ? "date" : antdPickerForGranularity(granularity)}
-        placeholder={field.placeholder}
+        placeholder={resolveFieldPlaceholder(field)}
         showTime={showTime}
         status={errors?.length ? "error" : undefined}
         style={fullWidth}
@@ -213,6 +214,7 @@ function DateRangeInput({
         format={format}
         id={domId}
         picker={antdPickerForGranularity(granularity)}
+        placeholder={resolveDateRangePlaceholderPair(granularity)}
         status={errors?.length ? "error" : undefined}
         style={fullWidth}
         value={parseRange(value, granularity)}

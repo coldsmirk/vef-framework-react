@@ -61,6 +61,16 @@ export function getDynamicSubformRows(subform: SubformNode): DynamicSubformRows 
 }
 
 /**
+ * Effective label for a dynamic subform's add-row button, falling back to
+ * {@link DEFAULT_DYNAMIC_ADD_LABEL} when unset or empty.
+ */
+export function dynamicAddRowLabel(rows: DynamicSubformRows): string {
+  return rows.addLabel && rows.addLabel.length > 0
+    ? rows.addLabel
+    : DEFAULT_DYNAMIC_ADD_LABEL;
+}
+
+/**
  * Effective column title for a fixed-row subform's read-only row-header column,
  * falling back to {@link DEFAULT_FIXED_HEADER_LABEL} when unset or empty.
  */

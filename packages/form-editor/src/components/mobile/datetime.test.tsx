@@ -107,6 +107,12 @@ describe("MobileDatetimeInput", () => {
     expect(screen.getByText("开始时间")).toBeInTheDocument();
   });
 
+  it("renders the default placeholder when none is configured", () => {
+    render(<MobileDatetimeInput domId="d1" field={makeField()} value="" onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择日期时间")).toBeInTheDocument();
+  });
+
   it("renders the trigger disabled when disabled", () => {
     render(<MobileDatetimeInput disabled domId="d1" field={makeField()} value="" onChange={vi.fn()} />);
 

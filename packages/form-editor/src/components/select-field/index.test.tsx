@@ -162,4 +162,15 @@ describe("select field", () => {
 
     expect(onChange).toHaveBeenLastCalledWith("");
   });
+
+  it("shows 请选择 as the default placeholder and honors an explicit override", () => {
+    const Component = selectFieldDefinition.Component!;
+    const { rerender } = render(<Component domId="field-s" field={makeField()} value="" onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择")).toBeInTheDocument();
+
+    rerender(<Component domId="field-s" field={makeField({ placeholder: "请选择城市" })} value="" onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择城市")).toBeInTheDocument();
+  });
 });

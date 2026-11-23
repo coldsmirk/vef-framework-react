@@ -123,6 +123,7 @@ export {
   DEFAULT_DYNAMIC_ADD_LABEL,
   DEFAULT_FIXED_HEADER_LABEL,
   DEFAULT_FIXED_ITEM_KEY,
+  dynamicAddRowLabel,
   fixedRowHeaderTitle,
   fixedRowItemLabel,
   getDynamicSubformRows,

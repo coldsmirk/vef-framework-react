@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
+import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import {
   formatGranularityTrigger,
   fromGranularityPickerDate,
@@ -44,7 +45,7 @@ export function MobileDateInput({
 
   const granularity: DateGranularity = field.granularity ?? "day";
   const display = formatGranularityTrigger(value, granularity);
-  const placeholder = field.placeholder ?? "请选择日期";
+  const placeholder = resolveFieldPlaceholder(field);
   const title = field.label ?? "日期";
 
   return (
