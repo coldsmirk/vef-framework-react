@@ -81,12 +81,20 @@ const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
   textarea: "textarea",
   number: "number",
   select: "select",
+  "multi-select": "select",
   radio: "select",
   "checkbox-group": "select",
   date: "date",
   datetime: "date",
   upload: "upload"
 };
+
+/**
+ * Selection widgets whose runtime value is an array of chosen option values
+ * rather than a single scalar. Projected with `isMultiple: true`, mirroring
+ * `multiValueSelectTypes` in Go `internal/approval/formeditor/project.go`.
+ */
+const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group", "multi-select"]);
 
 /**
  * Widget types that bind a value the approval contract cannot carry (as
@@ -105,6 +113,7 @@ interface ProjectedField {
  */
 interface SeenProjection {
   kind: ApprovalFieldKind;
+  isMultiple: boolean;
   /**
    * Column signature of a table field ({@link peekTableSignature}); absent
    * for scalar kinds.
@@ -189,9 +198,16 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
         // deduped the losing device away, matching Go's abort-on-first-error.
         if (previous !== null) {
           const kind = peekKind(node);
+          const isMultiple = MULTI_VALUE_SELECT_TYPES.has(node.type);
 
-          if (kind !== null && kind !== previous.kind) {
-            issues.push(issueCrossDeviceKindMismatch(node.key, previous.kind, kind));
+          if (kind !== null && (kind !== previous.kind || isMultiple !== previous.isMultiple)) {
+            issues.push(
+              issueCrossDeviceKindMismatch(
+                node.key,
+                describeFieldShape(previous.kind, previous.isMultiple),
+                describeFieldShape(kind, isMultiple)
+              )
+            );
           } else if (
             kind === "table"
             && previous.tableSignature !== undefined
@@ -213,6 +229,7 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
         ? null
         : {
             kind: projected.approval.kind,
+            isMultiple: projected.approval.isMultiple === true,
             ...isSubform && { tableSignature: peekTableSignature(node as SubformNode) }
           });
 
@@ -270,6 +287,15 @@ function peekKind(node: Block & KeyedNode): ApprovalFieldKind | null {
 }
 
 /**
+ * Formats a projected kind + multiplicity for cross-device comparison and
+ * diagnostics, mirroring `describeFieldShape` in Go `internal/approval/
+ * formeditor/project.go`.
+ */
+function describeFieldShape(kind: ApprovalFieldKind, isMultiple: boolean): string {
+  return kind === "select" && isMultiple ? `${kind} (multiple)` : kind;
+}
+
+/**
  * Contract signature of a subform's column set — the ordered, deduplicated
  * `key:kind` pairs of its template's keyed leaves (layout containers are
  * transparent, matching the projection walk). Two devices whose signatures
@@ -285,7 +311,15 @@ function peekTableSignature(subform: SubformNode): string {
     }
 
     seenKeys.add(node.key);
-    parts.push(`${node.key}:${node.type === "subform" ? "table" : KIND_BY_TYPE[node.type] ?? "?"}`);
+    let shape = "?";
+
+    if (node.type === "subform") {
+      shape = "table";
+    } else if (KIND_BY_TYPE[node.type] !== undefined) {
+      shape = describeFieldShape(KIND_BY_TYPE[node.type]!, MULTI_VALUE_SELECT_TYPES.has(node.type));
+    }
+
+    parts.push(`${node.key}:${shape}`);
   });
 
   return parts.join(",");
@@ -333,12 +367,15 @@ function projectLeaf(
     issues.push(issueDecimalScaleMissing(path));
   }
 
+  const isMultiple = MULTI_VALUE_SELECT_TYPES.has(field.type);
+
   const approval: Omit<ApprovalFormField, "sortOrder"> = {
     key: field.key,
     kind,
     label,
     ...placeholder !== undefined && { placeholder },
     ...isRequired && { isRequired },
+    ...isMultiple && { isMultiple },
     ...options !== undefined && { options },
     ...optionSource !== undefined && { optionSource },
     ...rule !== undefined && { validation: rule },
@@ -350,6 +387,7 @@ function projectLeaf(
     key: field.key,
     kind,
     label,
+    ...isMultiple && { isMultiple },
     ...options !== undefined && { options }
   };
 

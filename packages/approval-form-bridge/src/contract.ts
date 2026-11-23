@@ -96,6 +96,12 @@ export interface ApprovalFormField {
   placeholder?: string;
   defaultValue?: unknown;
   isRequired?: boolean;
+  /**
+   * `true` for multi-value selection fields (`checkbox-group`, `multi-select`),
+   * mirroring Go `approval.FormFieldDefinition.IsMultiple`. Drives condition
+   * operator selection and deploy-time operator validation.
+   */
+  isMultiple?: boolean;
   options?: ApprovalFieldOption[];
   /**
    * Where the options come from when they could not be enumerated into

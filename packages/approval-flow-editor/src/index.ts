@@ -10,6 +10,10 @@ export { ApprovalIcon, CcIcon, ConditionIcon, EndIcon, HandleIcon, StartIcon } f
 // Plugins
 export type { EditorPlugins, PickerProps, TenantOption } from "./plugins";
 
+// Per-field condition-operator compatibility table mirroring Go
+// approval.ConditionOperatorsForField / IsOperatorValidForField.
+export { getOperatorsForField, isOperatorValidForField } from "./shared/condition-operators";
+
 export {
   validateFlowDefinition,
   type FlowValidationCode,
@@ -44,8 +48,7 @@ export { isPrincipalKind, PRINCIPAL_KINDS } from "./types";
 // than replace them.
 export { BUILTIN_ASSIGNEE_KINDS, BUILTIN_CC_KINDS } from "./types";
 
-// Condition-operator vocabulary — the closed set the backend's
-// approval.ConditionOperator mirrors, for hosts building their own condition UI.
+// Closed condition-operator vocabulary mirroring Go approval.ConditionOperator.
 export { CONDITION_OPERATORS } from "./types";
 
 // Types

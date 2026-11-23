@@ -122,6 +122,14 @@ describe("projectFormSchema", () => {
           dataSource: { kind: "static", options: [{ label: "A", value: "a" }] }
         },
         {
+          id: "F9",
+          type: "multi-select",
+          key: "skills",
+          label: "技能",
+          maxCount: 3,
+          dataSource: { kind: "static", options: [{ label: "Go", value: "go" }] }
+        },
+        {
           id: "F8",
           type: "upload",
           key: "attachment",
@@ -164,14 +172,30 @@ describe("projectFormSchema", () => {
         {
           key: "tags",
           kind: "select",
+          isMultiple: true,
           columnType: "json",
           options: [{ label: "A", value: "a" }]
+        },
+        {
+          key: "skills",
+          kind: "select",
+          isMultiple: true,
+          columnType: "json",
+          options: [{ label: "Go", value: "go" }]
         },
         {
           key: "attachment",
           kind: "upload"
         }
       ]);
+      expect(result.fields[3]).not.toHaveProperty("isMultiple");
+      expect(result.formFields).toContainEqual({
+        key: "skills",
+        kind: "select",
+        label: "技能",
+        isMultiple: true,
+        options: [{ label: "Go", value: "go" }]
+      });
     });
 
     it("projects number precision into a decimal column with scale", () => {

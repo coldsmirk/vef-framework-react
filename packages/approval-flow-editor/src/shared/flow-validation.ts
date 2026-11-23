@@ -7,6 +7,7 @@ import type {
   ConditionBranchDefinition,
   ConditionDefinition,
   ConditionGroup,
+  ConditionOperator,
   ConsecutiveApproverAction,
   EmptyAssigneeAction,
   ExecutionType,
@@ -31,6 +32,8 @@ import {
   BUILTIN_CC_KINDS,
   CONDITION_OPERATORS as CONDITION_OPERATOR_LIST
 } from "../types";
+import { isOperatorValidForField, OPERATOR_LABELS } from "./condition-operators";
+import { BUILT_IN_SUBJECT_FIELDS } from "./condition-subjects";
 
 /**
  * Stable codes for structural validation problems. Each mirrors a rule enforced
@@ -99,6 +102,7 @@ export type FlowValidationCode
     | "duplicate_branch_priority"
     | "condition_subject_required"
     | "invalid_condition_operator"
+    | "condition_operator_not_allowed"
     | "condition_expression_required"
     | "invalid_condition_kind"
     | "branch_conditions_required"
@@ -305,6 +309,13 @@ export function validateFlowDefinition(
   const { formFields } = context;
 
   const fieldsByKey = formFields && new Map(formFields.map(field => [field.key, field]));
+  const conditionFields: ConditionFieldScope = {
+    fieldsByKey,
+    contextSubjectKeys: new Set([
+      ...BUILT_IN_SUBJECT_FIELDS.map(field => field.key),
+      ...(context.globalSubjects ?? []).filter(field => field.kind !== "table").map(field => field.key)
+    ])
+  };
   const vocabulary: KindVocabulary = {
     assignees: selectionIndex(context.assigneeKinds ?? BUILTIN_ASSIGNEE_KINDS),
     ccs: selectionIndex(context.ccKinds ?? BUILTIN_CC_KINDS)
@@ -368,7 +379,7 @@ export function validateFlowDefinition(
 
     if (node.kind === "condition") {
       conditionBranches.set(node.id, node.data?.branches);
-      validateBranchConditions(node.id, node.data?.branches, errors, fieldsByKey);
+      validateBranchConditions(node.id, node.data?.branches, errors, conditionFields);
       continue;
     }
 
@@ -984,6 +995,16 @@ function validateRequiredFieldTimeoutAutoPass(
   }
 }
 
+interface ConditionFieldScope {
+  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined;
+  /**
+   * Built-in applicant subjects and host-supplied scalar globals. They resolve
+   * before form data at runtime (shadowing any same-named form field), so
+   * scalar field-condition operator checks skip them.
+   */
+  contextSubjectKeys: ReadonlySet<string>;
+}
+
 /**
  * Validate one condition group: the engine treats an empty group as an
  * unconditional match, so it is rejected before its conditions are checked.
@@ -993,7 +1014,7 @@ function validateConditionGroup(
   branch: ConditionBranchDefinition,
   group: ConditionGroup,
   errors: FlowValidationError[],
-  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
+  scope: ConditionFieldScope
 ): void {
   if (group.conditions.length === 0) {
     errors.push({
@@ -1007,7 +1028,7 @@ function validateConditionGroup(
   }
 
   for (const condition of group.conditions) {
-    validateBranchCondition(nodeId, branch, condition, errors, fieldsByKey);
+    validateBranchCondition(nodeId, branch, condition, errors, scope);
   }
 }
 
@@ -1081,7 +1102,7 @@ function validateBranchConditions(
   nodeId: string,
   branches: ConditionBranchDefinition[] | undefined,
   errors: FlowValidationError[],
-  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
+  scope: ConditionFieldScope
 ): void {
   const seenPriorities = new Set<number>();
   const conditionBranches = branches ?? [];
@@ -1119,7 +1140,7 @@ function validateBranchConditions(
     }
 
     for (const group of conditionGroups) {
-      validateConditionGroup(nodeId, branch, group, errors, fieldsByKey);
+      validateConditionGroup(nodeId, branch, group, errors, scope);
     }
   }
 }
@@ -1129,8 +1150,10 @@ function validateBranchCondition(
   branch: ConditionBranchDefinition,
   condition: ConditionDefinition,
   errors: FlowValidationError[],
-  fieldsByKey: ReadonlyMap<string, FormFieldDefinition> | undefined
+  scope: ConditionFieldScope
 ): void {
+  const { contextSubjectKeys, fieldsByKey } = scope;
+
   switch (condition.kind) {
     case "field": {
       if (!condition.subject) {
@@ -1147,6 +1170,25 @@ function validateBranchCondition(
           nodeId,
           branchId: branch.id
         });
+      } else if (
+        condition.aggregate === undefined
+        && fieldsByKey
+        && !contextSubjectKeys.has(condition.subject)
+      ) {
+        // Mirrors the backend ValidateConditionFields scalar check: a field
+        // condition targeting a deployed form field must use an operator
+        // valid for its kind and multiplicity. Applicant subjects and host
+        // globals are not form fields and are skipped.
+        const field = fieldsByKey.get(condition.subject);
+
+        if (field && !isOperatorValidForField(field, condition.operator)) {
+          errors.push({
+            code: "condition_operator_not_allowed",
+            message: `分支「${branch.label || branch.id}」的条件字段「${field.label || field.key}」不支持运算符「${OPERATOR_LABELS[condition.operator as ConditionOperator] ?? condition.operator}」`,
+            nodeId,
+            branchId: branch.id
+          });
+        }
       }
 
       if (condition.aggregate !== undefined && fieldsByKey && condition.subject) {

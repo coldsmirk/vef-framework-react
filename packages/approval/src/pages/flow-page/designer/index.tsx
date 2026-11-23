@@ -192,12 +192,13 @@ function DesignerBody({
     () => draft
       ? validateFlowDefinition(draft.flowDefinition, {
           formFields: fields,
+          globalSubjects: plugins.globalSubjects,
           businessKind: draft.basic.businessKind,
           assigneeKinds: kindOptions?.assignees,
           ccKinds: kindOptions?.ccs
         })
       : [],
-    [draft, fields, kindOptions]
+    [draft, fields, plugins.globalSubjects, kindOptions]
   );
   // A shared flow routes work to people of other tenants, so the editor asks
   // for the tenant before it lists users or departments.

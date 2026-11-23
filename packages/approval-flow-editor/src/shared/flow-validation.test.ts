@@ -830,6 +830,111 @@ describe("validateFlowDefinition aggregate conditions", () => {
   });
 });
 
+function scalarFieldFlow(subject: string, operator: string) {
+  return conditionFlowWith([
+    {
+      id: "b1",
+      label: "分支 1",
+      priority: 1,
+      conditionGroups: [
+        {
+          conditions: [
+            {
+              kind: "field" as const,
+              subject,
+              operator: operator as never,
+              value: "go",
+              expression: ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      id: "b_default",
+      label: "默认",
+      isDefault: true,
+      priority: 99
+    }
+  ]);
+}
+
+function codesForScalar(subject: string, operator: string, formFields: FormFieldDefinition[]) {
+  return codesOf(scalarFieldFlow(subject, operator), formFields);
+}
+
+describe("validateFlowDefinition field condition operator compatibility", () => {
+  const fields: FormFieldDefinition[] = [
+    {
+      key: "skills",
+      kind: "select",
+      label: "技能",
+      isMultiple: true
+    },
+    {
+      key: "category",
+      kind: "select",
+      label: "类别"
+    },
+    {
+      key: "attachment",
+      kind: "upload",
+      label: "附件"
+    },
+    {
+      key: "applicantId",
+      kind: "select",
+      label: "同名字段",
+      isMultiple: true
+    }
+  ];
+
+  it("rejects eq and in on a multi-value select field", () => {
+    expect(codesForScalar("skills", "eq", fields))
+      .toContain("condition_operator_not_allowed");
+    expect(codesForScalar("skills", "in", fields))
+      .toContain("condition_operator_not_allowed");
+  });
+
+  it("accepts contains, not_contains, is_empty, and is_not_empty on a multi-value select field", () => {
+    expect(codesForScalar("skills", "contains", fields)).toEqual([]);
+    expect(codesForScalar("skills", "not_contains", fields)).toEqual([]);
+    expect(codesForScalar("skills", "is_empty", fields)).toEqual([]);
+    expect(codesForScalar("skills", "is_not_empty", fields)).toEqual([]);
+  });
+
+  it("rejects contains on a single-value select field", () => {
+    expect(codesForScalar("category", "contains", fields))
+      .toContain("condition_operator_not_allowed");
+  });
+
+  it("rejects eq on an upload field", () => {
+    expect(codesForScalar("attachment", "eq", fields))
+      .toContain("condition_operator_not_allowed");
+  });
+
+  it("skips built-in applicant subjects even when a form field shares the key", () => {
+    expect(codesForScalar("applicantId", "eq", fields)).toEqual([]);
+  });
+
+  it("skips host global subjects absent from formFields or shadowing a form field", () => {
+    expect(codesForScalar("tenantTier", "eq", fields)).toEqual([]);
+
+    const errors = validateFlowDefinition(scalarFieldFlow("skills", "eq"), {
+      formFields: fields,
+      globalSubjects: [
+        {
+          key: "skills",
+          kind: "input",
+          label: "全局变量"
+        }
+      ]
+    });
+
+    expect(errors).toEqual([]);
+  });
+});
+
 describe("validateFlowDefinition sequential add-assignee", () => {
   it("rejects the parallel add-assignee type on sequential nodes", () => {
     const codes = codesOf(flowWith({

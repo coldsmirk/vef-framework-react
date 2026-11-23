@@ -306,3 +306,64 @@ describe("ConditionRuleItem expression rules", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "expression", expression: "x" }));
   });
 });
+
+describe("ConditionRuleItem multi-value select fields", () => {
+  const multiSelectPlugins: EditorPlugins = {
+    formFields: [
+      {
+        key: "skills",
+        kind: "select",
+        label: "技能",
+        isMultiple: true,
+        options: [
+          { label: "Go", value: "go" },
+          { label: "Rust", value: "rust" }
+        ]
+      }
+    ]
+  };
+
+  it("offers element-membership and emptiness operators instead of eq / in", async () => {
+    const user = userEvent.setup();
+
+    renderRule({
+      condition: condition({ subject: "skills", operator: "" }),
+      plugins: multiSelectPlugins
+    });
+
+    await user.click(screen.getByRole("combobox", { name: "运算符" }));
+
+    expect(await screen.findByText("包含")).toBeInTheDocument();
+    expect(screen.getByText("不包含")).toBeInTheDocument();
+    expect(screen.getByText("为空")).toBeInTheDocument();
+    expect(screen.getByText("不为空")).toBeInTheDocument();
+    expect(screen.queryByText("等于")).not.toBeInTheDocument();
+    expect(screen.queryByText("属于")).not.toBeInTheDocument();
+  });
+
+  it("offers the single-option picker for contains on a multi-value select", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    renderRule({
+      condition: condition({
+        subject: "skills",
+        operator: "contains",
+        value: undefined
+      }),
+      plugins: multiSelectPlugins,
+      onChange
+    });
+
+    // Value slot renders a single-select option picker beside the field and operator comboboxes.
+    const comboboxes = screen.getAllByRole("combobox");
+    await user.click(comboboxes.at(-1)!);
+    await user.click(await screen.findByText("Rust"));
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      subject: "skills",
+      operator: "contains",
+      value: "rust"
+    }));
+  });
+});

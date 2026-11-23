@@ -9,9 +9,9 @@ import { XIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { useEditorPlugins } from "../../plugins";
+import { AGGREGATE_LABELS, getOperatorsForField, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "../../shared/condition-operators";
 import { conditionSubjectOptions, subjectOptionValue } from "../../shared/condition-subjects";
 import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
-import { AGGREGATE_LABELS, getOperatorsForFieldKind, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "./condition-operators";
 import { PrincipalPicker } from "./principal-picker";
 
 const FULL_WIDTH_STYLE = { width: "100%" } as const;
@@ -199,7 +199,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
   const operators = isTableSubject
     ? [...AGGREGATE_OPERATORS]
     : selectedField
-      ? getOperatorsForFieldKind(selectedField.kind)
+      ? getOperatorsForField(selectedField)
       : [];
   const isNoValue = !isTableSubject && (NO_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
   const isMultiValue = !isTableSubject && (MULTI_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
@@ -320,13 +320,15 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       );
     }
 
+    // Covers both single-select eq/ne and multi-select contains/not_contains
+    // (one option value), preserving numeric option values via asSelectValue.
     if (kind === "select" && selectedField.options) {
       return (
         <Select
           disabled={readonly}
           options={selectedField.options.map(o => { return { label: o.label, value: asSelectValue(o.value) }; })}
           placeholder="请选择"
-          value={asStringValue(condition.value)}
+          value={condition.value === null || condition.value === undefined ? undefined : asSelectValue(condition.value)}
           onChange={value => onChange({ ...condition, value })}
         />
       );

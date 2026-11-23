@@ -322,6 +322,14 @@ export interface FormFieldDefinition {
   key: string;
   kind: FieldKind;
   label: string;
+  /**
+   * `true` when a `select` field holds multiple chosen values as an array
+   * (e.g. `checkbox-group`, `multi-select`). Drives condition operator
+   * selection (`contains` / `not_contains` / `is_empty` / `is_not_empty`)
+   * and deploy-time operator validation. Mirrors Go
+   * `approval.FormFieldDefinition.IsMultiple`.
+   */
+  isMultiple?: boolean;
   options?: FieldOptionDefinition[];
   /**
    * Row shape of a detail-table field (kind === "table"): the condition
