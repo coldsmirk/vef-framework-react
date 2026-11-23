@@ -60,6 +60,50 @@ const schema: FormSchema = {
 };
 
 describe("toFormFieldDefinitions", () => {
+  it("marks checkbox-group and multi-select fields as multi-value select", () => {
+    const result = toFormFieldDefinitions({
+      id: "Form_multi",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "F1",
+              type: "checkbox-group",
+              key: "tags",
+              label: "标签",
+              dataSource: { kind: "static", options: [{ label: "A", value: "a" }] }
+            },
+            {
+              id: "F2",
+              type: "multi-select",
+              key: "skills",
+              label: "技能",
+              dataSource: { kind: "static", options: [{ label: "Go", value: "go" }] }
+            }
+          ]
+        }
+      }
+    });
+
+    expect(result).toEqual([
+      {
+        key: "tags",
+        kind: "select",
+        label: "标签",
+        isMultiple: true,
+        options: [{ label: "A", value: "a" }]
+      },
+      {
+        key: "skills",
+        kind: "select",
+        label: "技能",
+        isMultiple: true,
+        options: [{ label: "Go", value: "go" }]
+      }
+    ]);
+  });
+
   it("projects an upload field as the upload kind", () => {
     // `upload` is a built-in registered type AND a declared FieldKind member,
     // so folding it into "input" made the union member unreachable and told the

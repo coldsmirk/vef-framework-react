@@ -11,6 +11,7 @@ import type {
   FieldComponentProps,
   FieldDefinition,
   FormField,
+  MultiSelectField,
   NumberField,
   ParagraphField,
   RadioField,
@@ -26,6 +27,7 @@ import { checkboxGroupFieldDefinition } from "../checkbox-group-field";
 import { flexDefinition, gridDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../date-field";
 import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../display";
+import { multiSelectFieldDefinition } from "../multi-select-field";
 import { numberFieldDefinition } from "../number-field";
 import { radioFieldDefinition } from "../radio-field";
 import { selectFieldDefinition } from "../select-field";
@@ -40,6 +42,7 @@ import { MobileDateInput } from "./date";
 import { MobileDateRangeInput } from "./daterange";
 import { MobileDatetimeInput } from "./datetime";
 import { MobileDivider } from "./divider";
+import { MobileMultiSelectInput } from "./multi-select";
 import { MobileNumber } from "./number";
 import { MobileParagraph } from "./paragraph";
 import { MobileRadioInput } from "./radio";
@@ -78,6 +81,7 @@ export const mobileFieldDefinitions: FieldDefinition[] = [
   mobileDefinition<NumberField, number | undefined>(numberFieldDefinition, MobileNumber),
   mobileDefinition<SwitchField, boolean>(switchFieldDefinition, MobileSwitch),
   mobileDefinition<SelectField, string | number | undefined>(selectFieldDefinition, MobileSelectInput),
+  mobileDefinition<MultiSelectField, Array<string | number>>(multiSelectFieldDefinition, MobileMultiSelectInput),
   mobileDefinition<RadioField, string | number | undefined>(radioFieldDefinition, MobileRadioInput),
   mobileDefinition<CheckboxGroupField, Array<string | number>>(checkboxGroupFieldDefinition, MobileCheckboxGroupInput),
   mobileDefinition<DateField, string>(dateFieldDefinition, MobileDateInput),

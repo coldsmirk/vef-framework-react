@@ -47,6 +47,18 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
       return <Select disabled options={columnOptions(field.dataSource, codeSetOptions)} placeholder={field.placeholder} style={fullWidthStyle} />;
     }
 
+    case "multi-select": {
+      return (
+        <Select
+          disabled
+          mode="multiple"
+          options={columnOptions(field.dataSource, codeSetOptions)}
+          placeholder={field.placeholder}
+          style={fullWidthStyle}
+        />
+      );
+    }
+
     case "radio": {
       return <Radio.Group disabled options={columnOptions(field.dataSource, codeSetOptions)} />;
     }

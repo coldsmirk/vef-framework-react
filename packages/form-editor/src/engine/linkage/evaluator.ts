@@ -532,6 +532,10 @@ function getFieldDefaultValue(field: KeyedFormField): unknown {
       return [];
     }
 
+    case "multi-select": {
+      return [];
+    }
+
     case "daterange": {
       return [];
     }

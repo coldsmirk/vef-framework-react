@@ -7,6 +7,7 @@ const MOBILE_FIELD_TYPES = [
   "number",
   "switch",
   "select",
+  "multi-select",
   "radio",
   "checkbox-group",
   "date",

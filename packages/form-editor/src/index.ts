@@ -6,6 +6,7 @@ export { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition 
 export { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "./components/display";
 export { mobileFieldDefinitions } from "./components/mobile/definitions";
 export { useMobileScopeContainer } from "./components/mobile/scope";
+export { multiSelectFieldDefinition } from "./components/multi-select-field";
 export { numberFieldDefinition } from "./components/number-field";
 export { radioFieldDefinition } from "./components/radio-field";
 export { selectFieldDefinition } from "./components/select-field";

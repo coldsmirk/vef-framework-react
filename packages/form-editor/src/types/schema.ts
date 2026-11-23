@@ -477,6 +477,38 @@ export interface SelectField extends FormFieldBase, KeyedNode, Validatable {
 }
 
 /**
+ * Multi-select dropdown. Keyed: contributes an array of chosen option values
+ * (`[]` when empty). No free-input `tags` mode: the approval backend validates
+ * submitted values against the field's options.
+ */
+export interface MultiSelectField extends FormFieldBase, KeyedNode, Validatable {
+  type: "multi-select";
+  placeholder?: string;
+  helperText?: string;
+  /**
+   * Control size. Maps to antd `Select` `size`; PC-only.
+   */
+  size?: "small" | "middle" | "large";
+  /**
+   * Show a one-click clear affordance (antd `allowClear`). Clearing commits `[]`.
+   */
+  allowClear?: boolean;
+  /**
+   * Enable option search in the dropdown (antd `showSearch`). PC-only.
+   */
+  showSearch?: boolean;
+  /**
+   * Maximum number of options the user may select (antd `Select` `maxCount`,
+   * mirrored by the mobile CheckList popup). Omit for unlimited selection.
+   */
+  maxCount?: number;
+  /**
+   * Option source. Defaults to an empty static list when omitted.
+   */
+  dataSource?: FieldOptionSource;
+}
+
+/**
  * Single-select radio group. Keyed: contributes the chosen option value.
  */
 export interface RadioField extends FormFieldBase, KeyedNode, Validatable {
@@ -713,6 +745,7 @@ export interface FormFieldTypeMap {
   switch: SwitchField;
   button: ButtonField;
   select: SelectField;
+  "multi-select": MultiSelectField;
   radio: RadioField;
   "checkbox-group": CheckboxGroupField;
   textarea: TextareaField;

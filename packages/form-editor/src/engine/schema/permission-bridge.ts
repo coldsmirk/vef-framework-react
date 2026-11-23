@@ -27,6 +27,7 @@ export interface FormFieldDefinition {
   key: string;
   kind: FieldKind;
   label: string;
+  isMultiple?: boolean;
   options?: FieldOption[];
 }
 
@@ -37,6 +38,7 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   number: "number",
   switch: "input",
   select: "select",
+  "multi-select": "select",
   radio: "select",
   "checkbox-group": "select",
   date: "date",
@@ -44,6 +46,8 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   daterange: "date",
   upload: "upload"
 };
+
+const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group", "multi-select"]);
 
 function fieldKind(type: string): FieldKind {
   // Own-property guarded: a consumer-registered widget named like an Object
@@ -99,11 +103,13 @@ export function toFormFieldDefinitions(schema: FormSchema): FormFieldDefinition[
 
   walkUniqueRootKeyedFields(schema, field => {
     const options = staticOptions(field, dataSources);
+    const isMultiple = MULTI_VALUE_SELECT_TYPES.has(field.type);
 
     definitions.push({
       key: field.key,
       kind: fieldKind(field.type),
       label: field.label ?? field.key,
+      ...isMultiple && { isMultiple },
       ...options && { options }
     });
   });

@@ -106,6 +106,12 @@ describe("deriveDefaultValues", () => {
             label: "tags"
           },
           {
+            id: "Field_skills",
+            type: "multi-select",
+            key: "skills",
+            label: "skills"
+          },
+          {
             id: "Field_period",
             type: "daterange",
             key: "period",
@@ -123,6 +129,7 @@ describe("deriveDefaultValues", () => {
           qty: undefined,
           active: false,
           tags: [],
+          skills: [],
           period: []
         }
       ]);

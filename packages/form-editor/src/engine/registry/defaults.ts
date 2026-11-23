@@ -4,6 +4,7 @@ import { codeEditorDefinition } from "../../components/code-editor";
 import { flexDefinition, gridDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../../components/containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../../components/date-field";
 import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../../components/display";
+import { multiSelectFieldDefinition } from "../../components/multi-select-field";
 import { numberFieldDefinition } from "../../components/number-field";
 import { radioFieldDefinition } from "../../components/radio-field";
 import { selectFieldDefinition } from "../../components/select-field";
@@ -31,6 +32,7 @@ export function registerDefaults(registry: FormFieldRegistry): void {
   registry.register(numberFieldDefinition);
   registry.register(switchFieldDefinition);
   registry.register(selectFieldDefinition);
+  registry.register(multiSelectFieldDefinition);
   registry.register(radioFieldDefinition);
   registry.register(checkboxGroupFieldDefinition);
   registry.register(textareaFieldDefinition);

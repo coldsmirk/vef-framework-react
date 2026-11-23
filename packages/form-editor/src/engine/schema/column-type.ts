@@ -20,13 +20,14 @@ export interface ColumnDefinition {
  * the string family (textfield / select / radio, sized by maxLength) are
  * resolved separately in {@link inferColumnType} since the widget alone does not
  * fix their type, so they are absent here. Multi-value widgets (checkbox-group /
- * daterange) project into a JSON column.
+ * multi-select / daterange) project into a JSON column.
  */
 const COLUMN_TYPE_BY_WIDGET: Record<string, ColumnDataType> = {
   switch: "boolean",
   date: "date",
   datetime: "datetime",
   "checkbox-group": "json",
+  "multi-select": "json",
   daterange: "json",
   textarea: "text",
   "code-editor": "text"

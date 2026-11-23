@@ -38,6 +38,11 @@ describe("inferColumnType", () => {
     } as FormField)).toBe("json");
     expect(inferColumnType({
       id: "1",
+      type: "multi-select",
+      key: "a"
+    } as FormField)).toBe("json");
+    expect(inferColumnType({
+      id: "1",
       type: "daterange",
       key: "a"
     } as FormField)).toBe("json");

@@ -129,6 +129,28 @@ function columnFor(field: KeyedFormField, codeSets: CodeSetOptions): EditableCol
       });
     }
 
+    case "multi-select": {
+      const maxCount = field.maxCount !== undefined && field.maxCount > 0 ? field.maxCount : undefined;
+
+      return createEditableColumn<Row>(field.key, {
+        title,
+        width,
+        validators,
+        renderEditor: f => (
+          <f.Select
+            noWrapper
+            allowClear={field.allowClear}
+            filterOption={filterOptionByLabel}
+            maxCount={maxCount}
+            mode="multiple"
+            options={columnOptions(field.dataSource, codeSets)}
+            placeholder={field.placeholder}
+            showSearch={field.showSearch === true}
+          />
+        )
+      });
+    }
+
     case "radio": {
       return createEditableColumn<Row>(field.key, {
         title,
