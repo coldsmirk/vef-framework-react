@@ -4,6 +4,7 @@ import type { MaybeNull } from "../types";
 
 import dayjs from "dayjs";
 import locale from "dayjs/locale/zh-cn";
+import advancedFormat from "dayjs/plugin/advancedFormat";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import duration from "dayjs/plugin/duration";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -18,6 +19,7 @@ function ensureDayjsConfigured(): void {
   }
 
   dayjs.locale(locale);
+  dayjs.extend(advancedFormat);
   dayjs.extend(localizedFormat);
   dayjs.extend(customParseFormat);
   dayjs.extend(duration);
@@ -26,17 +28,172 @@ function ensureDayjsConfigured(): void {
 }
 
 /**
+ * Calendar granularity for date and date-range form fields.
+ * Lockstep twin of Go `approval.DateGranularity` (`approval/enums.go`).
+ */
+export type DateGranularity = "year" | "quarter" | "month" | "day";
+
+export const DATE_GRANULARITIES: readonly DateGranularity[] = ["year", "quarter", "month", "day"];
+
+/**
  * Temporal picker mode type.
  * Defines the granularity of date/time selection.
  */
 export type TemporalMode = "minute" | "hour" | "time" | "date" | "datetime" | "week" | "month" | "quarter" | "year";
 
 // Common date format constants
+export const DEFAULT_YEAR_FORMAT = "YYYY";
+export const DEFAULT_QUARTER_FORMAT = "YYYY-[Q]Q";
+export const DEFAULT_MONTH_FORMAT = "YYYY-MM";
 export const DEFAULT_DATE_FORMAT = "YYYY-MM-DD";
 export const DEFAULT_TIME_FORMAT = "HH:mm:ss";
 export const DEFAULT_DATETIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
 export const LOCALIZED_DATETIME_FORMAT = "LLLL";
 export const LOCALIZED_DATE_FORMAT = "LLdddd";
+
+const DATE_GRANULARITY_FORMATS: Record<DateGranularity, string> = {
+  year: DEFAULT_YEAR_FORMAT,
+  quarter: DEFAULT_QUARTER_FORMAT,
+  month: DEFAULT_MONTH_FORMAT,
+  day: DEFAULT_DATE_FORMAT
+};
+
+const YEAR_PATTERN = /^(?<year>\d{4})$/;
+const QUARTER_PATTERN = /^(?<year>\d{4})-Q(?<quarter>[1-4])$/;
+const MONTH_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})$/;
+const DAY_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/;
+
+/**
+ * Type guard for {@link DateGranularity}.
+ */
+export function isDateGranularity(value: unknown): value is DateGranularity {
+  return value === "year" || value === "quarter" || value === "month" || value === "day";
+}
+
+/**
+ * Canonical display/wire format string for a {@link DateGranularity}.
+ */
+export function getDateGranularityFormat(granularity: DateGranularity = "day"): string {
+  return DATE_GRANULARITY_FORMATS[granularity];
+}
+
+/**
+ * Format a date into the canonical chronologically-sortable string for
+ * `granularity` (`YYYY`, `YYYY-Qn`, `YYYY-MM`, or `YYYY-MM-DD`). Shared by PC
+ * and mobile pickers so both round-trip byte-identically.
+ */
+export function formatDateByGranularity(date: Dayjs | Date, granularity: DateGranularity = "day"): string {
+  ensureDayjsConfigured();
+
+  const resolved = date instanceof Date ? dayjs(date) : date;
+
+  if (granularity === "quarter") {
+    const year = String(resolved.year()).padStart(4, "0");
+    const quarter = Math.floor(resolved.month() / 3) + 1;
+
+    return `${year}-Q${quarter}`;
+  }
+
+  return resolved.format(DATE_GRANULARITY_FORMATS[granularity]);
+}
+
+/**
+ * Strictly parse a date string in the canonical format of `granularity`.
+ * Rejects wrong granularities, padding, invalid calendar dates (e.g.
+ * `2026-02-29`), and out-of-range quarters (`Q0`/`Q5`). Handles `quarter`
+ * explicitly because dayjs `customParseFormat` does not parse the `Q` token.
+ */
+export function tryParseDateByGranularity(value: string, granularity: DateGranularity = "day"): MaybeNull<Dayjs> {
+  ensureDayjsConfigured();
+
+  switch (granularity) {
+    case "year": {
+      const match = YEAR_PATTERN.exec(value);
+
+      if (!match?.groups?.year) {
+        return null;
+      }
+
+      const year = Number(match.groups.year);
+      const parsed = dayjs(`${match.groups.year}-01-01`, DEFAULT_DATE_FORMAT, true);
+
+      return parsed.isValid() && parsed.year() === year ? parsed : null;
+    }
+
+    case "quarter": {
+      const match = QUARTER_PATTERN.exec(value);
+
+      if (!match?.groups?.year || !match.groups.quarter) {
+        return null;
+      }
+
+      const year = Number(match.groups.year);
+      const month = (Number(match.groups.quarter) - 1) * 3 + 1;
+      const parsed = dayjs(`${match.groups.year}-${String(month).padStart(2, "0")}-01`, DEFAULT_DATE_FORMAT, true);
+
+      return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 ? parsed : null;
+    }
+
+    case "month": {
+      const match = MONTH_PATTERN.exec(value);
+
+      if (!match?.groups?.year || !match.groups.month) {
+        return null;
+      }
+
+      const year = Number(match.groups.year);
+      const month = Number(match.groups.month);
+
+      if (month < 1 || month > 12) {
+        return null;
+      }
+
+      const parsed = dayjs(`${match.groups.year}-${match.groups.month}-01`, DEFAULT_DATE_FORMAT, true);
+
+      return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 ? parsed : null;
+    }
+
+    case "day": {
+      const match = DAY_PATTERN.exec(value);
+
+      if (!match?.groups?.year || !match.groups.month || !match.groups.day) {
+        return null;
+      }
+
+      const year = Number(match.groups.year);
+      const month = Number(match.groups.month);
+      const day = Number(match.groups.day);
+      const parsed = dayjs(value, DEFAULT_DATE_FORMAT, true);
+
+      return parsed.isValid() && parsed.year() === year && parsed.month() === month - 1 && parsed.date() === day
+        ? parsed
+        : null;
+    }
+  }
+}
+
+/**
+ * Report whether `value` is a string strictly matching `granularity`'s format.
+ */
+export function isValidDateByGranularity(value: unknown, granularity: DateGranularity = "day"): value is string {
+  return typeof value === "string" && tryParseDateByGranularity(value, granularity) !== null;
+}
+
+/**
+ * Report whether `value` is a `[start, end]` pair of valid strings in
+ * `granularity`'s format with `start <= end`.
+ */
+export function isValidDateRangeByGranularity(value: unknown, granularity: DateGranularity = "day"): value is [string, string] {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return false;
+  }
+
+  const [start, end] = value;
+
+  return isValidDateByGranularity(start, granularity)
+    && isValidDateByGranularity(end, granularity)
+    && start <= end;
+}
 
 // Temporal format patterns for different modes
 const YEAR_FORMATS = ["YYYY"] as const;
@@ -152,6 +309,12 @@ export function parseDate(date: string | Date, format?: string): Dayjs {
  */
 export function tryParseDate(date: string): MaybeNull<Dayjs> {
   ensureDayjsConfigured();
+
+  const quarter = tryParseDateByGranularity(date, "quarter");
+
+  if (quarter !== null) {
+    return quarter;
+  }
 
   const allFormats = [...DATETIME_FORMATS, ...DATE_FORMATS];
 

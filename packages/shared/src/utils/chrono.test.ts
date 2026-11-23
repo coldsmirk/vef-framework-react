@@ -3,12 +3,22 @@ import type { Dayjs } from "..";
 import { describe, expect, it } from "vitest";
 
 import {
+  DATE_GRANULARITIES,
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_MONTH_FORMAT,
+  DEFAULT_QUARTER_FORMAT,
+  DEFAULT_YEAR_FORMAT,
   formatDate,
+  formatDateByGranularity,
+  getDateGranularityFormat,
   getTemporalFormats,
+  isDateGranularity,
+  isValidDateByGranularity,
+  isValidDateRangeByGranularity,
   parseDate,
   tryParseDate,
+  tryParseDateByGranularity,
   tryParseTime
-
 } from "..";
 
 describe("utils/chrono", () => {
@@ -507,6 +517,75 @@ describe("utils/chrono", () => {
       // TypeScript will enforce this at compile time
       // At runtime, we can check that it's an array
       expect(Array.isArray(formats)).toBe(true);
+    });
+  });
+
+  describe("date granularity helpers", () => {
+    it("exposes canonical format constants for every granularity", () => {
+      expect(DATE_GRANULARITIES).toEqual(["year", "quarter", "month", "day"]);
+      expect(getDateGranularityFormat("year")).toBe(DEFAULT_YEAR_FORMAT);
+      expect(getDateGranularityFormat("quarter")).toBe(DEFAULT_QUARTER_FORMAT);
+      expect(getDateGranularityFormat("month")).toBe(DEFAULT_MONTH_FORMAT);
+      expect(getDateGranularityFormat("day")).toBe(DEFAULT_DATE_FORMAT);
+      expect(getDateGranularityFormat()).toBe(DEFAULT_DATE_FORMAT);
+      expect(isDateGranularity("quarter")).toBe(true);
+      expect(isDateGranularity("week")).toBe(false);
+    });
+
+    it("round-trips valid values for every granularity", () => {
+      const cases = [
+        { granularity: "year" as const, input: "2026" },
+        { granularity: "quarter" as const, input: "2026-Q1" },
+        { granularity: "quarter" as const, input: "2026-Q4" },
+        { granularity: "month" as const, input: "2026-04" },
+        { granularity: "day" as const, input: "2026-04-15" },
+        { granularity: "day" as const, input: "2024-02-29" }
+      ];
+
+      for (const { granularity, input } of cases) {
+        const parsed = tryParseDateByGranularity(input, granularity);
+
+        expect(parsed, `${granularity}:${input}`).not.toBeNull();
+        expect(formatDateByGranularity(parsed!, granularity)).toBe(input);
+        expect(formatDateByGranularity(parsed!.toDate(), granularity)).toBe(input);
+        expect(isValidDateByGranularity(input, granularity)).toBe(true);
+      }
+    });
+
+    it("parses quarter strings in tryParseDate so generic pickers hydrate them", () => {
+      const parsed = tryParseDate("2026-Q3");
+
+      expect(parsed).not.toBeNull();
+      expect(parsed?.year()).toBe(2026);
+      expect(parsed?.month()).toBe(6);
+      expect(parsed?.date()).toBe(1);
+    });
+
+    it("rejects malformed or wrong-granularity inputs strictly", () => {
+      expect(tryParseDateByGranularity("26", "year")).toBeNull();
+      expect(tryParseDateByGranularity("2026-01", "year")).toBeNull();
+      expect(tryParseDateByGranularity("2026-Q0", "quarter")).toBeNull();
+      expect(tryParseDateByGranularity("2026-Q5", "quarter")).toBeNull();
+      expect(tryParseDateByGranularity("2026-q1", "quarter")).toBeNull();
+      expect(tryParseDateByGranularity("2026-04", "quarter")).toBeNull();
+      expect(tryParseDateByGranularity("2026-00", "month")).toBeNull();
+      expect(tryParseDateByGranularity("2026-13", "month")).toBeNull();
+      expect(tryParseDateByGranularity("2026-4", "month")).toBeNull();
+      expect(tryParseDateByGranularity("2026-04-01", "month")).toBeNull();
+      expect(tryParseDateByGranularity("2026-02-29", "day")).toBeNull();
+      expect(tryParseDateByGranularity("2026-04-31", "day")).toBeNull();
+      expect(tryParseDateByGranularity("2026-4-5", "day")).toBeNull();
+      expect(tryParseDateByGranularity("2026-04-15 08:30:00", "day")).toBeNull();
+      expect(tryParseDateByGranularity(" 2026-04-15", "day")).toBeNull();
+    });
+
+    it("validates date ranges for length, format, and chronological order", () => {
+      expect(isValidDateRangeByGranularity(["2026-Q1", "2026-Q4"], "quarter")).toBe(true);
+      expect(isValidDateRangeByGranularity(["2026-Q2", "2026-Q2"], "quarter")).toBe(true);
+      expect(isValidDateRangeByGranularity(["2026-Q4", "2026-Q1"], "quarter")).toBe(false);
+      expect(isValidDateRangeByGranularity(["2026-Q1"], "quarter")).toBe(false);
+      expect(isValidDateRangeByGranularity(["2026-01", "2026-04"], "quarter")).toBe(false);
+      expect(isValidDateRangeByGranularity([], "day")).toBe(false);
     });
   });
 });
