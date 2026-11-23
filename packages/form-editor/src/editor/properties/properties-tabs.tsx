@@ -30,7 +30,7 @@ const tabCss = css({
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  padding: "16px 0 14px",
+  padding: "11px 0 10px",
   border: "none",
   background: "transparent",
   fontSize: globalCssVars.fontSize,

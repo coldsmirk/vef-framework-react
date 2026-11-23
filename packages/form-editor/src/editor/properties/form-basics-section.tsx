@@ -12,13 +12,6 @@ import { useId, useState } from "react";
 // than collapsing to its single-word options' intrinsic width.
 const selectStyle = { width: "100%" } as const;
 
-const bodyCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 22,
-  padding: "20px 22px 24px"
-});
-
 const groupCss = css({
   display: "flex",
   flexDirection: "column",
@@ -59,52 +52,28 @@ const fieldErrorCss = css({
   lineHeight: 1.4
 });
 
-const statRowCss = css({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "8px 0",
-  borderBottom: `1px solid ${globalCssVars.colorFillQuaternary}`,
-  fontSize: globalCssVars.fontSize
-});
-
-const statLabelCss = css({ color: globalCssVars.colorTextSecondary });
-const statValueCss = css({
-  color: globalCssVars.colorText,
-  fontVariantNumeric: "tabular-nums",
-  fontWeight: 500
-});
-
 const GAP_OPTIONS: Array<{ label: string; value: GapScale }> = [
   { label: "小", value: "small" },
   { label: "中", value: "medium" },
   { label: "大", value: "large" }
 ];
 
-export interface FormBasicsTabProps {
+export interface FormBasicsSectionProps {
   /**
    * The active device's presentation — source of the per-device layout default
-   * (stack gap) and layout stats.
+   * (stack gap).
    */
   layer: PresentationLayer;
   /**
-   * The schema — source of the shared root metadata (id, version).
+   * The schema — source of the shared root metadata (`id`).
    */
   schema: FormSchema;
-  /**
-   * Leaf-field count of the active layer. Supplied by the drawer from the
-   * store's cached `selectFieldCount` selector, so the stats row never pays a
-   * fresh full-tree walk per keystroke.
-   */
-  fieldCount: number;
   onPatch: (patch: FormSchemaPatch) => void;
 }
 
 /**
- * The form-config drawer's "表单" tab: root metadata (id), the layout default
- * (stack gap), and read-only layout stats. Migrated verbatim from the retired
- * right-panel `FormProperties` — the variables / data-sources / linkage sections
- * it used to carry are now first-class drawer tabs.
+ * Form-level identity (`id`) and per-device layout default (`gap`), mounted at
+ * the top of the right panel's `表单` tab.
  *
  * The form ID is the only free-form input the schema validator constrains
  * (`id_required`: non-empty string — a blanked id would fail re-import), so it
@@ -112,12 +81,11 @@ export interface FormBasicsTabProps {
  * visible with an inline error instead of being committed or silently
  * reverted. The gap select offers only valid presets, so it needs no guard.
  */
-export function FormBasicsTab({
-  fieldCount,
+export function FormBasicsSection({
   layer,
   onPatch,
   schema
-}: FormBasicsTabProps): ReactElement {
+}: FormBasicsSectionProps): ReactElement {
   const formIdInputId = useId();
   const gapId = useId();
   // Pending invalid id text, or null when the input mirrors the schema. Only
@@ -138,7 +106,7 @@ export function FormBasicsTab({
   };
 
   return (
-    <div css={bodyCss}>
+    <>
       <section css={groupCss}>
         <div css={groupTitleCss}>基础</div>
 
@@ -176,25 +144,6 @@ export function FormBasicsTab({
           />
         </div>
       </section>
-
-      <section css={groupCss}>
-        <div css={groupTitleCss}>统计</div>
-
-        <div css={statRowCss}>
-          <span css={statLabelCss}>字段数量</span>
-          <span css={statValueCss}>{fieldCount}</span>
-        </div>
-
-        <div css={statRowCss}>
-          <span css={statLabelCss}>顶层区块</span>
-          <span css={statValueCss}>{layer.children.length}</span>
-        </div>
-
-        <div css={statRowCss}>
-          <span css={statLabelCss}>Schema 版本</span>
-          <span css={statValueCss}>{schema.version}</span>
-        </div>
-      </section>
-    </div>
+    </>
   );
 }

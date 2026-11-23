@@ -12,7 +12,7 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile";
 import { validateSchema } from "../engine/schema/validate";
 import { findField, findNode, findScope, walkFields } from "../engine/schema/walk";
-import { FormEditorStoreProvider, isPaletteVisible, selectFieldCount, useFormEditorStoreApi } from "./form-store";
+import { FormEditorStoreProvider, isSidebarVisible, selectFieldCount, useFormEditorStoreApi } from "./form-store";
 
 function wrapper({ children }: { children: ReactNode }): ReactNode {
   return <FormEditorStoreProvider initialState={{}}>{children}</FormEditorStoreProvider>;
@@ -1436,7 +1436,7 @@ describe("form store", () => {
 
       act(() => api.getState().setViewMode("json"));
 
-      expect(isPaletteVisible(api.getState())).toBe(false);
+      expect(isSidebarVisible(api.getState())).toBe(false);
     });
 
     it("keeps the selection across a view-mode round trip", () => {
@@ -1451,26 +1451,51 @@ describe("form store", () => {
       expect(api.getState().selectedId).toBe(selected);
     });
 
-    it("collapses the form-config drawer when leaving edit mode", () => {
+    it("closes the narrow right overlay when leaving edit mode while keeping tabs", () => {
       const api = setup();
-      act(() => api.getState().setFormConfigTab("variables"));
-      expect(api.getState().formConfigOpen).toBe(true);
+      act(() => {
+        api.getState().setSidebarTab("data");
+        api.getState().setPropertiesTab("form");
+      });
+      expect(api.getState().propertiesDrawerOpen).toBe(true);
 
       act(() => api.getState().setViewMode("preview"));
 
-      expect(api.getState().formConfigOpen).toBe(false);
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
+      expect(api.getState().sidebarTab).toBe("data");
     });
   });
 
   describe("control selection", () => {
-    it("clears the selection on selectNode(null)", () => {
+    it("activates control tab on select and reverts to form on selectNode(null)", () => {
       const api = setup();
+      expect(api.getState().propertiesTab).toBe("form");
+
       act(() => api.getState().insertField({ definition: textfieldDefinition }));
       expect(api.getState().selectedId).not.toBeNull();
+      expect(api.getState().propertiesTab).toBe("control");
+      expect(api.getState().propertiesDrawerOpen).toBe(true);
 
       act(() => api.getState().selectNode(null));
 
       expect(api.getState().selectedId).toBeNull();
+      expect(api.getState().propertiesTab).toBe("form");
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
+    });
+
+    it("allows manual switch to form while selected and returns to control on reselect", () => {
+      const api = setup();
+      act(() => api.getState().insertField({ definition: textfieldDefinition }));
+      const fieldId = api.getState().selectedId!;
+
+      act(() => api.getState().setPropertiesTab("form"));
+
+      expect(api.getState().selectedId).toBe(fieldId);
+      expect(api.getState().propertiesTab).toBe("form");
+
+      act(() => api.getState().selectNode(fieldId));
+
+      expect(api.getState().propertiesTab).toBe("control");
     });
 
     it("leaves the selection untouched when a form-level patch is applied", () => {
@@ -1483,33 +1508,48 @@ describe("form store", () => {
     });
   });
 
-  describe("form-config drawer", () => {
-    it("opens to the requested tab", () => {
+  describe("side panel tabs", () => {
+    it("switches the left sidebar tab", () => {
       const api = setup();
+      expect(api.getState().sidebarTab).toBe("palette");
 
-      act(() => api.getState().setFormConfigTab("dataSources"));
+      act(() => api.getState().setSidebarTab("data"));
+      expect(api.getState().sidebarTab).toBe("data");
 
-      expect(api.getState().formConfigOpen).toBe(true);
-      expect(api.getState().formConfigTab).toBe("dataSources");
+      act(() => api.getState().setSidebarTab("outline"));
+      expect(api.getState().sidebarTab).toBe("outline");
     });
 
-    it("toggles open and closed", () => {
+    it("refuses switching the right panel to control when nothing is selected", () => {
       const api = setup();
 
-      act(() => api.getState().setFormConfigOpen(true));
-      expect(api.getState().formConfigOpen).toBe(true);
+      act(() => api.getState().setPropertiesTab("control"));
 
-      act(() => api.getState().setFormConfigOpen(false));
-      expect(api.getState().formConfigOpen).toBe(false);
+      expect(api.getState().propertiesTab).toBe("form");
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
     });
 
-    it("ignores open requests outside edit mode", () => {
+    it("opens and closes the narrow right overlay", () => {
+      const api = setup();
+
+      act(() => api.getState().setPropertiesTab("form"));
+      expect(api.getState().propertiesDrawerOpen).toBe(true);
+
+      act(() => api.getState().setPropertiesDrawerOpen(false));
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
+    });
+
+    it("ignores panel tab switches outside edit mode", () => {
       const api = setup();
       act(() => api.getState().setViewMode("preview"));
 
-      act(() => api.getState().setFormConfigTab("variables"));
+      act(() => {
+        api.getState().setSidebarTab("data");
+        api.getState().setPropertiesTab("form");
+      });
 
-      expect(api.getState().formConfigOpen).toBe(false);
+      expect(api.getState().sidebarTab).toBe("palette");
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
     });
   });
 });

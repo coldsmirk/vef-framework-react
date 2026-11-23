@@ -33,12 +33,11 @@ import { DataSourceApisProvider } from "./data-source-apis";
 import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
 import { EditorLayoutProvider, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
-import { FormConfigDrawer } from "./form-config/form-config-drawer";
 import { HostValidationProvider } from "./host-validation";
-import { PalettePanel } from "./palette/palette-panel";
 import { previewDispatchEffect } from "./preview-effects";
 import { PreviewRuntimeProvider } from "./preview-runtime-context";
 import { PropertiesPanel } from "./properties/properties-panel";
+import { SidebarPanel } from "./sidebar/sidebar-panel";
 import { Toolbar } from "./toolbar/toolbar";
 import { useEditorShortcuts } from "./use-editor-shortcuts";
 
@@ -58,7 +57,7 @@ const rootCss = css({
 });
 
 const workspaceCss = css({
-  // Anchors the drawer-layout properties overlay (absolute against this box).
+  // Anchors the narrow-layout left sidebar and right properties overlays.
   position: "relative",
   flex: 1,
   display: "flex",
@@ -74,18 +73,6 @@ const stageCss = css({
   flexDirection: "column",
   minHeight: 0,
   minWidth: 0,
-  overflow: "hidden"
-});
-
-const canvasAreaCss = css({
-  position: "relative",
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 0,
-  minWidth: 0,
-  // The form-config drawer is positioned absolute against this area so it floats
-  // over the canvas's bottom edge but stays above the footer below it.
   overflow: "hidden"
 });
 
@@ -393,27 +380,22 @@ export function FormEditorShell({ children }: FormEditorShellProps): ReactElemen
 }
 
 /**
- * The horizontal band under the toolbar: palette | stage | properties. Also
- * the positioning anchor for the narrow-layout properties overlay.
+ * The horizontal band under the toolbar: sidebar | stage | properties. Also
+ * the positioning anchor for the narrow-layout sidebar and properties overlays.
  */
 export function FormEditorWorkspace({ children }: { children: ReactNode }): ReactElement {
   return <div css={workspaceCss}>{children}</div>;
 }
 
 /**
- * The canvas column: design surface, the form-config drawer floating over its
- * bottom edge, and the status footer (edit mode only).
+ * The canvas column: design surface and the status footer (edit mode only).
  */
 export function FormEditorStage(): ReactElement {
   const isEditing = useFormEditorStore(s => s.viewMode === "edit");
 
   return (
     <div css={stageCss}>
-      <div css={canvasAreaCss}>
-        <Canvas />
-        <FormConfigDrawer />
-      </div>
-
+      <Canvas />
       {isEditing ? <EditorFooter /> : null}
     </div>
   );
@@ -447,7 +429,7 @@ export interface FormEditorProps extends Omit<FormEditorProviderProps, "children
 
 /**
  * The pre-composed visual form editor: provider + shell + the canonical
- * toolbar / palette / stage / properties arrangement. Hosts that need a
+ * toolbar / sidebar / stage / properties arrangement. Hosts that need a
  * different shell (own toolbar, relocated panels) compose the same parts
  * directly:
  *
@@ -456,7 +438,7 @@ export interface FormEditorProps extends Omit<FormEditorProviderProps, "children
  * <FormEditor.Shell>
  * <MyToolbar />
  * <FormEditor.Workspace>
- * <FormEditor.Palette />
+ * <FormEditor.Sidebar />
  * <FormEditor.Stage />
  * <FormEditor.Properties />
  * </FormEditor.Workspace>
@@ -477,7 +459,7 @@ function FormEditorRoot({
         <Toolbar brand={brand} publishLoading={publishLoading} publishText={publishText} onPublish={onPublish} />
 
         <FormEditorWorkspace>
-          <PalettePanel />
+          <SidebarPanel />
           <FormEditorStage />
           <PropertiesPanel />
         </FormEditorWorkspace>
@@ -492,6 +474,6 @@ export const FormEditor = Object.assign(FormEditorRoot, {
   Workspace: FormEditorWorkspace,
   Stage: FormEditorStage,
   Toolbar,
-  Palette: PalettePanel,
+  Sidebar: SidebarPanel,
   Properties: PropertiesPanel
 });

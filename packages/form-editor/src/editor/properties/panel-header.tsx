@@ -8,8 +8,8 @@ import { EditorIcon } from "../../icons";
 const headerCss = css({
   display: "flex",
   alignItems: "center",
-  gap: 14,
-  padding: "18px 20px 16px",
+  gap: 12,
+  padding: "12px 20px",
   borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`,
   flexShrink: 0
 });
@@ -18,16 +18,16 @@ const iconCss = css({
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 40,
-  height: 40,
+  width: 36,
+  height: 36,
   borderRadius: 8,
   border: `1px solid ${globalCssVars.colorBorderSecondary}`,
   color: globalCssVars.colorTextSecondary,
   flexShrink: 0,
 
   "& > svg": {
-    width: 20,
-    height: 20
+    width: 18,
+    height: 18
   }
 });
 

@@ -29,7 +29,7 @@ describe("FormEditor", () => {
   it("renders the pre-composed shell", async () => {
     render(<FormEditor initialSchema={makeSchema()} />);
 
-    expect(await screen.findByRole("complementary", { name: "组件库" })).toBeInTheDocument();
+    expect(await screen.findByRole("complementary", { name: "侧边栏" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "属性" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "撤销" })).toBeInTheDocument();
   });
@@ -48,11 +48,11 @@ describe("FormEditor", () => {
       </FormEditor.Provider>
     );
 
-    // Host chrome and editor surfaces coexist; the palette was deliberately
+    // Host chrome and editor surfaces coexist; the sidebar was deliberately
     // left out and must not render.
     expect(await screen.findByTestId("host-toolbar")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "属性" })).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "组件库" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "侧边栏" })).not.toBeInTheDocument();
   });
 
   describe("apiRef", () => {
@@ -61,7 +61,7 @@ describe("FormEditor", () => {
       const onSchemaChange = vi.fn();
 
       render(<FormEditor apiRef={api} initialSchema={makeSchema()} onSchemaChange={onSchemaChange} />);
-      await screen.findByRole("complementary", { name: "组件库" });
+      await screen.findByRole("complementary", { name: "侧边栏" });
 
       expect(api.current?.getSchema().id).toBe("Form_1");
       expect(api.current?.canUndo()).toBe(false);

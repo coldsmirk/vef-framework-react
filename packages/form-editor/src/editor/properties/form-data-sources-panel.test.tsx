@@ -24,7 +24,7 @@ interface HarnessProps {
 }
 
 /**
- * Mirrors the form-config drawer wiring: data sources come from the store
+ * Mirrors the sidebar `数据` tab wiring: data sources come from the store
  * schema and updates patch them back, so the store-backed delete and the
  * onChange path stay in sync.
  */

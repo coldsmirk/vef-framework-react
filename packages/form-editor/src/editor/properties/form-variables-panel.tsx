@@ -99,7 +99,7 @@ export interface FormVariablesPanelProps {
  * `$vars.<name>` with its `defaultValue`; the runtime seeds the evaluation scope
  * from this list.
  *
- * Add and type/default edits flow through `onChange` (the drawer patches
+ * Add and type/default edits flow through `onChange` (the `数据` tab patches
  * `schema.variables`); rename and delete go through the store's
  * `renameVariable` / `removeVariable` so `set_variable` references follow the
  * variable instead of dangling.

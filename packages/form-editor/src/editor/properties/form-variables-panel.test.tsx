@@ -25,7 +25,7 @@ interface HarnessProps {
 }
 
 /**
- * Mirrors the form-config drawer wiring: variables come from the store schema
+ * Mirrors the sidebar `数据` tab wiring: variables come from the store schema
  * and updates patch them back, so the panel's store-backed rename/remove and
  * its onChange path stay in sync.
  */

@@ -62,13 +62,14 @@ function setupEditor(contextSources?: LinkageContextSource[]): FormEditorStoreAp
     const api = useFormEditorStoreApi();
 
     useEffect(() => {
-      api.getState().setFormConfigTab("variables");
+      api.getState().setSidebarTab("data");
       storeApi = api;
     }, [api]);
 
     return (
       <FormEditor.Shell>
         <FormEditor.Workspace>
+          <FormEditor.Sidebar />
           <FormEditor.Stage />
         </FormEditor.Workspace>
       </FormEditor.Shell>

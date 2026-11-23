@@ -1,5 +1,5 @@
 import type { SchemaIssue } from "../engine/validation";
-import type { FormConfigTabId, FormEditorStoreApi } from "../store/form-store";
+import type { FormEditorStoreApi, PropertiesTabId, SidebarTabId } from "../store/form-store";
 import type { Block, FormSchema, PresentationDevice, PresentationLayer } from "../types";
 
 import { useCallback } from "react";
@@ -10,12 +10,13 @@ import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/wa
 import { useFormEditorStoreApi } from "../store/form-store";
 
 /**
- * Where a diagnostic can be shown: a node of one device's tree, or the
- * form-config tab that edits the form-level part it is about.
+ * Where a diagnostic can be shown: a node of one device's tree, a left-sidebar
+ * tab (`data`), or a right-properties tab (`form`).
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
-    | { kind: "tab"; tab: FormConfigTabId };
+    | { kind: "sidebar"; tab: SidebarTabId }
+    | { kind: "properties"; tab: PropertiesTabId };
 
 const DEVICES: readonly PresentationDevice[] = ["pc", "mobile"];
 
@@ -26,6 +27,10 @@ const DEVICES: readonly PresentationDevice[] = ["pc", "mobile"];
 const BODY_SEGMENT = /^(?<body>children|tabs|template)\[(?<index>\d+)\]$/;
 
 const NODE_SEGMENT = /^node\[(?<id>[^\]]+)\]$/;
+
+const DATA_SOURCES_HEAD = /^dataSources(?:\[\d+\])?$/;
+
+const VARIABLES_HEAD = /^variables(?:\[\d+\])?$/;
 
 /**
  * Top-level paths that name the schema envelope rather than a field, so a
@@ -168,15 +173,11 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
   }
 
   if (head === "linkage" || (head === "schema" && second === "linkage")) {
-    return { kind: "tab", tab: "linkage" };
+    return { kind: "properties", tab: "form" };
   }
 
-  if (/^dataSources(?:\[\d+\])?$/.test(head)) {
-    return { kind: "tab", tab: "dataSources" };
-  }
-
-  if (/^variables(?:\[\d+\])?$/.test(head)) {
-    return { kind: "tab", tab: "variables" };
+  if (DATA_SOURCES_HEAD.test(head) || VARIABLES_HEAD.test(head)) {
+    return { kind: "sidebar", tab: "data" };
   }
 
   if (ENVELOPE_PATHS.has(path)) {
@@ -197,7 +198,7 @@ function headIndex(path: string): number | undefined {
 }
 
 /**
- * A named entry of a form-config list — a data source or a variable — by its
+ * A named entry of a form-level list — a data source or a variable — by its
  * name, else by its position.
  */
 function describeListEntry(noun: string, names: ReadonlyArray<string | undefined>, index: number | undefined): string {
@@ -212,7 +213,7 @@ function describeListEntry(noun: string, names: ReadonlyArray<string | undefined
 
 /**
  * Where a diagnostic is, in the designer's own words — the field it is about
- * (`金额`, `移动端 · 备注`) or the form-config entry (`数据源「部门」`,
+ * (`金额`, `移动端 · 备注`) or the form-level entry (`数据源「部门」`,
  * `表单联动`) — or `undefined` when the path names nothing the designer shows.
  * A raw path such as `presentations.pc.children[3].key` is for a developer;
  * the designer reading the issue list wants the name they gave the thing.
@@ -224,37 +225,39 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
     return undefined;
   }
 
-  if (target.kind === "node") {
-    const layer = schema.presentations[target.device];
-    const node = layer === undefined ? undefined : findNode(layer, target.nodeId);
-    const name = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
+  switch (target.kind) {
+    case "node": {
+      const layer = schema.presentations[target.device];
+      const node = layer === undefined ? undefined : findNode(layer, target.nodeId);
+      const name = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
 
-    return target.device === "mobile" ? `移动端 · ${name}` : name;
-  }
-
-  switch (target.tab) {
-    case "dataSources": {
-      return describeListEntry("数据源", (schema.dataSources ?? []).map(source => source.name), headIndex(path));
+      return target.device === "mobile" ? `移动端 · ${name}` : name;
     }
 
-    case "variables": {
-      return describeListEntry("变量", (schema.variables ?? []).map(variable => variable.name), headIndex(path));
-    }
+    case "sidebar": {
+      if (target.tab !== "data") {
+        return undefined;
+      }
 
-    case "linkage": {
-      return "表单联动";
-    }
+      const [head = ""] = path.split(".");
 
-    case "outline": {
+      if (DATA_SOURCES_HEAD.test(head)) {
+        return describeListEntry("数据源", (schema.dataSources ?? []).map(source => source.name), headIndex(path));
+      }
+
+      if (VARIABLES_HEAD.test(head)) {
+        return describeListEntry("变量", (schema.variables ?? []).map(variable => variable.name), headIndex(path));
+      }
+
       return undefined;
     }
 
-    case "form": {
-      return undefined;
+    case "properties": {
+      return target.tab === "form" ? "表单联动" : undefined;
     }
 
     default: {
-      return assertNever(target.tab);
+      return assertNever(target);
     }
   }
 }
@@ -262,16 +265,30 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
 function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): void {
   const state = storeApi.getState();
 
-  if (target.kind === "tab") {
-    state.setFormConfigTab(target.tab);
-    return;
-  }
+  switch (target.kind) {
+    case "sidebar": {
+      state.setSidebarTab(target.tab);
+      return;
+    }
 
-  if (state.device !== target.device) {
-    state.setDevice(target.device);
-  }
+    case "properties": {
+      state.setPropertiesTab(target.tab);
+      return;
+    }
 
-  state.selectNode(target.nodeId);
+    case "node": {
+      if (state.device !== target.device) {
+        state.setDevice(target.device);
+      }
+
+      state.selectNode(target.nodeId);
+      return;
+    }
+
+    default: {
+      assertNever(target);
+    }
+  }
 }
 
 /**
@@ -295,7 +312,7 @@ export function useIssueDescriber(): (issue: SchemaIssue) => string | undefined 
 /**
  * Resolves a diagnostic to the action that shows it — selecting the node it is
  * about (switching device when needed; the canvas scrolls a selection into
- * view) or opening the form-config tab that edits it — or `undefined` when it
+ * view) or switching the owning side panel to its tab — or `undefined` when it
  * cannot be shown. Reads the store when called, so the resolver itself is
  * stable and never re-renders a list on schema edits.
  */

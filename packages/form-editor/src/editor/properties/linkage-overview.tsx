@@ -57,9 +57,10 @@ const countTagCss = css({
 });
 
 const emptyHintCss = css({
-  padding: "2px 8px",
+  padding: "2px 0",
   fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary
+  color: globalCssVars.colorTextTertiary,
+  lineHeight: 1.5
 });
 
 interface LinkageBearerRow {
@@ -70,8 +71,8 @@ interface LinkageBearerRow {
 /**
  * Read-only index of every node on the active layer that carries linkage
  * rules — the field-level share of the footer's "联动" count. Rules are
- * authored per field, so each row simply selects its node: the properties
- * panel then shows the field whose 联动 tab owns the rules.
+ * authored per field, so each row simply selects its node, which switches the
+ * right properties panel to that control.
  */
 export function LinkageOverview(): ReactElement {
   const layer = useCurrentLayer();
@@ -88,7 +89,7 @@ export function LinkageOverview(): ReactElement {
   });
 
   if (rows.length === 0) {
-    return <div css={emptyHintCss}>当前设备层还没有字段级联动规则，可在控件属性面板的「联动」页配置。</div>;
+    return <div css={emptyHintCss}>当前设备层还没有字段级联动规则，可在选中控件的「联动」页配置。</div>;
   }
 
   return (

@@ -562,14 +562,15 @@ describe("Canvas", () => {
       expect(storeApi.getState().selectedId).toBeNull();
     });
 
-    it("does not open any panel when nothing is selected", async () => {
+    it("keeps the form tab active without opening the narrow overlay when nothing is selected", async () => {
       const user = userEvent.setup();
       const storeApi = setupCanvas();
 
       await user.click(getSurface());
 
       expect(storeApi.getState().selectedId).toBeNull();
-      expect(storeApi.getState().formConfigOpen).toBe(false);
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(false);
     });
   });
 });

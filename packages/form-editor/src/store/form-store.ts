@@ -53,14 +53,21 @@ export type EditorViewMode = "edit" | "preview" | "json";
 export type EditorDeviceMode = PresentationDevice;
 
 /**
- * Tab of the bottom form-config drawer. `outline` is the schema field tree;
- * `form` carries root metadata + layout + stats; the rest map one-to-one to the
- * form-global variables / data sources / linkage (the unified "events") panels.
+ * Tab of the left sidebar workbench. `palette` is the draggable component
+ * catalog; `outline` is the active layer's node tree; `data` holds form-global
+ * data sources and variables (form + host system variables).
  */
-export type FormConfigTabId = "outline" | "form" | "variables" | "dataSources" | "linkage";
+export type SidebarTabId = "palette" | "outline" | "data";
 
 /**
- * The form-level metadata the form-config drawer patches. Shared fields (root
+ * Top-level tab of the right properties panel. `control` edits the currently
+ * selected node (only active while a node is selected); `form` edits
+ * form-level metadata, layout gap, and linkage (field overview + form events).
+ */
+export type PropertiesTabId = "control" | "form";
+
+/**
+ * The form-level metadata patched from the side panels. Shared fields (root
  * id, form-scope linkage, form-global variables / data sources) live on the
  * schema; `gap` is a layout default applied to the active device's presentation.
  */
@@ -102,20 +109,26 @@ export interface EditCoalesceOptions {
 export interface FormEditorStoreState {
   schema: FormSchema;
   /**
-   * Currently selected node (field or container), or null for none. The docked
-   * properties panel keys off this: a non-null selection shows that control's
-   * editor, null shows the empty hint.
+   * Currently selected node (field or container), or null for none. Selection
+   * drives the right properties panel: selecting a node activates `control`,
+   * clearing the selection switches back to `form`.
    */
   selectedId: string | null;
   /**
-   * Whether the bottom form-config drawer is open. Independent of the
-   * selection — both the drawer and a selected control can be active at once.
+   * Active tab of the left sidebar (`palette` / `outline` / `data`). In narrow
+   * (`drawer`) layout, any non-`palette` tab opens as a left-edge overlay.
    */
-  formConfigOpen: boolean;
+  sidebarTab: SidebarTabId;
   /**
-   * Active tab of the bottom form-config drawer.
+   * Active top-level tab of the right properties panel (`control` / `form`).
+   * Invariant: `"control"` is only active while `selectedId !== null`.
    */
-  formConfigTab: FormConfigTabId;
+  propertiesTab: PropertiesTabId;
+  /**
+   * Whether the narrow-layout (`drawer`) right properties overlay is open.
+   * Ignored in docked mode, where the right panel stays permanently visible.
+   */
+  propertiesDrawerOpen: boolean;
   viewMode: EditorViewMode;
   device: EditorDeviceMode;
 
@@ -142,14 +155,20 @@ export interface FormEditorStoreState {
   patchSchema: (patch: FormSchemaPatch) => void;
   selectNode: (id: string | null) => void;
   /**
-   * Open or collapse the bottom form-config drawer (no-op outside edit mode).
+   * Switch the left sidebar tab (no-op outside edit mode).
    */
-  setFormConfigOpen: (open: boolean) => void;
+  setSidebarTab: (tab: SidebarTabId) => void;
   /**
-   * Switch the form-config drawer to a tab, opening it if collapsed (no-op
-   * outside edit mode).
+   * Switch the right properties panel's top-level tab and open the narrow
+   * right overlay (no-op outside edit mode, or when `"control"` is requested
+   * with no node selected).
    */
-  setFormConfigTab: (tab: FormConfigTabId) => void;
+  setPropertiesTab: (tab: PropertiesTabId) => void;
+  /**
+   * Open or collapse the narrow-layout right properties overlay (no-op outside
+   * edit mode).
+   */
+  setPropertiesDrawerOpen: (open: boolean) => void;
   setViewMode: (mode: EditorViewMode) => void;
   setDevice: (device: EditorDeviceMode) => void;
   /**
@@ -263,7 +282,7 @@ export interface FormEditorStoreState {
 
 export type FormEditorStoreApi = UnboundStore<FormEditorStoreState>;
 
-export function isPaletteVisible(state: Pick<FormEditorStoreState, "viewMode">): boolean {
+export function isSidebarVisible(state: Pick<FormEditorStoreState, "viewMode">): boolean {
   return state.viewMode === "edit";
 }
 
@@ -292,6 +311,24 @@ function buildField(definition: FieldDefinition, layer: PresentationLayer, scope
   }
 
   return base as Block;
+}
+
+const CLEARED_SELECTION = {
+  selectedId: null,
+  propertiesTab: "form",
+  propertiesDrawerOpen: false
+} as const;
+
+function selectPatch(nodeId: string): {
+  selectedId: string;
+  propertiesTab: "control";
+  propertiesDrawerOpen: true;
+} {
+  return {
+    selectedId: nodeId,
+    propertiesTab: "control",
+    propertiesDrawerOpen: true
+  };
 }
 
 const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: FormSchema }> = createComponentStore<
@@ -355,8 +392,9 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
     return {
       schema: createEmptySchema(),
       selectedId: null,
-      formConfigOpen: false,
-      formConfigTab: "outline",
+      sidebarTab: "palette",
+      propertiesTab: "form",
+      propertiesDrawerOpen: false,
       viewMode: "edit",
       device: "pc",
       past: [],
@@ -368,7 +406,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         coalesceKey = null;
         set({
           schema,
-          selectedId: null,
+          ...CLEARED_SELECTION,
           past: [],
           future: []
         });
@@ -378,7 +416,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: createEmptySchema(),
-          selectedId: null
+          ...CLEARED_SELECTION
         });
       },
 
@@ -451,37 +489,49 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
       selectNode: id => {
         coalesceKey = null;
 
-        if (get().viewMode !== "edit") {
-          set({ selectedId: null });
+        if (get().viewMode !== "edit" || id === null) {
+          set(CLEARED_SELECTION);
           return;
         }
 
-        if (id !== null) {
-          const { device, schema } = get();
-          const node = findNode(currentLayer(schema, device), id);
+        const { device, schema } = get();
+        const node = findNode(currentLayer(schema, device), id);
 
-          // A stale id is not selectable; clear the selection (no form-level
-          // fallback — that lives in the bottom drawer now).
-          if (!node) {
-            set({ selectedId: null });
-            return;
-          }
+        // A stale id is not selectable; clear the selection and revert the
+        // right panel to form-level settings.
+        if (!node) {
+          set(CLEARED_SELECTION);
+          return;
         }
 
-        set({ selectedId: id });
+        set(selectPatch(id));
       },
 
-      setFormConfigOpen: open => set({
-        formConfigOpen: open && get().viewMode === "edit"
+      setSidebarTab: tab => {
+        if (get().viewMode !== "edit") {
+          return;
+        }
+
+        set({ sidebarTab: tab });
+      },
+
+      setPropertiesTab: tab => {
+        const { selectedId, viewMode } = get();
+
+        if (viewMode !== "edit") {
+          return;
+        }
+
+        if (tab === "control" && selectedId === null) {
+          return;
+        }
+
+        set({ propertiesTab: tab, propertiesDrawerOpen: true });
+      },
+
+      setPropertiesDrawerOpen: open => set({
+        propertiesDrawerOpen: open && get().viewMode === "edit"
       }),
-
-      setFormConfigTab: tab => {
-        if (get().viewMode !== "edit") {
-          return;
-        }
-
-        set({ formConfigOpen: true, formConfigTab: tab });
-      },
 
       setViewMode: mode => {
         // A view-mode round trip ends any running property-edit coalescing:
@@ -489,13 +539,13 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         coalesceKey = null;
 
         if (mode !== "edit") {
-          // Selection survives the round trip — peeking at the preview or the
-          // JSON must not cost the designer their working selection (non-edit
-          // surfaces simply don't render it). The config drawer is edit-only
-          // chrome, so that one does close.
+          // Selection and panel tabs survive the round trip — peeking at the
+          // preview or the JSON must not cost the designer their working state
+          // (non-edit surfaces simply hide both side panels). The narrow-layout
+          // right overlay is edit-only chrome, so it closes on exit.
           set({
             viewMode: mode,
-            formConfigOpen: false
+            propertiesDrawerOpen: false
           });
           return;
         }
@@ -512,6 +562,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const keep = selectedId !== null && findNode(layer, selectedId) ? selectedId : null;
 
         coalesceKey = null;
+
+        if (keep === null) {
+          set({ device, ...CLEARED_SELECTION });
+          return;
+        }
+
         set({ device, selectedId: keep });
       },
 
@@ -522,7 +578,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({
           schema: withPresentation(schema, "mobile", layer),
           device: "mobile",
-          selectedId: null
+          ...CLEARED_SELECTION
         });
       },
 
@@ -544,7 +600,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: withPresentation(schema, device, next),
-          selectedId: block.id
+          ...selectPatch(block.id)
         });
       },
 
@@ -597,7 +653,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // stays selected (and the canvas scrolls it into view). The node still
         // resolves — it was moved, not removed — so the id is always live here.
         checkpoint();
-        set({ schema: nextSchema, selectedId: nodeId });
+        set({ schema: nextSchema, ...selectPatch(nodeId) });
       },
 
       removeNode: nodeId => {
@@ -641,7 +697,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: nextSchema,
-          selectedId: selectionSurvives ? selectedId : null
+          ...selectionSurvives ? { selectedId } : CLEARED_SELECTION
         });
       },
 
@@ -675,7 +731,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: nextSchema,
-          selectedId: selectionSurvives ? selectedId : null
+          ...selectionSurvives ? { selectedId } : CLEARED_SELECTION
         });
       },
 
@@ -702,7 +758,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: withPresentation(schema, device, next),
-          selectedId: clone.id
+          ...selectPatch(clone.id)
         });
       },
 
@@ -974,7 +1030,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           // never made on (an undesigned one shows its seed state, so the redo
           // looks like it did nothing).
           future: [...future, { schema, device: previous.device }],
-          selectedId: keepSelection ? selectedId : null
+          ...keepSelection ? { selectedId } : CLEARED_SELECTION
         });
       },
 
@@ -1001,7 +1057,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           device: next.device,
           past: [...past, { schema, device: next.device }],
           future: future.slice(0, -1),
-          selectedId: keepSelection ? selectedId : null
+          ...keepSelection ? { selectedId } : CLEARED_SELECTION
         });
       },
 

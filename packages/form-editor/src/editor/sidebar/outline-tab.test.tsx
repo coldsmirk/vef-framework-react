@@ -6,7 +6,6 @@ import type { FormSchema } from "../../types";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { describe, expect, it } from "vitest";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { RegistryProvider } from "../../store/engine-provider";

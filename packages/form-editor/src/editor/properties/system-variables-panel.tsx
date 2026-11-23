@@ -64,7 +64,7 @@ const pathCss = css({
 });
 
 const sampleCss = css({
-  width: 200,
+  width: 136,
   flexShrink: 0
 });
 

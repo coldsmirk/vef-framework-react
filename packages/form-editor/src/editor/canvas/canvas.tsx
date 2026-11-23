@@ -272,9 +272,9 @@ export function Canvas(): ReactElement {
 
   useScrollSelectionIntoView(canvasRef);
 
-  // Clicking the blank surface only clears the current selection (closing the
-  // control-property panel with it). Form-level config lives in the bottom
-  // drawer now, so a blank click no longer toggles any panel.
+  // Clicking the blank surface clears the current selection, reverting the
+  // right properties panel to form-level settings (and dismissing its narrow
+  // overlay).
   const handleSurfaceClick = (): void => {
     storeApi.getState().selectNode(null);
   };

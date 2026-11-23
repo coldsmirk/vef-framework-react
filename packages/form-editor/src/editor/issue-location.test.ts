@@ -145,20 +145,20 @@ describe("locateIssue", () => {
   });
 
   describe("when the path names form-level configuration", () => {
-    it("opens the data-source tab", () => {
-      expect(locateIssue("dataSources[0].request", makeSchema(), "pc")).toEqual({ kind: "tab", tab: "dataSources" });
+    it("targets the sidebar data tab for a data source", () => {
+      expect(locateIssue("dataSources[0].request", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
     });
 
-    it("opens the variables tab", () => {
-      expect(locateIssue("variables[1].name", makeSchema(), "pc")).toEqual({ kind: "tab", tab: "variables" });
+    it("targets the sidebar data tab for a variable", () => {
+      expect(locateIssue("variables[1].name", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
     });
 
-    it("opens the linkage tab for a form event", () => {
-      expect(locateIssue("schema.linkage.rules[0]", makeSchema(), "pc")).toEqual({ kind: "tab", tab: "linkage" });
+    it("targets the properties form tab for a form event", () => {
+      expect(locateIssue("schema.linkage.rules[0]", makeSchema(), "pc")).toEqual({ kind: "properties", tab: "form" });
     });
 
-    it("opens the linkage tab for a dependency cycle", () => {
-      expect(locateIssue("linkage", makeSchema(), "pc")).toEqual({ kind: "tab", tab: "linkage" });
+    it("targets the properties form tab for a dependency cycle", () => {
+      expect(locateIssue("linkage", makeSchema(), "pc")).toEqual({ kind: "properties", tab: "form" });
     });
   });
 

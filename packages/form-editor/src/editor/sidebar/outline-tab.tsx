@@ -114,7 +114,7 @@ export function OutlineTab(): ReactElement {
               </span>
 
               <span css={emptyTitleCss}>还没有任何字段</span>
-              <span css={emptyHintCss}>从左侧组件库拖入组件，字段结构会显示在这里</span>
+              <span css={emptyHintCss}>从左侧「组件」页拖入组件，字段结构会显示在这里</span>
             </div>
           )
         // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
@@ -123,8 +123,8 @@ export function OutlineTab(): ReactElement {
   );
 }
 
-// Memoized by block reference (mirroring the canvas's EditorBlock): with the
-// drawer open during property keystrokes, only the edited block's outline row
+// Memoized by block reference (mirroring the canvas's EditorBlock): while the
+// outline tab is open during property keystrokes, only the edited block's row
 // re-renders instead of the whole tree.
 const BlockNode = memo(function BlockNode({ block, depth }: { block: Block; depth: number }): ReactElement {
   const registry = useFieldRegistry();

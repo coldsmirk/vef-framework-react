@@ -28,8 +28,8 @@ const EVALUATION_CONTEXT: EvaluationContext = {
   }
 };
 
-// The form's system variables: listed in the 变量 tab (with preview samples)
-// and offered as a "系统变量" group by the visual condition builder.
+// The form's system variables: listed in the sidebar's 数据 tab (with preview
+// samples) and offered as a "系统变量" group by the visual condition builder.
 const CONTEXT_SOURCES: LinkageContextSource[] = [
   { key: "$applicant.name", label: "发起人姓名" },
   { key: "$applicant.departmentId", label: "发起人部门 ID" },

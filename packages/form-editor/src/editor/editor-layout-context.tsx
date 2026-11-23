@@ -2,30 +2,37 @@ import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { createContext, use, useEffect, useRef, useState } from "react";
 
+import { PROPERTIES_PANEL_WIDTH, SIDEBAR_DATA_WIDTH } from "./styles";
+
 /**
  * Layout mode the editor settles into, driven by the editor root's measured
  * width (not the viewport — the editor can be embedded inside a host shell
  * that already eats horizontal space).
  *
  * - `docked`: both side panels sit beside the canvas at their full width
- * (palette 296, properties 400), the toolbar shows every action
- * - `drawer`: on a narrow host the properties panel detaches into a full-height
- * overlay and the palette collapses to an icon rail, so the canvas keeps its
- * width instead of being squeezed
+ * (sidebar 296 — widening to 400 on the `数据` tab — and properties 400),
+ * the toolbar shows every action
+ * - `drawer`: on a narrow host the sidebar collapses to an icon rail (with
+ * `大纲` / `数据` opening as a left-edge overlay) and the properties panel
+ * detaches into a right-edge overlay, so the canvas keeps its width instead
+ * of being squeezed
  */
 export type EditorLayoutMode = "docked" | "drawer";
 
 const EditorLayoutContext = createContext<EditorLayoutMode>("docked");
 EditorLayoutContext.displayName = "EditorLayoutContext";
 
+const MIN_CANVAS_WIDTH = 520;
+
 /**
  * Width threshold (in CSS pixels of the editor *root*, not the viewport) at or
- * above which the docked layout is used: the 296px palette + 400px properties
- * panel leave a usable (≥520px) canvas, i.e. `296 + 400 + 520 ≈ 1220`. Below it
- * the canvas would lose too much room, so the editor detaches the properties
- * panel into a drawer overlay and rails the palette.
+ * above which the docked layout is used: even at the widest docked sidebar
+ * (`数据`, 400px) plus the 400px properties panel, the canvas still keeps a
+ * usable (≥520px) surface, i.e. `400 + 400 + 520 = 1320`. Below it the canvas
+ * would lose too much room, so the editor rails the sidebar and detaches both
+ * overlays.
  */
-const DRAWER_MIN = 1220;
+export const DRAWER_MIN = SIDEBAR_DATA_WIDTH + PROPERTIES_PANEL_WIDTH + MIN_CANVAS_WIDTH;
 
 export function resolveEditorLayoutMode(width: number): EditorLayoutMode {
   // A zero width is the pre-measure state; assume the roomy docked layout until
@@ -84,7 +91,7 @@ export interface EditorLayoutMeasure {
  * The ResizeObserver callback resolves the mode itself and commits state only
  * when the mode **crosses a threshold** (compared against a ref). Tracking the
  * raw width in state instead would re-render the whole editor shell once per
- * pixel during a host splitter drag; the mode changes at exactly two widths,
+ * pixel during a host splitter drag; the mode changes at exactly one boundary,
  * so this observes every resize but renders at most on a band change.
  */
 export function useEditorLayoutMeasure(): EditorLayoutMeasure {

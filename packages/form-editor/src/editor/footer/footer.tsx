@@ -1,7 +1,6 @@
 import type { ReactElement } from "react";
 
 import type { SchemaIssue } from "../../engine/validation";
-import type { FormConfigTabId } from "../../store/form-store";
 
 import { css } from "@emotion/react";
 import { globalCssVars, Popover } from "@vef-framework-react/components";
@@ -96,75 +95,55 @@ const countCss = css({
   color: globalCssVars.colorText
 });
 
-const spacerCss = css({ flex: 1 });
-
-const toggleCss = css([
-  pillCss,
-  {
-    gap: 6,
-    fontWeight: 500
-  }
-]);
-
-const activeFillCss = css({
-  // A neutral fill marks an active footer control — a count pill whose tab the
-  // open drawer is showing, and the drawer toggle itself — keeping the saturated
-  // accent for the publish CTA only (matching the toolbar's demoted toggle).
-  background: globalCssVars.colorFillSecondary,
-  color: globalCssVars.colorText,
-
-  "&:hover": {
-    background: globalCssVars.colorFillSecondary,
-    color: globalCssVars.colorText
-  }
-});
-
 interface CountPill {
+  id: string;
   label: string;
   count: number;
-  tab: FormConfigTabId;
+  onClick: () => void;
 }
 
 /**
- * Bottom status bar. Count pills double as shortcuts into the form-config
- * drawer's matching tab; the right-hand toggle expands / collapses the drawer.
- * Rendered only in edit mode by the shell, so it mirrors the design surface.
+ * Bottom status bar. Count pills jump straight to the side-panel tab owning
+ * each inventory (`字段` → left `大纲`, `变量` / `数据源` → left `数据`,
+ * `联动` → right `表单`); the diagnostics chip opens the full issue list.
+ * Rendered only in edit mode by the stage, so it mirrors the design surface.
  */
 export function EditorFooter(): ReactElement {
-  // Primitive selectors so a keystroke that touches neither declarations nor
-  // rules re-renders nothing here.
+  // Primitive / WeakMap-memoized selectors so a keystroke that touches neither
+  // declarations nor rules re-renders nothing here.
   const fieldsCount = useFormEditorStore(selectFieldCount);
   const variablesCount = useFormEditorStore(s => s.schema.variables?.length ?? 0);
   const dataSourcesCount = useFormEditorStore(s => s.schema.dataSources?.length ?? 0);
   const linkageCount = useFormEditorStore(selectLinkageRuleCount);
-  const drawerOpen = useFormEditorStore(s => s.formConfigOpen);
-  // Tracks which tab the open drawer shows, so the matching count pill can read
-  // as active (a discrete change — re-renders the footer only on tab switches).
-  const activeTab = useFormEditorStore(s => s.formConfigTab);
   const storeApi = useFormEditorStoreApi();
 
   const pills: CountPill[] = [
     {
+      id: "fields",
       label: "字段",
       count: fieldsCount,
-      tab: "outline"
+      onClick: () => storeApi.getState().setSidebarTab("outline")
     },
     {
+      id: "variables",
       label: "变量",
       count: variablesCount,
-      tab: "variables"
+      onClick: () => storeApi.getState().setSidebarTab("data")
     },
     {
+      id: "dataSources",
       label: "数据源",
       count: dataSourcesCount,
-      tab: "dataSources"
+      onClick: () => storeApi.getState().setSidebarTab("data")
     },
     {
       // Field-level rules plus form-level events — the aggregate the designer
-      // actually authored; the drawer tab edits the form-level share.
+      // actually authored; the right `表单` tab lists field linkages and edits
+      // form-level events.
+      id: "linkage",
       label: "联动",
       count: linkageCount,
-      tab: "linkage"
+      onClick: () => storeApi.getState().setPropertiesTab("form")
     }
   ];
 
@@ -172,10 +151,10 @@ export function EditorFooter(): ReactElement {
     <footer css={footerCss}>
       {pills.map(pill => (
         <button
-          key={pill.tab}
-          css={[pillCss, drawerOpen && activeTab === pill.tab && activeFillCss]}
+          key={pill.id}
+          css={pillCss}
           type="button"
-          onClick={() => storeApi.getState().setFormConfigTab(pill.tab)}
+          onClick={pill.onClick}
         >
           <span css={countCss}>{pill.count}</span>
           <span>{pill.label}</span>
@@ -183,16 +162,6 @@ export function EditorFooter(): ReactElement {
       ))}
 
       <IssuesChip />
-      <span css={spacerCss} />
-
-      <button
-        css={[toggleCss, drawerOpen && activeFillCss]}
-        type="button"
-        onClick={() => storeApi.getState().setFormConfigOpen(!drawerOpen)}
-      >
-        <EditorIcon name={drawerOpen ? "chevron-down" : "chevron-up"} />
-        <span>表单配置</span>
-      </button>
     </footer>
   );
 }
@@ -200,7 +169,7 @@ export function EditorFooter(): ReactElement {
 /**
  * The schema's diagnostics — structural and the host's — behind one chip. It
  * opens the full list, where each locatable issue takes the designer to the
- * node or form-config tab it is about. Renders nothing while the schema is
+ * node or side-panel tab it is about. Renders nothing while the schema is
  * clean, so a clean form keeps a quiet footer.
  */
 function IssuesChip(): ReactElement | null {

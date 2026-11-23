@@ -141,17 +141,18 @@ export { Label, type LabelProps } from "./render/parts/label";
 export { DeviceProvider, RegistryProvider, useDeviceRegistries, useFieldRegistry } from "./store/engine-provider";
 export {
   FormEditorStoreProvider,
-  isPaletteVisible,
+  isSidebarVisible,
   useCurrentLayer,
   useFormEditorStore,
   useFormEditorStoreApi,
   type EditCoalesceOptions,
   type EditorDeviceMode,
   type EditorViewMode,
-  type FormConfigTabId,
   type FormEditorStoreApi,
   type FormEditorStoreState,
   type FormSchemaPatch,
-  type HistoryEntry
+  type HistoryEntry,
+  type PropertiesTabId,
+  type SidebarTabId
 } from "./store/form-store";
 export * from "./types";

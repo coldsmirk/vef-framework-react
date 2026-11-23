@@ -128,7 +128,7 @@ function RefSource({
   onChange: (next: FieldOptionSource) => void;
 }): ReactElement {
   if (dataSources.length === 0) {
-    return <span css={emptyCss}>表单暂无数据源，请先在「表单配置 · 数据源」中添加</span>;
+    return <span css={emptyCss}>表单暂无数据源，请先在左侧「数据」页中添加</span>;
   }
 
   return (

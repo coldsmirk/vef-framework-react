@@ -57,9 +57,8 @@ export interface PropertiesEmptyProps {
 }
 
 /**
- * Empty / error placeholder for the properties panel body. Used when no
- * field is selected, the selected field is missing, or the field's type
- * is not in the registry.
+ * Empty / error placeholder for the properties panel body. Used when a tab has
+ * no registered entries or a selected field's type is not in the registry.
  */
 export function PropertiesEmpty({
   hint,

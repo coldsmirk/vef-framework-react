@@ -244,7 +244,7 @@ describe("EditorFooter", () => {
       expect(storeApi.getState().selectedId).toBe("Field_hidden");
     });
 
-    it("opens the data-source tab for a data-source issue", async () => {
+    it("opens the sidebar data tab for a data-source issue", async () => {
       const user = userEvent.setup();
       const storeApi = setupFooter({
         ...makeSchema(),
@@ -261,8 +261,36 @@ describe("EditorFooter", () => {
       await user.click(screen.getByTestId("footer-issues"));
       await user.click(await screen.findByRole("button", { name: /请求尚未配置完整/ }));
 
-      expect(storeApi.getState().formConfigOpen).toBe(true);
-      expect(storeApi.getState().formConfigTab).toBe("dataSources");
+      expect(storeApi.getState().sidebarTab).toBe("data");
+    });
+
+    it("opens the right form tab for a form-linkage issue", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter({
+        ...makeSchema(),
+        linkage: {
+          rules: [
+            {
+              id: "Rule_form",
+              trigger: { kind: "load" },
+              actions: [
+                {
+                  id: "Action_var",
+                  type: "set_variable",
+                  variable: "",
+                  value: { kind: "literal", value: "1" }
+                }
+              ]
+            }
+          ]
+        }
+      });
+
+      await user.click(screen.getByTestId("footer-issues"));
+      await user.click(await screen.findByRole("button", { name: /表单联动/ }));
+
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(true);
     });
   });
 
@@ -295,24 +323,51 @@ describe("EditorFooter", () => {
     });
   });
 
-  it("opens the drawer to a tab when a count pill is clicked", async () => {
-    const user = userEvent.setup();
-    const storeApi = setupFooter();
+  describe("count-pill navigation", () => {
+    it("jumps to the left outline tab when 字段 is clicked", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter();
 
-    await user.click(screen.getByRole("button", { name: /变量/ }));
+      await user.click(screen.getByRole("button", { name: /字段/ }));
 
-    expect(storeApi.getState().formConfigOpen).toBe(true);
-    expect(storeApi.getState().formConfigTab).toBe("variables");
-  });
+      expect(storeApi.getState().sidebarTab).toBe("outline");
+    });
 
-  it("toggles the drawer with the form-config switch", async () => {
-    const user = userEvent.setup();
-    const storeApi = setupFooter();
+    it("jumps to the left data tab when 变量 is clicked", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter();
 
-    await user.click(screen.getByRole("button", { name: /表单配置/ }));
-    expect(storeApi.getState().formConfigOpen).toBe(true);
+      await user.click(screen.getByRole("button", { name: /变量/ }));
 
-    await user.click(screen.getByRole("button", { name: /表单配置/ }));
-    expect(storeApi.getState().formConfigOpen).toBe(false);
+      expect(storeApi.getState().sidebarTab).toBe("data");
+    });
+
+    it("jumps to the left data tab when 数据源 is clicked", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter();
+
+      await user.click(screen.getByRole("button", { name: /数据源/ }));
+
+      expect(storeApi.getState().sidebarTab).toBe("data");
+    });
+
+    it("jumps to the right form tab when 联动 is clicked", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupFooter();
+
+      storeApi.getState().selectNode("Field_1");
+      expect(storeApi.getState().propertiesTab).toBe("control");
+
+      await user.click(screen.getByRole("button", { name: /联动/ }));
+
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(true);
+    });
+
+    it("renders no form-config drawer toggle", () => {
+      setupFooter();
+
+      expect(screen.queryByRole("button", { name: /表单配置/ })).not.toBeInTheDocument();
+    });
   });
 });

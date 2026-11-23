@@ -35,7 +35,7 @@ interface HarnessProps {
 }
 
 /**
- * Mirrors the form-config drawer wiring: the form-scope linkage comes from the
+ * Mirrors the right `表单` tab wiring: the form-scope linkage comes from the
  * store schema and commits patch it back.
  */
 function Harness({ onReady }: HarnessProps): ReactElement {

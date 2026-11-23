@@ -7,7 +7,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { FormBasicsTab } from "./form-basics-tab";
+import { FormBasicsSection } from "./form-basics-section";
 
 function makeSchema(): FormSchema {
   return {
@@ -33,10 +33,10 @@ function makeLayer(schema: FormSchema): PresentationLayer {
 }
 
 /**
- * Mirrors the drawer's wiring: committed patches flow back into the schema
- * prop, so the tab renders against the post-patch state like in the editor.
+ * Mirrors the panel's wiring: committed patches flow back into the schema
+ * prop, so the section renders against the post-patch state like in the editor.
  */
-function ControlledTab({ onPatch }: { onPatch: (patch: FormSchemaPatch) => void }): ReactElement {
+function ControlledSection({ onPatch }: { onPatch: (patch: FormSchemaPatch) => void }): ReactElement {
   const [schema, setSchema] = useState(makeSchema);
 
   const handlePatch = (patch: FormSchemaPatch): void => {
@@ -49,27 +49,28 @@ function ControlledTab({ onPatch }: { onPatch: (patch: FormSchemaPatch) => void 
     });
   };
 
-  return <FormBasicsTab fieldCount={1} layer={makeLayer(schema)} schema={schema} onPatch={handlePatch} />;
+  return <FormBasicsSection layer={makeLayer(schema)} schema={schema} onPatch={handlePatch} />;
 }
 
-function setupTab(onPatch = vi.fn()): ReturnType<typeof vi.fn> {
-  render(<ControlledTab onPatch={onPatch} />);
+function setupSection(onPatch = vi.fn()): ReturnType<typeof vi.fn> {
+  render(<ControlledSection onPatch={onPatch} />);
 
   return onPatch;
 }
 
-describe("FormBasicsTab", () => {
-  it("renders the schema id and the layout stats", () => {
-    setupTab();
+describe("FormBasicsSection", () => {
+  it("renders the schema id and layout gap without redundant stats", () => {
+    setupSection();
 
     expect(screen.getByLabelText("表单 ID")).toHaveValue("Form_1");
-    expect(screen.getByText("字段数量")).toBeInTheDocument();
+    expect(screen.getByLabelText("元素间距")).toBeInTheDocument();
+    expect(screen.queryByText("字段数量")).not.toBeInTheDocument();
   });
 
   describe("form id", () => {
     it("commits a valid id edit", async () => {
       const user = userEvent.setup();
-      const onPatch = setupTab();
+      const onPatch = setupSection();
 
       await user.type(screen.getByLabelText("表单 ID"), "x");
 
@@ -78,7 +79,7 @@ describe("FormBasicsTab", () => {
 
     it("refuses to commit a cleared id and shows inline feedback", async () => {
       const user = userEvent.setup();
-      const onPatch = setupTab();
+      const onPatch = setupSection();
 
       await user.clear(screen.getByLabelText("表单 ID"));
 
@@ -90,7 +91,7 @@ describe("FormBasicsTab", () => {
 
     it("treats a whitespace-only id as empty", async () => {
       const user = userEvent.setup();
-      const onPatch = setupTab();
+      const onPatch = setupSection();
       const input = screen.getByLabelText("表单 ID");
 
       await user.clear(input);
@@ -102,7 +103,7 @@ describe("FormBasicsTab", () => {
 
     it("recovers and commits once the id becomes valid again", async () => {
       const user = userEvent.setup();
-      const onPatch = setupTab();
+      const onPatch = setupSection();
       const input = screen.getByLabelText("表单 ID");
 
       await user.clear(input);
@@ -116,7 +117,7 @@ describe("FormBasicsTab", () => {
   describe("layout gap", () => {
     it("patches the selected gap preset", async () => {
       const user = userEvent.setup();
-      const onPatch = setupTab();
+      const onPatch = setupSection();
 
       await user.click(screen.getByLabelText("元素间距"));
       await user.click(await screen.findByText("大"));

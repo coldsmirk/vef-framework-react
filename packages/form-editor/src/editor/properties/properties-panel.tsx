@@ -1,24 +1,89 @@
 import type { DynamicIconName } from "@vef-framework-react/components";
 import type { ReactElement } from "react";
 
+import type { PropertiesTabId } from "../../store/form-store";
 import type { ContainerNode, FieldDefinition, FormField, FormSchema, PropertiesDescriptor, PropertyEntry, PropertyTabId } from "../../types";
 
 import { css } from "@emotion/react";
-import { globalCssVars, ScrollArea } from "@vef-framework-react/components";
+import { Button, globalCssVars, ScrollArea } from "@vef-framework-react/components";
 import { Suspense, useMemo, useState } from "react";
 
 import { findNodeWithParentContainer, isContainerNode, isLeafField } from "../../engine/schema/walk";
+import { EditorIcon } from "../../icons";
 import { useFieldRegistry } from "../../store/engine-provider";
 import { useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useEditorLayout } from "../editor-layout-context";
-import { panelBodyCss, propertiesDockCss } from "../styles";
+import { panelBodyCss, propertiesDockCss, propertiesDrawerTriggerCss } from "../styles";
 import { BlockLayoutSection } from "./block-layout-section";
 import { ContainerProperties } from "./container-properties";
 import { BUILT_IN_PROPERTY_ENTRIES } from "./entries/built-ins";
+import { FormPropertiesTab } from "./form-properties-tab";
 import { PropertiesEmpty } from "./properties-empty";
 import { PropertiesHeader } from "./properties-header";
 import { buildPropertiesDescriptor, groupsForTab, PROPERTY_TAB_ORDER } from "./properties-provider";
 import { PropertiesTabs } from "./properties-tabs";
+
+const topBarCss = css({
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  height: 44,
+  padding: "0 16px",
+  borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`
+});
+
+// Compact, quiet segmented switch for the top-level `控件` / `表单` scope.
+// Visually lighter than the underlined `PropertiesTabs` below so stacked
+// controls never read as competing tab rows.
+const scopeTrackCss = css({
+  flex: 1,
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 2,
+  padding: 2,
+  borderRadius: 8,
+  background: globalCssVars.colorFillTertiary
+});
+
+const scopeTabCss = css({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: 26,
+  padding: "0 10px",
+  border: "none",
+  borderRadius: 6,
+  background: "transparent",
+  color: globalCssVars.colorTextSecondary,
+  fontSize: globalCssVars.fontSizeSm,
+  fontWeight: 500,
+  lineHeight: 1,
+  cursor: "pointer",
+  transition: `background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
+
+  "&:hover:not(:disabled)": {
+    color: globalCssVars.colorText
+  },
+
+  "&:disabled": {
+    color: globalCssVars.colorTextQuaternary,
+    cursor: "not-allowed"
+  }
+});
+
+const scopeTabActiveCss = css({
+  background: globalCssVars.colorBgContainer,
+  color: globalCssVars.colorText,
+  boxShadow: globalCssVars.shadowXxs
+});
+
+const collapseButtonCss = css({
+  width: 28,
+  height: 28,
+  padding: 0,
+  flexShrink: 0
+});
 
 const bodyInnerCss = css({
   display: "flex",
@@ -107,30 +172,119 @@ const EMPTY_TAB_HINTS: Partial<Record<PropertyTabId, TabEmptyHint>> = {
 
 /**
  * Docked properties workbench on the right edge of the workspace — the mirror of
- * the component palette. It is permanent in edit mode and hidden during
- * preview / json mode; a selected field or container shows its property editor,
- * an empty selection shows a "pick a control" hint.
+ * the tabbed left sidebar. Visible in edit mode and hidden during preview / JSON
+ * mode; topped by a compact `控件` / `表单` switcher driven by selection:
  *
- * Layout when a field is selected:
- * - header: type icon + field label + field id + deselect button
- * - tabs: 属性 / 校验 / 联动 with count badges, plus a 布局 tab shown for any
- * selected field (its sizing control adapts to the field's parent context)
- * - body: scrollable, renders groups assigned to the active tab
+ * - selecting a node activates `控件` (and opens the overlay in narrow hosts)
+ * - clearing the selection reverts to `表单` (no dead empty state)
+ * - the user may peek at `表单` while a node is selected, and selecting any
+ * node switches back to `控件`
+ * - in narrow (`drawer`) layout, a right-edge trigger keeps `表单` reachable
+ * even when nothing is selected
  *
- * Empty / error states:
- * - nothing selected → "未选择控件"
- * - selected field's type is unknown → "未知字段类型"
+ * Only the active tab's body is mounted, so form-level linkage walks never run
+ * while editing a control, and node walks never run while editing form config.
  */
 export function PropertiesPanel(): ReactElement {
   const isEditing = useFormEditorStore(s => s.viewMode === "edit");
+  const hasSelection = useFormEditorStore(s => s.selectedId !== null);
+  const propertiesTab = useFormEditorStore(s => s.propertiesTab);
+  const drawerOpen = useFormEditorStore(s => s.propertiesDrawerOpen);
+  const storeApi = useFormEditorStoreApi();
+  const layout = useEditorLayout();
+
+  // Retained here so switching `控件` → `表单` → `控件` keeps the field sub-tab.
+  const [fieldTab, setFieldTab] = useState<PropertyTabId>("props");
+
+  const isDrawer = layout === "drawer";
+  const panelVisible = isEditing && (!isDrawer || drawerOpen);
+  const showDrawerTrigger = isEditing && isDrawer && !drawerOpen;
+  const resolvedPanelTab: PropertiesTabId = hasSelection ? propertiesTab : "form";
+
+  return (
+    <>
+      <aside
+        aria-label="属性"
+        css={propertiesDockCss}
+        data-layout={layout}
+        data-tab={resolvedPanelTab}
+        hidden={!panelVisible}
+      >
+        <div css={topBarCss}>
+          <div aria-label="属性范围" css={scopeTrackCss} role="tablist">
+            <button
+              aria-selected={resolvedPanelTab === "control"}
+              css={[scopeTabCss, resolvedPanelTab === "control" && scopeTabActiveCss]}
+              disabled={!hasSelection}
+              role="tab"
+              title={hasSelection ? undefined : "请先在画布中选择控件"}
+              type="button"
+              onClick={() => storeApi.getState().setPropertiesTab("control")}
+            >
+              控件
+            </button>
+
+            <button
+              aria-selected={resolvedPanelTab === "form"}
+              css={[scopeTabCss, resolvedPanelTab === "form" && scopeTabActiveCss]}
+              role="tab"
+              type="button"
+              onClick={() => storeApi.getState().setPropertiesTab("form")}
+            >
+              表单
+            </button>
+          </div>
+
+          {isDrawer
+            ? (
+                <Button
+                  aria-label="收起属性面板"
+                  css={collapseButtonCss}
+                  icon={<EditorIcon name="chevron-right" />}
+                  size="small"
+                  title="收起属性面板"
+                  type="text"
+                  onClick={() => storeApi.getState().setPropertiesDrawerOpen(false)}
+                />
+              )
+            : null}
+        </div>
+
+        {panelVisible
+          ? resolvedPanelTab === "control"
+            ? <ControlProperties activeTab={fieldTab} onTabChange={setFieldTab} />
+            : <FormPropertiesTab />
+          : null}
+      </aside>
+
+      {showDrawerTrigger
+        ? (
+            <button
+              aria-label={hasSelection ? "打开属性面板" : "打开表单属性"}
+              css={propertiesDrawerTriggerCss}
+              type="button"
+              onClick={() => storeApi.getState().setPropertiesTab(hasSelection ? propertiesTab : "form")}
+            >
+              <EditorIcon name="settings-2" />
+              <span>{hasSelection ? "属性" : "表单"}</span>
+            </button>
+          )
+        : null}
+    </>
+  );
+}
+
+interface ControlPropertiesProps {
+  activeTab: PropertyTabId;
+  onTabChange: (tab: PropertyTabId) => void;
+}
+
+function ControlProperties({ activeTab, onTabChange }: ControlPropertiesProps): ReactElement {
   const selectedId = useFormEditorStore(s => s.selectedId);
   const schema = useFormEditorStore(s => s.schema);
   const layer = useCurrentLayer();
   const registry = useFieldRegistry();
   const storeApi = useFormEditorStoreApi();
-  const layout = useEditorLayout();
-
-  const [activeTab, setActiveTab] = useState<PropertyTabId>("props");
 
   // Resolve the selected node and its owning container in a single tree walk —
   // both are read on every property keystroke.
@@ -164,22 +318,34 @@ export function PropertiesPanel(): ReactElement {
     () => showLayout ? PROPERTY_TAB_ORDER : PROPERTY_TAB_ORDER.filter(tab => tab !== "layout"),
     [showLayout]
   );
-  // Resolve away a stale selection (e.g. left on "布局", then a field outside any
-  // layout container is selected) so the body never renders a hidden tab.
+  // Resolve away a stale selection so the body never renders a hidden tab.
   const resolvedTab = tabs.includes(activeTab) ? activeTab : "props";
 
-  // The dock is permanent, so clearing the selection just reverts it to the
-  // empty hint (there is no panel to close); the canvas highlight clears with
-  // the selection.
   const deselect = (): void => {
     storeApi.getState().selectNode(null);
   };
 
-  const handleChange = (entry: PropertyEntry, value: unknown): void => {
-    if (!field) {
-      return;
-    }
+  if (container) {
+    return <ContainerProperties node={container} parent={located?.parent} onClose={deselect} />;
+  }
 
+  if (!field) {
+    return <FormPropertiesTab />;
+  }
+
+  if (!definition) {
+    return (
+      <ScrollArea css={panelBodyCss} scrollbars="vertical">
+        <PropertiesEmpty
+          hint={`字段类型 "${field.type}" 未在当前 registry 中注册`}
+          icon="circle-help"
+          title="未知字段类型"
+        />
+      </ScrollArea>
+    );
+  }
+
+  const handleChange = (entry: PropertyEntry, value: unknown): void => {
     // The data-binding key needs value-scope context (non-empty fallback +
     // per-scope uniqueness) that a field-level write lens cannot provide, so
     // route it to the dedicated store action.
@@ -197,72 +363,35 @@ export function PropertiesPanel(): ReactElement {
     );
   };
 
-  // Resolve the body with early-outs rather than a 4-level nested ternary:
-  // container → nothing selected → unknown field type → the field editor.
-  let content: ReactElement;
-
-  if (container) {
-    content = <ContainerProperties node={container} parent={located?.parent} onClose={deselect} />;
-  } else if (!field) {
-    content = (
-      <PropertiesEmpty
-        hint="在画布中点选一个控件，在这里编辑它的属性。"
-        icon="mouse-pointer-2"
-        title="未选择控件"
-      />
-    );
-  } else if (definition) {
-    content = (
-      <>
-        <PropertiesHeader
-          definition={definition}
-          field={field}
-          onClose={deselect}
-        />
-
-        <PropertiesTabs
-          activeTab={resolvedTab}
-          descriptor={descriptor}
-          field={field}
-          tabs={tabs}
-          onChange={setActiveTab}
-        />
-
-        <ScrollArea css={panelBodyCss} scrollbars="vertical">
-          <div css={bodyInnerCss}>
-            <TabContent
-              activeTab={resolvedTab}
-              descriptor={descriptor}
-              field={field}
-              parent={located?.parent}
-              schema={schema}
-              onChange={handleChange}
-            />
-          </div>
-        </ScrollArea>
-      </>
-    );
-  } else {
-    content = (
-      <ScrollArea css={panelBodyCss} scrollbars="vertical">
-        <PropertiesEmpty
-          hint={`字段类型 "${field.type}" 未在当前 registry 中注册`}
-          icon="circle-help"
-          title="未知字段类型"
-        />
-      </ScrollArea>
-    );
-  }
-
-  // In the drawer layout the panel is a floating overlay over the canvas's
-  // right edge; with nothing selected it stays away entirely so the narrow
-  // host keeps every pixel for the canvas (the empty hint earns no overlay).
-  const hidden = !isEditing || (layout === "drawer" && node === undefined);
-
   return (
-    <aside aria-label="属性" css={propertiesDockCss} data-layout={layout} hidden={hidden}>
-      {content}
-    </aside>
+    <>
+      <PropertiesHeader
+        definition={definition}
+        field={field}
+        onClose={deselect}
+      />
+
+      <PropertiesTabs
+        activeTab={resolvedTab}
+        descriptor={descriptor}
+        field={field}
+        tabs={tabs}
+        onChange={onTabChange}
+      />
+
+      <ScrollArea css={panelBodyCss} scrollbars="vertical">
+        <div css={bodyInnerCss}>
+          <TabContent
+            activeTab={resolvedTab}
+            descriptor={descriptor}
+            field={field}
+            parent={located?.parent}
+            schema={schema}
+            onChange={handleChange}
+          />
+        </div>
+      </ScrollArea>
+    </>
   );
 }
 

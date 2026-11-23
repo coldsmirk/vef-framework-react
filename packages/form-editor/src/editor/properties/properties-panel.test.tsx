@@ -5,16 +5,17 @@ import type { ReactElement } from "react";
 import type { FormFieldRegistry } from "../../engine/registry/form-field-registry";
 import type { FormEditorStoreApi } from "../../store/form-store";
 import type { EntryType, FormField, FormSchema } from "../../types";
+import type { EditorLayoutMode } from "../editor-layout-context";
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
 import { definePropertyEntry } from "../../types";
+import { EditorLayoutProvider } from "../editor-layout-context";
 import { PropertiesPanel } from "./properties-panel";
 
 // Replace the Radix-backed ScrollArea with a passthrough so its props (notably
@@ -55,6 +56,37 @@ function makeSchema(): FormSchema {
   };
 }
 
+function makeLinkageSchema(): FormSchema {
+  const schema = makeSchema();
+
+  schema.presentations.pc.children.push({
+    id: "Field_2",
+    type: "textfield",
+    key: "note",
+    label: "备注",
+    linkage: {
+      rules: [
+        {
+          id: "Rule_1",
+          trigger: {
+            kind: "condition",
+            condition: {
+              kind: "leaf",
+              id: "Cond_1",
+              sourceKey: "name",
+              operator: "eq",
+              value: "x"
+            }
+          },
+          actions: [{ id: "Action_1", type: "show" }]
+        }
+      ]
+    }
+  });
+
+  return schema;
+}
+
 interface PropertiesHarnessProps {
   onReady: (api: FormEditorStoreApi) => void;
   selectId?: string;
@@ -72,14 +104,6 @@ function PropertiesHarness({ onReady, selectId }: PropertiesHarnessProps): React
   }, [api, onReady, selectId]);
 
   return <PropertiesPanel />;
-}
-
-function getStoreApi(storeApi: FormEditorStoreApi | null): FormEditorStoreApi {
-  if (!storeApi) {
-    throw new Error("Form store API was not captured");
-  }
-
-  return storeApi;
 }
 
 function flexChildSchema(): FormSchema {
@@ -138,42 +162,141 @@ function tableColumnSchema(): FormSchema {
 function setupPropertiesPanel(
   selectId?: string,
   schema: FormSchema = makeSchema(),
-  registry: FormFieldRegistry = createDefaultRegistry()
+  registry: FormFieldRegistry = createDefaultRegistry(),
+  layout: EditorLayoutMode = "docked"
 ): FormEditorStoreApi {
   let storeApi: FormEditorStoreApi | null = null;
 
   render(
     <FormEditorStoreProvider initialState={{ schema }}>
       <RegistryProvider registries={{ pc: registry, mobile: createDefaultRegistry() }}>
-        <PropertiesHarness
-          selectId={selectId}
-          onReady={nextApi => {
-            storeApi = nextApi;
-          }}
-        />
+        <EditorLayoutProvider value={layout}>
+          <PropertiesHarness
+            selectId={selectId}
+            onReady={nextApi => {
+              storeApi = nextApi;
+            }}
+          />
+        </EditorLayoutProvider>
       </RegistryProvider>
     </FormEditorStoreProvider>
   );
 
-  return getStoreApi(storeApi);
+  if (!storeApi) {
+    throw new Error("Form store API was not captured");
+  }
+
+  return storeApi;
 }
 
 describe("PropertiesPanel", () => {
-  it("shows an empty hint when nothing is selected", () => {
-    setupPropertiesPanel();
+  describe("selection-driven tabs", () => {
+    it("shows the 表单 tab with 控件 disabled when nothing is selected", () => {
+      setupPropertiesPanel();
 
-    // The dock is permanent now: with no selection it shows a placeholder, not
-    // any control properties (form-level config lives in the bottom drawer).
-    expect(screen.getByText("未选择控件")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "取消选择" })).not.toBeInTheDocument();
-    expect(screen.queryByText("姓名")).not.toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "表单" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: "控件" })).toBeDisabled();
+      expect(screen.getByLabelText("表单 ID")).toHaveValue("Form_1");
+      expect(screen.getByLabelText("元素间距")).toBeInTheDocument();
+      expect(screen.queryByText("未选择控件")).not.toBeInTheDocument();
+      expect(screen.queryByText("字段数量")).not.toBeInTheDocument();
+    });
+
+    it("activates the 控件 tab when a field is selected", async () => {
+      setupPropertiesPanel(FIELD_ID);
+
+      expect(await screen.findByRole("button", { name: "取消选择" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "控件" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getAllByText("姓名").length).toBeGreaterThan(0);
+    });
+
+    it("reverts to the 表单 tab when the selection is cleared", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupPropertiesPanel(FIELD_ID);
+
+      await user.click(await screen.findByRole("button", { name: "取消选择" }));
+
+      expect(storeApi.getState().selectedId).toBeNull();
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(screen.getByRole("tab", { name: "表单" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: "控件" })).toBeDisabled();
+      expect(screen.getByLabelText("表单 ID")).toHaveValue("Form_1");
+    });
+
+    it("allows switching to 表单 while a node is selected and switches back to 控件 on reselect", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupPropertiesPanel(FIELD_ID);
+
+      await screen.findByRole("button", { name: "取消选择" });
+      await user.click(screen.getByRole("tab", { name: "表单" }));
+
+      expect(storeApi.getState().selectedId).toBe(FIELD_ID);
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(screen.getByLabelText("表单 ID")).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "控件" })).toBeEnabled();
+
+      // Re-selecting a node switches back to the 控件 tab automatically.
+      act(() => {
+        storeApi.getState().selectNode(FIELD_ID);
+      });
+
+      expect(storeApi.getState().propertiesTab).toBe("control");
+      expect(screen.getByRole("tab", { name: "控件" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("button", { name: "取消选择" })).toBeInTheDocument();
+    });
+
+    it("lists field linkage overview and form events on 表单, and selects the bearer row on click", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupPropertiesPanel(undefined, makeLinkageSchema());
+
+      expect(screen.getByText("字段联动")).toBeInTheDocument();
+      expect(screen.getByText("备注")).toBeInTheDocument();
+      expect(screen.getByText(/1\s*条规则/)).toBeInTheDocument();
+      expect(screen.getByText("表单事件")).toBeInTheDocument();
+      expect(screen.getByText("还没有事件规则")).toBeInTheDocument();
+
+      await user.click(screen.getByText("备注"));
+
+      expect(storeApi.getState().selectedId).toBe("Field_2");
+      expect(storeApi.getState().propertiesTab).toBe("control");
+      expect(screen.getByRole("tab", { name: "控件" })).toHaveAttribute("aria-selected", "true");
+    });
   });
 
-  it("shows the selected field's properties", async () => {
-    setupPropertiesPanel(FIELD_ID);
+  describe("drawer layout", () => {
+    it("keeps 表单 reachable with nothing selected through the right-edge trigger", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupPropertiesPanel(undefined, makeSchema(), createDefaultRegistry(), "drawer");
 
-    expect(await screen.findByRole("button", { name: "取消选择" })).toBeInTheDocument();
-    expect(screen.getAllByText("姓名").length).toBeGreaterThan(0);
+      expect(screen.queryByRole("complementary", { name: "属性" })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "打开表单属性" }));
+
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(true);
+      expect(storeApi.getState().propertiesTab).toBe("form");
+      expect(screen.getByRole("complementary", { name: "属性" })).toBeInTheDocument();
+      expect(screen.getByLabelText("表单 ID")).toHaveValue("Form_1");
+
+      await user.click(screen.getByRole("button", { name: "收起属性面板" }));
+
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(false);
+      expect(screen.queryByRole("complementary", { name: "属性" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "打开表单属性" })).toBeInTheDocument();
+    });
+
+    it("opens automatically on 控件 when a node is selected and collapses on clear", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupPropertiesPanel(FIELD_ID, makeSchema(), createDefaultRegistry(), "drawer");
+
+      expect(await screen.findByRole("complementary", { name: "属性" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "控件" })).toHaveAttribute("aria-selected", "true");
+
+      await user.click(screen.getByRole("button", { name: "取消选择" }));
+
+      expect(storeApi.getState().selectedId).toBeNull();
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(false);
+      expect(screen.queryByRole("complementary", { name: "属性" })).not.toBeInTheDocument();
+    });
   });
 
   it("constrains the properties body to vertical scrolling only", async () => {
@@ -182,15 +305,6 @@ describe("PropertiesPanel", () => {
     // A horizontal scrollbar must never appear when a wide control (e.g. the
     // linkage script editor) renders — the panel is a vertical-only surface.
     expect(await screen.findByTestId("properties-scroll-area")).toHaveAttribute("scrollbars", "vertical");
-  });
-
-  it("deselects the field when the deselect button is clicked", async () => {
-    const user = userEvent.setup();
-    const storeApi = setupPropertiesPanel(FIELD_ID);
-
-    await user.click(await screen.findByRole("button", { name: "取消选择" }));
-
-    expect(storeApi.getState().selectedId).toBeNull();
   });
 
   it("appends a 布局 tab for a field inside a layout container", async () => {

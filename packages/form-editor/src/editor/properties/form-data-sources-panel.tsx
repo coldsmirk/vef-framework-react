@@ -122,7 +122,7 @@ export interface FormDataSourcesPanelProps {
  * list; a remote source carries an RPC request the host resolver runs. Selection
  * fields reference these by id (`{ kind: "ref", dataSourceId }`).
  *
- * Add and in-place edits flow through `onChange` (the drawer patches
+ * Add and in-place edits flow through `onChange` (the `数据` tab patches
  * `schema.dataSources`); deletion goes through the store's `removeDataSource`
  * so the references hanging off the schema are cleaned up with it.
  */
@@ -196,25 +196,6 @@ function DataSourceCard({
           onChange={(event: ChangeEvent<HTMLInputElement>) => onUpdate({ ...source, name: event.target.value })}
         />
 
-        <Popconfirm
-          cancelText="取消"
-          okText="切换"
-          open={kindSwitch.pendingKind !== null}
-          title="切换类型将丢弃当前数据源配置"
-          onCancel={kindSwitch.cancel}
-          onConfirm={kindSwitch.confirm}
-        >
-          <Segmented
-            options={[...KIND_OPTIONS]}
-            value={source.kind}
-            onChange={value => {
-              if (isDataSourceKind(value)) {
-                kindSwitch.requestKind(value);
-              }
-            }}
-          />
-        </Popconfirm>
-
         <Button
           aria-label="删除数据源"
           css={removeCss}
@@ -223,6 +204,26 @@ function DataSourceCard({
           onClick={onRemove}
         />
       </div>
+
+      <Popconfirm
+        cancelText="取消"
+        okText="切换"
+        open={kindSwitch.pendingKind !== null}
+        title="切换类型将丢弃当前数据源配置"
+        onCancel={kindSwitch.cancel}
+        onConfirm={kindSwitch.confirm}
+      >
+        <Segmented
+          block
+          options={[...KIND_OPTIONS]}
+          value={source.kind}
+          onChange={value => {
+            if (isDataSourceKind(value)) {
+              kindSwitch.requestKind(value);
+            }
+          }}
+        />
+      </Popconfirm>
 
       {source.kind === "static"
         ? <OptionListEditor options={source.options} onChange={options => onUpdate({ ...source, options })} />

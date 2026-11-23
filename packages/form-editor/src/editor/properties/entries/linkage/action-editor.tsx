@@ -216,7 +216,7 @@ function ActionBody({
     case "refresh_data_source": {
       return (
         <Select
-          notFoundContent="请先在表单「数据源」中创建"
+          notFoundContent="请先在左侧「数据」页中创建"
           options={dataSourceOptions}
           placeholder="选择数据源"
           style={selectStyle}
