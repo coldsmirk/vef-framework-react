@@ -22,6 +22,7 @@ import type {
   ApprovalTableFixedRows,
   ApprovalValidationRule
 } from "./contract";
+import type { ProjectedApprovalField } from "./contract-compare";
 import type { ProjectionIssue } from "./issues";
 
 import {
@@ -37,9 +38,8 @@ import {
   walkNodes
 } from "@vef-framework-react/form-editor";
 
+import { compareFieldContracts } from "./contract-compare";
 import {
-  issueCrossDeviceKindMismatch,
-  issueCrossDeviceTableMismatch,
   issueDecimalScaleMissing,
   issueLinkageNotProjected,
   issueNestedSubform,
@@ -120,23 +120,8 @@ const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group",
 const UNMAPPABLE_TYPES: ReadonlySet<string> = new Set(["switch"]);
 
 interface ProjectedField {
-  approval: Omit<ApprovalFormField, "sortOrder">;
+  approval: ProjectedApprovalField;
   flow: FlowFormFieldDefinition;
-}
-
-/**
- * What the dedup map remembers about a projected key, enough to detect a
- * cross-device contract conflict on a later sighting without re-projecting.
- */
-interface SeenProjection {
-  kind: ApprovalFieldKind;
-  isMultiple: boolean;
-  granularity?: DateGranularity;
-  /**
-   * Column signature of a table field ({@link peekTableSignature}); absent
-   * for scalar kinds.
-   */
-  tableSignature?: string;
 }
 
 /**
@@ -151,11 +136,14 @@ interface SeenProjection {
  *
  * Both device presentations are walked (pc first) and deduped by key — the
  * submitted data contract is shared across devices, and the backend's form
- * data is closed, so a mobile-only field must still project. Only root-scope
- * keyed nodes become fields: leaf fields map by {@link KIND_BY_TYPE}, a
- * subform becomes a single-level `table` field whose template's keyed leaves
- * are its columns (layout containers in the template are transparent — only
- * a subform opens a value scope, so the submitted row stays a flat record).
+ * data is closed, so a mobile-only field must still project. When a key appears
+ * on both devices, both sides are projected and their data contracts (stripping
+ * display-only fields) are compared structurally via {@link compareFieldContracts}
+ * so any residual divergence raises an error. Only root-scope keyed nodes become
+ * fields: leaf fields map by {@link KIND_BY_TYPE}, a subform becomes a
+ * single-level `table` field whose template's keyed leaves are its columns
+ * (layout containers in the template are transparent — only a subform opens a
+ * value scope, so the submitted row stays a flat record).
  *
  * Conservation rule: a keyed node that cannot be mapped is always an
  * error-severity issue, never silently dropped.
@@ -166,107 +154,136 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
   const formFields: FlowFormFieldDefinition[] = [];
   const dataSources = new Map((schema.dataSources ?? []).map(source => [source.id, source]));
 
-  // key → the first sighting's projection, or null when it was unprojectable
-  // (a failed classify, or an empty / nested subform). Classification runs
-  // BEFORE this dedupe (see the loop), so an unmappable / unknown widget errors
-  // on every device; the cross-device conflict checks below only compare two
-  // successfully-projected sightings.
-  const seen = new Map<string, SeenProjection | null>();
+  // key → the PC-side projection, or null when PC's sighting was unprojectable
+  // (a failed classify, or an empty / nested / invalid subform). Classification
+  // runs BEFORE per-device dedupe so an unmappable / unknown widget errors on
+  // every device; cross-device contract comparison compares two successfully
+  // projected sightings.
+  const pcProjected = new Map<string, ProjectedApprovalField | null>();
 
-  for (const layer of [schema.presentations.pc, schema.presentations.mobile]) {
-    if (layer === undefined) {
-      continue;
-    }
+  const projectNode = (
+    node: Block & KeyedNode,
+    targetIssues: ProjectionIssue[]
+  ): ProjectedField | undefined => node.type === "subform"
+    ? projectSubform(node, dataSources, targetIssues)
+    : projectLeaf(node as KeyedField, node.key, dataSources, targetIssues);
 
-    walkNodes(layer, (node, scope) => {
+  const appendProjected = (layer: PresentationLayer, node: Block & KeyedNode, projected: ProjectedField): void => {
+    fields.push({ ...projected.approval, sortOrder: fields.length });
+    // hasConditionalVisibility is a designer-side hint on the flow field
+    // (the FlowFormFieldDefinition the permission table reads), orthogonal
+    // to the linkage_not_projected warning warnOnLinkage already raised.
+    formFields.push(
+      hasConditionalVisibility(layer, node)
+        ? { ...projected.flow, hasConditionalVisibility: true }
+        : projected.flow
+    );
+  };
+
+  const pcLayer = schema.presentations.pc;
+
+  if (pcLayer !== undefined) {
+    const pcSeen = new Set<string>();
+
+    walkNodes(pcLayer, (node, scope) => {
       if (scope.length > 0 || !isKeyedNode(node)) {
         return;
       }
 
-      const previous = seen.get(node.key);
-
-      // Classify the widget's type BEFORE resolving the dedupe: an unmappable
-      // (switch) or unknown widget breaks the submit contract on EVERY device,
-      // so a key first sighted as a mappable widget and again as an unmappable
-      // one must still error — otherwise the losing device submits values the
-      // deployed definition rejects, the exact hazard the cross-device check
-      // exists to prevent. Mirrors the Go parser's classifyWidget-before-seen
-      // order (internal/approval/formeditor, parser.go). A repeat unprojectable
-      // sighting of an already-failed key (previous === null) is deduped to a
-      // single issue.
       const classification = classifyWidget(node);
 
       if (classification !== undefined) {
-        if (previous !== null) {
+        if (!pcSeen.has(node.key)) {
           issues.push(classification);
-          seen.set(node.key, null);
+          pcSeen.add(node.key);
+          pcProjected.set(node.key, null);
         }
 
         return;
       }
 
-      if (previous !== undefined) {
-        // The submitted data contract is shared across devices, so a second
-        // sighting that would project a DIFFERENT contract means the losing
-        // device submits values the deployed definition rejects — an error,
-        // not a preference. Kind, multiplicity, date granularity, and table
-        // column-set conflicts are detected; a same-kind options/validation
-        // divergence is not (documented limitation). classifyWidget passed, so
-        // peekKind resolves to a real kind here; previous === null (first
-        // sighting unprojectable) deduped the losing device away, matching Go's
-        // abort-on-first-error.
-        if (previous !== null) {
-          const kind = peekKind(node);
-          const isMultiple = MULTI_VALUE_SELECT_TYPES.has(node.type);
-          const granularity = peekGranularity(node);
+      if (pcSeen.has(node.key)) {
+        return;
+      }
 
-          if (
-            kind !== null
-            && (kind !== previous.kind || isMultiple !== previous.isMultiple || granularity !== previous.granularity)
-          ) {
-            issues.push(
-              issueCrossDeviceKindMismatch(
-                node.key,
-                describeFieldShape(previous.kind, previous.isMultiple, previous.granularity),
-                describeFieldShape(kind, isMultiple, granularity)
-              )
-            );
-          } else if (
-            kind === "table"
-            && previous.tableSignature !== undefined
-            && peekTableSignature(node as SubformNode) !== previous.tableSignature
-          ) {
-            issues.push(issueCrossDeviceTableMismatch(node.key));
+      pcSeen.add(node.key);
+
+      const projected = projectNode(node, issues);
+
+      pcProjected.set(node.key, projected?.approval ?? null);
+
+      if (projected !== undefined) {
+        appendProjected(pcLayer, node, projected);
+      }
+    });
+  }
+
+  const mobileLayer = schema.presentations.mobile;
+
+  if (mobileLayer !== undefined) {
+    const mobileSeen = new Set<string>();
+
+    walkNodes(mobileLayer, (node, scope) => {
+      if (scope.length > 0 || !isKeyedNode(node)) {
+        return;
+      }
+
+      const classification = classifyWidget(node);
+
+      if (classification !== undefined) {
+        if (pcProjected.get(node.key) !== null && !mobileSeen.has(node.key)) {
+          issues.push(classification);
+          mobileSeen.add(node.key);
+        }
+
+        return;
+      }
+
+      if (mobileSeen.has(node.key)) {
+        return;
+      }
+
+      mobileSeen.add(node.key);
+
+      if (pcProjected.has(node.key)) {
+        const pcField = pcProjected.get(node.key);
+
+        // PC's sighting was already unprojectable: dedupe the losing device
+        // away to match Go's abort-on-first-error.
+        if (pcField === null || pcField === undefined) {
+          return;
+        }
+
+        // Project into an isolated issue sink so shared warnings
+        // (`options_not_static`, `linkage_not_projected`, `decimal_scale_missing`)
+        // are not reported twice; errors still surface and structural errors
+        // short-circuit contract comparison against an incomplete projection.
+        const mobileIssues: ProjectionIssue[] = [];
+        const mobileProjected = projectNode(node, mobileIssues);
+        const mobileErrors = mobileIssues.filter(issue => issue.severity === "error");
+
+        for (const error of mobileErrors) {
+          if (issues.every(existing => existing.code !== error.code || existing.path !== error.path)) {
+            issues.push(error);
           }
         }
 
+        const hasBlockingError = mobileProjected === undefined
+          || mobileErrors.some(error => error.code !== "pattern_unsupported");
+
+        if (hasBlockingError) {
+          return;
+        }
+
+        compareFieldContracts(node.key, pcField, mobileProjected.approval, issues);
+
         return;
       }
 
-      const isSubform = node.type === "subform";
-      const projected = isSubform
-        ? projectSubform(node as SubformNode, dataSources, issues)
-        : projectLeaf(node as KeyedField, node.key, dataSources, issues);
-
-      seen.set(node.key, projected === undefined
-        ? null
-        : {
-            kind: projected.approval.kind,
-            isMultiple: projected.approval.isMultiple === true,
-            granularity: peekGranularity(node),
-            ...isSubform && { tableSignature: peekTableSignature(node as SubformNode) }
-          });
+      const projected = projectNode(node, issues);
 
       if (projected !== undefined) {
-        fields.push({ ...projected.approval, sortOrder: fields.length });
-        // hasConditionalVisibility is a designer-side hint on the flow field
-        // (the FlowFormFieldDefinition the permission table reads), orthogonal
-        // to the linkage_not_projected warning warnOnLinkage already raised.
-        formFields.push(
-          hasConditionalVisibility(layer, node)
-            ? { ...projected.flow, hasConditionalVisibility: true }
-            : projected.flow
-        );
+        appendProjected(mobileLayer, node, projected);
       }
     });
   }
@@ -295,105 +312,6 @@ function classifyWidget(node: Block & KeyedNode): ProjectionIssue | undefined {
   return UNMAPPABLE_TYPES.has(node.type)
     ? issueUnmappableFieldType(node.key, node.type)
     : issueUnknownFieldType(node.key, node.type);
-}
-
-/**
- * The kind a keyed node would project to, without projecting it — used to
- * detect a cross-device kind conflict on an already-seen key.
- */
-function peekKind(node: Block & KeyedNode): ApprovalFieldKind | null {
-  if (node.type === "subform") {
-    return "table";
-  }
-
-  return KIND_BY_TYPE[node.type] ?? null;
-}
-
-/**
- * Effective calendar granularity of a `date` or `daterange` node for
- * cross-device comparison (omitted resolves to `"day"`), or `undefined` for
- * other widget types. Mirrors `peekGranularity` in Go `internal/approval/
- * formeditor/project.go`.
- */
-function peekGranularity(node: Block & KeyedNode): DateGranularity | undefined {
-  if (node.type === "date" || node.type === "daterange") {
-    const { granularity } = node as { granularity?: DateGranularity };
-
-    return (granularity && granularity.length > 0 ? granularity : "day") as DateGranularity;
-  }
-
-  return undefined;
-}
-
-/**
- * Formats a projected kind + multiplicity / granularity for cross-device
- * comparison and diagnostics, mirroring `describeFieldShape` in Go
- * `internal/approval/formeditor/project.go`.
- */
-function describeFieldShape(
-  kind: ApprovalFieldKind,
-  isMultiple: boolean,
-  granularity: DateGranularity | undefined
-): string {
-  if (kind === "select" && isMultiple) {
-    return `${kind} (multiple)`;
-  }
-
-  if ((kind === "date" || kind === "daterange") && granularity !== undefined && granularity !== "day") {
-    return `${kind} (${granularity})`;
-  }
-
-  return kind;
-}
-
-/**
- * Contract signature of a subform's row shape: its row mode (dynamic vs fixed
- * + `itemKey`) and the ordered, deduplicated `key:kind` pairs of its
- * template's keyed leaves (layout containers are transparent, matching the
- * projection walk). Two devices whose signatures differ deploy a definition at
- * least one of them cannot submit against. Mirrors `peekTableSignature` in Go
- * `internal/approval/formeditor/project.go`.
- */
-function peekTableSignature(subform: SubformNode): string {
-  // Widen to `string | undefined` so an untyped wire payload carrying an empty
-  // or unrecognized mode mirrors Go's string-based `peekTableSignature` without
-  // casting the discriminated union.
-  const mode: string | undefined = subform.rows?.mode;
-  let modePrefix: string;
-
-  if (mode === undefined || mode === "" || mode === "dynamic") {
-    modePrefix = "dynamic|";
-  } else if (isFixedSubform(subform)) {
-    modePrefix = `fixed:${subform.rows.itemKey}|`;
-  } else {
-    modePrefix = `invalid:${mode}|`;
-  }
-
-  const parts: string[] = [];
-  const seenKeys = new Set<string>();
-
-  walkNodes({ children: subform.template }, (node, scope) => {
-    if (scope.length > 0 || !isKeyedNode(node) || seenKeys.has(node.key)) {
-      return;
-    }
-
-    seenKeys.add(node.key);
-    let shape = "?";
-
-    if (node.type === "subform") {
-      shape = "table";
-    } else if (KIND_BY_TYPE[node.type] !== undefined) {
-      shape = describeFieldShape(
-        KIND_BY_TYPE[node.type]!,
-        MULTI_VALUE_SELECT_TYPES.has(node.type),
-        peekGranularity(node)
-      );
-    }
-
-    parts.push(`${node.key}:${shape}`);
-  });
-
-  return `${modePrefix}${parts.join(",")}`;
 }
 
 /**

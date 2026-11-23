@@ -1,4 +1,4 @@
-import type { Block, ContainerNode, FormField, PresentationLayer } from "../../types";
+import type { Block, ContainerNode, FormField, KeyedNodeUnion, PresentationLayer } from "../../types";
 
 import { isShallowEqual } from "@vef-framework-react/shared";
 
@@ -201,6 +201,33 @@ export function findField(schema: PresentationLayer, id: string): FormField | un
  */
 export function findScope(schema: PresentationLayer, id: string): ScopePath | undefined {
   return findFirst(schema, (node, scope) => node.id === id ? scope : undefined);
+}
+
+/**
+ * Find the first keyed block (leaf field or subform) bound to `key` at exactly
+ * `scope` within `schema`. Returns `undefined` when `key` is empty or absent
+ * from that scope.
+ */
+export function findKeyedNodeByKeyInScope(
+  schema: PresentationLayer,
+  scope: ScopePath,
+  key: string
+): KeyedNodeUnion | undefined {
+  if (key.length === 0) {
+    return undefined;
+  }
+
+  return findFirst(schema, (node, nodeScope) => {
+    if (!scopeEquals(nodeScope, scope)) {
+      return;
+    }
+
+    const candidateKey = (node as { key?: unknown }).key;
+
+    return typeof candidateKey === "string" && candidateKey === key
+      ? (node as KeyedNodeUnion)
+      : undefined;
+  });
 }
 
 /**

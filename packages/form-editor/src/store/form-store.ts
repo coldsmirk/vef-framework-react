@@ -9,7 +9,8 @@ import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSl
 import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
-import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
+import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedNode, nextUniqueKey, sanitizeKey } from "../engine/keys";
+import { hasNodeContractChange, syncNodeContractToTwin } from "../engine/schema/contract-sync";
 import { isDateGranularityField, withFieldGranularity } from "../engine/schema/date-granularity";
 import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, setStackSlot as setStackSlotOp, targetScope } from "../engine/schema/edit-ops";
 import {
@@ -33,7 +34,7 @@ import {
 } from "../engine/schema/reconcile";
 import { removeTabBody } from "../engine/schema/removal-impact";
 import { isValidVariableName } from "../engine/schema/validate";
-import { countFields, findField, findNode, findScope, scopeEquals, walkFields, walkNodes } from "../engine/schema/walk";
+import { countFields, findField, findKeyedNodeByKeyInScope, findNode, findScope, isLeafField, scopeEquals, walkNodes } from "../engine/schema/walk";
 
 export type { DropTarget } from "../engine/schema/edit-ops";
 export { createEmptySchema } from "../engine/schema/nodes";
@@ -242,7 +243,10 @@ export interface FormEditorStoreState {
    * Apply a pure updater to a single leaf field. The properties panel forwards
    * updaters from each `PropertyEntry.write` lens, keeping the action
    * property-agnostic while per-property type safety lives at the entry's
-   * declaration site.
+   * declaration site. Any data-contract property that changed (`validate`,
+   * `dataSource`, `granularity`, `columnType`, `precision`, upload `maxCount`)
+   * propagates to the same-scope, same-key twin on the other device presentation
+   * within the same undo step; purely presentational edits stay device-local.
    */
   editField: (args: { fieldId: string; updater: (field: FormField) => FormField }, options?: EditCoalesceOptions) => void;
   /**
@@ -263,7 +267,11 @@ export interface FormEditorStoreState {
    */
   setDateGranularity: (args: { fieldId: string; granularity: DateGranularity }) => void;
   /**
-   * Apply a pure updater to any node (field or container) by id.
+   * Apply a pure updater to any node (field or container) by id. For keyed
+   * nodes (keyed leaf fields and subforms), data-contract edits (such as
+   * subform `rows` mode / `itemKey` / `source` / `required` / `min` / `max`)
+   * propagate to the same-scope, same-key twin on the other device presentation
+   * within the same undo step; presentational properties stay device-local.
    */
   updateBlock: (args: { nodeId: string; updater: (node: Block) => Block }, options?: EditCoalesceOptions) => void;
 
@@ -842,6 +850,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
       editField: ({ fieldId, updater }, options) => {
         const { device, schema } = get();
         const layer = currentLayer(schema, device);
+        const before = findField(layer, fieldId);
+
+        if (!before) {
+          return;
+        }
+
         const next = editFieldOp(layer, fieldId, updater);
 
         // Identity contract: a missing id or an updater that returned its input
@@ -850,8 +864,22 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
+        let nextSchema = withPresentation(schema, device, next);
+        const after = findField(next, fieldId);
+
+        if (after !== undefined) {
+          nextSchema = syncEditedNodeToTwin({
+            schema: nextSchema,
+            device,
+            beforeLayer: layer,
+            nodeId: fieldId,
+            before,
+            after
+          });
+        }
+
         checkpointCoalescing(options?.coalesceKey);
-        set({ schema: withPresentation(schema, device, next) });
+        set({ schema: nextSchema });
       },
 
       setFieldKey: ({ fieldId, key }) => {
@@ -908,7 +936,8 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // and is left untouched.
         const otherDevice: PresentationDevice = device === "pc" ? "mobile" : "pc";
         const otherLayer = resolvePresentation(nextSchema, otherDevice);
-        const twin = otherLayer === undefined ? undefined : findFieldByKeyInScope(otherLayer, scope, previousKey);
+        const candidate = otherLayer === undefined ? undefined : findKeyedNodeByKeyInScope(otherLayer, scope, previousKey);
+        const twin = candidate !== undefined && isLeafField(candidate) ? candidate : undefined;
 
         if (otherLayer !== undefined && twin !== undefined) {
           nextSchema = withPresentation(nextSchema, otherDevice, renameKeyReferences(
@@ -997,14 +1026,34 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
       updateBlock: ({ nodeId, updater }, options) => {
         const { device, schema } = get();
         const layer = currentLayer(schema, device);
+        const before = findNode(layer, nodeId);
+
+        if (!before) {
+          return;
+        }
+
         const next = updateNodeOp(layer, nodeId, updater);
 
         if (next === layer) {
           return;
         }
 
+        let nextSchema = withPresentation(schema, device, next);
+        const after = findNode(next, nodeId);
+
+        if (after !== undefined) {
+          nextSchema = syncEditedNodeToTwin({
+            schema: nextSchema,
+            device,
+            beforeLayer: layer,
+            nodeId,
+            before,
+            after
+          });
+        }
+
         checkpointCoalescing(options?.coalesceKey);
-        set({ schema: withPresentation(schema, device, next) });
+        set({ schema: nextSchema });
       },
 
       renameVariable: (name, nextName) => {
@@ -1209,20 +1258,48 @@ function collectScopeKeysAcrossDevices(schema: FormSchema, scope: ScopePath): Se
 }
 
 /**
- * The field bound to `key` at exactly `scope` in `layer` — the other device's
- * counterpart of a field being renamed or having its granularity switched, when
- * it carries one.
+ * Propagate data-contract changes from an edited node on `device` onto its
+ * same-scope, same-key twin on the opposite presentation (when one exists).
+ * Presentation trees may differ, but the data layer is shared — keeping twin
+ * contract properties aligned prevents the two devices from drifting apart on
+ * the same binding. Purely presentational edits bail before walking either tree.
  */
-function findFieldByKeyInScope(layer: PresentationLayer, scope: ScopePath, key: string): FormField | undefined {
-  let found: FormField | undefined;
+function syncEditedNodeToTwin({
+  after,
+  before,
+  beforeLayer,
+  device,
+  nodeId,
+  schema
+}: {
+  schema: FormSchema;
+  device: PresentationDevice;
+  beforeLayer: PresentationLayer;
+  nodeId: string;
+  before: Block;
+  after: Block;
+}): FormSchema {
+  if (!hasNodeContractChange(before, after) || !isKeyedNode(before)) {
+    return schema;
+  }
 
-  walkFields(layer, (field, fieldScope) => {
-    if (found === undefined && scopeEquals(fieldScope, scope) && isKeyedField(field) && field.key === key) {
-      found = field;
-    }
-  });
+  const otherDevice: PresentationDevice = device === "pc" ? "mobile" : "pc";
+  const otherLayer = resolvePresentation(schema, otherDevice);
 
-  return found;
+  if (otherLayer === undefined) {
+    return schema;
+  }
+
+  const scope = findScope(beforeLayer, nodeId) ?? [];
+  const twin = findKeyedNodeByKeyInScope(otherLayer, scope, before.key);
+
+  if (twin === undefined) {
+    return schema;
+  }
+
+  const nextOtherLayer = updateNodeOp(otherLayer, twin.id, current => syncNodeContractToTwin(before, after, current));
+
+  return nextOtherLayer === otherLayer ? schema : withPresentation(schema, otherDevice, nextOtherLayer);
 }
 
 function applyGranularityToLayer(
@@ -1243,7 +1320,7 @@ function applyGranularityToLayer(
 /**
  * Look up the cross-device twin of a `date` or `daterange` field — same key,
  * same value scope, and same field type on the opposite presentation — reusing
- * {@link findFieldByKeyInScope}.
+ * {@link findKeyedNodeByKeyInScope}.
  */
 function findDateGranularityTwin(
   schema: FormSchema,
@@ -1257,8 +1334,8 @@ function findDateGranularityTwin(
 } {
   const otherDevice: PresentationDevice = device === "pc" ? "mobile" : "pc";
   const otherLayer = resolvePresentation(schema, otherDevice);
-  const candidate = otherLayer === undefined ? undefined : findFieldByKeyInScope(otherLayer, scope, field.key);
-  const twin = candidate !== undefined && candidate.type === field.type ? candidate : undefined;
+  const candidate = otherLayer === undefined ? undefined : findKeyedNodeByKeyInScope(otherLayer, scope, field.key);
+  const twin = candidate !== undefined && isLeafField(candidate) && candidate.type === field.type ? candidate : undefined;
 
   return {
     otherDevice,

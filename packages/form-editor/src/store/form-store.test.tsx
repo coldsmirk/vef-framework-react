@@ -1,6 +1,20 @@
 import type { ReactNode } from "react";
 
-import type { Block, DateField, FieldLinkageRule, FormSchema, SectionNode, SubformNode, TabsNode, TextfieldField } from "../types";
+import type {
+  Block,
+  DateField,
+  FieldLinkageRule,
+  FormSchema,
+  NumberField,
+  RadioField,
+  SectionNode,
+  SelectField,
+  SubformNode,
+  TabsNode,
+  TextareaField,
+  TextfieldField,
+  UploadField
+} from "../types";
 import type { FormEditorStoreApi } from "./form-store";
 
 import { act, renderHook } from "@testing-library/react";
@@ -1946,6 +1960,343 @@ describe("form store", () => {
 
       expect(api.getState().sidebarTab).toBe("palette");
       expect(api.getState().propertiesDrawerOpen).toBe(false);
+    });
+  });
+
+  describe("cross-device twin contract sync", () => {
+    it("syncs selection dataSource, validation, columnType, precision, and upload maxCount to the twin in one undo step", () => {
+      const api = setup();
+      const initial: FormSchema = {
+        id: "Form_1",
+        version: 2,
+        presentations: {
+          pc: {
+            children: [
+              {
+                id: "P-Sel",
+                type: "select",
+                key: "grade",
+                label: "PC 等级",
+                dataSource: { kind: "static", options: [{ label: "甲", value: "a" }] }
+              },
+              {
+                id: "P-Num",
+                type: "number",
+                key: "amount",
+                label: "金额"
+              },
+              {
+                id: "P-Up",
+                type: "upload",
+                key: "files",
+                label: "附件",
+                maxCount: 1
+              },
+              {
+                id: "P-Code",
+                type: "code-editor",
+                key: "script",
+                label: "脚本"
+              }
+            ]
+          },
+          mobile: {
+            children: [
+              {
+                id: "M-Sel",
+                type: "radio",
+                key: "grade",
+                label: "移动端等级",
+                direction: "horizontal",
+                dataSource: { kind: "static", options: [{ label: "甲", value: "a" }] }
+              },
+              {
+                id: "M-Num",
+                type: "number",
+                key: "amount",
+                label: "手机金额",
+                prefix: "¥"
+              },
+              {
+                id: "M-Up",
+                type: "upload",
+                key: "files",
+                label: "手机附件",
+                maxCount: 1,
+                dragger: true
+              },
+              {
+                id: "M-Code",
+                type: "textarea",
+                key: "script",
+                label: "手机脚本"
+              }
+            ]
+          }
+        }
+      };
+
+      act(() => api.getState().setSchema(initial));
+
+      // Edit select options + required + columnType on PC -> syncs to mobile radio twin.
+      const nextOptions = {
+        kind: "static" as const,
+        options: [
+          { label: "甲等", value: "a" },
+          { label: "乙等", value: "b" }
+        ]
+      };
+
+      act(() => api.getState().editField({
+        fieldId: "P-Sel",
+        updater: field => {
+          return {
+            ...field,
+            dataSource: nextOptions,
+            columnType: "string",
+            validate: { required: true }
+          };
+        }
+      }));
+
+      expect(api.getState().past).toHaveLength(1);
+      const mobileRadio = findField(api.getState().schema.presentations.mobile!, "M-Sel") as RadioField;
+      expect(mobileRadio.label).toBe("移动端等级");
+      expect(mobileRadio.direction).toBe("horizontal");
+      expect(mobileRadio.dataSource).toEqual(nextOptions);
+      expect(mobileRadio.columnType).toBe("string");
+      expect(mobileRadio.validate).toEqual({ required: true });
+
+      // Single undo restores both devices atomically.
+      act(() => api.getState().undo());
+      expect(api.getState().schema).toBe(initial);
+
+      // Edit number precision + validate.min on mobile -> syncs back to PC twin.
+      act(() => api.getState().setDevice("mobile"));
+      act(() => api.getState().editField({
+        fieldId: "M-Num",
+        updater: field => {
+          return {
+            ...field,
+            precision: 2,
+            validate: { min: 0, max: 999 }
+          };
+        }
+      }));
+
+      const pcNum = findField(api.getState().schema.presentations.pc, "P-Num") as NumberField;
+      expect(pcNum.label).toBe("金额");
+      expect(pcNum.precision).toBe(2);
+      expect(pcNum.validate).toEqual({ min: 0, max: 999 });
+
+      // Edit upload maxCount and code-editor validate on PC -> syncs to mobile upload / textarea twins.
+      act(() => api.getState().setDevice("pc"));
+      act(() => api.getState().editField({
+        fieldId: "P-Up",
+        updater: field => {
+          return { ...field, maxCount: 3 };
+        }
+      }));
+      act(() => api.getState().editField({
+        fieldId: "P-Code",
+        updater: field => {
+          return { ...field, validate: { required: true, maxLength: 500 } };
+        }
+      }));
+
+      const mobileUpload = findField(api.getState().schema.presentations.mobile!, "M-Up") as UploadField;
+      const mobileTextarea = findField(api.getState().schema.presentations.mobile!, "M-Code") as TextareaField;
+      expect(mobileUpload.maxCount).toBe(3);
+      expect(mobileUpload.dragger).toBe(true);
+      expect(mobileTextarea.validate).toEqual({ required: true, maxLength: 500 });
+    });
+
+    it("syncs subform row contract changes and nested column edits while keeping display properties independent", () => {
+      const api = setup();
+      const initial: FormSchema = {
+        id: "Form_1",
+        version: 2,
+        presentations: {
+          pc: {
+            children: [
+              {
+                id: "P-Sub",
+                type: "subform",
+                variant: "table",
+                key: "checks",
+                label: "PC 自查表",
+                rows: {
+                  mode: "fixed",
+                  itemKey: "item",
+                  headerLabel: "PC 检查项",
+                  headerWidth: 240,
+                  required: true,
+                  source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+                },
+                template: [
+                  {
+                    id: "P-Col",
+                    type: "select",
+                    key: "result",
+                    label: "PC 结果",
+                    dataSource: { kind: "static", options: [{ label: "合格", value: "ok" }] }
+                  }
+                ]
+              }
+            ]
+          },
+          mobile: {
+            children: [
+              {
+                id: "M-Sub",
+                type: "subform",
+                variant: "stack",
+                key: "checks",
+                label: "移动端自查",
+                rows: {
+                  mode: "fixed",
+                  itemKey: "item",
+                  headerLabel: "移动端检查项",
+                  headerWidth: 150,
+                  required: true,
+                  source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+                },
+                template: [
+                  {
+                    id: "M-Col",
+                    type: "select",
+                    key: "result",
+                    label: "手机结果",
+                    dataSource: { kind: "static", options: [{ label: "合格", value: "ok" }] }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      };
+
+      act(() => api.getState().setSchema(initial));
+
+      // Presentation-only edits on PC subform must leave mobile layer reference untouched.
+      const mobileBeforeDisplayEdit = api.getState().schema.presentations.mobile;
+      act(() => api.getState().updateBlock({
+        nodeId: "P-Sub",
+        updater: node => node.type === "subform" && node.rows?.mode === "fixed"
+          ? {
+              ...node,
+              label: "PC 新标题",
+              rows: {
+                ...node.rows,
+                headerLabel: "PC 新行头",
+                headerWidth: 300
+              }
+            }
+          : node
+      }));
+      expect(api.getState().schema.presentations.mobile).toBe(mobileBeforeDisplayEdit);
+
+      // Editing fixed-row source + itemKey + required syncs to mobile twin while preserving mobile's headerLabel/headerWidth.
+      const updatedSource = {
+        kind: "static" as const,
+        options: [
+          { label: "项1", value: "1" },
+          { label: "项2", value: "2" }
+        ]
+      };
+      const pastBeforeContractEdit = api.getState().past.length;
+      act(() => api.getState().updateBlock({
+        nodeId: "P-Sub",
+        updater: node => node.type === "subform" && node.rows?.mode === "fixed"
+          ? {
+              ...node,
+              rows: {
+                ...node.rows,
+                itemKey: "clause",
+                required: false,
+                source: updatedSource
+              }
+            }
+          : node
+      }));
+
+      expect(api.getState().past).toHaveLength(pastBeforeContractEdit + 1);
+      const mobileSub = findNode(api.getState().schema.presentations.mobile!, "M-Sub") as SubformNode;
+      expect(mobileSub.label).toBe("移动端自查");
+      expect(mobileSub.variant).toBe("stack");
+      expect(mobileSub.rows).toEqual({
+        mode: "fixed",
+        itemKey: "clause",
+        headerLabel: "移动端检查项",
+        headerWidth: 150,
+        required: false,
+        source: updatedSource
+      });
+
+      // Editing a column inside the subform syncs only the same-scope twin column on mobile.
+      const nextColSource = { kind: "codeSet" as const, codeSet: "check.result" };
+      act(() => api.getState().editField({
+        fieldId: "P-Col",
+        updater: field => {
+          return {
+            ...field,
+            dataSource: nextColSource,
+            validate: { required: true }
+          };
+        }
+      }));
+
+      const mobileCol = findField(api.getState().schema.presentations.mobile!, "M-Col") as SelectField;
+      expect(mobileCol.label).toBe("手机结果");
+      expect(mobileCol.dataSource).toEqual(nextColSource);
+      expect(mobileCol.validate).toEqual({ required: true });
+
+      // Undo reverts the column edit on both devices in one step.
+      act(() => api.getState().undo());
+      const revertedMobileCol = findField(api.getState().schema.presentations.mobile!, "M-Col") as SelectField;
+      expect(revertedMobileCol.dataSource).toEqual({ kind: "static", options: [{ label: "合格", value: "ok" }] });
+      expect(revertedMobileCol.validate).toBeUndefined();
+    });
+
+    it("leaves the other device untouched for presentation-only leaf edits and device-only fields", () => {
+      const api = setup();
+      const initial: FormSchema = {
+        id: "Form_1",
+        version: 2,
+        presentations: {
+          pc: {
+            children: [
+              tf("P1", "shared", { label: "PC 共享" }),
+              tf("P2", "pcOnly", { label: "仅 PC" })
+            ]
+          },
+          mobile: {
+            children: [tf("M1", "shared", { label: "手机共享" })]
+          }
+        }
+      };
+
+      act(() => api.getState().setSchema(initial));
+      const mobileLayer = api.getState().schema.presentations.mobile;
+
+      act(() => api.getState().editField({
+        fieldId: "P1",
+        updater: field => {
+          return {
+            ...field,
+            label: "新标签",
+            placeholder: "新占位符"
+          };
+        }
+      }));
+      act(() => api.getState().editField({
+        fieldId: "P2",
+        updater: field => {
+          return { ...field, validate: { required: true } };
+        }
+      }));
+
+      expect(api.getState().schema.presentations.mobile).toBe(mobileLayer);
     });
   });
 });

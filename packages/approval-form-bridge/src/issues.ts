@@ -18,7 +18,11 @@ export type ProjectionIssueCode
     | "options_not_static"
     | "linkage_not_projected"
     | "cross_device_kind_mismatch"
-    | "cross_device_table_mismatch";
+    | "cross_device_options_mismatch"
+    | "cross_device_validation_mismatch"
+    | "cross_device_storage_mismatch"
+    | "cross_device_table_mismatch"
+    | "cross_device_table_rows_mismatch";
 
 /**
  * One projection diagnostic. Structurally aligned with form-editor's
@@ -153,11 +157,47 @@ export function issueCrossDeviceKindMismatch(path: string, pcKind: string, mobil
   };
 }
 
+export function issueCrossDeviceOptionsMismatch(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "cross_device_options_mismatch",
+    severity: "error",
+    message: `字段 "${path}" 在 PC 与移动端的选项来源不一致,投影以 PC 为准——另一端提交的选项值或标签不符,提交将被服务端拒绝`
+  };
+}
+
+export function issueCrossDeviceValidationMismatch(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "cross_device_validation_mismatch",
+    severity: "error",
+    message: `字段 "${path}" 在 PC 与移动端的校验规则不一致,投影以 PC 为准——两端必须执行相同的提交约束`
+  };
+}
+
+export function issueCrossDeviceStorageMismatch(path: string, pcStorage: string, mobileStorage: string): ProjectionIssue {
+  return {
+    path,
+    code: "cross_device_storage_mismatch",
+    severity: "error",
+    message: `字段 "${path}" 在 PC 与移动端的存储列类型或精度不一致("${pcStorage}" / "${mobileStorage}"),两端必须使用相同的数据存储契约`
+  };
+}
+
 export function issueCrossDeviceTableMismatch(path: string): ProjectionIssue {
   return {
     path,
     code: "cross_device_table_mismatch",
     severity: "error",
-    message: `明细表 "${path}" 在 PC 与移动端的行模式或列结构不一致,投影以 PC 为准——另一端提交的行结构不符,提交将被服务端拒绝`
+    message: `明细表 "${path}" 在 PC 与移动端的列集合不一致,投影以 PC 为准——另一端提交的行结构不符,提交将被服务端拒绝`
+  };
+}
+
+export function issueCrossDeviceTableRowsMismatch(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "cross_device_table_rows_mismatch",
+    severity: "error",
+    message: `明细表 "${path}" 在 PC 与移动端的行模式或固定行配置不一致,投影以 PC 为准——另一端提交的行项目契约不符,提交将被服务端拒绝`
   };
 }

@@ -10,10 +10,44 @@ import type {
 } from "@vef-framework-react/form-editor";
 
 import type { ApprovalFieldKind, ApprovalFormField } from "./contract";
+import type { ProjectionIssueCode } from "./issues";
 
 import { expectTypeOf } from "vitest";
 
 import { projectFormSchema } from "./project";
+
+/**
+ * Expected error code and path for every parseable error fixture, mirroring
+ * Go `internal/approval/formeditor/parser_test.go`'s `errorTokens`. A new error
+ * fixture absent from this table fails the suite loudly so parity stays
+ * intentional.
+ */
+const EXPECTED_ERROR_ISSUES: Record<string, { code: ProjectionIssueCode; path: string }> = {
+  cross_device_date_granularity: { code: "cross_device_kind_mismatch", path: "period" },
+  cross_device_fixed_rows_item_key_conflict: { code: "cross_device_table_rows_mismatch", path: "checks" },
+  cross_device_fixed_rows_source_conflict: { code: "cross_device_table_rows_mismatch", path: "checks" },
+  cross_device_kind_conflict: { code: "cross_device_kind_mismatch", path: "amount" },
+  cross_device_options_conflict: { code: "cross_device_options_mismatch", path: "city" },
+  cross_device_options_label_conflict: { code: "cross_device_options_mismatch", path: "level" },
+  cross_device_options_source_conflict: { code: "cross_device_options_mismatch", path: "gender" },
+  cross_device_select_multiplicity: { code: "cross_device_kind_mismatch", path: "tags" },
+  cross_device_storage_conflict: { code: "cross_device_storage_mismatch", path: "amount" },
+  cross_device_table_column_options_conflict: { code: "cross_device_options_mismatch", path: "checks.result" },
+  cross_device_table_conflict: { code: "cross_device_table_mismatch", path: "items" },
+  cross_device_table_row_mode_conflict: { code: "cross_device_table_rows_mismatch", path: "checks" },
+  cross_device_table_validation_conflict: { code: "cross_device_validation_mismatch", path: "items" },
+  cross_device_unmappable: { code: "unmappable_field_type", path: "a" },
+  cross_device_validation_conflict: { code: "cross_device_validation_mismatch", path: "phone" },
+  nested_subform: { code: "nested_subform_unsupported", path: "items.parts" },
+  subform_fixed_item_key_conflict: { code: "table_fixed_rows_item_key_conflict", path: "checks" },
+  subform_fixed_item_key_empty: { code: "table_fixed_rows_item_key_empty", path: "checks" },
+  subform_fixed_source_duplicate: { code: "table_fixed_rows_source_invalid", path: "checks" },
+  subform_fixed_source_empty: { code: "table_fixed_rows_source_invalid", path: "checks" },
+  table_columns_empty: { code: "table_columns_empty", path: "items" },
+  unknown_type: { code: "unknown_field_type_unprojectable", path: "score" },
+  unmappable_column: { code: "unmappable_field_type", path: "items.flag" },
+  unmappable_switch: { code: "unmappable_field_type", path: "flag" }
+};
 
 /**
  * Byte-verbatim copies of the Go parser's golden fixtures — the source of
@@ -76,13 +110,20 @@ describe("projectFormSchema Go parser parity", () => {
 
   describe("error fixtures", () => {
     for (const name of parseableErrorNames) {
-      it(`rejects ${name} with an error-severity issue`, () => {
+      it(`rejects ${name} with the expected error-severity issue`, () => {
+        const expected = EXPECTED_ERROR_ISSUES[name];
+        expect(expected, `register expected code/path for error fixture "${name}" in EXPECTED_ERROR_ISSUES`).toBeDefined();
+
         const schema = JSON.parse(readFixture(`${name}.schema.json`)) as FormSchema;
 
         const result = projectFormSchema(schema);
 
         expect(result.valid).toBe(false);
-        expect(result.issues.some(issue => issue.severity === "error")).toBe(true);
+        expect(result.issues).toContainEqual(expect.objectContaining({
+          code: expected!.code,
+          path: expected!.path,
+          severity: "error"
+        }));
       });
     }
 

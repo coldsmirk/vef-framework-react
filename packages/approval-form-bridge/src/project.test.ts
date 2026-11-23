@@ -1371,6 +1371,432 @@ describe("projectFormSchema", () => {
       expect(result.fields).toHaveLength(1);
     });
 
+    it("accepts display-only differences across devices without raising errors", () => {
+      const sharedStatic: FormDataSource = {
+        id: "DS1",
+        kind: "static",
+        name: "cities",
+        options: [{ label: "北京", value: "bj" }]
+      };
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "textfield",
+            key: "name",
+            label: "PC 姓名",
+            placeholder: "请输入",
+            validate: {
+              required: true,
+              maxLength: 30,
+              message: "PC 校验文案"
+            }
+          },
+          {
+            id: "P2",
+            type: "select",
+            key: "city",
+            label: "PC 城市",
+            dataSource: { kind: "static", options: [{ label: "北京", value: "bj" }] }
+          },
+          {
+            id: "P3",
+            type: "subform",
+            variant: "table",
+            key: "checks",
+            label: "PC 自查",
+            rows: {
+              mode: "fixed",
+              itemKey: "item",
+              headerLabel: "PC 检查项",
+              headerWidth: 240,
+              required: true,
+              source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+            },
+            template: [
+              {
+                id: "P3-1",
+                type: "textfield",
+                key: "a",
+                label: "PC 列 A"
+              },
+              {
+                id: "P3-2",
+                type: "number",
+                key: "b",
+                label: "PC 列 B"
+              }
+            ]
+          }
+        ],
+        {
+          dataSources: [sharedStatic],
+          mobile: {
+            children: [
+              {
+                id: "M3",
+                type: "subform",
+                variant: "stack",
+                key: "checks",
+                label: "手机自查",
+                rows: {
+                  mode: "fixed",
+                  itemKey: "item",
+                  headerLabel: "手机检查项",
+                  required: true,
+                  source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+                },
+                template: [
+                  {
+                    id: "M3-2",
+                    type: "number",
+                    key: "b",
+                    label: "手机列 B"
+                  },
+                  {
+                    id: "M3-1",
+                    type: "textfield",
+                    key: "a",
+                    label: "手机列 A"
+                  }
+                ]
+              },
+              {
+                id: "M2",
+                type: "radio",
+                key: "city",
+                label: "手机城市",
+                dataSource: { kind: "ref", dataSourceId: "DS1" }
+              },
+              {
+                id: "M1",
+                type: "textfield",
+                key: "name",
+                label: "手机姓名",
+                placeholder: "填写姓名",
+                validate: {
+                  required: true,
+                  maxLength: 30,
+                  message: "手机校验文案"
+                }
+              }
+            ]
+          }
+        }
+      ));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.fields.map(field => field.key)).toEqual(["name", "city", "checks"]);
+    });
+
+    it("rejects selection option divergences across devices (static values/labels, codeSet, and remote)", () => {
+      const staticDiff = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "select",
+            key: "city",
+            dataSource: {
+              kind: "static",
+              options: [
+                { label: "北京", value: "bj" },
+                { label: "上海", value: "sh" }
+              ]
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "select",
+                key: "city",
+                dataSource: {
+                  kind: "static",
+                  options: [
+                    { label: "北京", value: "bj" },
+                    { label: "广州", value: "gz" }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(staticDiff.valid).toBe(false);
+      expect(staticDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_options_mismatch",
+          severity: "error",
+          path: "city"
+        })
+      ]);
+
+      const remoteDiff = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "select",
+            key: "dept",
+            dataSource: {
+              kind: "remote",
+              request: {
+                resource: "org/dept",
+                action: "list",
+                params: { active: { kind: "literal", value: true } }
+              }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "select",
+                key: "dept",
+                dataSource: {
+                  kind: "remote",
+                  request: {
+                    resource: "org/dept",
+                    action: "list",
+                    params: { active: { kind: "literal", value: false } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(remoteDiff.valid).toBe(false);
+      // Shared remote warning is emitted once (PC), plus the options conflict error.
+      expect(remoteDiff.issues).toEqual([
+        expect.objectContaining({ code: "options_not_static", path: "dept" }),
+        expect.objectContaining({
+          code: "cross_device_options_mismatch",
+          severity: "error",
+          path: "dept"
+        })
+      ]);
+    });
+
+    it("rejects validation divergences on scalar fields and detail tables without duplicating derived storage errors", () => {
+      const maxLenDiff = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "textfield",
+            key: "title",
+            validate: { maxLength: 50 }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "textfield",
+                key: "title"
+              }
+            ]
+          }
+        }
+      ));
+      expect(maxLenDiff.valid).toBe(false);
+      expect(maxLenDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_validation_mismatch",
+          severity: "error",
+          path: "title"
+        })
+      ]);
+
+      const tableBoundsDiff = projectFormSchema(schemaOf(
+        [
+          {
+            ...deviceSubform("pc", [{ key: "note", type: "textfield" }]),
+            rows: {
+              mode: "dynamic",
+              min: 1,
+              max: 5
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                ...deviceSubform("mobile", [{ key: "note", type: "textfield" }]),
+                rows: {
+                  mode: "dynamic",
+                  min: 2,
+                  max: 5
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(tableBoundsDiff.valid).toBe(false);
+      expect(tableBoundsDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_validation_mismatch",
+          severity: "error",
+          path: "items"
+        })
+      ]);
+    });
+
+    it("rejects storage/precision divergences (number precision, columnType, upload maxCount)", () => {
+      const precisionDiff = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "number",
+            key: "amount",
+            precision: 2
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "number",
+                key: "amount",
+                precision: 4
+              }
+            ]
+          }
+        }
+      ));
+      expect(precisionDiff.valid).toBe(false);
+      expect(precisionDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_storage_mismatch",
+          severity: "error",
+          path: "amount"
+        })
+      ]);
+
+      const uploadDiff = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "upload",
+            key: "files",
+            maxCount: 3
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "upload",
+                key: "files",
+                maxCount: 1
+              }
+            ]
+          }
+        }
+      ));
+      expect(uploadDiff.valid).toBe(false);
+      expect(uploadDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_storage_mismatch",
+          severity: "error",
+          path: "files"
+        })
+      ]);
+    });
+
+    it("rejects fixed-row mode/itemKey/source divergences and nested table column contract conflicts", () => {
+      const fixedSourceDiff = projectFormSchema(schemaOf(
+        [
+          {
+            ...deviceSubform("pc", [{ key: "note", type: "textfield" }]),
+            rows: {
+              mode: "fixed",
+              itemKey: "item",
+              source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                ...deviceSubform("mobile", [{ key: "note", type: "textfield" }]),
+                rows: {
+                  mode: "fixed",
+                  itemKey: "item",
+                  source: { kind: "codeSet", codeSet: "hosp.check" }
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(fixedSourceDiff.valid).toBe(false);
+      expect(fixedSourceDiff.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_table_rows_mismatch",
+          severity: "error",
+          path: "items"
+        })
+      ]);
+
+      const columnConflict = projectFormSchema(schemaOf(
+        [
+          {
+            id: "Sub-pc",
+            type: "subform",
+            variant: "table",
+            key: "checks",
+            template: [
+              {
+                id: "P-C1",
+                type: "select",
+                key: "result",
+                dataSource: { kind: "static", options: [{ label: "合格", value: "ok" }] }
+              }
+            ]
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "Sub-m",
+                type: "subform",
+                variant: "stack",
+                key: "checks",
+                template: [
+                  {
+                    id: "M-C1",
+                    type: "select",
+                    key: "result",
+                    dataSource: { kind: "static", options: [{ label: "通过", value: "pass" }] }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ));
+      expect(columnConflict.valid).toBe(false);
+      expect(columnConflict.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_options_mismatch",
+          severity: "error",
+          path: "checks.result"
+        })
+      ]);
+    });
+
     it("reports an unprojectable key once across devices", () => {
       const result = projectFormSchema(schemaOf(
         [

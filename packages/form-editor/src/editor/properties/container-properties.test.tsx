@@ -39,11 +39,14 @@ function subformNode(overrides: Partial<SubformNode> = {}): SubformNode {
   };
 }
 
-function makeSchema(subform: SubformNode): FormSchema {
+function makeSchema(subform: SubformNode, mobileSubform?: SubformNode): FormSchema {
   return {
     id: "Form_1",
     version: 2,
-    presentations: { pc: { children: [subform] } }
+    presentations: {
+      pc: { children: [subform] },
+      ...mobileSubform && { mobile: { children: [mobileSubform] } }
+    }
   };
 }
 
@@ -70,11 +73,11 @@ function Harness({ onReady }: HarnessProps): ReactElement | null {
   return <ContainerProperties node={node} parent={undefined} onClose={vi.fn()} />;
 }
 
-function setup(subform: SubformNode): FormEditorStoreApi {
+function setup(subform: SubformNode, mobileSubform?: SubformNode): FormEditorStoreApi {
   let captured: FormEditorStoreApi | null = null;
 
   render(
-    <FormEditorStoreProvider initialState={{ schema: makeSchema(subform) }}>
+    <FormEditorStoreProvider initialState={{ schema: makeSchema(subform, mobileSubform) }}>
       <Harness
         onReady={api => {
           captured = api;
@@ -229,6 +232,45 @@ describe("ContainerProperties", () => {
       });
 
       expect(screen.getByText("子元素间距")).toBeInTheDocument();
+    });
+
+    it("syncs row mode, itemKey, and required edits to the mobile twin while leaving headerLabel device-local", async () => {
+      const user = userEvent.setup();
+      const pcSubform = subformNode({ variant: "table" });
+      const mobileSubform = subformNode({
+        id: "M_Sub_1",
+        variant: "stack",
+        label: "移动端明细"
+      });
+      const api = setup(pcSubform, mobileSubform);
+
+      // Switch PC from dynamic to fixed -> mobile switches to fixed without copying PC's headerLabel.
+      await user.click(screen.getByText("固定行"));
+
+      const mobileAfterFixed = api.getState().schema.presentations.mobile?.children[0] as SubformNode;
+      expect(mobileAfterFixed.variant).toBe("stack");
+      expect(mobileAfterFixed.rows).toMatchObject({
+        mode: "fixed",
+        itemKey: "item",
+        required: true,
+        source: { kind: "static" }
+      });
+      expect(mobileAfterFixed.rows?.mode === "fixed" ? mobileAfterFixed.rows.headerLabel : undefined).toBeUndefined();
+
+      // Edit PC headerLabel (presentation-only) -> mobile layer reference stays untouched.
+      const mobileBeforeHeaderEdit = api.getState().schema.presentations.mobile;
+      const headerLabelRow = screen.getByText("行头列标题").closest("div") as HTMLElement;
+      await user.type(within(headerLabelRow).getByRole("textbox"), "补充");
+      expect(api.getState().schema.presentations.mobile).toBe(mobileBeforeHeaderEdit);
+
+      // Edit PC itemKey -> mobile twin follows.
+      const itemKeyRow = screen.getByText("行项目 Key (itemKey)").closest("div") as HTMLElement;
+      const itemKeyInput = within(itemKeyRow).getByRole("textbox");
+      await user.clear(itemKeyInput);
+      await user.type(itemKeyInput, "clause{Enter}");
+
+      const mobileAfterItemKey = api.getState().schema.presentations.mobile?.children[0] as SubformNode;
+      expect(mobileAfterItemKey.rows?.mode === "fixed" ? mobileAfterItemKey.rows.itemKey : undefined).toBe("clause");
     });
   });
 });
