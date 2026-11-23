@@ -97,12 +97,13 @@ const actionsCss = css({
   position: "absolute",
   // An accent tab standing on the selection ring's top edge (the name-tag of
   // Webflow / Figma), outside the block's own box, so it never sits over the
-  // block's label or control — the block keeps all of its own space. Slim on
-  // purpose: the tab rises 20px off the block (18px tab + the 2px bridge
-  // below) into the 16px stack gap, so it reaches at most a few pixels into
-  // the bottom edge of the block above. A tall floating pill covered most of
-  // that block's control instead — and caught the clicks aimed at it, which
-  // with a delete button on the bar is a hazard, not a cosmetic flaw.
+  // block's label or control — the block keeps all of its own space. Sized to
+  // the gap: the 16px tab rises exactly as far as the default (`medium`) stack
+  // gap, so at `medium` and `large` it never reaches the block above, and at
+  // `small` (8px) it overlaps that block by the 8px no usable tab can avoid. A
+  // tall floating pill covered most of that block's control instead — and
+  // caught the clicks aimed at it, which with a delete button on the bar is a
+  // hazard, not a cosmetic flaw.
   // Left-anchored: the floating properties panel overlays the canvas's right
   // edge, so a right-anchored bar on any full-width block — every root-level
   // block — would sit underneath the panel exactly while that block is
@@ -113,15 +114,14 @@ const actionsCss = css({
   bottom: "100%",
   left: globalCssVars.borderRadius,
   zIndex: 3,
-  // Hover bridge: the gap between the tab and the block must live INSIDE the
-  // bar's box as transparent padding, never as empty space between the two —
-  // a real gap would be a hover dead zone (the pointer crossing it leaves the
-  // block's hover chain, the bar folds away, and its actions become
-  // unreachable). The bar is a descendant of the block wrapper, so as long as
-  // the pointer stays inside this box, `:hover` holds. 2px is the ring's
-  // offset: the tab's foot lands on the ring's inner edge, covering the ring
-  // line beneath it, so tab and ring paint as one shape.
-  paddingBottom: 2,
+  // No gap between the tab and the block: the tab's foot sits on the block's
+  // own top edge, covering the ring line and its 2px offset beneath it, so tab
+  // and ring paint as one shape. That contact is also the hover bridge — any
+  // empty space between the two would be a hover dead zone (the pointer
+  // crossing it leaves the block's hover chain, the bar folds away, and its
+  // actions become unreachable); the bar is a descendant of the block wrapper,
+  // so as long as the pointer moves from one straight into the other, `:hover`
+  // holds.
   display: "flex",
   opacity: 0,
   transform: "scale(0.96)",
@@ -165,14 +165,13 @@ const actionsCss = css({
 // The visible tab of the action bar — the accent fill matches the selection
 // ring, so the two read as one selection shape: rounded top corners, a square
 // foot standing on the ring. Flat, with no shadow, since it is attached rather
-// than floating. Split from the positioned carrier above so the carrier's
-// bottom padding can stay transparent (the hover bridge) while the tab paints
-// opaque.
+// than floating. The positioned carrier above owns placement and the reveal
+// rules; this element only paints the tab.
 const actionsPillCss = css({
   display: "flex",
   alignItems: "center",
   gap: 1,
-  height: 18,
+  height: 16,
   padding: "0 3px",
   borderRadius: `${globalCssVars.borderRadiusSm} ${globalCssVars.borderRadiusSm} 0 0`,
   background: globalCssVars.colorPrimary,
@@ -190,7 +189,7 @@ const actionDividerCss = css({
 
 const actionButtonCss = css({
   width: 20,
-  height: 18,
+  height: 16,
   minWidth: 0,
   borderRadius: globalCssVars.borderRadiusXs,
   padding: 0,
@@ -225,7 +224,7 @@ const gripCss = css({
   alignItems: "center",
   justifyContent: "center",
   width: 16,
-  height: 18,
+  height: 16,
   borderRadius: globalCssVars.borderRadiusXs,
   // The handle is the quietest glyph (dimmed white), brightening on hover.
   color: `color-mix(in srgb, ${globalCssVars.colorWhite} 72%, transparent)`,
