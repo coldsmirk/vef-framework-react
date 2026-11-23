@@ -76,8 +76,8 @@ afterEach(() => {
 describe("resolveEditorLayoutMode", () => {
   it("maps widths to the documented bands", () => {
     expect(resolveEditorLayoutMode(0)).toBe("docked");
-    expect(resolveEditorLayoutMode(1320)).toBe("docked");
-    expect(resolveEditorLayoutMode(1319)).toBe("drawer");
+    expect(resolveEditorLayoutMode(1216)).toBe("docked");
+    expect(resolveEditorLayoutMode(1215)).toBe("drawer");
     expect(resolveEditorLayoutMode(1100)).toBe("drawer");
   });
 });

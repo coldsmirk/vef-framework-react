@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { createContext, use, useEffect, useRef, useState } from "react";
 
-import { PROPERTIES_PANEL_WIDTH, SIDEBAR_DATA_WIDTH } from "./styles";
+import { PROPERTIES_PANEL_WIDTH, SIDEBAR_DOCK_WIDTH } from "./styles";
 
 /**
  * Layout mode the editor settles into, driven by the editor root's measured
@@ -26,13 +26,18 @@ const MIN_CANVAS_WIDTH = 520;
 
 /**
  * Width threshold (in CSS pixels of the editor *root*, not the viewport) at or
- * above which the docked layout is used: even at the widest docked sidebar
- * (`数据`, 400px) plus the 400px properties panel, the canvas still keeps a
- * usable (≥520px) surface, i.e. `400 + 400 + 520 = 1320`. Below it the canvas
- * would lose too much room, so the editor rails the sidebar and detaches both
- * overlays.
+ * above which the docked layout is used: the resting 296px sidebar plus the
+ * 400px properties panel leave the canvas a usable (≥520px) surface, i.e.
+ * `296 + 400 + 520 = 1216`. Below it the editor rails the sidebar and detaches
+ * both overlays.
+ *
+ * Sized by the resting sidebar, not the wider `数据` tab: that tab is a
+ * temporary editing surface whose extra width comes out of the canvas while
+ * it is open. Sizing by it would push a 1440px screen with the host's
+ * navigation expanded (a ~1220px editor) into the rail layout for good, to
+ * protect a canvas nobody is laying out while editing data sources.
  */
-export const DRAWER_MIN = SIDEBAR_DATA_WIDTH + PROPERTIES_PANEL_WIDTH + MIN_CANVAS_WIDTH;
+export const DRAWER_MIN = SIDEBAR_DOCK_WIDTH + PROPERTIES_PANEL_WIDTH + MIN_CANVAS_WIDTH;
 
 export function resolveEditorLayoutMode(width: number): EditorLayoutMode {
   // A zero width is the pre-measure state; assume the roomy docked layout until
