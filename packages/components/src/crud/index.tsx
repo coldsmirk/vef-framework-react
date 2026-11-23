@@ -84,4 +84,5 @@ export type {
 export { createCrudKit } from "./helpers";
 export type { CrudKit } from "./helpers";
 export type { CrudProps } from "./props";
+export type { CrudState } from "./store";
 export type * from "./types";

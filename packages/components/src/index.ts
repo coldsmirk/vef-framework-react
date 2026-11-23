@@ -96,7 +96,8 @@ export {
   type CrudFormScene,
   type CrudKit,
   type CrudOperationButtonGroupProps,
-  type CrudProps
+  type CrudProps,
+  type CrudState
 } from "./crud";
 export type { PaginatedQueryParams, QueryParams } from "./crud";
 export { CrudPage, type CrudPageProps } from "./crud-page";
