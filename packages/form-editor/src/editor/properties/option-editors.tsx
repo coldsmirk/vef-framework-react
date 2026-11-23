@@ -8,7 +8,7 @@ import { Button, globalCssVars, Input } from "@vef-framework-react/components";
 import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
 import { useRef, useState } from "react";
 
-import { findDuplicateOptionValues } from "../../engine/schema/subform";
+import { findDuplicateOptionValues } from "../../engine/options";
 import { EditorIcon } from "../../icons";
 
 const emptyCss = css({
@@ -382,7 +382,7 @@ export function OptionListEditor({
               <Input.TextArea
                 aria-label="批量粘贴行项目"
                 autoSize={{ minRows: 4, maxRows: 10 }}
-                placeholder={"例如：\n虚构不存在手术加收患者费用的（8分）\n使用非卫生技术人员从事诊疗工作的（10分）"}
+                placeholder={"例如：\n第一项\n第二项\n第三项"}
                 value={bulkText}
                 onChange={event => setBulkText(event.target.value)}
               />

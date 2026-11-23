@@ -3,10 +3,8 @@ import type {
   Block,
   ColumnDataType,
   DateGranularity,
-  DynamicSubformRows,
   FieldLinkage,
   FieldOptionSource,
-  FixedSubformRows,
   FormDataSource,
   FormField,
   FormSchema,
@@ -30,7 +28,9 @@ import {
   dateGranularityMaxLength,
   findDuplicateOptionValues,
   findParentContainer,
+  getDynamicSubformRows,
   inferColumnType,
+  isFixedSubform,
   isKeyedNode,
   isValidFixedItemValue,
   normalizeOptionMapping,
@@ -355,18 +355,18 @@ function describeFieldShape(
  * `internal/approval/formeditor/project.go`.
  */
 function peekTableSignature(subform: SubformNode): string {
-  let modePrefix = "dynamic|";
+  // Widen to `string | undefined` so an untyped wire payload carrying an empty
+  // or unrecognized mode mirrors Go's string-based `peekTableSignature` without
+  // casting the discriminated union.
+  const mode: string | undefined = subform.rows?.mode;
+  let modePrefix: string;
 
-  if (subform.rows !== undefined) {
-    const { mode } = subform.rows as { mode?: string };
-
-    if (mode === undefined || mode === "" || mode === "dynamic") {
-      modePrefix = "dynamic|";
-    } else if (mode === "fixed") {
-      modePrefix = `fixed:${(subform.rows as FixedSubformRows).itemKey}|`;
-    } else {
-      modePrefix = `invalid:${mode}|`;
-    }
+  if (mode === undefined || mode === "" || mode === "dynamic") {
+    modePrefix = "dynamic|";
+  } else if (isFixedSubform(subform)) {
+    modePrefix = `fixed:${subform.rows.itemKey}|`;
+  } else {
+    modePrefix = `invalid:${mode}|`;
   }
 
   const parts: string[] = [];
@@ -532,14 +532,17 @@ function projectSubform(
   warnOnLinkage(subform, subform.key, issues);
 
   const label = subform.label ?? subform.key;
-  const rows = subform.rows as { mode?: string } | undefined;
+  // Widen to `string | undefined` so untrusted wire JSON with an empty or
+  // unrecognized mode reaches the same branches as Go's projector without
+  // casting the discriminated union.
+  const mode: string | undefined = subform.rows?.mode;
 
-  if (rows === undefined || rows.mode === undefined || rows.mode === "" || rows.mode === "dynamic") {
-    const dynamicRows = rows as DynamicSubformRows | undefined;
-    const isRequired = (dynamicRows?.min ?? 0) >= 1;
+  if (mode === undefined || mode === "" || mode === "dynamic") {
+    const dynamicRows = getDynamicSubformRows(subform);
+    const isRequired = (dynamicRows.min ?? 0) >= 1;
     const rule: ApprovalValidationRule = {
-      ...dynamicRows?.min !== undefined && dynamicRows.min > 0 && { minLength: dynamicRows.min },
-      ...dynamicRows?.max !== undefined && { maxLength: dynamicRows.max }
+      ...dynamicRows.min !== undefined && dynamicRows.min > 0 && { minLength: dynamicRows.min },
+      ...dynamicRows.max !== undefined && { maxLength: dynamicRows.max }
     };
     const hasRule = rule.minLength !== undefined || rule.maxLength !== undefined;
 
@@ -562,13 +565,13 @@ function projectSubform(
     return { approval, flow };
   }
 
-  if (rows.mode !== "fixed") {
-    issues.push(issueTableRowsModeInvalid(subform.key, rows.mode));
+  if (!isFixedSubform(subform)) {
+    issues.push(issueTableRowsModeInvalid(subform.key, mode));
 
     return undefined;
   }
 
-  const fixed = rows as FixedSubformRows;
+  const fixed = subform.rows;
 
   if (typeof fixed.itemKey !== "string" || fixed.itemKey.trim().length === 0) {
     issues.push(issueTableFixedRowsItemKeyEmpty(subform.key));

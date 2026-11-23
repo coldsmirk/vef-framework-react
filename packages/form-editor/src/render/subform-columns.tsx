@@ -9,7 +9,7 @@ import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framewor
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
 import { antdPickerForGranularity } from "../engine/schema/date-granularity";
-import { DEFAULT_FIXED_HEADER_LABEL, isFixedSubform } from "../engine/schema/subform";
+import { fixedRowHeaderTitle } from "../engine/schema/subform";
 import { isContainerNode } from "../engine/schema/walk";
 import { isRecord } from "../engine/validation";
 import { validateKeyedFieldValue } from "./submit";
@@ -242,16 +242,11 @@ export function buildSubformColumns(
   fixedRows?: FixedSubformRows
 ): Array<EditableColumn<Row>> {
   const columns: Array<EditableColumn<Row>> = [];
-  const effectiveFixed = fixedRows ?? (extras && isFixedSubform(extras.subform) ? extras.subform.rows : undefined);
 
-  if (effectiveFixed) {
-    const headerTitle = effectiveFixed.headerLabel && effectiveFixed.headerLabel.length > 0
-      ? effectiveFixed.headerLabel
-      : DEFAULT_FIXED_HEADER_LABEL;
-
-    columns.push(createEditableColumn<Row>(effectiveFixed.itemKey, {
-      title: headerTitle,
-      width: effectiveFixed.headerWidth,
+  if (fixedRows) {
+    columns.push(createEditableColumn<Row>(fixedRows.itemKey, {
+      title: fixedRowHeaderTitle(fixedRows),
+      width: fixedRows.headerWidth,
       editable: false,
       renderView: (value, _record, index) => {
         const label = isRecord(value) && typeof value.label === "string" ? value.label : "";

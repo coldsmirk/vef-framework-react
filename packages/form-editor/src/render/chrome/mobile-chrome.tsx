@@ -7,7 +7,6 @@ import type {
   RemoveControlChromeProps,
   SectionChromeProps,
   SubformChromeProps,
-  SubformRowChromeProps,
   TabsChromeProps
 } from "../../types";
 
@@ -21,13 +20,9 @@ import { EditorIcon } from "../../icons";
 import { FieldFooter } from "../parts/field-shell";
 import {
   SECTION_PANEL_KEY,
+  SharedSubformRow,
   subformBodyCss,
-  subformRemoveCss,
-  subformRowBodyCss,
-  subformRowCardBodyCss,
-  subformRowCardCss,
-  subformRowCss,
-  subformRowHeaderCss
+  subformRemoveCss
 } from "./subform-shell";
 
 // antd-mobile ships no antd-style `Card`, so card-like containers (the `card`
@@ -131,32 +126,6 @@ function MobileSubform({
   );
 }
 
-function MobileSubformRow({
-  children,
-  header,
-  removeControl
-}: SubformRowChromeProps): ReactElement {
-  if (header !== undefined) {
-    return (
-      <div css={subformRowCardCss}>
-        <div css={subformRowHeaderCss}>{header}</div>
-
-        <div css={subformRowCardBodyCss}>
-          <div css={subformRowBodyCss}>{children}</div>
-          {removeControl}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div css={subformRowCss}>
-      <div css={subformRowBodyCss}>{children}</div>
-      {removeControl}
-    </div>
-  );
-}
-
 function MobileAddButton({ label, onClick }: AddControlChromeProps): ReactElement {
   return (
     <Button block fill="outline" onClick={onClick}>
@@ -194,6 +163,6 @@ export const mobileContainerChrome: ContainerChromeSet = {
   RemoveButton: MobileRemoveButton,
   Section: MobileSection,
   Subform: MobileSubform,
-  SubformRow: MobileSubformRow,
+  SubformRow: SharedSubformRow,
   Tabs: MobileTabs
 };

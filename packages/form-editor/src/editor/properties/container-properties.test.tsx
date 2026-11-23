@@ -164,7 +164,7 @@ describe("ContainerProperties", () => {
       expect(storeSubform(api).rows).toMatchObject({
         mode: "fixed",
         itemKey: "item_2",
-        headerLabel: "自查内容",
+        headerLabel: "检查项",
         source: { kind: "static" }
       });
 

@@ -19,7 +19,7 @@ import { isValidatableField } from "../../engine/keys";
 import { resolvePresentation } from "../../engine/schema/presentation";
 import {
   DEFAULT_DYNAMIC_ADD_LABEL,
-  DEFAULT_FIXED_HEADER_LABEL,
+  fixedRowHeaderTitle,
   getDynamicSubformRows,
   isFixedSubform,
   resolveStaticFixedRowItems
@@ -1117,9 +1117,7 @@ function SubformTablePreview({ subform }: { subform: TableSubform }): ReactEleme
   }
 
   const inline = inlineSlots(columns);
-  const headerTitle = fixed && fixed.headerLabel && fixed.headerLabel.length > 0
-    ? fixed.headerLabel
-    : DEFAULT_FIXED_HEADER_LABEL;
+  const headerTitle = fixed ? fixedRowHeaderTitle(fixed) : "";
   const previewRows = fixedPreview && fixedPreview.kind !== "loading"
     ? fixedPreview.labels.slice(0, MAX_CANVAS_FIXED_ROWS)
     : [];

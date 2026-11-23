@@ -61,7 +61,7 @@ export const palettePointerSensors = [editorPointerSensor];
  * lift.
  */
 export type EditorDragData
-  = | { kind: "palette"; type: string }
+  = | { kind: "palette"; paletteKey: string }
     | { kind: "block"; nodeId: string; isContainer: boolean };
 
 /**
@@ -182,10 +182,10 @@ export function isEditorDragData(value: unknown): value is EditorDragData {
     return false;
   }
 
-  const data = value as { kind?: unknown; type?: unknown; nodeId?: unknown; isContainer?: unknown };
+  const data = value as { kind?: unknown; paletteKey?: unknown; nodeId?: unknown; isContainer?: unknown };
 
   if (data.kind === "palette") {
-    return typeof data.type === "string";
+    return typeof data.paletteKey === "string";
   }
 
   if (data.kind === "block") {
@@ -230,7 +230,7 @@ export function useEditorDragEnd(): (event: DragEndEvent) => void {
     const dropTarget = toDropTarget(zoneData);
 
     if (dragData.kind === "palette") {
-      const definition = registry.getPaletteItem(dragData.type);
+      const definition = registry.getPaletteItem(dragData.paletteKey);
 
       if (definition) {
         storeApi.getState().insertField({ definition, target: dropTarget });

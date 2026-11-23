@@ -190,6 +190,36 @@ describe("buildSubformColumns", () => {
 
     expect(columns[0]?.width).toBeUndefined();
   });
+
+  it("prepends a read-only row-header column for fixedRows with default title fallback", () => {
+    const columns = buildSubformColumns(
+      [
+        {
+          id: "F1",
+          type: "textfield",
+          key: "note",
+          label: "说明"
+        }
+      ],
+      undefined,
+      undefined,
+      {
+        mode: "fixed",
+        itemKey: "item",
+        headerWidth: 240,
+        source: { kind: "static", options: [{ label: "第一项", value: "a" }] }
+      }
+    );
+
+    expect(columns).toHaveLength(2);
+    expect(columns[0]).toMatchObject({
+      dataIndex: "item",
+      title: "检查项",
+      width: 240,
+      editable: false
+    });
+    expect(columns[1]).toMatchObject({ dataIndex: "note", title: "说明" });
+  });
 });
 
 describe("subform table select column", () => {

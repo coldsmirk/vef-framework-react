@@ -77,6 +77,7 @@ export {
   type LinkageValidationResult
 } from "./engine/linkage";
 export { normalizeOptionMapping } from "./engine/option-mapping";
+export { findDuplicateOptionValues } from "./engine/options";
 export {
   createDefaultRegistry,
   registerDefaults
@@ -118,10 +119,11 @@ export {
   withPresentation
 } from "./engine/schema/presentation";
 export {
+  createDefaultFixedSubformRows,
   DEFAULT_DYNAMIC_ADD_LABEL,
   DEFAULT_FIXED_HEADER_LABEL,
   DEFAULT_FIXED_ITEM_KEY,
-  findDuplicateOptionValues,
+  fixedRowHeaderTitle,
   fixedRowItemLabel,
   getDynamicSubformRows,
   isFixedSubform,

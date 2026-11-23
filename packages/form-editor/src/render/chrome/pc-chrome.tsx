@@ -7,7 +7,6 @@ import type {
   RemoveControlChromeProps,
   SectionChromeProps,
   SubformChromeProps,
-  SubformRowChromeProps,
   TabsChromeProps
 } from "../../types";
 
@@ -17,13 +16,9 @@ import { EditorIcon } from "../../icons";
 import { FieldFooter } from "../parts/field-shell";
 import {
   SECTION_PANEL_KEY,
+  SharedSubformRow,
   subformBodyCss,
-  subformRemoveCss,
-  subformRowBodyCss,
-  subformRowCardBodyCss,
-  subformRowCardCss,
-  subformRowCss,
-  subformRowHeaderCss
+  subformRemoveCss
 } from "./subform-shell";
 
 function PcSection({
@@ -76,32 +71,6 @@ function PcSubform({
   );
 }
 
-function PcSubformRow({
-  children,
-  header,
-  removeControl
-}: SubformRowChromeProps): ReactElement {
-  if (header !== undefined) {
-    return (
-      <div css={subformRowCardCss}>
-        <div css={subformRowHeaderCss}>{header}</div>
-
-        <div css={subformRowCardBodyCss}>
-          <div css={subformRowBodyCss}>{children}</div>
-          {removeControl}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div css={subformRowCss}>
-      <div css={subformRowBodyCss}>{children}</div>
-      {removeControl}
-    </div>
-  );
-}
-
 function PcAddButton({ label, onClick }: AddControlChromeProps): ReactElement {
   return (
     <Button icon={<EditorIcon name="plus" />} type="dashed" onClick={onClick}>
@@ -133,6 +102,6 @@ export const pcContainerChrome: ContainerChromeSet = {
   RemoveButton: PcRemoveButton,
   Section: PcSection,
   Subform: PcSubform,
-  SubformRow: PcSubformRow,
+  SubformRow: SharedSubformRow,
   Tabs: PcTabs
 };

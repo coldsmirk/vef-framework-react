@@ -57,7 +57,7 @@ export function makeColumnAccept(registry: FormFieldRegistry, layer: Presentatio
     }
 
     if (data.kind === "palette") {
-      return isColumnEligibleDefinition(registry.getPaletteItem(data.type));
+      return isColumnEligibleDefinition(registry.getPaletteItem(data.paletteKey));
     }
 
     return layer !== undefined && isColumnEligibleNode(findNode(layer, data.nodeId));

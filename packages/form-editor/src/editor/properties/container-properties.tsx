@@ -26,6 +26,7 @@ import { useState } from "react";
 import { createId } from "../../engine/ids";
 import { isKeyedNode, nextUniqueKey, sanitizeKey } from "../../engine/keys";
 import {
+  createDefaultFixedSubformRows,
   DEFAULT_DYNAMIC_ADD_LABEL,
   DEFAULT_FIXED_HEADER_LABEL,
   DEFAULT_FIXED_ITEM_KEY,
@@ -398,19 +399,7 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
 
         return {
           ...node,
-          rows: {
-            mode: "fixed",
-            itemKey,
-            headerLabel: DEFAULT_FIXED_HEADER_LABEL,
-            required: true,
-            source: {
-              kind: "static",
-              options: [
-                { label: "检查项 1", value: "item_1" },
-                { label: "检查项 2", value: "item_2" }
-              ]
-            }
-          }
+          rows: createDefaultFixedSubformRows(itemKey)
         };
       });
     }

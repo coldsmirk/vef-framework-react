@@ -455,12 +455,11 @@ export function deriveEvaluationVariables(schema: RuntimeSchema): Record<string,
  * TanStack Form treats `undefined` as "uncontrolled". A subform is seeded from
  * the supplied initial array — each supplied row merged over a fresh blank-row
  * seed, so a row record missing a template key still gets that field's default
- * slot rather than an uncontrolled `undefined` — or to `minRows` blank rows
- * (each built from its template) so a required-minimum group renders its rows
- * on load.
+ * slot rather than an uncontrolled `undefined` — or per its `rows` config
+ * (`rows.min` blank rows for dynamic, static items for fixed).
  */
 export function deriveDefaultValues(
-  schema: RuntimeSchema,
+  schema: Omit<RuntimeSchema, "dataSources"> & { dataSources?: readonly FormDataSource[] },
   initialValues: Record<string, unknown> = {}
 ): Record<string, unknown> {
   const values: Record<string, unknown> = {};
@@ -533,8 +532,6 @@ function seedSubformRows(
   subform: SubformNode,
   dataSources: readonly FormDataSource[] | undefined
 ): Array<Record<string, unknown>> {
-  const mutableDataSources = dataSources ? [...dataSources] : undefined;
-
   if (isFixedSubform(subform)) {
     const items = resolveStaticFixedRowItems(subform.rows, dataSources);
 
@@ -547,7 +544,7 @@ function seedSubformRows(
         ...deriveDefaultValues({
           id: subform.id,
           children: subform.template,
-          dataSources: mutableDataSources
+          dataSources
         }),
         [subform.rows.itemKey]: {
           value: option.value,
@@ -562,7 +559,7 @@ function seedSubformRows(
   return Array.from({ length: count }, () => deriveDefaultValues({
     id: subform.id,
     children: subform.template,
-    dataSources: mutableDataSources
+    dataSources
   }));
 }
 

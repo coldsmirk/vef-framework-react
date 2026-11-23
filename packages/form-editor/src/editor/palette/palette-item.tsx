@@ -161,7 +161,7 @@ export function PaletteItem({ definition, iconOnly = false }: PaletteItemProps):
   const { ref } = useDraggable({
     id: `palette-${paletteKey}`,
     type: FIELD_DRAG_TYPE,
-    data: { kind: "palette", type: paletteKey },
+    data: { kind: "palette", paletteKey },
     plugins: [Feedback.configure({ feedback: "clone", dropAnimation: null })],
     sensors: palettePointerSensors
   });

@@ -1,7 +1,7 @@
 import type { FieldDefinition } from "../../types";
 
 import { createId } from "../../engine/ids";
-import { DEFAULT_DYNAMIC_ADD_LABEL, DEFAULT_FIXED_HEADER_LABEL, DEFAULT_FIXED_ITEM_KEY } from "../../engine/schema/subform";
+import { createDefaultFixedSubformRows, DEFAULT_DYNAMIC_ADD_LABEL } from "../../engine/schema/subform";
 import { defineContainerDefinition } from "../../types";
 
 /**
@@ -96,19 +96,7 @@ export const matrixTableDefinition: FieldDefinition = defineContainerDefinition(
         type: "subform",
         variant: "table",
         label: "矩阵表格",
-        rows: {
-          mode: "fixed",
-          itemKey: DEFAULT_FIXED_ITEM_KEY,
-          headerLabel: DEFAULT_FIXED_HEADER_LABEL,
-          required: true,
-          source: {
-            kind: "static",
-            options: [
-              { label: "检查项 1", value: "item_1" },
-              { label: "检查项 2", value: "item_2" }
-            ]
-          }
-        },
+        rows: createDefaultFixedSubformRows(),
         template: []
       };
     }

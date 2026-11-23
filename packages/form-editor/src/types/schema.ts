@@ -903,7 +903,7 @@ export interface FixedSubformRows {
    */
   itemKey: string;
   /**
-   * Display title for the read-only row-header column (default `"自查内容"`).
+   * Display title for the read-only row-header column (default `"检查项"`).
    */
   headerLabel?: string;
   /**

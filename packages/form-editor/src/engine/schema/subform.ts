@@ -12,7 +12,7 @@ export const DEFAULT_FIXED_ITEM_KEY = "item";
  * Default column title for the read-only row-header column of a fixed-row
  * subform.
  */
-export const DEFAULT_FIXED_HEADER_LABEL = "自查内容";
+export const DEFAULT_FIXED_HEADER_LABEL = "检查项";
 
 /**
  * Default label for a dynamic subform's add-row button.
@@ -20,6 +20,26 @@ export const DEFAULT_FIXED_HEADER_LABEL = "自查内容";
 export const DEFAULT_DYNAMIC_ADD_LABEL = "新增一行";
 
 const EMPTY_DYNAMIC_ROWS: DynamicSubformRows = Object.freeze({ mode: "dynamic" });
+
+/**
+ * Build the default fixed-row configuration for a new matrix table or a subform
+ * switching from dynamic to fixed mode.
+ */
+export function createDefaultFixedSubformRows(itemKey: string = DEFAULT_FIXED_ITEM_KEY): FixedSubformRows {
+  return {
+    mode: "fixed",
+    itemKey,
+    headerLabel: DEFAULT_FIXED_HEADER_LABEL,
+    required: true,
+    source: {
+      kind: "static",
+      options: [
+        { label: "检查项 1", value: "item_1" },
+        { label: "检查项 2", value: "item_2" }
+      ]
+    }
+  };
+}
 
 /**
  * Narrow a subform to its fixed-row mode. Omitted `rows` is always dynamic.
@@ -33,13 +53,27 @@ export function isFixedSubform(subform: SubformNode): subform is SubformNode & {
  * `{ mode: "dynamic" }` descriptor when `rows` is omitted or fixed.
  */
 export function getDynamicSubformRows(subform: SubformNode): DynamicSubformRows {
-  return subform.rows?.mode === "dynamic" ? subform.rows : EMPTY_DYNAMIC_ROWS;
+  if (subform.rows === undefined || subform.rows.mode === "fixed") {
+    return EMPTY_DYNAMIC_ROWS;
+  }
+
+  return subform.rows;
+}
+
+/**
+ * Effective column title for a fixed-row subform's read-only row-header column,
+ * falling back to {@link DEFAULT_FIXED_HEADER_LABEL} when unset or empty.
+ */
+export function fixedRowHeaderTitle(rows: FixedSubformRows): string {
+  return rows.headerLabel && rows.headerLabel.length > 0
+    ? rows.headerLabel
+    : DEFAULT_FIXED_HEADER_LABEL;
 }
 
 /**
  * Whether a candidate item value is a valid non-empty scalar (`string` with
  * non-whitespace text, or finite `number`). Mirrors the Go backend's
- * `formatFixedRowItemValue` check.
+ * `shared.FormatFixedRowItemValue` check.
  */
 export function isValidFixedItemValue(value: unknown): value is string | number {
   if (typeof value === "string") {
@@ -47,27 +81,6 @@ export function isValidFixedItemValue(value: unknown): value is string | number 
   }
 
   return typeof value === "number" && Number.isFinite(value);
-}
-
-/**
- * Return the stringified option values that appear more than once in `options`.
- * Shared by schema validation, approval projection, and `OptionListEditor`.
- */
-export function findDuplicateOptionValues(options: ReadonlyArray<{ value: unknown }>): string[] {
-  const seen = new Set<string>();
-  const duplicated = new Set<string>();
-
-  for (const option of options) {
-    const value = String(option.value);
-
-    if (seen.has(value)) {
-      duplicated.add(value);
-    }
-
-    seen.add(value);
-  }
-
-  return [...duplicated];
 }
 
 /**

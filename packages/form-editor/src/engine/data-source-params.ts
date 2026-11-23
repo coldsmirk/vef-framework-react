@@ -1,7 +1,7 @@
 import type { DynamicValue, RemoteDataSourceRequest, ResolvedDataSourceRequest, RuntimeSchema } from "../types";
 
 import { linkageRules, ruleActions } from "./linkage/shape";
-import { isFixedSubform } from "./schema/subform";
+import { getNodeOptionSource } from "./options";
 import { walkNodes } from "./schema/walk";
 
 /**
@@ -38,9 +38,7 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
       return;
     }
 
-    const source = node.type === "subform"
-      ? isFixedSubform(node) ? node.rows.source : undefined
-      : "dataSource" in node ? node.dataSource : undefined;
+    const source = getNodeOptionSource(node);
 
     if (source?.kind === "remote" && hasBoundParams(source.request)) {
       bound = true;

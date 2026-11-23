@@ -92,11 +92,11 @@ export class FormFieldRegistry {
   }
 
   /**
-   * Resolve a palette entry by its `paletteId ?? type` key (falls back to
-   * primary type lookup).
+   * Resolve a palette entry by its `paletteId ?? type` key. Every registered
+   * definition — primary types and presets alike — lives in `paletteEntries`.
    */
   getPaletteItem(paletteKey: string): FieldDefinition | undefined {
-    return this.paletteEntries.get(paletteKey) ?? this.fields.get(paletteKey);
+    return this.paletteEntries.get(paletteKey);
   }
 
   /**

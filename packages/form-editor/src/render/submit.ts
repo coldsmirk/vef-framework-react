@@ -471,7 +471,7 @@ function matchesPattern(pattern: string, value: string): boolean {
 
 /**
  * Seed a fresh subform row: type-appropriate empty values for keyed leaf
- * fields, nested subforms seeded to their own `minRows`.
+ * fields, nested subforms seeded per their `rows` configuration.
  */
 export function blankSubformRow(subform: SubformNode): Record<string, unknown> {
   return deriveDefaultValues({

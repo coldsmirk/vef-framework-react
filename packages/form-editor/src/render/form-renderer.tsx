@@ -1018,18 +1018,9 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
               });
             }
 
-            const clean = next.map((row, index) => {
+            const clean = next.map(row => {
               const rest = { ...row };
               delete rest[SUBFORM_ROW_ID];
-
-              // Defensively preserve the read-only header cell snapshot on fixed rows.
-              if (fixed && !Object.hasOwn(rest, fixed.itemKey)) {
-                const prevRow = rows[index];
-
-                if (prevRow && Object.hasOwn(prevRow, fixed.itemKey)) {
-                  rest[fixed.itemKey] = prevRow[fixed.itemKey];
-                }
-              }
 
               return rest;
             });

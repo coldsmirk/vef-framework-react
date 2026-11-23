@@ -64,9 +64,21 @@ describe("useEditorDragEnd", () => {
   it("inserts a new field when a palette item is dropped", () => {
     const { api, dragEnd } = setup();
 
-    act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, { zone: "root" })));
+    act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, { zone: "root" })));
 
     expect(fieldIds(api)).toHaveLength(1);
+  });
+
+  it("inserts a palette preset by its paletteKey", () => {
+    const { api, dragEnd } = setup();
+
+    act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "matrix-table" }, { zone: "root" })));
+
+    expect(api.getState().schema.presentations.pc.children[0]).toMatchObject({
+      type: "subform",
+      variant: "table",
+      rows: { mode: "fixed" }
+    });
   });
 
   it("moves an existing block beside an anchor", () => {
@@ -116,7 +128,7 @@ describe("useEditorDragEnd", () => {
     }));
 
     act(() => dragEnd(dragEvent(
-      { kind: "palette", type: "textfield" },
+      { kind: "palette", paletteKey: "textfield" },
       {
         zone: "container",
         containerId: "Tabs_1",
@@ -152,7 +164,7 @@ describe("useEditorDragEnd", () => {
   it("ignores a canceled drag", () => {
     const { api, dragEnd } = setup();
 
-    act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, { zone: "root" }, true)));
+    act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, { zone: "root" }, true)));
 
     expect(fieldIds(api)).toHaveLength(0);
   });
@@ -160,16 +172,16 @@ describe("useEditorDragEnd", () => {
   it("ignores a drag with no drop target", () => {
     const { api, dragEnd } = setup();
 
-    act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, null)));
+    act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, null)));
 
     expect(fieldIds(api)).toHaveLength(0);
   });
 
-  it("ignores a palette type missing from the registry", () => {
+  it("ignores a palette key missing from the registry", () => {
     const { api, dragEnd } = setup();
     const before = api.getState();
 
-    act(() => dragEnd(dragEvent({ kind: "palette", type: "not-registered" }, { zone: "root" })));
+    act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "not-registered" }, { zone: "root" })));
 
     expect(api.getState().schema).toBe(before.schema);
     expect(api.getState().past).toBe(before.past);
@@ -180,7 +192,7 @@ describe("useEditorDragEnd", () => {
       const { api, dragEnd } = setup();
 
       act(() => dragEnd(dragEvent({ kind: "mystery" }, { zone: "root" })));
-      act(() => dragEnd(dragEvent({ kind: "palette", type: 42 }, { zone: "root" })));
+      act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: 42 }, { zone: "root" })));
       act(() => dragEnd(dragEvent("palette", { zone: "root" })));
       act(() => dragEnd(dragEvent(null, { zone: "root" })));
 
@@ -190,14 +202,14 @@ describe("useEditorDragEnd", () => {
     it("rejects target data that is not DropZoneData", () => {
       const { api, dragEnd } = setup();
 
-      act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, { zone: "bogus" })));
-      act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, {
+      act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, { zone: "bogus" })));
+      act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, {
         zone: "beside",
         anchorId: 9,
         side: "after"
       })));
-      act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, { zone: "container" })));
-      act(() => dragEnd(dragEvent({ kind: "palette", type: "textfield" }, "root")));
+      act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, { zone: "container" })));
+      act(() => dragEnd(dragEvent({ kind: "palette", paletteKey: "textfield" }, "root")));
 
       expect(fieldIds(api)).toHaveLength(0);
     });
@@ -222,7 +234,7 @@ describe("isContainerDragData", () => {
   });
 
   it("rejects a palette drag", () => {
-    expect(isContainerDragData({ kind: "palette", type: "textfield" })).toBe(false);
+    expect(isContainerDragData({ kind: "palette", paletteKey: "textfield" })).toBe(false);
   });
 
   it("rejects a block drag missing the isContainer flag", () => {

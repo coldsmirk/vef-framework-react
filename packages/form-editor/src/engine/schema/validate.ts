@@ -4,8 +4,9 @@ import type { ValidationIssue } from "../validation";
 
 import { CONTAINER_TYPES, GAP_SCALES, ROW_COLS } from "../../types";
 import { validateLinkageSchema } from "../linkage";
+import { findDuplicateOptionValues } from "../options";
 import { createIssue, hasErrorIssues, isRecord, validateRemoteRequest } from "../validation";
-import { findDuplicateOptionValues, isValidFixedItemValue } from "./subform";
+import { isValidFixedItemValue } from "./subform";
 
 /**
  * Result of a `validateSchema` run. `valid` is true when no issue carries

@@ -1,6 +1,6 @@
 import type { PresentationLayer } from "../types";
 
-import { isFixedSubform } from "./schema/subform";
+import { getNodeOptionSource } from "./options";
 import { walkNodes } from "./schema/walk";
 
 /**
@@ -14,9 +14,7 @@ export function collectCodeSets(layer: PresentationLayer): string[] {
   const codeSets = new Set<string>();
 
   walkNodes(layer, node => {
-    const source = node.type === "subform"
-      ? isFixedSubform(node) ? node.rows.source : undefined
-      : "dataSource" in node ? node.dataSource : undefined;
+    const source = getNodeOptionSource(node);
 
     if (source?.kind === "codeSet" && source.codeSet.length > 0) {
       codeSets.add(source.codeSet);
