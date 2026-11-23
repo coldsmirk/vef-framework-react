@@ -2,6 +2,7 @@ import type { Block, DataSourceResolver, FieldOption, FormSchema } from "../type
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ConfigProvider } from "@vef-framework-react/components";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
@@ -263,6 +264,34 @@ describe("subform table runtime behavior", () => {
 
     expect(await screen.findByRole("option", { name: "北京" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "上海" })).not.toBeInTheDocument();
+  });
+
+  it("outlines a required select cell in error when the row is saved empty", async () => {
+    const user = userEvent.setup();
+    const schema = selectColumnSchema();
+    const subform = schema.presentations.pc.children[0] as Extract<Block, { type: "subform" }>;
+    subform.template = [{ ...subform.template[0], validate: { required: true } } as Block];
+    const registry = createDefaultRegistry();
+    // The failed save reports through the imperative message helper, which
+    // the components ConfigProvider initializes.
+    render(
+      <ConfigProvider>
+        <RegistryProvider registries={{ pc: registry, mobile: registry }}>
+          <FormRenderer schema={schema} />
+        </RegistryProvider>
+      </ConfigProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: /新增一行/ }));
+    // antd exposes `status` only as a class on the select root; its prefix
+    // depends on the ConfigProvider, so match the documented suffix.
+    const select = screen.getByRole("combobox").closest("[class*='-select ']");
+
+    expect(select?.className).not.toMatch(/-select-status-error/);
+
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+
+    await waitFor(() => expect(select?.className).toMatch(/-select-status-error/));
   });
 
   it("honors dynamic rows.addLabel on the runtime table add button", async () => {

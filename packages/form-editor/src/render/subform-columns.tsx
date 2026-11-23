@@ -165,9 +165,22 @@ function normalizeSingleSelectionValue(value: unknown): string | number | undefi
   return value === "" || value === null || value === undefined ? undefined : value as string | number;
 }
 
+/**
+ * Whether the editing row's draft value for `key` currently fails its column
+ * validators. The `f.*` editors of the other columns get this outline from
+ * `withFormItem`'s validate status; the selection editors bind the draft form
+ * directly, so they read the same field meta to show the same feedback.
+ */
+function useDraftFieldInvalid(key: string): boolean {
+  const form = useFormContext<Row>();
+
+  return useFormStore(form.store, state => (state.fieldMeta[key]?.errors.length ?? 0) > 0);
+}
+
 function SelectCellEditor({ field }: { field: SelectField }): ReactElement {
   const form = useFormContext<Row>();
   const value = useFormStore(form.store, state => state.values[field.key]);
+  const invalid = useDraftFieldInvalid(field.key);
   const disabled = useDisabled();
   const {
     error,
@@ -185,7 +198,7 @@ function SelectCellEditor({ field }: { field: SelectField }): ReactElement {
       options={options}
       placeholder={resolveFieldPlaceholder(field)}
       showSearch={field.showSearch}
-      status={error ? "error" : undefined}
+      status={error || invalid ? "error" : undefined}
       style={fullWidthStyle}
       value={normalizeSingleSelectionValue(value)}
       onChange={(next: string | number | undefined) => form.setFieldValue(field.key, next ?? "")}
@@ -196,6 +209,7 @@ function SelectCellEditor({ field }: { field: SelectField }): ReactElement {
 function MultiSelectCellEditor({ field }: { field: MultiSelectField }): ReactElement {
   const form = useFormContext<Row>();
   const value = useFormStore(form.store, state => state.values[field.key]);
+  const invalid = useDraftFieldInvalid(field.key);
   const disabled = useDisabled();
   const {
     error,
@@ -216,7 +230,7 @@ function MultiSelectCellEditor({ field }: { field: MultiSelectField }): ReactEle
       options={options}
       placeholder={resolveFieldPlaceholder(field)}
       showSearch={field.showSearch === true}
-      status={error ? "error" : undefined}
+      status={error || invalid ? "error" : undefined}
       style={fullWidthStyle}
       value={Array.isArray(value) ? value as Array<string | number> : EMPTY_MULTI_VALUE}
       onChange={(next: Array<string | number> | undefined) => form.setFieldValue(field.key, next ?? [])}
