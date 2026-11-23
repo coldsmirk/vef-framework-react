@@ -144,6 +144,20 @@ if (isBrowserEnvironment) {
       // jsdom stub: scrollIntoView is a no-op under test.
     };
   }
+
+  // jsdom 29's CSSStyleDeclaration skips computed-value caching for custom
+  // properties (`--*`), so resolving a custom property whose value is `inherit`
+  // when no ancestor defines it recurses over ancestors in O(2^depth) time on
+  // every cached `getComputedStyle` hit. antd v6's Button emits three such
+  // tokens (`onlyIconSize{,SM,LG}: "inherit"`), turning `@testing-library`
+  // queries on buttons inside FormRenderer -> Card -> EditableTable (~depth 19)
+  // into ~2s per call (~17s per test). Seeding concrete root fallbacks breaks
+  // the recursion at O(depth) without altering any standard CSS property.
+  for (const prefix of ["ant", "vef"]) {
+    for (const suffix of ["", "-sm", "-lg"]) {
+      global.document.documentElement.style.setProperty(`--${prefix}-button-only-icon-size${suffix}`, "1em");
+    }
+  }
 }
 
 beforeEach(() => {
