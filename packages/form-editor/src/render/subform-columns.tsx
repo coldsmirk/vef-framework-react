@@ -197,6 +197,7 @@ function SelectCellEditor({ field }: { field: SelectField }): ReactElement {
       notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
       options={options}
       placeholder={resolveFieldPlaceholder(field)}
+      popupMatchSelectWidth={false}
       showSearch={field.showSearch}
       status={error || invalid ? "error" : undefined}
       style={fullWidthStyle}
@@ -229,6 +230,7 @@ function MultiSelectCellEditor({ field }: { field: MultiSelectField }): ReactEle
       notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
       options={options}
       placeholder={resolveFieldPlaceholder(field)}
+      popupMatchSelectWidth={false}
       showSearch={field.showSearch === true}
       status={error || invalid ? "error" : undefined}
       style={fullWidthStyle}
