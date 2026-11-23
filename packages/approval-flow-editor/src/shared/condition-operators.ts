@@ -19,7 +19,11 @@ export const OPERATOR_LABELS: Record<ConditionOperator, string> = {
 
 export const NO_VALUE_OPERATORS: ConditionOperator[] = ["is_empty", "is_not_empty"];
 
-export const MULTI_VALUE_OPERATORS: ConditionOperator[] = ["in", "not_in"];
+/**
+ * Operators whose comparison value is a list of candidates (`in` / `not_in`),
+ * as opposed to the field being multi-value (see {@link getOperatorsForField}).
+ */
+export const LIST_VALUE_OPERATORS: ConditionOperator[] = ["in", "not_in"];
 
 export const AGGREGATE_LABELS: Record<AggregateKind, string> = {
   count: "行数",

@@ -16,7 +16,7 @@ import { XIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import { useEditorPlugins } from "../../plugins";
-import { AGGREGATE_LABELS, getOperatorsForField, MULTI_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "../../shared/condition-operators";
+import { AGGREGATE_LABELS, getOperatorsForField, LIST_VALUE_OPERATORS, NO_VALUE_OPERATORS, OPERATOR_LABELS } from "../../shared/condition-operators";
 import { conditionSubjectOptions, subjectOptionValue } from "../../shared/condition-subjects";
 import { AGGREGATE_KINDS, AGGREGATE_OPERATORS } from "../../types";
 import { PrincipalPicker } from "./principal-picker";
@@ -209,7 +209,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       ? getOperatorsForField(selectedField)
       : [];
   const isNoValue = !isTableSubject && (NO_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
-  const isMultiValue = !isTableSubject && (MULTI_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
+  const takesListValue = !isTableSubject && (LIST_VALUE_OPERATORS as readonly string[]).includes(condition.operator);
 
   const handleFieldChange = (value: string) => {
     const nextField = subjectOptions.find(option => option.value === value)!.field;
@@ -278,7 +278,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
 
     if (principalKind && IDENTITY_OPERATORS.has(condition.operator)) {
       const single = asStringValue(condition.value);
-      const selected = isMultiValue
+      const selected = takesListValue
         ? Array.isArray(condition.value) ? condition.value.map(String) : []
         : single ? [single] : [];
 
@@ -291,7 +291,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
           // Single-value operators keep the last pick: the picker is a
           // multi-select by contract, so re-picking must replace rather than
           // accumulate a value the engine would compare as one id.
-          onChange={ids => onChange({ ...condition, value: isMultiValue ? ids : ids.at(-1) })}
+          onChange={ids => onChange({ ...condition, value: takesListValue ? ids : ids.at(-1) })}
         />
       );
     }
@@ -300,7 +300,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
 
     // Multi-value lists collapse overflowing tags into "+N" so the value slot
     // keeps the row's single-line height.
-    if (isMultiValue && kind === "select" && selectedField.options) {
+    if (takesListValue && kind === "select" && selectedField.options) {
       return (
         <Select
           disabled={readonly}
@@ -314,7 +314,7 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
       );
     }
 
-    if (isMultiValue) {
+    if (takesListValue) {
       return (
         <Select
           disabled={readonly}
