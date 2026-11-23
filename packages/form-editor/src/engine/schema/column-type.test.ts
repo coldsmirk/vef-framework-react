@@ -28,6 +28,30 @@ describe("inferColumnType", () => {
     } as FormField)).toBe("date");
     expect(inferColumnType({
       id: "1",
+      type: "date",
+      key: "a",
+      granularity: "day"
+    } as FormField)).toBe("date");
+    expect(inferColumnType({
+      id: "1",
+      type: "date",
+      key: "a",
+      granularity: "year"
+    } as FormField)).toBe("string");
+    expect(inferColumnType({
+      id: "1",
+      type: "date",
+      key: "a",
+      granularity: "quarter"
+    } as FormField)).toBe("string");
+    expect(inferColumnType({
+      id: "1",
+      type: "date",
+      key: "a",
+      granularity: "month"
+    } as FormField)).toBe("string");
+    expect(inferColumnType({
+      id: "1",
       type: "datetime",
       key: "a"
     } as FormField)).toBe("datetime");
@@ -169,6 +193,34 @@ describe("toColumnDefinitions", () => {
             label: "生日"
           },
           {
+            id: "F3Y",
+            type: "date",
+            key: "fiscalYear",
+            label: "年度",
+            granularity: "year"
+          },
+          {
+            id: "F3Q",
+            type: "date",
+            key: "fiscalQuarter",
+            label: "季度",
+            granularity: "quarter"
+          },
+          {
+            id: "F3M",
+            type: "date",
+            key: "billingMonth",
+            label: "月份",
+            granularity: "month"
+          },
+          {
+            id: "F3R",
+            type: "daterange",
+            key: "span",
+            label: "区间",
+            granularity: "month"
+          },
+          {
             id: "F4",
             type: "checkbox-group",
             key: "tags",
@@ -213,6 +265,22 @@ describe("toColumnDefinitions", () => {
         precision: 2
       },
       { key: "birthday", columnType: "date" },
+      {
+        key: "fiscalYear",
+        columnType: "string",
+        maxLength: 4
+      },
+      {
+        key: "fiscalQuarter",
+        columnType: "string",
+        maxLength: 7
+      },
+      {
+        key: "billingMonth",
+        columnType: "string",
+        maxLength: 7
+      },
+      { key: "span", columnType: "json" },
       { key: "tags", columnType: "json" }
     ]);
   });
@@ -220,7 +288,7 @@ describe("toColumnDefinitions", () => {
   it("excludes non-keyed presentation and subform-template fields", () => {
     const keys = toColumnDefinitions(schema).map(definition => definition.key);
 
-    expect(keys).toEqual(["name", "price", "birthday", "tags"]);
+    expect(keys).toEqual(["name", "price", "birthday", "fiscalYear", "fiscalQuarter", "billingMonth", "span", "tags"]);
     expect(keys).not.toContain("amount");
     expect(keys).not.toContain("lines");
   });

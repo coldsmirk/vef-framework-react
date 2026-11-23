@@ -5,9 +5,10 @@ import type { Block, FieldOption, FieldOptionSource, KeyedFormField, SubformNode
 import type { FormRendererProps } from "./form-renderer";
 
 import { createEditableColumn, filterOptionByLabel, Flex, Text } from "@vef-framework-react/components";
-import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
+import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framework-react/shared";
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
+import { antdPickerForGranularity } from "../engine/schema/date-granularity";
 import { isContainerNode } from "../engine/schema/walk";
 import { validateKeyedFieldValue } from "./submit";
 
@@ -183,7 +184,14 @@ function columnFor(field: KeyedFormField, codeSets: CodeSetOptions): EditableCol
         title,
         width,
         validators,
-        renderEditor: f => <f.DatePicker noWrapper format={DEFAULT_DATE_FORMAT} placeholder={field.placeholder} />
+        renderEditor: f => (
+          <f.DatePicker
+            noWrapper
+            format={getDateGranularityFormat(field.granularity)}
+            picker={antdPickerForGranularity(field.granularity)}
+            placeholder={field.placeholder}
+          />
+        )
       });
     }
 
@@ -201,7 +209,13 @@ function columnFor(field: KeyedFormField, codeSets: CodeSetOptions): EditableCol
         title,
         width,
         validators,
-        renderEditor: f => <f.DateRangePicker noWrapper format={DEFAULT_DATE_FORMAT} />
+        renderEditor: f => (
+          <f.DateRangePicker
+            noWrapper
+            format={getDateGranularityFormat(field.granularity)}
+            picker={antdPickerForGranularity(field.granularity)}
+          />
+        )
       });
     }
 

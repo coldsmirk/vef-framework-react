@@ -1,21 +1,21 @@
-import type { FieldOption, FormDataSource, FormField, FormSchema } from "../../types";
+import type { DateGranularity, FieldOption, FormDataSource, FormField, FormSchema } from "../../types";
 
 import { walkUniqueRootKeyedFields } from "../keys";
 
 /**
  * Coarse field kind understood by the approval flow editor and the Go backend
- * (`approval/form_definition.go` `FieldKind`). The form editor's own field
+ * (`approval/enums.go` `FieldKind`). The form editor's own field
  * types are richer; this is the lowest-common-denominator the cross-package
  * field-permission matrix keys off.
  *
  * For approval-backend integrations use `projectFormSchema` from
  * `@vef-framework-react/approval-form-bridge` instead — its mapping is the
- * authoritative one there. This table intentionally stays lossy (switch /
- * daterange collapse into a nearest kind, subforms are excluded, unknown
- * types fall back to "input") because a permission row only needs a rough
- * label, while the bridge must reject what the backend cannot carry.
+ * authoritative one there. This table intentionally stays lossy (switch
+ * collapses into a nearest kind, subforms are excluded, unknown types fall back
+ * to "input") because a permission row only needs a rough label, while the
+ * bridge must reject what the backend cannot carry.
  */
-export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload";
+export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "datetime" | "daterange" | "upload";
 
 /**
  * A form field flattened to the shape the approval flow editor consumes through
@@ -28,6 +28,7 @@ export interface FormFieldDefinition {
   kind: FieldKind;
   label: string;
   isMultiple?: boolean;
+  granularity?: DateGranularity;
   options?: FieldOption[];
 }
 
@@ -42,8 +43,8 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   radio: "select",
   "checkbox-group": "select",
   date: "date",
-  datetime: "date",
-  daterange: "date",
+  datetime: "datetime",
+  daterange: "daterange",
   upload: "upload"
 };
 
@@ -104,12 +105,16 @@ export function toFormFieldDefinitions(schema: FormSchema): FormFieldDefinition[
   walkUniqueRootKeyedFields(schema, field => {
     const options = staticOptions(field, dataSources);
     const isMultiple = MULTI_VALUE_SELECT_TYPES.has(field.type);
+    const granularity = (field.type === "date" || field.type === "daterange")
+      ? (field as { granularity?: DateGranularity }).granularity
+      : undefined;
 
     definitions.push({
       key: field.key,
       kind: fieldKind(field.type),
       label: field.label ?? field.key,
       ...isMultiple && { isMultiple },
+      ...granularity !== undefined && { granularity },
       ...options && { options }
     });
   });

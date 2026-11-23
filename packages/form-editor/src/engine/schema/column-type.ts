@@ -1,6 +1,24 @@
-import type { ColumnDataType, FormField, FormSchema, Validatable } from "../../types";
+import type { ColumnDataType, DateGranularity, FormField, FormSchema, Validatable } from "../../types";
 
 import { walkUniqueRootKeyedFields } from "../keys";
+
+/**
+ * Fixed character length for a non-day date granularity stored in a VARCHAR
+ * column (`4` for `YYYY`, `7` for `YYYY-Qn` / `YYYY-MM`). Day dates project to
+ * a native `date` column and carry no length bound. Mirrors
+ * `approval.DateGranularity.MaxLength` in Go `approval/enums.go`.
+ */
+export function dateGranularityMaxLength(granularity: DateGranularity | undefined): number | undefined {
+  if (granularity === "year") {
+    return 4;
+  }
+
+  if (granularity === "quarter" || granularity === "month") {
+    return 7;
+  }
+
+  return undefined;
+}
 
 /**
  * A keyed field projected to its table-storage column shape: the dialect-
@@ -24,7 +42,6 @@ export interface ColumnDefinition {
  */
 const COLUMN_TYPE_BY_WIDGET: Record<string, ColumnDataType> = {
   switch: "boolean",
-  date: "date",
   datetime: "datetime",
   "checkbox-group": "json",
   "multi-select": "json",
@@ -37,9 +54,10 @@ const COLUMN_TYPE_BY_WIDGET: Record<string, ColumnDataType> = {
  * Infer a keyed field's column type from its widget, honoring an explicit
  * `columnType` override first. Most widgets map deterministically; only the
  * value-ambiguous ones need the override: number is integer or decimal by its
- * `precision`, and select/radio default to string but can be pinned to integer
- * when their option values are numeric. Unknown / consumer-registered widgets
- * fall back to a lossless string/text column.
+ * `precision`, date is `date` for day or sized `string` for year/quarter/month,
+ * and select/radio default to string but can be pinned to integer when their
+ * option values are numeric. Unknown / consumer-registered widgets fall back to
+ * a lossless string/text column.
  */
 export function inferColumnType(field: FormField): ColumnDataType {
   const override = (field as { columnType?: ColumnDataType }).columnType;
@@ -52,6 +70,12 @@ export function inferColumnType(field: FormField): ColumnDataType {
     const { precision } = field as { precision?: number };
 
     return precision !== undefined && precision > 0 ? "decimal" : "integer";
+  }
+
+  if (field.type === "date") {
+    const { granularity } = field as { granularity?: DateGranularity };
+
+    return granularity === undefined || granularity === "day" ? "date" : "string";
   }
 
   // An upload field's value is a storage key: one string when it accepts a
@@ -95,7 +119,9 @@ export function toColumnDefinitions(schema: FormSchema): ColumnDefinition[] {
     const columnType = inferColumnType(field);
     const definition: ColumnDefinition = { key: field.key, columnType };
 
-    const maxLength = (field as Validatable).validate?.maxLength;
+    const explicitMaxLength = (field as Validatable).validate?.maxLength;
+    const maxLength = explicitMaxLength
+      ?? (field.type === "date" ? dateGranularityMaxLength((field as { granularity?: DateGranularity }).granularity) : undefined);
 
     if (columnType === "string" && maxLength !== undefined && maxLength > 0) {
       definition.maxLength = maxLength;

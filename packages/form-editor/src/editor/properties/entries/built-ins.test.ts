@@ -1,5 +1,6 @@
 import { BUILT_IN_PROPERTY_ENTRIES } from "./built-ins";
 import { CheckboxEntry } from "./checkbox-entry";
+import { DateGranularityEntry } from "./date-granularity-entry";
 import { NumberEntry } from "./number-entry";
 import { OptionsSourceEntry } from "./options-source";
 import { SelectEntry } from "./select-entry";
@@ -16,6 +17,7 @@ describe("BUILT_IN_PROPERTY_ENTRIES", () => {
     expect(BUILT_IN_PROPERTY_ENTRIES.number).toBe(NumberEntry);
     expect(BUILT_IN_PROPERTY_ENTRIES.checkbox).toBe(CheckboxEntry);
     expect(BUILT_IN_PROPERTY_ENTRIES.select).toBe(SelectEntry);
+    expect(BUILT_IN_PROPERTY_ENTRIES["date-granularity"]).toBe(DateGranularityEntry);
     expect(BUILT_IN_PROPERTY_ENTRIES["options-editor"]).toBe(OptionsSourceEntry);
     expect(BUILT_IN_PROPERTY_ENTRIES["linkage-rules"]).toBeDefined();
   });

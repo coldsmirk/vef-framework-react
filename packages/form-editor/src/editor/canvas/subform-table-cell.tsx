@@ -4,8 +4,9 @@ import type { KeyedFormField } from "../../types";
 
 import { css } from "@emotion/react";
 import { Checkbox, DatePicker, globalCssVars, Input, InputNumber, Radio, Select, Switch } from "@vef-framework-react/components";
-import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT } from "@vef-framework-react/shared";
+import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framework-react/shared";
 
+import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
 import { useCodeSetState } from "../../render/code-set-context";
 import { columnOptions } from "../../render/subform-columns";
 
@@ -72,7 +73,15 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
     }
 
     case "date": {
-      return <DatePicker disabled format={DEFAULT_DATE_FORMAT} placeholder={field.placeholder} style={fullWidthStyle} />;
+      return (
+        <DatePicker
+          disabled
+          format={getDateGranularityFormat(field.granularity)}
+          picker={antdPickerForGranularity(field.granularity)}
+          placeholder={field.placeholder}
+          style={fullWidthStyle}
+        />
+      );
     }
 
     case "datetime": {
@@ -80,7 +89,14 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
     }
 
     case "daterange": {
-      return <DatePicker.RangePicker disabled format={DEFAULT_DATE_FORMAT} style={fullWidthStyle} />;
+      return (
+        <DatePicker.RangePicker
+          disabled
+          format={getDateGranularityFormat(field.granularity)}
+          picker={antdPickerForGranularity(field.granularity)}
+          style={fullWidthStyle}
+        />
+      );
     }
 
     default: {

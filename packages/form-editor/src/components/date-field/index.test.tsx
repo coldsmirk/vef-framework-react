@@ -226,4 +226,129 @@ describe("date fields", () => {
 
     expect(screen.getByRole("textbox")).toHaveValue("");
   });
+
+  it("displays and formats each date granularity (year, quarter, month, day)", () => {
+    const { Component } = dateFieldDefinition;
+
+    if (!Component) {
+      throw new Error("date field is missing a Component");
+    }
+
+    const cases = [
+      {
+        granularity: "year" as const,
+        valid: "2026",
+        wrong: "2026-04-15"
+      },
+      {
+        granularity: "quarter" as const,
+        valid: "2026-Q4",
+        wrong: "2026-04"
+      },
+      {
+        granularity: "month" as const,
+        valid: "2026-04",
+        wrong: "2026-04-15"
+      },
+      {
+        granularity: "day" as const,
+        valid: "2026-04-15",
+        wrong: "2026-04"
+      }
+    ];
+
+    for (const {
+      granularity,
+      valid,
+      wrong
+    } of cases) {
+      const field: DateField = {
+        id: `D_${granularity}`,
+        type: "date",
+        key: `d_${granularity}`,
+        label: "日期",
+        granularity
+      };
+
+      const { rerender, unmount } = render(<Component domId={`field-${granularity}`} field={field} value={valid} onChange={vi.fn()} />);
+
+      expect(screen.getByRole("textbox")).toHaveValue(valid);
+
+      // A value from another granularity is rejected strictly and renders empty.
+      rerender(<Component domId={`field-${granularity}`} field={field} value={wrong} onChange={vi.fn()} />);
+      expect(screen.getByRole("textbox")).toHaveValue("");
+
+      unmount();
+    }
+  });
+
+  it("emits YYYY-Qn when a quarter is selected from the PC picker", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { Component } = dateFieldDefinition;
+
+    if (!Component) {
+      throw new Error("date field is missing a Component");
+    }
+
+    const field: DateField = {
+      id: "DQ",
+      type: "date",
+      key: "dq",
+      label: "季度",
+      granularity: "quarter"
+    };
+
+    render(<Component domId="field-dq" field={field} value="2026-Q1" onChange={onChange} />);
+
+    await user.click(screen.getByRole("textbox"));
+    await user.click(await screen.findByText("Q4"));
+
+    expect(onChange).toHaveBeenCalledWith("2026-Q4");
+  });
+
+  it("displays each daterange granularity and clears to an empty array", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const onChange = vi.fn();
+    const { Component } = dateRangeFieldDefinition;
+
+    if (!Component) {
+      throw new Error("date range field is missing a Component");
+    }
+
+    const cases = [
+      { granularity: "year" as const, pair: ["2024", "2026"] },
+      { granularity: "quarter" as const, pair: ["2026-Q1", "2026-Q4"] },
+      { granularity: "month" as const, pair: ["2026-01", "2026-06"] }
+    ];
+
+    for (const { granularity, pair } of cases) {
+      const field: DateRangeField = {
+        id: `R_${granularity}`,
+        type: "daterange",
+        key: `r_${granularity}`,
+        label: "区间",
+        granularity
+      };
+
+      const { unmount } = render(<Component domId={`field-r-${granularity}`} field={field} value={pair} onChange={onChange} />);
+      const inputs = screen.getAllByRole("textbox");
+
+      expect(inputs[0]).toHaveValue(pair[0]);
+      expect(inputs[1]).toHaveValue(pair[1]);
+
+      await user.click(getClearAffordance());
+      expect(onChange).toHaveBeenLastCalledWith([]);
+
+      unmount();
+    }
+  });
+
+  it("exposes the granularity property on date and daterange, but not datetime", () => {
+    const idsOf = (def: typeof dateFieldDefinition) => (def.properties ?? []).flatMap(group => group.entries.map(entry => entry.id));
+
+    expect(idsOf(dateFieldDefinition)).toContain("granularity");
+    expect(idsOf(dateRangeFieldDefinition)).toContain("granularity");
+    expect(idsOf(datetimeFieldDefinition)).not.toContain("granularity");
+  });
 });

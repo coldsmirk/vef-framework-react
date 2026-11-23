@@ -1,5 +1,6 @@
-import type { ColumnDataType, FormField, PropertyEntry, PropertyEntryOption, Validatable } from "../types";
+import type { ColumnDataType, DateField, DateGranularity, DateRangeField, FormField, PropertyEntry, PropertyEntryOption, Validatable } from "../types";
 
+import { applyDateGranularityToField, DATE_GRANULARITY_OPTIONS } from "../engine/schema/date-granularity";
 import { definePropertyEntry } from "../types";
 
 /**
@@ -235,5 +236,22 @@ export function columnTypeEntry<F extends ColumnTypedField>(options: PropertyEnt
     options: [{ value: "", label: "自动(按控件推断)" }, ...options],
     read: field => field.columnType ?? "",
     write: (field, value) => { return { ...field, columnType: value === "" ? undefined : (value as ColumnDataType) }; }
+  });
+}
+
+/**
+ * The "精度" entry for `date` and `daterange` fields (`year` / `quarter` /
+ * `month` / `day`; omitted = `day`). Rendered by `DateGranularityEntry`, which
+ * confirms before discarding incompatible linkage literals; `write` also scrubs
+ * the field's own linkage literals directly so pure lens writes stay safe.
+ */
+export function dateGranularityEntry<F extends DateField | DateRangeField>(): PropertyEntry {
+  return definePropertyEntry<F, DateGranularity>({
+    id: "granularity",
+    label: "精度",
+    type: "date-granularity",
+    options: DATE_GRANULARITY_OPTIONS,
+    read: field => field.granularity ?? "day",
+    write: (field, granularity) => applyDateGranularityToField(field, granularity)
   });
 }

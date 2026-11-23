@@ -15,6 +15,7 @@ export interface PropertyEntryTypeMap {
   checkbox: undefined;
   select: undefined;
   icon: undefined;
+  "date-granularity": undefined;
   "options-editor": undefined;
   "linkage-rules": undefined;
 }

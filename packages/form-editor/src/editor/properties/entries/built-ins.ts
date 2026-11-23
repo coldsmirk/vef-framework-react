@@ -5,6 +5,7 @@ import type { EntryComponentProps, EntryType } from "../../../types";
 import { lazy } from "react";
 
 import { CheckboxEntry } from "./checkbox-entry";
+import { DateGranularityEntry } from "./date-granularity-entry";
 import { IconEntry } from "./icon-entry";
 import { KeyEntry } from "./key-entry";
 import { NumberEntry } from "./number-entry";
@@ -45,6 +46,7 @@ export const BUILT_IN_PROPERTY_ENTRIES: Partial<Record<EntryType, ComponentType<
   checkbox: CheckboxEntry,
   select: SelectEntry,
   icon: IconEntry,
+  "date-granularity": DateGranularityEntry,
   "options-editor": OptionsSourceEntry,
   "linkage-rules": LinkageRulesEntry
 };

@@ -1,7 +1,9 @@
+import type { Dayjs } from "@vef-framework-react/shared";
 import type { ReactElement } from "react";
 
 import type {
   DateField,
+  DateGranularity,
   DateRangeField,
   DatetimeField,
   FieldComponentProps,
@@ -10,11 +12,18 @@ import type {
 } from "../../types";
 
 import { DatePicker } from "@vef-framework-react/components";
-import { DEFAULT_DATE_FORMAT, DEFAULT_DATETIME_FORMAT, tryParseDate } from "@vef-framework-react/shared";
+import {
+  DEFAULT_DATETIME_FORMAT,
+  formatDateByGranularity,
+  getDateGranularityFormat,
+  tryParseDate,
+  tryParseDateByGranularity
+} from "@vef-framework-react/shared";
 
+import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
 import { FieldShell } from "../../render/parts/field-shell";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
-import { requiredEntry } from "../field-entries";
+import { dateGranularityEntry, requiredEntry } from "../field-entries";
 
 const fullWidth = { width: "100%" } as const;
 
@@ -23,13 +32,11 @@ const EMPTY_RANGE: string[] = [];
 /* ---------------------------------------------------------- single date/time */
 
 /**
- * Shared renderer for the single-value date and datetime fields. They differ
- * only by whether a time part is shown, which is derived from `field.type`, so
- * one component serves both definitions. Values are stored as formatted strings
- * (JSON-serializable) and parsed back to a `Dayjs` for the controlled picker.
- * The serialized shape rests on the shared `DEFAULT_DATE_FORMAT` /
- * `DEFAULT_DATETIME_FORMAT` constants — the same ones the mobile adapters
- * format with — so the two presentations round-trip byte-identically.
+ * Shared renderer for the single-value date and datetime fields. `date` carries
+ * a calendar {@link DateGranularity} (`year` / `quarter` / `month` / `day`);
+ * `datetime` stays a fixed timestamp (`YYYY-MM-DD HH:mm:ss`). Both serialize
+ * through the shared `@vef-framework-react/shared` helpers so PC and mobile
+ * round-trip byte-identically.
  */
 function SingleDateInput({
   disabled,
@@ -42,6 +49,13 @@ function SingleDateInput({
   onChange
 }: FieldComponentProps<DateField | DatetimeField, string>): ReactElement {
   const showTime = field.type === "datetime";
+  const granularity: DateGranularity = field.type === "date" ? (field.granularity ?? "day") : "day";
+  const format = showTime ? DEFAULT_DATETIME_FORMAT : getDateGranularityFormat(granularity);
+  let parsedValue = null;
+
+  if (value) {
+    parsedValue = showTime ? tryParseDate(value) : tryParseDateByGranularity(value, granularity);
+  }
 
   return (
     <FieldShell
@@ -55,20 +69,28 @@ function SingleDateInput({
       <DatePicker
         allowClear={field.allowClear ?? true}
         disabled={disabled}
-        format={showTime ? DEFAULT_DATETIME_FORMAT : DEFAULT_DATE_FORMAT}
+        format={format}
         id={domId}
+        picker={showTime ? "date" : antdPickerForGranularity(granularity)}
         placeholder={field.placeholder}
         showTime={showTime}
         status={errors?.length ? "error" : undefined}
         style={fullWidth}
-        value={value ? tryParseDate(value) : null}
-        onChange={(_date, dateString) => onChange(typeof dateString === "string" ? dateString : "")}
+        value={parsedValue}
+        onChange={(date, dateString) => {
+          if (showTime) {
+            onChange(typeof dateString === "string" ? dateString : "");
+            return;
+          }
+
+          onChange(date ? formatDateByGranularity(date, granularity) : "");
+        }}
       />
     </FieldShell>
   );
 }
 
-function singleDateProperties(): PropertiesDescriptor {
+function singleDateProperties(withGranularity: boolean): PropertiesDescriptor {
   return [
     {
       id: "general",
@@ -96,6 +118,7 @@ function singleDateProperties(): PropertiesDescriptor {
           read: field => field.helperText,
           write: (field, helperText) => { return { ...field, helperText }; }
         }),
+        ...withGranularity ? [dateGranularityEntry<DateField>()] : [],
         definePropertyEntry<DateField | DatetimeField, boolean>({
           id: "allowClear",
           label: "允许清除",
@@ -126,7 +149,7 @@ export const dateFieldDefinition: FieldDefinition = defineFieldDefinition<DateFi
     }
   },
   Component: SingleDateInput,
-  properties: singleDateProperties()
+  properties: singleDateProperties(true)
 });
 
 export const datetimeFieldDefinition: FieldDefinition = defineFieldDefinition<DatetimeField, string>({
@@ -141,23 +164,23 @@ export const datetimeFieldDefinition: FieldDefinition = defineFieldDefinition<Da
     }
   },
   Component: SingleDateInput,
-  properties: singleDateProperties()
+  properties: singleDateProperties(false)
 });
 
 /* ----------------------------------------------------------------- date range */
 
 /**
- * A range is set only when it has two valid ends — a pair with an unparseable
- * end resolves to "unset" rather than a half-filled picker, matching the
- * mobile `toRange` semantics.
+ * A range is set only when it has two valid ends for the field's granularity —
+ * a pair with an unparseable end resolves to "unset" rather than a half-filled
+ * picker, matching the mobile `toRange` semantics.
  */
-function parseRange(value: string[]): [NonNullable<ReturnType<typeof tryParseDate>>, NonNullable<ReturnType<typeof tryParseDate>>] | null {
+function parseRange(value: string[], granularity: DateGranularity): [Dayjs, Dayjs] | null {
   if (!Array.isArray(value) || value.length !== 2) {
     return null;
   }
 
-  const start = tryParseDate(String(value[0]));
-  const end = tryParseDate(String(value[1]));
+  const start = tryParseDateByGranularity(String(value[0]), granularity);
+  const end = tryParseDateByGranularity(String(value[1]), granularity);
 
   return start && end ? [start, end] : null;
 }
@@ -172,6 +195,9 @@ function DateRangeInput({
   value = EMPTY_RANGE,
   onChange
 }: FieldComponentProps<DateRangeField, string[]>): ReactElement {
+  const granularity: DateGranularity = field.granularity ?? "day";
+  const format = getDateGranularityFormat(granularity);
+
   return (
     <FieldShell
       domId={domId}
@@ -184,16 +210,19 @@ function DateRangeInput({
       <DatePicker.RangePicker
         allowClear={field.allowClear ?? true}
         disabled={disabled}
-        format={DEFAULT_DATE_FORMAT}
+        format={format}
         id={domId}
+        picker={antdPickerForGranularity(granularity)}
         status={errors?.length ? "error" : undefined}
         style={fullWidth}
-        value={parseRange(value)}
+        value={parseRange(value, granularity)}
         // Clearing commits `[]` (the unset shape mobile writes too), never the
         // `["", ""]` pair the picker's dateStrings carry on clear.
-        onChange={(dates, dateStrings) => onChange(dates === null
-          ? EMPTY_RANGE
-          : [dateStrings[0] ?? "", dateStrings[1] ?? ""])}
+        onChange={dates => onChange(
+          dates?.[0] && dates[1]
+            ? [formatDateByGranularity(dates[0], granularity), formatDateByGranularity(dates[1], granularity)]
+            : EMPTY_RANGE
+        )}
       />
     </FieldShell>
   );
@@ -219,6 +248,7 @@ const dateRangeProperties: PropertiesDescriptor = [
         read: field => field.helperText,
         write: (field, helperText) => { return { ...field, helperText }; }
       }),
+      dateGranularityEntry<DateRangeField>(),
       definePropertyEntry<DateRangeField, boolean>({
         id: "allowClear",
         label: "允许清除",

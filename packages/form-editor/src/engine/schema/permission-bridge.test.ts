@@ -135,6 +135,70 @@ describe("toFormFieldDefinitions", () => {
     ]);
   });
 
+  it("projects date granularity, datetime, and daterange kinds", () => {
+    const result = toFormFieldDefinitions({
+      id: "Form_dates",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "F1",
+              type: "date",
+              key: "day",
+              label: "日期"
+            },
+            {
+              id: "F2",
+              type: "date",
+              key: "quarter",
+              label: "季度",
+              granularity: "quarter"
+            },
+            {
+              id: "F3",
+              type: "datetime",
+              key: "moment",
+              label: "时刻"
+            },
+            {
+              id: "F4",
+              type: "daterange",
+              key: "span",
+              label: "月份区间",
+              granularity: "month"
+            }
+          ]
+        }
+      }
+    });
+
+    expect(result).toEqual([
+      {
+        key: "day",
+        kind: "date",
+        label: "日期"
+      },
+      {
+        key: "quarter",
+        kind: "date",
+        label: "季度",
+        granularity: "quarter"
+      },
+      {
+        key: "moment",
+        kind: "datetime",
+        label: "时刻"
+      },
+      {
+        key: "span",
+        kind: "daterange",
+        label: "月份区间",
+        granularity: "month"
+      }
+    ]);
+  });
+
   it("emits one entry per root keyed leaf field, mapped to its backend kind", () => {
     expect(toFormFieldDefinitions(schema)).toEqual([
       {

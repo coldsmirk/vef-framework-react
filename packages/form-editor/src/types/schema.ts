@@ -7,9 +7,12 @@
 // `CodeEditor` fall back). If that churn ever bites, widen these to
 // `DynamicIconName | (string & {})` (the components' own `IconPickerValue` idiom).
 import type { CodeEditorLanguage, DynamicIconName } from "@vef-framework-react/components";
+import type { DateGranularity } from "@vef-framework-react/shared";
 
 import type { FormDataSource, FormVariable, RemoteDataSourceRequest, RemoteOptionMapping } from "./data-source";
 import type { FieldLinkage } from "./linkage";
+
+export type { DateGranularity } from "@vef-framework-react/shared";
 
 /**
  * Document-flow form schema.
@@ -587,12 +590,18 @@ export interface TextareaField extends FormFieldBase, KeyedNode, Validatable {
 }
 
 /**
- * Date picker. Keyed: contributes a `YYYY-MM-DD` string value via `key`.
+ * Date picker. Keyed: contributes a formatted calendar string matching
+ * `granularity` (`YYYY`, `YYYY-Qn`, `YYYY-MM`, or `YYYY-MM-DD`; omitted = `day`).
  */
 export interface DateField extends FormFieldBase, KeyedNode, Validatable {
   type: "date";
   placeholder?: string;
   helperText?: string;
+  /**
+   * Calendar granularity (`"year" | "quarter" | "month" | "day"`). Omitted
+   * defaults to `"day"`.
+   */
+  granularity?: DateGranularity;
   /**
    * Whether the picker shows a clear affordance. Mirrors antd `DatePicker`'s
    * `allowClear`, which is enabled by default — so the renderers treat an absent
@@ -616,11 +625,17 @@ export interface DatetimeField extends FormFieldBase, KeyedNode, Validatable {
 }
 
 /**
- * Date range picker. Keyed: contributes a `[start, end]` pair of date strings.
+ * Date range picker. Keyed: contributes a `[start, end]` pair of date strings
+ * matching `granularity` (`[]` when empty).
  */
 export interface DateRangeField extends FormFieldBase, KeyedNode, Validatable {
   type: "daterange";
   helperText?: string;
+  /**
+   * Calendar granularity (`"year" | "quarter" | "month" | "day"`). Omitted
+   * defaults to `"day"`.
+   */
+  granularity?: DateGranularity;
   /**
    * Whether the range picker shows a clear affordance. See
    * {@link DateField.allowClear} — default-on, only a stored `false` disables it.

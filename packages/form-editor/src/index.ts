@@ -84,6 +84,7 @@ export {
 export { createDefaultMobileRegistry } from "./engine/registry/defaults-mobile";
 export { FormFieldRegistry, type DeviceRegistries } from "./engine/registry/form-field-registry";
 export {
+  dateGranularityMaxLength,
   inferColumnType,
   toColumnDefinitions,
   type ColumnDefinition

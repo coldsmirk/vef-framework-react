@@ -96,4 +96,52 @@ describe("MobileDateRangeInput", () => {
 
     expect(screen.getByRole("button")).toBeDisabled();
   });
+
+  it("round-trips year, quarter, and month ranges byte-identically on confirm", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+
+    for (const { granularity, pair } of [
+      { granularity: "year" as const, pair: ["2024", "2026"] },
+      { granularity: "quarter" as const, pair: ["2026-Q1", "2026-Q4"] },
+      { granularity: "month" as const, pair: ["2026-01", "2026-06"] }
+    ]) {
+      const onChange = vi.fn();
+      const { unmount } = render(
+        <MobileDateRangeInput
+          domId={`r-${granularity}`}
+          field={makeField({ granularity })}
+          value={pair}
+          onChange={onChange}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "日期区间" })).toHaveTextContent(`${pair[0]} 至 ${pair[1]}`);
+
+      await user.click(screen.getByRole("button", { name: "日期区间" }));
+      await user.click(await screen.findByRole("button", { name: "确定" }));
+
+      expect(onChange).toHaveBeenCalledWith(pair);
+      unmount();
+    }
+  });
+
+  it("disables confirm when an inverted granular range is seeded", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+    const onChange = vi.fn();
+
+    render(
+      <MobileDateRangeInput
+        domId="r-inv"
+        field={makeField({ granularity: "quarter" })}
+        value={["2026-Q4", "2026-Q1"]}
+        onChange={onChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "日期区间" }));
+
+    expect(await screen.findByText("结束时间不能早于开始时间")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确定" })).toBeDisabled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

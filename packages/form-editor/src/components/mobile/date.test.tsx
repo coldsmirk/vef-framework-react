@@ -105,4 +105,38 @@ describe("MobileDateInput", () => {
 
     expect(screen.getByText("请选择日期")).toBeInTheDocument();
   });
+
+  it("round-trips year, month, and quarter granularities byte-identically on confirm", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+
+    for (const { granularity, value } of [
+      { granularity: "year" as const, value: "2026" },
+      { granularity: "month" as const, value: "2026-04" },
+      { granularity: "quarter" as const, value: "2026-Q4" }
+    ]) {
+      const onChange = vi.fn();
+      const { unmount } = render(
+        <MobileDateInput
+          domId={`d-${granularity}`}
+          field={makeField({ granularity })}
+          value={value}
+          onChange={onChange}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "日期" })).toHaveTextContent(value);
+
+      await user.click(screen.getByRole("button", { name: "日期" }));
+      await user.click(await screen.findByRole("button", { name: "确定" }));
+
+      expect(onChange).toHaveBeenCalledWith(value);
+      unmount();
+    }
+  });
+
+  it("rejects a value from another granularity on the trigger", () => {
+    render(<MobileDateInput domId="d-q" field={makeField({ granularity: "quarter" })} value="2026-04-15" onChange={vi.fn()} />);
+
+    expect(screen.getByText("请选择日期")).toBeInTheDocument();
+  });
 });

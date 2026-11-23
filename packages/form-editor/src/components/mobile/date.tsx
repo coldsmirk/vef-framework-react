@@ -1,23 +1,33 @@
 import type { ReactElement } from "react";
 
-import type { DateField, FieldComponentProps } from "../../types";
+import type { DateField, DateGranularity, FieldComponentProps } from "../../types";
 
-import { DEFAULT_DATE_FORMAT } from "@vef-framework-react/shared";
 import DatePicker from "antd-mobile/es/components/date-picker";
+import Picker from "antd-mobile/es/components/picker";
 import { useState } from "react";
 
 import { EditorIcon } from "../../icons";
 import { FieldShell } from "../../render/parts/field-shell";
-import { formatTrigger, fromPickerDate, PICKER_MAX_DATE, PICKER_MIN_DATE, toPickerDate } from "./date-adapters";
+import {
+  formatGranularityTrigger,
+  fromGranularityPickerDate,
+  fromQuarterColumnsValue,
+  PICKER_MAX_DATE,
+  PICKER_MIN_DATE,
+  QUARTER_PICKER_COLUMNS,
+  toGranularityPickerDate,
+  toQuarterColumnsValue
+} from "./date-adapters";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
 
 /**
- * Mobile renderer for the single-value date field. Mirrors the PC `date-field`
- * contract: same `FieldComponentProps<DateField, string>`, same `YYYY-MM-DD`
- * serialized value, same label / helper / error / required shell. Only the
- * control differs — a tappable trigger opening an antd-mobile `DatePicker` at
- * day precision rather than the antd desktop popover.
+ * Mobile renderer for the single-value date field across every
+ * {@link DateGranularity}. `year` / `month` / `day` delegate to antd-mobile's
+ * `DatePicker` at matching `precision`; `quarter` uses a custom two-column
+ * `Picker` (year + Q1–Q4) because antd-mobile `DatePicker` has no quarter
+ * precision. Serializes through the shared helpers so PC and mobile round-trip
+ * byte-identically.
  */
 export function MobileDateInput({
   disabled,
@@ -32,15 +42,17 @@ export function MobileDateInput({
   const [visible, setVisible] = useState(false);
   const getContainer = useMobileScopeContainer();
 
-  const display = formatTrigger(value, DEFAULT_DATE_FORMAT);
+  const granularity: DateGranularity = field.granularity ?? "day";
+  const display = formatGranularityTrigger(value, granularity);
   const placeholder = field.placeholder ?? "请选择日期";
+  const title = field.label ?? "日期";
 
   return (
     <FieldShell
       domId={domId}
       errors={errors}
       helperText={field.helperText}
-      label={field.label ?? "日期"}
+      label={title}
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >
@@ -58,17 +70,37 @@ export function MobileDateInput({
         onOpen={() => setVisible(true)}
       />
 
-      <DatePicker
-        getContainer={getContainer}
-        max={PICKER_MAX_DATE}
-        min={PICKER_MIN_DATE}
-        precision="day"
-        title={field.label ?? "日期"}
-        value={toPickerDate(value)}
-        visible={visible}
-        onClose={() => setVisible(false)}
-        onConfirm={date => onChange(fromPickerDate(date, DEFAULT_DATE_FORMAT))}
-      />
+      {granularity === "quarter"
+        ? (
+            <Picker
+              columns={QUARTER_PICKER_COLUMNS}
+              getContainer={getContainer}
+              title={title}
+              value={toQuarterColumnsValue(value)}
+              visible={visible}
+              onClose={() => setVisible(false)}
+              onConfirm={columns => {
+                const next = fromQuarterColumnsValue(columns);
+
+                if (next) {
+                  onChange(next);
+                }
+              }}
+            />
+          )
+        : (
+            <DatePicker
+              getContainer={getContainer}
+              max={PICKER_MAX_DATE}
+              min={PICKER_MIN_DATE}
+              precision={granularity}
+              title={title}
+              value={toGranularityPickerDate(value, granularity)}
+              visible={visible}
+              onClose={() => setVisible(false)}
+              onConfirm={date => onChange(fromGranularityPickerDate(date, granularity))}
+            />
+          )}
     </FieldShell>
   );
 }
