@@ -47,7 +47,6 @@ function EditableTableInner<TRow extends AnyObject>({
   canEdit,
   canDelete,
   creatable,
-  addLabel,
   createRecord,
   renderRowActions,
   operationColumn,
@@ -105,7 +104,7 @@ function EditableTableInner<TRow extends AnyObject>({
           tableLayout="auto"
         />
 
-        {creatable ? <AddRowButton label={addLabel} /> : null}
+        {creatable ? <AddRowButton /> : null}
       </Stack>
     </form.AppForm>
   );

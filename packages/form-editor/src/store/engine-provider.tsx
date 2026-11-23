@@ -61,8 +61,8 @@ export function DeviceProvider({
 
 /**
  * The active presentation device. Renderers that branch on device — e.g. the
- * subform's `table` variant, which mounts the desktop `EditableTable` only on
- * PC and falls back to the stacked layout on mobile — read it here.
+ * subform's `table` variant, which renders a multi-column table on PC and
+ * falls back to the stacked card layout on mobile — read it here.
  */
 export function useDevice(): PresentationDevice {
   return use(DeviceContext);

@@ -1,9 +1,9 @@
 import type { FormFieldRegistry } from "../../engine/registry/form-field-registry";
-import type { Block, FieldDefinition, KeyedFormField, PresentationLayer } from "../../types";
+import type { Block, FieldDefinition, PresentationLayer } from "../../types";
 import type { DropZoneAccept } from "./drop-zones";
 
-import { isKeyedField } from "../../engine/keys";
-import { findNode, isLeafField } from "../../engine/schema/walk";
+import { isTableColumnField } from "../../engine/schema/subform";
+import { findNode } from "../../engine/schema/walk";
 import { isEditorDragData } from "../dnd";
 
 /**
@@ -11,17 +11,10 @@ import { isEditorDragData } from "../dnd";
  * field, so only those may be dropped into a table subform or rendered as a
  * column. Containers and non-keyed display / action blocks are excluded. This is
  * the design-time enforcement of the same contract `validateSchema` checks
- * post-hoc (`subform_table_column`) and the runtime `buildSubformColumns` honors
- * by skipping non-columns.
+ * post-hoc (`subform_table_column`) and the runtime table renderer honors by
+ * skipping non-columns.
  */
-
-/**
- * Whether an already-placed block may render as a table column. Narrows to
- * {@link KeyedFormField} so callers can build columns without a further cast.
- */
-export function isTableColumnField(block: Block): block is KeyedFormField {
-  return isLeafField(block) && isKeyedField(block);
-}
+export { isTableColumnField } from "../../engine/schema/subform";
 
 /**
  * Whether a resolved node (or a `findNode` miss) is column-eligible. A missing

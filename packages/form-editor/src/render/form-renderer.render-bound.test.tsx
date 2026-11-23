@@ -335,4 +335,85 @@ describe("FormRenderer render bound", () => {
       expect(evaluatedTags).toContain("");
     });
   });
+
+  describe("table subform render and controller isolation", () => {
+    it("isolates table subform rows: typing in one row does not re-render another row's cells", async () => {
+      const user = userEvent.setup();
+      const subform: SubformNode = {
+        id: "Sub_tbl",
+        type: "subform",
+        variant: "table",
+        key: "lines",
+        rows: { mode: "dynamic", min: 2 },
+        template: [
+          probe("category"),
+          probe("note", { linkage: showWhen("category", "other") })
+        ]
+      };
+      renderRuntime(stack(subform));
+
+      const before = new Map(renderCounts);
+      await user.type(screen.getByLabelText("field-lines[0].Field_category"), "other");
+
+      expect(renderCounts.get("field-lines[1].Field_category")).toBe(before.get("field-lines[1].Field_category"));
+      expect(await screen.findByLabelText("field-lines[0].Field_note")).toBeInTheDocument();
+      expect(screen.queryByLabelText("field-lines[1].Field_note")).not.toBeInTheDocument();
+    });
+
+    it("does not re-render existing table rows or re-run their controllers when adding a row", async () => {
+      const user = userEvent.setup();
+      const evaluatedTags: unknown[] = [];
+
+      const evaluateExpression = (_source: string, values: Record<string, unknown>): boolean => {
+        evaluatedTags.push(values.tag);
+
+        return false;
+      };
+
+      const tableSubform: SubformNode = {
+        id: "Sub_tbl_ctrl",
+        type: "subform",
+        variant: "table",
+        key: "lines",
+        rows: { mode: "dynamic", addLabel: "新增一行" },
+        template: [
+          probe("tag"),
+          probe("gated", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_expr",
+                  trigger: { kind: "condition", condition: { kind: "expression", source: "$form.never" } },
+                  actions: [{ type: "disable" }]
+                }
+              ]
+            }
+          })
+        ]
+      };
+      const registry = createDefaultRegistry();
+      registry.register(probeDefinition);
+
+      render(
+        <RegistryProvider registries={{ pc: registry, mobile: registry }}>
+          <FormRenderer
+            defaultValues={{ lines: [{ tag: "r0", gated: "" }, { tag: "r1", gated: "" }] }}
+            evaluators={{ evaluateExpression }}
+            schema={stack(tableSubform)}
+          />
+        </RegistryProvider>
+      );
+
+      const before = new Map(renderCounts);
+      evaluatedTags.length = 0;
+
+      await user.click(screen.getByRole("button", { name: /新增一行/ }));
+
+      expect(renderCounts.get("field-lines[0].Field_tag")).toBe(before.get("field-lines[0].Field_tag"));
+      expect(renderCounts.get("field-lines[1].Field_tag")).toBe(before.get("field-lines[1].Field_tag"));
+      expect(evaluatedTags).not.toContain("r0");
+      expect(evaluatedTags).not.toContain("r1");
+      expect(evaluatedTags).toContain("");
+    });
+  });
 });

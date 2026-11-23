@@ -6,7 +6,7 @@ import type { FieldComponentProps, FieldDefinition, PropertiesDescriptor, Textfi
 import { Input } from "@vef-framework-react/components";
 
 import { EditorIcon } from "../../icons";
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import {
   allowClearEntry,
@@ -36,6 +36,8 @@ export const Textfield: FC<FieldComponentProps<TextfieldField, string>> = ({
   value = "",
   onChange
 }) => {
+  const cell = useFieldCell();
+
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
     onChange(event.target.value);
   };
@@ -55,6 +57,7 @@ export const Textfield: FC<FieldComponentProps<TextfieldField, string>> = ({
     >
       <Control
         allowClear={field.allowClear}
+        aria-labelledby={cell?.labelId}
         disabled={disabled}
         id={domId}
         maxLength={field.maxLength}

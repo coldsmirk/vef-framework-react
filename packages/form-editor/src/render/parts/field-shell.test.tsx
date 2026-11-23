@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FieldShell } from "./field-shell";
+import { FieldCellProvider, FieldShell } from "./field-shell";
 
 describe("FieldShell label association", () => {
   it("associates a single control by htmlFor", () => {
@@ -42,5 +42,24 @@ describe("FieldShell label association", () => {
     );
 
     expect(screen.getByRole("group", { name: "爱好" })).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("omits label and helperText inside FieldCellProvider while keeping group aria-labelledby and cell alerts", () => {
+    render(
+      <div>
+        <span id="col-hdr-gender">性别</span>
+
+        <FieldCellProvider value={{ labelId: "col-hdr-gender" }}>
+          <FieldShell domId="f4" errors={["此项为必填"]} helperText="不会在单元格重复显示" label="性别" labelledBy="group">
+            <input type="radio" />
+          </FieldShell>
+        </FieldCellProvider>
+      </div>
+    );
+
+    expect(screen.getAllByText("性别")).toHaveLength(1);
+    expect(screen.queryByText("不会在单元格重复显示")).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "性别" })).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("此项为必填");
   });
 });

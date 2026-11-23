@@ -11,23 +11,24 @@ import type {
   EvaluationContext,
   FieldLinkageRule,
   FieldPermission,
+  FixedSubformRows,
   FlexNode,
   FormField,
   FormSchema,
   GapScale,
   GridNode,
+  KeyedFormField,
   LinkageEvaluators,
   LinkageTriggerKind,
   PresentationDevice,
   RuntimeSchema,
   SectionNode,
   SubformNode,
-  TableSubform,
   TabsNode
 } from "../types";
 
 import { css } from "@emotion/react";
-import { EditableTable, Flex, globalCssVars, Stack, useForm, useFormStore } from "@vef-framework-react/components";
+import { Flex, globalCssVars, Stack, useForm, useFormStore } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, memo, use, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 
@@ -49,7 +50,8 @@ import {
   dynamicAddRowLabel,
   fixedRowItemLabel,
   getDynamicSubformRows,
-  isFixedSubform
+  isFixedSubform,
+  isTableColumnField
 } from "../engine/schema/subform";
 import { EditorIcon } from "../icons";
 import { dispatchFormEffects, useEffectDispatch } from "../runtime/effects";
@@ -62,8 +64,20 @@ import { DataSourceProvider } from "./data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
+import { FieldCellProvider } from "./parts/field-shell";
 import { DEFAULT_STACK_GAP, resolveStackGap, stackSlotStyle } from "./stack-style";
-import { buildSubformColumns, SUBFORM_ROW_ID, subformRowHeading } from "./subform-columns";
+import {
+  fixedHeaderColumnStyle,
+  subformRowHeading,
+  SubformTableFrame,
+  tableCellExtraCss,
+  tableColumnHeaderId,
+  tableColumnStyle,
+  tableDataCellCss,
+  tableFixedHeaderCellCss,
+  tableRemoveCellCss,
+  tableRowHeadingCss
+} from "./subform-table";
 import {
   blankSubformRow,
   buildRuntimeFormId,
@@ -891,45 +905,25 @@ function reconcileRowKeys(keys: string[], length: number, seed: RefObject<number
   }
 }
 
-/**
- * Subform dispatch. The `table` variant renders through the components
- * `EditableTable` on PC; everything else — the `stack` variant, or `table` on
- * mobile (`EditableTable` is desktop antd) — renders the stacked layout.
- */
 // Stable empty array: a fresh `[]` per selector run would churn the
 // subscription on every store notification.
 const EMPTY_ERRORS: unknown[] = [];
 
+/**
+ * Unified subform renderer for both `stack` and `table` variants. Both bind to
+ * the same TanStack Form array field, share row-key reconciliation, fixed-row
+ * seeding, add/remove bounds, per-row linkage controllers (`SubformRowScope`),
+ * and field rendering (`FieldSlot`). Only the presentation layout differs: on
+ * PC, `variant: "table"` lays each row out as directly-editable table cells;
+ * `stack` (and `table` on mobile) lays each row out as a card/block stack.
+ */
 function SubformFlow({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }): ReactElement {
+  const chrome = useContainerChrome();
   const device = useDevice();
-
-  if (subform.variant === "table" && device === "pc") {
-    return <SubformTable ctx={ctx} subform={subform} />;
-  }
-
-  return <SubformStack ctx={ctx} subform={subform} />;
-}
-
-/**
- * Table-variant subform. Binds the components `EditableTable` to the same
- * TanStack array field as the stack variant (controlled `value` / `onChange`),
- * mapping each template leaf field to a column editor. A per-row
- * {@link SUBFORM_ROW_ID} gives `EditableTable` stable row identity (it auto-fills
- * it for a freshly added row); it is injected into the view value and stripped
- * on write, so form state stays the clean record the schema / submit expect.
- *
- * Per-row linkage rules are intentionally NOT wired here (those live in the
- * stack variant's per-row controllers) — the table targets straightforward
- * tabular entry. Selection columns still resolve through the shared
- * `useFieldOptions` pipeline with a per-row data-source parameter scope (live
- * draft values while editing, committed row values in read mode).
- */
-function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform }): ReactElement {
-  const chrome = useContainerChrome();
+  const tableSubform = subform.variant === "table" && device === "pc" ? subform : undefined;
   const arrayName = `${ctx.namePrefix}${subform.key}`;
-  // The subform mounts ONE field for the whole array, so its own errors
-  // ("at least one row", and a table variant's rolled-up row error) have no
-  // other slot — without this they block submission with nothing on screen.
+  // The subform mounts ONE array field for subform-level errors ("at least one
+  // row" when required); per-cell errors render directly inside each cell.
   const fieldErrors = useFormStore(ctx.form.store, state => state.fieldMeta[arrayName]?.errors ?? EMPTY_ERRORS);
   const rowsEmpty = useFormStore(ctx.form.store, state => {
     const raw = resolveScopeValues(state.values, ctx.namePrefix)[subform.key];
@@ -947,136 +941,10 @@ function SubformTable({ ctx, subform }: { ctx: RenderCtx; subform: TableSubform 
     rowsEmpty,
     subform
   });
-  const idsRef = useRef<string[]>([]);
-  const idSeedRef = useRef(0);
-  // Row-wrapper cache keyed by the underlying TanStack row object: a keystroke
-  // in one row replaces only that row's reference, so every untouched row keeps
-  // its previous wrapped identity and rc-table's per-row memoization holds —
-  // without this, the map below would mint fresh objects for ALL rows on every
-  // render and force a cell diff across the whole table. Written during render:
-  // safe because it is a pure idempotent memo (same row + id ⇒ equal wrapper).
-  const wrappedRowsRef = useRef(new WeakMap<Record<string, unknown>, Record<string, unknown>>());
-
-  const columns = useMemo(
-    () => buildSubformColumns(subform.template, {
-      extras: ctx.renderFieldExtra && { subform, render: ctx.renderFieldExtra },
-      fixedRows: fixed
-    }),
-    [subform, ctx.renderFieldExtra, fixed]
+  const tableColumns = useMemo(
+    () => tableSubform ? tableSubform.template.filter(block => isTableColumnField(block)) : undefined,
+    [tableSubform]
   );
-  const createRecord = useCallback(() => blankSubformRow(subform), [subform]);
-
-  return (
-    <chrome.Subform errors={formatErrors(fieldErrors)} title={subform.label}>
-      <FixedSubformStatusBanner status={fixedStatus} />
-
-      <ctx.form.AppField mode="array" name={arrayName}>
-        {(fieldApi: RuntimeArrayFieldApi) => {
-          const rows = (Array.isArray(fieldApi.state.value) ? fieldApi.state.value : []) as Array<Record<string, unknown>>;
-
-          if (fixed) {
-            idsRef.current = deriveFixedRowKeys(rows, fixed.itemKey);
-          } else {
-            reconcileRowKeys(idsRef.current, rows.length, idSeedRef);
-          }
-
-          const valueForTable = rows.map((row, index) => {
-            const id = idsRef.current[index];
-            const cached = wrappedRowsRef.current.get(row);
-
-            if (cached && cached[SUBFORM_ROW_ID] === id) {
-              return cached;
-            }
-
-            const wrapped = { ...row, [SUBFORM_ROW_ID]: id };
-
-            wrappedRowsRef.current.set(row, wrapped);
-
-            return wrapped;
-          });
-
-          if (fixed && rows.length === 0 && (fixedStatus?.loading || fixedStatus?.error || fixedStatus?.empty)) {
-            return null;
-          }
-
-          const handleChange = (next: Array<Record<string, unknown>>): void => {
-            if (!fixed) {
-              // Record each row's id (EditableTable assigns one to a freshly added
-              // row), then strip it so only the clean record reaches form state.
-              idsRef.current = next.map((row, index) => {
-                const id = row[SUBFORM_ROW_ID];
-                // EditableTable always carries `__rid` (auto-assigned on add, kept
-                // through edit), so the existing-id fallback is only a defensive
-                // floor for an externally reseeded row.
-                return typeof id === "string" ? id : idsRef.current[index] ?? `row-${index}`;
-              });
-            }
-
-            const clean = next.map(row => {
-              const rest = { ...row };
-              delete rest[SUBFORM_ROW_ID];
-
-              return rest;
-            });
-
-            ctx.form.setFieldValue(arrayName, clean);
-          };
-
-          return (
-            <EditableTable<Record<string, unknown>>
-              addLabel={dynamicAddRowLabel(dynamic)}
-              canDelete={!fixed && !ctx.disabled && rows.length > minRows}
-              canEdit={!ctx.disabled}
-              columns={columns}
-              creatable={!fixed && !ctx.disabled && (dynamic.max === undefined || rows.length < dynamic.max)}
-              createRecord={createRecord}
-              rowKey={SUBFORM_ROW_ID}
-              size={subform.size}
-              value={valueForTable}
-              onChange={handleChange}
-            />
-          );
-        }}
-      </ctx.form.AppField>
-    </chrome.Subform>
-  );
-}
-
-/**
- * Stack-variant subform (the default). Binds to a TanStack Form array field; each
- * row renders the template with its field names prefixed `${key}[${i}].` and
- * evaluates linkage against that row's own value slice (see {@link SubformRow}).
- * In dynamic mode, `rows.min` seeds and floors the row count and `rows.max` caps
- * the add control; in fixed mode, rows are seeded from `rows.source` with no add
- * or remove controls and each row renders as a card titled by its item label.
- *
- * Rows carry a stable identity through a parallel key list (a ref + a
- * monotonic counter) in dynamic mode, or derived from the snapshotted item
- * value in fixed mode.
- */
-function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }): ReactElement {
-  const chrome = useContainerChrome();
-  const arrayName = `${ctx.namePrefix}${subform.key}`;
-  // The subform mounts ONE field for the whole array, so its own errors
-  // ("at least one row", and a table variant's rolled-up row error) have no
-  // other slot — without this they block submission with nothing on screen.
-  const fieldErrors = useFormStore(ctx.form.store, state => state.fieldMeta[arrayName]?.errors ?? EMPTY_ERRORS);
-  const rowsEmpty = useFormStore(ctx.form.store, state => {
-    const raw = resolveScopeValues(state.values, ctx.namePrefix)[subform.key];
-
-    return !Array.isArray(raw) || raw.length === 0;
-  });
-  const fixed = isFixedSubform(subform) ? subform.rows : undefined;
-  const dynamic = getDynamicSubformRows(subform);
-  const minRows = dynamic.min ?? 0;
-  const fixedStatus = useFixedSubformRows({
-    arrayName,
-    form: ctx.form,
-    initialValues: ctx.initialValues,
-    namePrefix: ctx.namePrefix,
-    rowsEmpty,
-    subform
-  });
   const rowKeysRef = useRef<string[]>([]);
   const rowKeySeedRef = useRef(0);
   // The live array field api for the stable handlers below; written during the
@@ -1115,23 +983,55 @@ function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }
             rowKeys = rowKeysRef.current;
           }
 
+          if (tableSubform && fixed && rows.length === 0 && (fixedStatus?.loading || fixedStatus?.error || fixedStatus?.empty)) {
+            return null;
+          }
+
           const canRemove = !fixed && !ctx.disabled && rows.length > minRows;
           const canAdd = !fixed && !ctx.disabled && (dynamic.max === undefined || rows.length < dynamic.max);
 
           return (
             <>
-              {rows.map((row, index) => (
-                // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
-                <SubformRow
-                  key={rowKeys[index]}
-                  canRemove={canRemove}
-                  ctx={ctx}
-                  header={fixed ? fixedRowItemLabel(row, fixed.itemKey) : undefined}
-                  index={index}
-                  subform={subform}
-                  onRemove={handleRemove}
-                />
-              ))}
+              {tableSubform && tableColumns
+                ? (
+                    <SubformTableFrame
+                      canRemove={canRemove}
+                      columns={tableColumns}
+                      domIdPrefix={ctx.domIdPrefix}
+                      empty={rows.length === 0}
+                      fixed={fixed}
+                      namePrefix={ctx.namePrefix}
+                      renderFieldExtra={ctx.renderFieldExtra}
+                      subform={tableSubform}
+                    >
+                      {rows.map((row, index) => (
+                        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
+                        <SubformTableRow
+                          key={rowKeys[index]}
+                          canRemove={canRemove}
+                          columns={tableColumns}
+                          ctx={ctx}
+                          fixed={fixed}
+                          fixedHeaderLabel={fixed ? fixedRowItemLabel(row, fixed.itemKey) : undefined}
+                          index={index}
+                          subform={tableSubform}
+                          onRemove={handleRemove}
+                        />
+                      ))}
+                    </SubformTableFrame>
+                  )
+                : rows.map((row, index) => (
+                    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
+                    <SubformRow
+                      key={rowKeys[index]}
+                      canRemove={canRemove}
+                      ctx={ctx}
+                      header={fixed ? fixedRowItemLabel(row, fixed.itemKey) : undefined}
+                      index={index}
+                      subform={subform}
+                      onRemove={handleRemove}
+                    />
+                  ))}
 
               {canAdd
                 ? (
@@ -1150,34 +1050,17 @@ function SubformStack({ ctx, subform }: { ctx: RenderCtx; subform: SubformNode }
 }
 
 /**
- * One subform row. A {@link SubformRowController} subscribes to this row's value
- * slice and publishes a nested runtime-state scope, so hide/disable/require
- * reflow and `assign` work inside the row exactly as they do at the root — and
- * only this row re-evaluates when its own record changes.
- *
- * Memoized with stable props (see {@link SubformFlow}) so a keystroke in one row
- * — which re-runs the array field's render prop — does not re-render the other
- * rows' controllers. Load-bearing at 100s of fields: without it every keystroke
- * in any row re-evaluates every row's template.
+ * Shared row-scope derivation for both {@link SubformRow} and
+ * {@link SubformTableRow}: builds the per-row name prefix, stable template
+ * schema, and memoized child `RenderCtx` (clearing root-only `fieldPermissions`
+ * and stamping `rowLocation` for `renderFieldExtra`).
  */
-function SubformRowBase({
-  canRemove,
-  ctx,
-  header,
-  index,
-  onRemove,
-  subform
-}: {
-  canRemove: boolean;
-  ctx: RenderCtx;
-  header?: ReactNode;
-  index: number;
-  onRemove: (index: number) => void;
-  subform: SubformNode;
-}): ReactElement {
-  const chrome = useContainerChrome();
+function useSubformRowContext(
+  ctx: RenderCtx,
+  subform: SubformNode,
+  index: number
+): { rowCtx: RenderCtx; rowPrefix: string; templateSchema: RuntimeSchema } {
   const rowPrefix = `${ctx.namePrefix}${subform.key}[${index}].`;
-
   const templateSchema = useMemo<RuntimeSchema>(
     () => {
       return {
@@ -1203,6 +1086,46 @@ function SubformRowBase({
     [ctx, rowPrefix, subform.key, index]
   );
 
+  return {
+    rowCtx,
+    rowPrefix,
+    templateSchema
+  };
+}
+
+/**
+ * One stacked subform row. A {@link SubformRowController} subscribes to this
+ * row's value slice and publishes a nested runtime-state scope, so
+ * hide/disable/require reflow and `assign` work inside the row exactly as they
+ * do at the root — and only this row re-evaluates when its own record changes.
+ *
+ * Memoized with stable props (see {@link SubformFlow}) so a keystroke in one row
+ * — which re-runs the array field's render prop — does not re-render the other
+ * rows' controllers. Load-bearing at 100s of fields: without it every keystroke
+ * in any row re-evaluates every row's template.
+ */
+function SubformRowBase({
+  canRemove,
+  ctx,
+  header,
+  index,
+  onRemove,
+  subform
+}: {
+  canRemove: boolean;
+  ctx: RenderCtx;
+  header?: ReactNode;
+  index: number;
+  onRemove: (index: number) => void;
+  subform: SubformNode;
+}): ReactElement {
+  const chrome = useContainerChrome();
+  const {
+    rowCtx,
+    rowPrefix,
+    templateSchema
+  } = useSubformRowContext(ctx, subform, index);
+
   return (
     <chrome.SubformRow header={header} removeControl={canRemove ? <chrome.RemoveButton onClick={() => onRemove(index)} /> : undefined}>
       {subformRowHeading(subform, index, ctx.renderFieldExtra)}
@@ -1215,6 +1138,139 @@ function SubformRowBase({
 }
 
 const SubformRow = memo(SubformRowBase);
+
+/**
+ * One directly-editable table subform row, sharing the exact same per-row
+ * linkage controller, bound-parameter scope, memoization boundary, and field
+ * slot renderer as {@link SubformRow}. Takes only primitive `fixedHeaderLabel`
+ * (never the mutable row record) so typing inside one row keeps every row's
+ * memo airtight.
+ */
+function SubformTableRowBase({
+  canRemove,
+  columns,
+  ctx,
+  fixed,
+  fixedHeaderLabel,
+  index,
+  onRemove,
+  subform
+}: {
+  canRemove: boolean;
+  columns: readonly KeyedFormField[];
+  ctx: RenderCtx;
+  fixed?: FixedSubformRows;
+  fixedHeaderLabel?: string;
+  index: number;
+  onRemove: (index: number) => void;
+  subform: SubformNode;
+}): ReactElement {
+  const chrome = useContainerChrome();
+  const {
+    rowCtx,
+    rowPrefix,
+    templateSchema
+  } = useSubformRowContext(ctx, subform, index);
+  const fixedHeading = fixed ? subformRowHeading(subform, index, ctx.renderFieldExtra) : null;
+
+  return (
+    <tr>
+      {fixed
+        ? (
+            <td css={tableFixedHeaderCellCss} style={fixedHeaderColumnStyle(fixed.headerWidth)}>
+              {fixedHeading ? <div css={tableRowHeadingCss}>{fixedHeading}</div> : null}
+              <span>{fixedHeaderLabel}</span>
+            </td>
+          )
+        : null}
+
+      <SubformRowScope ctx={ctx} prefix={rowPrefix} templateSchema={templateSchema}>
+        {columns.map((field, columnIndex) => (
+          // eslint-disable-next-line @typescript-eslint/no-use-before-define -- co-located row cell component
+          <SubformTableCell
+            key={field.id}
+            ctx={rowCtx}
+            field={field}
+            headerId={tableColumnHeaderId(ctx.domIdPrefix, ctx.namePrefix, subform.key, field.id)}
+            index={index}
+            showRowHeading={!fixed && columnIndex === 0}
+            subform={subform}
+          />
+        ))}
+      </SubformRowScope>
+
+      {canRemove
+        ? (
+            <td css={tableRemoveCellCss}>
+              <chrome.RemoveButton onClick={() => onRemove(index)} />
+            </td>
+          )
+        : null}
+    </tr>
+  );
+}
+
+const SubformTableRow = memo(SubformTableRowBase);
+
+/**
+ * One table cell. Reads its own per-row runtime state via selector context so
+ * typing or linkage flips elsewhere in the row never re-render untouched cells.
+ * When per-row linkage hides the field, keeps the `<td>` mounted empty so later
+ * columns stay aligned under their headers.
+ */
+function SubformTableCellBase({
+  ctx,
+  field,
+  headerId,
+  index,
+  showRowHeading,
+  subform
+}: {
+  ctx: RenderCtx;
+  field: KeyedFormField;
+  headerId: string;
+  index: number;
+  showRowHeading: boolean;
+  subform: SubformNode;
+}): ReactElement {
+  const runtimeState = useRuntimeFieldState(field.id);
+  const cellContext = useMemo(
+    () => {
+      return { labelId: headerId };
+    },
+    [headerId]
+  );
+  const rowHeading = showRowHeading ? subformRowHeading(subform, index, ctx.renderFieldExtra) : null;
+  const cellExtra = !runtimeState.hidden && ctx.renderFieldExtra
+    ? ctx.renderFieldExtra({
+        key: subform.key,
+        type: field.type,
+        label: field.label,
+        row: index,
+        column: field.key
+      })
+    : null;
+
+  return (
+    <td css={tableDataCellCss} style={tableColumnStyle(field)}>
+      {rowHeading ? <div css={tableRowHeadingCss}>{rowHeading}</div> : null}
+
+      {runtimeState.hidden
+        ? null
+        : (
+            <FieldCellProvider value={cellContext}>
+              <FieldSlot ctx={ctx} field={field} runtimeState={runtimeState} />
+            </FieldCellProvider>
+          )}
+
+      {cellExtra !== null && cellExtra !== undefined
+        ? <div css={tableCellExtraCss}>{cellExtra}</div>
+        : null}
+    </td>
+  );
+}
+
+const SubformTableCell = memo(SubformTableCellBase);
 
 /**
  * Bridges the reactive evaluation scope into the row controller. The context

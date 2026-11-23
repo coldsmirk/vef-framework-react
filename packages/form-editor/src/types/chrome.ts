@@ -26,10 +26,9 @@ export interface TabsChromeProps {
 export interface SubformChromeProps {
   title?: ReactNode;
   /**
-   * The subform field's own validation errors — "at least one row" on a
-   * required subform, and a table variant's rolled-up row error. Rendered
-   * under the body; without a slot here they reach the user nowhere, since a
-   * subform mounts one field for the whole array.
+   * The subform field's own validation errors — e.g. "at least one row" on a
+   * required subform. Rendered under the body; per-cell errors render inside
+   * each row field directly.
    */
   errors?: string[];
   children: ReactNode;

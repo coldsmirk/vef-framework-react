@@ -5,7 +5,7 @@ import type { FieldComponentProps, FieldDefinition, FieldOptionSource, Propertie
 import { filterOptionByLabel, Select } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, columnTypeEntry, requiredEntry, sizeEntry } from "../field-entries";
@@ -22,6 +22,7 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
   value,
   onChange
 }) => {
+  const cell = useFieldCell();
   const {
     error,
     loading,
@@ -39,6 +40,7 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
     >
       <Select
         allowClear={field.allowClear}
+        aria-labelledby={cell?.labelId}
         disabled={disabled}
         filterOption={filterOptionByLabel}
         id={domId}
@@ -46,11 +48,12 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
         options={options}
         placeholder={resolveFieldPlaceholder(field)}
+        popupMatchSelectWidth={cell ? false : undefined}
         showSearch={field.showSearch}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}
         style={selectStyle}
-        value={value === "" || value === undefined ? undefined : value}
+        value={value === "" || value === null || value === undefined ? undefined : value}
         onChange={(next: string | number | undefined) => onChange(next ?? "")}
       />
     </FieldShell>

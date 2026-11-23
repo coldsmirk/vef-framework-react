@@ -14,7 +14,7 @@ import type {
 import type { FormRendererApi, FormRendererProps } from "./form-renderer";
 
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
+import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
@@ -131,20 +131,18 @@ describe("FormRenderer field extras", () => {
     expect(extra.mock.calls.filter(([item]) => item.key === "lines" && item.column === undefined && item.row === undefined)).toHaveLength(1);
   });
 
-  it("places row, column and cell extras in their respective table cells", async () => {
-    // Both the button's accessible-name lookup and the pointer-events check
-    // compute table styles in jsdom. Click by label to exercise slot placement.
-    const user = userEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
+  it("places row, column and cell extras in their respective table cells", () => {
     const errors = vi.spyOn(console, "error");
     renderRuntime(<FormRenderer defaultValues={{ lines: [{ amount: "7" }] }} renderFieldExtra={renderLocation} schema={stack(tableSubform())} />);
     expect(screen.getByRole("columnheader", { name: /all-amount/ })).toHaveTextContent("amount");
     const cell = screen.getByText("0-amount").closest("td");
-    expect(cell).toHaveTextContent("7");
+    const input = screen.getByRole("textbox", { name: "amount" });
+    expect(cell).toContainElement(input);
+    expect(input).toHaveValue("7");
     expect(cell).toContainElement(screen.getByText("0-all"));
     const rollup = screen.getByText("all-all");
     expect(rollup.closest("table")).toBeNull();
-    await user.click(screen.getByText(/^编\s*辑$/).closest("button")!);
-    expect(screen.getByText("0-amount").closest("td")).toContainElement(screen.getByRole("textbox"));
+    expect(screen.queryByRole("button", { name: /编\s*辑/ })).not.toBeInTheDocument();
     expect(errors.mock.calls.filter(args => args.some(arg => String(arg).includes("React.Fragment")))).toEqual([]);
     errors.mockRestore();
   });
@@ -461,19 +459,17 @@ describe("FormRenderer field permissions", () => {
         />
       );
 
-      // The cell value renders — the table itself is mounted, so the absent
-      // controls below cannot pass vacuously.
-      expect(screen.getByText("42"), "the table renders its rows for display").toBeInTheDocument();
+      // Matching stack subforms: cells render disabled with their stored value
+      // and no add / delete controls are mounted.
+      const input = screen.getByRole("textbox", { name: "amount" });
+      expect(input, "the table renders its rows for display").toHaveValue("42");
+      expect(input, "a visible-clamped table subform disables every cell").toBeDisabled();
       expect(
         screen.queryByRole("button", { name: /新增一行/ }),
         "a read-only table subform offers no add control"
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "编辑" }),
-        "a read-only table subform offers no row editing"
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: "删除" }),
+        screen.queryByRole("button", { name: /删除/ }),
         "a read-only table subform offers no row deletion"
       ).not.toBeInTheDocument();
     });

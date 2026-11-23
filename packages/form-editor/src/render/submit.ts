@@ -11,7 +11,7 @@ import type {
   SubformNode
 } from "../types";
 
-import { isKeyedField, isKeyedNode, isValidatableField } from "../engine/keys";
+import { isKeyedNode, isValidatableField } from "../engine/keys";
 import {
   deriveDefaultValues,
   evaluateLinkage,
@@ -21,7 +21,7 @@ import {
 } from "../engine/linkage";
 import { containerBodies } from "../engine/schema/nodes";
 import { isFixedSubform } from "../engine/schema/subform";
-import { isContainerNode, isLeafField, nodeLabel, walkNodes } from "../engine/schema/walk";
+import { isContainerNode, walkNodes } from "../engine/schema/walk";
 import { resolveScopeValues } from "../runtime/resolve-scope-values";
 
 /**
@@ -223,38 +223,6 @@ export function collectSubmitErrors(args: {
   return errors;
 }
 
-/**
- * The first row error of a table-variant subform, rendered as a message its own
- * field can show: `第 2 行「金额」此项为必填`. One message rather than all of
- * them because a single field slot has room for one — and one that names the
- * row and column is enough for the user to find the cell.
- */
-function summarizeRowErrors(node: SubformNode, rowErrors: Record<string, string>, prefix: string): string | undefined {
-  const columnLabel = new Map(
-    node.template
-      .filter(block => isLeafField(block) && isKeyedField(block))
-      .map(block => [(block as KeyedFormField).key, nodeLabel(block) ?? (block as KeyedFormField).key])
-  );
-
-  for (const [name, message] of Object.entries(rowErrors)) {
-    const match = new RegExp(String.raw`^${escapeForRegExp(prefix)}\[(\d+)\]\.(.+)$`).exec(name);
-
-    if (!match) {
-      continue;
-    }
-
-    const [, index, key] = match;
-
-    return `第 ${Number(index) + 1} 行「${columnLabel.get(key ?? "") ?? key}」${message}`;
-  }
-
-  return undefined;
-}
-
-function escapeForRegExp(value: string): string {
-  return value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
-}
-
 function collectScopeSubmitErrors(
   blocks: Block[],
   values: RuntimeFormValues,
@@ -284,15 +252,10 @@ function collectScopeSubmitErrors(
 
       // Row scopes evaluate unclamped — top-level permissions stop at the
       // subform node itself (whose clamped hidden / disabled above already
-      // exempts the whole subtree).
+      // exempts the whole subtree). Both stack and table variants mount each
+      // row's template fields under `${namePrefix}${node.key}[${index}].*`, so
+      // per-cell errors flow straight to the failing controls.
       const rowOptions: EvaluateLinkageOptions = { ...options, fieldPermissions: undefined };
-
-      // The table variant mounts ONE field for the whole array, so a
-      // row-addressed error has nowhere to render. Collect the rows separately
-      // and roll them up onto the subform's own key, which IS mounted — an
-      // unrenderable error is the one outcome that cannot be right, since it
-      // blocks submission with no way for the user to learn why.
-      const rowErrors: Record<string, string> = node.variant === "table" ? {} : errors;
 
       for (const [index, rowValue] of rows.entries()) {
         collectScopeSubmitErrors(
@@ -300,16 +263,8 @@ function collectScopeSubmitErrors(
           asRecord(rowValue),
           `${namePrefix}${node.key}[${index}].`,
           rowOptions,
-          rowErrors
+          errors
         );
-      }
-
-      if (rowErrors !== errors) {
-        const summary = summarizeRowErrors(node, rowErrors, `${namePrefix}${node.key}`);
-
-        if (summary !== undefined) {
-          errors[`${namePrefix}${node.key}`] = summary;
-        }
       }
 
       return;

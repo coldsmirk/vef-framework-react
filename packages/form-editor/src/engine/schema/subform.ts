@@ -1,6 +1,25 @@
-import type { DynamicSubformRows, FieldOption, FixedSubformRows, FormDataSource, SubformNode } from "../../types";
+import type {
+  Block,
+  DynamicSubformRows,
+  FieldOption,
+  FixedSubformRows,
+  FormDataSource,
+  KeyedFormField,
+  SubformNode
+} from "../../types";
 
+import { isKeyedField } from "../keys";
 import { isRecord } from "../validation";
+import { isLeafField } from "./walk";
+
+/**
+ * Whether a template block may render as a column of a `table`-variant subform
+ * (a keyed leaf field). Shared by the designer's drag-accept predicate, canvas
+ * preview, and runtime table renderer.
+ */
+export function isTableColumnField(block: Block): block is KeyedFormField {
+  return isLeafField(block) && isKeyedField(block);
+}
 
 /**
  * Default row key storing the snapshotted `{ value, label }` header cell on a

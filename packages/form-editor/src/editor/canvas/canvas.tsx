@@ -766,10 +766,10 @@ function SubformPreview({ subform }: { subform: SubformNode }): ReactElement {
   const device = useFormEditorStore(s => s.device);
 
   // Mirror the runtime `SubformFlow`: the `table` variant renders as a real
-  // column table on PC, but degrades to the stacked layout on mobile (the
-  // runtime `EditableTable` is desktop antd). Keeping the same gate means the
-  // canvas shows exactly what each device renders — drag in columns, see a
-  // table, instead of a stack that silently becomes one at runtime.
+  // column table on PC, but degrades to the stacked card layout on mobile.
+  // Keeping the same gate means the canvas shows exactly what each device
+  // renders — drag in columns, see a table, instead of a stack that silently
+  // becomes one at runtime.
   if (subform.variant === "table" && device === "pc") {
     return <SubformTablePreview subform={subform} />;
   }
@@ -986,8 +986,8 @@ const subformTableColCss = css({
 /**
  * Inline sizing for a table-subform column with a fixed `columnWidth` — pins the
  * slot to that pixel width instead of the auto `flex: 1 1 0` default, mirroring
- * the runtime `EditableTable` column `width`. Returns `undefined` (auto) when the
- * column carries no width.
+ * the runtime table column width. Returns `undefined` (auto) when the column
+ * carries no width.
  */
 function subformColumnWidthStyle(width: number | undefined): CSSProperties | undefined {
   return typeof width === "number"
@@ -1068,10 +1068,10 @@ const subformAddRowCss = css({
 /**
  * Design-time table for a `table`-variant subform: each keyed leaf template
  * field is a column (header = its label, body = a disabled sample editor), so
- * the canvas matches the runtime `EditableTable`. Columns are selected, dragged
- * to reorder, and dropped in just like any block; the column drop zones carry a
- * {@link makeColumnAccept} predicate so only keyed leaf fields can land —
- * containers and display / action blocks are turned away at the affordance.
+ * the canvas matches the runtime inline-editable table. Columns are selected,
+ * dragged to reorder, and dropped in just like any block; the column drop zones
+ * carry a {@link makeColumnAccept} predicate so only keyed leaf fields can land
+ * — containers and display / action blocks are turned away at the affordance.
  * Non-column template blocks (only reachable via a stack→table toggle or JSON)
  * are skipped, exactly as the runtime drops them.
  */

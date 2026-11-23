@@ -4,7 +4,7 @@ import type { FieldComponentProps, FieldDefinition, PropertiesDescriptor, Textar
 
 import { Input } from "@vef-framework-react/components";
 
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import {
   allowClearEntry,
@@ -17,6 +17,10 @@ import {
 } from "../field-entries";
 
 const DEFAULT_ROWS = 3;
+// Inside table cells, default to a single-line auto-sizing textarea when the
+// designer has not pinned `rows` or `autoSize`, keeping rows compact until
+// multi-line content is entered.
+const CELL_TEXTAREA_AUTO_SIZE = { minRows: 1 } as const;
 
 const TextareaInput: FC<FieldComponentProps<TextareaField, string>> = ({
   disabled,
@@ -28,9 +32,13 @@ const TextareaInput: FC<FieldComponentProps<TextareaField, string>> = ({
   value = "",
   onChange
 }) => {
+  const cell = useFieldCell();
+
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     onChange(event.target.value);
   };
+
+  const compactCell = cell !== null && field.autoSize === undefined && field.rows === undefined;
 
   return (
     <FieldShell
@@ -43,12 +51,13 @@ const TextareaInput: FC<FieldComponentProps<TextareaField, string>> = ({
     >
       <Input.TextArea
         allowClear={field.allowClear}
-        autoSize={field.autoSize}
+        aria-labelledby={cell?.labelId}
+        autoSize={compactCell ? CELL_TEXTAREA_AUTO_SIZE : field.autoSize}
         disabled={disabled}
         id={domId}
         maxLength={field.maxLength}
         placeholder={field.placeholder}
-        rows={field.rows ?? DEFAULT_ROWS}
+        rows={compactCell ? undefined : (field.rows ?? DEFAULT_ROWS)}
         showCount={field.showCount}
         size={field.size}
         status={errors?.length ? "error" : undefined}

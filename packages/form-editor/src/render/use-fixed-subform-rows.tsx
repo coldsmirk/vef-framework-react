@@ -80,9 +80,9 @@ export function reconcileFixedRows(
 }
 
 /**
- * Derive stable, unique React / EditableTable row keys for fixed-row records
- * from each row's snapshotted item value, so surviving rows retain their
- * component identity when a bound parameter re-resolves the item list.
+ * Derive stable, unique React row keys for fixed-row records from each row's
+ * snapshotted item value, so surviving rows retain their component identity
+ * when a bound parameter re-resolves the item list.
  */
 export function deriveFixedRowKeys(rows: readonly unknown[], itemKey: string): string[] {
   const counts = new Map<string, number>();

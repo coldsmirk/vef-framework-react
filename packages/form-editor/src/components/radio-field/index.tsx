@@ -5,7 +5,7 @@ import type { FieldComponentProps, FieldDefinition, FieldOptionSource, Propertie
 import { Radio, Spin } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { columnTypeEntry, optionDirectionEntry, requiredEntry } from "../field-entries";
@@ -20,6 +20,7 @@ const RadioInput: FC<FieldComponentProps<RadioField, string | number | undefined
   value,
   onChange
 }) => {
+  const cell = useFieldCell();
   const {
     error,
     loading,
@@ -44,8 +45,8 @@ const RadioInput: FC<FieldComponentProps<RadioField, string | number | undefined
                 disabled={disabled}
                 options={options}
                 optionType={field.optionType}
-                orientation={field.direction ?? "vertical"}
-                value={value === "" ? undefined : value}
+                orientation={field.direction ?? (cell ? "horizontal" : "vertical")}
+                value={value === "" || value === null || value === undefined ? undefined : value}
                 onChange={event => onChange(event.target.value)}
               />
             </Spin>

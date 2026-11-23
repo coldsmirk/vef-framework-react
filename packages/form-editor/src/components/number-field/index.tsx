@@ -4,7 +4,7 @@ import type { FieldComponentProps, FieldDefinition, NumberField, PropertiesDescr
 
 import { InputNumber } from "@vef-framework-react/components";
 
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { columnTypeEntry, maxValueEntry, messageEntry, minValueEntry, requiredEntry, sizeEntry } from "../field-entries";
 
@@ -19,34 +19,39 @@ const NumberInput: FC<FieldComponentProps<NumberField, number | undefined>> = ({
   required,
   value,
   onChange
-}) => (
-  <FieldShell
-    domId={domId}
-    errors={errors}
-    helperText={field.helperText}
-    label={field.label ?? "数字"}
-    labelPosition={field.labelPosition ?? labelPosition}
-    required={required ?? field.validate?.required}
-  >
-    <InputNumber
-      controls={field.controls}
-      disabled={disabled}
-      id={domId}
-      max={field.max}
-      min={field.min}
-      placeholder={field.placeholder}
-      precision={field.precision}
-      prefix={field.prefix}
-      size={field.size}
-      status={errors?.length ? "error" : undefined}
-      step={field.step}
-      style={inputStyle}
-      suffix={field.suffix}
-      value={value}
-      onChange={next => onChange(typeof next === "number" ? next : undefined)}
-    />
-  </FieldShell>
-);
+}) => {
+  const cell = useFieldCell();
+
+  return (
+    <FieldShell
+      domId={domId}
+      errors={errors}
+      helperText={field.helperText}
+      label={field.label ?? "数字"}
+      labelPosition={field.labelPosition ?? labelPosition}
+      required={required ?? field.validate?.required}
+    >
+      <InputNumber
+        aria-labelledby={cell?.labelId}
+        controls={field.controls}
+        disabled={disabled}
+        id={domId}
+        max={field.max}
+        min={field.min}
+        placeholder={field.placeholder}
+        precision={field.precision}
+        prefix={field.prefix}
+        size={field.size}
+        status={errors?.length ? "error" : undefined}
+        step={field.step}
+        style={inputStyle}
+        suffix={field.suffix}
+        value={value}
+        onChange={next => onChange(typeof next === "number" ? next : undefined)}
+      />
+    </FieldShell>
+  );
+};
 
 const numberProperties: PropertiesDescriptor = [
   {

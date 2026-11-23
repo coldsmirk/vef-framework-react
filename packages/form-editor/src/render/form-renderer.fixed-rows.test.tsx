@@ -137,14 +137,13 @@ describe("FormRenderer fixed-row subform", () => {
       expect(screen.getByText("使用非卫生技术人员从事诊疗工作的（10分）")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /新增/ })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /删除/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /编\s*辑/ })).not.toBeInTheDocument();
 
-      // Clicking Edit on row 0 turns only the template column into an input;
+      // Template columns are immediately editable without an operation column;
       // the row-header cell stays read-only.
-      await user.click(within(firstRow).getByRole("button", { name: /编\s*辑/ }));
       const inputs = within(firstRow).getAllByRole("textbox");
       expect(inputs).toHaveLength(1);
       await user.type(inputs[0] as HTMLElement, "张三");
-      await user.click(within(firstRow).getByRole("button", { name: /保\s*存/ }));
 
       await user.click(screen.getByRole("button", { name: "提交" }));
 

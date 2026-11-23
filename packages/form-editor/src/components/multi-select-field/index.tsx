@@ -5,7 +5,7 @@ import type { FieldComponentProps, FieldDefinition, FieldOptionSource, MultiSele
 import { filterOptionByLabel, Select } from "@vef-framework-react/components";
 
 import { useFieldOptions } from "../../render/data-source-context";
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, requiredEntry, sizeEntry } from "../field-entries";
@@ -23,6 +23,7 @@ const MultiSelectInput: FC<FieldComponentProps<MultiSelectField, Array<string | 
   value,
   onChange
 }) => {
+  const cell = useFieldCell();
   const {
     error,
     loading,
@@ -41,6 +42,7 @@ const MultiSelectInput: FC<FieldComponentProps<MultiSelectField, Array<string | 
     >
       <Select
         allowClear={field.allowClear}
+        aria-labelledby={cell?.labelId}
         disabled={disabled}
         filterOption={filterOptionByLabel}
         id={domId}
@@ -50,6 +52,7 @@ const MultiSelectInput: FC<FieldComponentProps<MultiSelectField, Array<string | 
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
         options={options}
         placeholder={resolveFieldPlaceholder(field)}
+        popupMatchSelectWidth={cell ? false : undefined}
         showSearch={field.showSearch === true}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}

@@ -4,8 +4,41 @@ import type { LabelPosition } from "../../types";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
+import { createContext, use } from "react";
 
 import { Label } from "./label";
+
+/**
+ * Presentation context provided by each table-subform cell so leaf field
+ * renderers reuse the exact same components as stacked forms while omitting
+ * redundant per-cell labels/helper text and rendering jump-free cell validation
+ * feedback.
+ */
+export interface FieldCellContextValue {
+  /**
+   * DOM id of the column header text element this cell belongs to, wired to
+   * `aria-labelledby` so controls keep an accessible name without duplicating
+   * the column title text inside every cell.
+   */
+  labelId: string;
+}
+
+const FieldCellContext = createContext<FieldCellContextValue | null>(null);
+FieldCellContext.displayName = "FormEditorFieldCellContext";
+
+export function FieldCellProvider({
+  children,
+  value
+}: {
+  children: ReactNode;
+  value: FieldCellContextValue;
+}): ReactElement {
+  return <FieldCellContext value={value}>{children}</FieldCellContext>;
+}
+
+export function useFieldCell(): FieldCellContextValue | null {
+  return use(FieldCellContext);
+}
 
 /**
  * Shared layout shell for input-like leaf fields (textfield / number / code
@@ -74,6 +107,106 @@ export const errorTextCss = css({
 
 const footerSpacingCss = css({ marginTop: 4 });
 
+// Reserved bottom slot inside table cells: errors land at `bottom: 0` inside
+// this padding so transitioning valid ⇄ invalid never shifts row height.
+const cellFieldCss = css({
+  position: "relative",
+  width: "100%",
+  paddingBottom: 18
+});
+
+// Permanent 1px transparent border around controls without antd `status="error"`
+// support (Radio.Group, Checkbox.Group, Switch, Upload), flipping to error
+// color with zero geometry shift.
+const cellOutlinedCss = css({
+  display: "flex",
+  alignItems: "center",
+  width: "100%",
+  minHeight: 32,
+  padding: "2px 6px",
+  borderRadius: globalCssVars.borderRadius,
+  border: "1px solid transparent",
+  transition: "border-color 0.2s, background-color 0.2s"
+});
+
+const cellOutlinedErrorCss = css({
+  borderColor: globalCssVars.colorError,
+  backgroundColor: globalCssVars.colorErrorBg
+});
+
+const cellErrorCss = css({
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  fontSize: 11,
+  lineHeight: "16px",
+  color: globalCssVars.colorErrorText,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  pointerEvents: "none"
+});
+
+export interface CellFieldFrameProps {
+  children: ReactNode;
+  errors?: string[];
+  /**
+   * Wrap the control in a border-ready box that highlights in red when invalid
+   * (for controls that do not accept antd's `status="error"` prop).
+   */
+  outlined?: boolean;
+  /**
+   * Optional ARIA group metadata applied to the outlined wrapper for
+   * multi-control widgets (`labelledBy="group"`).
+   */
+  groupProps?: {
+    "aria-invalid": boolean;
+    "aria-labelledby": string;
+    "aria-required"?: boolean;
+  };
+}
+
+/**
+ * Shared table-cell frame for {@link FieldShell} and inline controls like
+ * `SwitchInput`. Keeps row height constant across validation state changes by
+ * placing the single-line error message inside a fixed bottom slot, with full
+ * text surfaced via `title` when truncated in narrow columns.
+ */
+export function CellFieldFrame({
+  children,
+  errors,
+  groupProps,
+  outlined = false
+}: CellFieldFrameProps): ReactElement {
+  const hasError = errors !== undefined && errors.length > 0;
+  const errorMessage = hasError ? errors.join("、") : undefined;
+
+  return (
+    <div css={cellFieldCss}>
+      {outlined || groupProps
+        ? (
+            <div
+              {...groupProps}
+              css={[cellOutlinedCss, hasError && cellOutlinedErrorCss]}
+              role={groupProps ? "group" : undefined}
+            >
+              {children}
+            </div>
+          )
+        : children}
+
+      {errorMessage
+        ? (
+            <div css={cellErrorCss} role="alert" title={errorMessage}>
+              {errorMessage}
+            </div>
+          )
+        : null}
+    </div>
+  );
+}
+
 export interface FieldFooterProps {
   errors?: string[];
   helperText?: string;
@@ -134,8 +267,28 @@ export function FieldShell({
   labelledBy = "control",
   required
 }: FieldShellProps): ReactElement {
-  const labelTitle = typeof label === "string" ? label : undefined;
+  const cell = useFieldCell();
   const isGroup = labelledBy === "group";
+
+  if (cell !== null) {
+    return (
+      <CellFieldFrame
+        errors={errors}
+        outlined={isGroup}
+        groupProps={isGroup
+          ? {
+              "aria-invalid": errors !== undefined && errors.length > 0,
+              "aria-labelledby": cell.labelId,
+              "aria-required": required
+            }
+          : undefined}
+      >
+        {children}
+      </CellFieldFrame>
+    );
+  }
+
+  const labelTitle = typeof label === "string" ? label : undefined;
   const labelId = `${domId}-label`;
   const labelNode = (
     <Label

@@ -21,7 +21,7 @@ import {
 } from "@vef-framework-react/shared";
 
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
-import { FieldShell } from "../../render/parts/field-shell";
+import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { resolveDateRangePlaceholderPair, resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { dateGranularityEntry, requiredEntry } from "../field-entries";
@@ -49,6 +49,7 @@ function SingleDateInput({
   value = "",
   onChange
 }: FieldComponentProps<DateField | DatetimeField, string>): ReactElement {
+  const cell = useFieldCell();
   const showTime = field.type === "datetime";
   const granularity: DateGranularity = field.type === "date" ? (field.granularity ?? "day") : "day";
   const format = showTime ? DEFAULT_DATETIME_FORMAT : getDateGranularityFormat(granularity);
@@ -69,6 +70,7 @@ function SingleDateInput({
     >
       <DatePicker
         allowClear={field.allowClear ?? true}
+        aria-labelledby={cell?.labelId}
         disabled={disabled}
         format={format}
         id={domId}
@@ -196,6 +198,7 @@ function DateRangeInput({
   value = EMPTY_RANGE,
   onChange
 }: FieldComponentProps<DateRangeField, string[]>): ReactElement {
+  const cell = useFieldCell();
   const granularity: DateGranularity = field.granularity ?? "day";
   const format = getDateGranularityFormat(granularity);
 
@@ -210,6 +213,7 @@ function DateRangeInput({
     >
       <DatePicker.RangePicker
         allowClear={field.allowClear ?? true}
+        aria-labelledby={cell?.labelId}
         disabled={disabled}
         format={format}
         id={domId}

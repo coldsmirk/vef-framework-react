@@ -526,11 +526,7 @@ describe("FormRenderer", () => {
     await waitFor(() => expect(total().value).toBe("500"));
   });
 
-  it("shows a table subform's row error on a field that is actually mounted", async () => {
-    // Row errors are keyed `lines[0].amount`. The stack variant mounts that
-    // name as a real field; the table variant mounts ONE field for the whole
-    // array, so the error had nowhere to render and submission was blocked with
-    // no message anywhere — the button simply did nothing.
+  it("shows a table subform's row error directly inside the invalid cell on submit", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     const subform: SubformNode = {
@@ -552,7 +548,11 @@ describe("FormRenderer", () => {
 
     await user.click(screen.getByRole("button", { name: "提交" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("第 1 行「金额」此项为必填");
+    const alert = await screen.findByRole("alert");
+    const cell = screen.getByRole("textbox", { name: "金额" }).closest("td");
+
+    expect(alert).toHaveTextContent("此项为必填");
+    expect(cell).toContainElement(alert);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

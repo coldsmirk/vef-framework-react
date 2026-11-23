@@ -5,7 +5,7 @@ import type { FieldComponentProps, FieldDefinition, PropertiesDescriptor, Switch
 import { css } from "@emotion/react";
 import { Switch } from "@vef-framework-react/components";
 
-import { FieldFooter } from "../../render/parts/field-shell";
+import { CellFieldFrame, FieldFooter, useFieldCell } from "../../render/parts/field-shell";
 import { Label } from "../../render/parts/label";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 
@@ -29,32 +29,53 @@ const SwitchInput: FC<FieldComponentProps<SwitchField, boolean>> = ({
   required,
   value,
   onChange
-}) => (
-  <div css={wrapperCss}>
-    <div css={rowCss}>
-      <Switch
-        checked={value === true}
-        checkedChildren={field.onText}
-        disabled={disabled}
-        id={domId}
-        size={field.size}
-        unCheckedChildren={field.offText}
-        onChange={next => onChange(next)}
-      />
+}) => {
+  const cell = useFieldCell();
 
-      {/* The shared Label part carries the required asterisk. SwitchField has no
-          static required toggle, so `required` only arrives from a runtime
-          `require` linkage — the marker must track it like every other field. */}
-      <Label htmlFor={domId} position="right" required={required}>
-        {field.label ?? "开关"}
-      </Label>
+  if (cell !== null) {
+    return (
+      <CellFieldFrame outlined errors={errors}>
+        <Switch
+          aria-labelledby={cell.labelId}
+          checked={value === true}
+          checkedChildren={field.onText}
+          disabled={disabled}
+          id={domId}
+          size={field.size}
+          unCheckedChildren={field.offText}
+          onChange={next => onChange(next)}
+        />
+      </CellFieldFrame>
+    );
+  }
+
+  return (
+    <div css={wrapperCss}>
+      <div css={rowCss}>
+        <Switch
+          checked={value === true}
+          checkedChildren={field.onText}
+          disabled={disabled}
+          id={domId}
+          size={field.size}
+          unCheckedChildren={field.offText}
+          onChange={next => onChange(next)}
+        />
+
+        {/* The shared Label part carries the required asterisk. SwitchField has no
+            static required toggle, so `required` only arrives from a runtime
+            `require` linkage — the marker must track it like every other field. */}
+        <Label htmlFor={domId} position="right" required={required}>
+          {field.label ?? "开关"}
+        </Label>
+      </div>
+
+      {/* Helper text and `require`-linkage validation errors render through the
+          shared field footer, identical to every FieldShell-based field. */}
+      <FieldFooter errors={errors} helperText={field.helperText} />
     </div>
-
-    {/* Helper text and `require`-linkage validation errors render through the
-        shared field footer, identical to every FieldShell-based field. */}
-    <FieldFooter errors={errors} helperText={field.helperText} />
-  </div>
-);
+  );
+};
 
 const switchProperties: PropertiesDescriptor = [
   {

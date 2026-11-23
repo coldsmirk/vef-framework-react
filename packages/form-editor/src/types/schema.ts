@@ -957,27 +957,26 @@ export interface StackSubform extends SubformBase {
 }
 
 /**
- * Table-layout subform: rows render through the components `EditableTable`
- * (view + per-row inline edit), each template leaf field becoming a column.
- * Targets straightforward tabular data entry, so `validateSchema` requires the
- * template to be flat keyed leaf fields. Desktop-only — the mobile presentation
- * renders it as a {@link StackSubform}.
+ * Table-layout subform: rows render as directly-editable table cells bound to
+ * the outer form with full per-row linkage and validation, each template leaf
+ * field becoming a column. `validateSchema` requires the template to be flat
+ * keyed leaf fields. Desktop-only — the mobile presentation renders it as a
+ * {@link StackSubform}.
  */
 export interface TableSubform extends SubformBase {
   variant: "table";
   /**
-   * Table density forwarded to the runtime `EditableTable`. Omitted uses the
-   * table's own default.
+   * Table cell density (`small` / `middle` / `large`). Defaults to `"middle"`.
    */
   size?: "small" | "middle" | "large";
 }
 
 /**
  * Repeating record group — a closed two-variant union: {@link StackSubform}
- * (free layout) and {@link TableSubform} (EditableTable). Both share the data
- * contract (array-of-records, value scope, key uniqueness, min/max rows); only
- * the presentation differs, so the engine treats them uniformly by `type` and
- * only the renderer branches on `variant`.
+ * (free layout) and {@link TableSubform} (tabular grid). Both share the data
+ * contract (array-of-records, value scope, key uniqueness, min/max rows,
+ * per-row linkage); only the presentation differs, so the engine treats them
+ * uniformly by `type` and only the renderer branches on `variant`.
  */
 export type SubformNode = StackSubform | TableSubform;
 

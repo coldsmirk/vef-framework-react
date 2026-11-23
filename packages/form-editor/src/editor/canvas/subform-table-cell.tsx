@@ -81,11 +81,10 @@ function SampleSelectionCell({ field }: { field: SampleSelectionField }): ReactE
 
 /**
  * A disabled, value-less control standing in for one table column's cell editor,
- * so the design canvas reads like the runtime `EditableTable` (header = the
- * field, body = the editor each row would show). Mirrors the per-type editor
- * mapping in `render/subform-columns.tsx`, but static — a canvas preview must
- * never bind real form state. A keyed leaf type with no table editor (e.g.
- * code-editor) falls back to a muted dash.
+ * so the design canvas reads like the runtime inline-editable table (header =
+ * the field, body = the editor each row shows). Static — a canvas preview must
+ * never bind real form state. A keyed leaf type with no canvas preview falls
+ * back to a muted dash.
  */
 export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
   switch (field.type) {
