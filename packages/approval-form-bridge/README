@@ -43,8 +43,12 @@ const gate = validateApprovalSchema(candidate, registries);
 - Only root-scope keyed nodes project; both device presentations are walked (pc wins a key collision,
   mobile-only fields still project — the backend's form data is a closed contract).
 - A subform becomes a single-level `table` field: template leaves are its columns, layout containers in
-  the template are transparent, a nested subform is an error. `minRows` / `maxRows` map to
-  `validation.minLength` / `maxLength` (row-count bounds); `minRows >= 1` sets `isRequired`.
+  the template are transparent, a nested subform is an error. Under dynamic rows (`rows` omitted or
+  `rows.mode === "dynamic"`), `rows.min` / `rows.max` map to `validation.minLength` / `maxLength`
+  (row-count bounds) and `rows.min >= 1` sets `isRequired`. Under fixed rows (`rows.mode === "fixed"`),
+  `fixedRows` carries `itemKey`, optional `headerLabel`, and either frozen static `items` or a
+  post-dereference `source` (`codeSet` / `remote`), while `isRequired` mirrors `rows.required`; the
+  row-header cell is never included in `columns`.
 - `switch` (boolean) is unprojectable and raises an error issue. Unknown keyed widget types do too,
   never a silent drop. `date` and `daterange` carry an optional `granularity` (`year` / `quarter` /
   `month` / `day`, omitted = `day`), and `datetime` projects to its own `datetime` kind.

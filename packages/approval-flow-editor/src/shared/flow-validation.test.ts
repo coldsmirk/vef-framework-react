@@ -771,6 +771,25 @@ describe("validateFlowDefinition aggregate conditions", () => {
     expect(codes).toEqual([]);
   });
 
+  it("rejects aggregating on a fixed-row table's header itemKey (not a template column)", () => {
+    const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "sum", column: "item" })), [
+      {
+        key: "items",
+        label: "自查表",
+        kind: "table",
+        columns: [
+          {
+            key: "score",
+            label: "扣分",
+            kind: "number"
+          }
+        ]
+      }
+    ]);
+
+    expect(codes).toContain("invalid_aggregate_reference");
+  });
+
   it("accepts count without a column", () => {
     const codes = codesOf(conditionFlowWith(aggregateBranch({ aggregate: "count" })), [
       {

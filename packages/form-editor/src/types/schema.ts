@@ -865,6 +865,65 @@ export interface TabsNode extends BlockBase {
 }
 
 /**
+ * Dynamic row mode: the user adds and removes rows freely, bounded by optional
+ * `min` / `max` row counts. Default when {@link SubformBase.rows} is omitted.
+ */
+export interface DynamicSubformRows {
+  mode: "dynamic";
+  /**
+   * Minimum number of rows the form keeps present. The runtime seeds this many
+   * blank rows and blocks removal below it. Defaults to `0`.
+   */
+  min?: number;
+  /**
+   * Maximum number of rows the user may add. The runtime disables the add
+   * control at this count. Unbounded when omitted.
+   */
+  max?: number;
+  addLabel?: string;
+}
+
+/**
+ * Fixed row mode (matrix / checklist table): rows are seeded from `source`
+ * (static list, form-global ref, remote API, or host data dictionary) in source
+ * order, no rows can be added or removed, and each row stores a read-only
+ * `{ value, label }` snapshot under `itemKey`.
+ */
+export interface FixedSubformRows {
+  mode: "fixed";
+  /**
+   * Where the fixed row items come from — the same option-source model used by
+   * selection fields (`static`, `ref`, `remote`, `codeSet`).
+   */
+  source: FieldOptionSource;
+  /**
+   * Data key inside each row holding the snapshotted `{ value, label }` item
+   * cell (default `"item"`). Unique within the subform's value scope, kept out
+   * of the template columns, and read-only for the filler.
+   */
+  itemKey: string;
+  /**
+   * Display title for the read-only row-header column (default `"自查内容"`).
+   */
+  headerLabel?: string;
+  /**
+   * Fixed pixel width for the read-only row-header column in `table` variant.
+   */
+  headerWidth?: number;
+  /**
+   * Require at least one row on submission — blocks submit when a remote or
+   * code-set source fails or resolves empty.
+   */
+  required?: boolean;
+}
+
+/**
+ * Row-management mode of a {@link SubformNode}, orthogonal to its presentation
+ * `variant` (`stack` | `table`).
+ */
+export type SubformRows = DynamicSubformRows | FixedSubformRows;
+
+/**
  * Common attributes shared by every subform variant. A subform is a repeating
  * record group: it binds `Array<Record<string, unknown>>` under `key`, and its
  * `template` opens a **new value scope** (child field keys are unique within the
@@ -877,16 +936,10 @@ interface SubformBase extends BlockBase, KeyedNode {
   label?: string;
   template: Block[];
   /**
-   * Minimum number of rows the form keeps present. The runtime seeds this many
-   * blank rows and blocks removal below it. Defaults to `0`.
+   * Row mode configuration (`dynamic` or `fixed`). Omitted defaults to an
+   * unbounded dynamic subform (`{ mode: "dynamic" }`).
    */
-  minRows?: number;
-  /**
-   * Maximum number of rows the user may add. The runtime disables the add
-   * control at this count. Unbounded when omitted.
-   */
-  maxRows?: number;
-  addLabel?: string;
+  rows?: SubformRows;
 }
 
 /**

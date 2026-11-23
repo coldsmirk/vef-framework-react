@@ -83,7 +83,7 @@ describe("deriveDefaultValues", () => {
   });
 
   describe("typed blank seeds", () => {
-    it("seeds minRows rows with type-appropriate defaults per field type", () => {
+    it("seeds dynamic rows.min rows with type-appropriate defaults per field type", () => {
       const node = subform(
         [
           textfield("name"),
@@ -118,7 +118,7 @@ describe("deriveDefaultValues", () => {
             label: "period"
           }
         ],
-        { minRows: 1 }
+        { rows: { mode: "dynamic", min: 1 } }
       );
 
       const values = deriveDefaultValues({ id: "F", children: [node] });
@@ -133,6 +133,78 @@ describe("deriveDefaultValues", () => {
           period: []
         }
       ]);
+    });
+
+    it("seeds static fixed rows with snapshotted header cells and blank template cells", () => {
+      const node = subform([textfield("note")], {
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          headerLabel: "自查内容",
+          source: {
+            kind: "static",
+            options: [
+              { label: "条款一", value: "c1" },
+              { label: "条款二", value: "c2" }
+            ]
+          }
+        }
+      });
+
+      const values = deriveDefaultValues({ id: "F", children: [node] });
+
+      expect(values.lines).toEqual([
+        { item: { value: "c1", label: "条款一" }, note: "" },
+        { item: { value: "c2", label: "条款二" }, note: "" }
+      ]);
+    });
+
+    it("seeds ref-to-static fixed rows from form dataSources and keeps stored initial rows intact", () => {
+      const node = subform([textfield("note")], {
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          source: { kind: "ref", dataSourceId: "DS_1" }
+        }
+      });
+      const dataSources = [
+        {
+          id: "DS_1",
+          kind: "static" as const,
+          name: "条款",
+          options: [{ label: "条款一", value: "c1" }]
+        }
+      ];
+
+      const fresh = deriveDefaultValues({
+        id: "F",
+        children: [node],
+        dataSources
+      });
+      expect(fresh.lines).toEqual([{ item: { value: "c1", label: "条款一" }, note: "" }]);
+
+      const stored = deriveDefaultValues(
+        {
+          id: "F",
+          children: [node],
+          dataSources
+        },
+        { lines: [{ item: { value: "old", label: "历史条款" }, note: "已整改" }] }
+      );
+      expect(stored.lines).toEqual([{ item: { value: "old", label: "历史条款" }, note: "已整改" }]);
+    });
+
+    it("seeds async fixed-row sources (codeSet / remote) to an empty array until resolved", () => {
+      const node = subform([textfield("note")], {
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          source: { kind: "codeSet", codeSet: "hosp.check" }
+        }
+      });
+
+      const values = deriveDefaultValues({ id: "F", children: [node] });
+      expect(values.lines).toEqual([]);
     });
   });
 

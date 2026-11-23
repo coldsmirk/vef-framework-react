@@ -46,22 +46,32 @@ function readSource(value: unknown): FieldOptionSource {
   return { kind: "static", options: [] };
 }
 
+export interface OptionSourceEditorProps {
+  allowBulkPaste?: boolean;
+  confirmTitle?: string;
+  dataSources: FormDataSource[];
+  description?: string;
+  label: string;
+  source: FieldOptionSource;
+  onChange: (next: FieldOptionSource) => void;
+}
+
 /**
- * Editor for a selection field's option source. A segmented control switches
- * between an inline static list, a reference to a form-global data source, an
- * inline remote request, and a host data dictionary — the four arms of
- * {@link FieldOptionSource}, all resolved at runtime by `useFieldOptions`.
+ * Reusable editor for any {@link FieldOptionSource} (selection fields and
+ * fixed-row subforms alike). A segmented control switches between an inline
+ * static list, a form-global data-source ref, an inline remote request, and a
+ * host data dictionary — gated behind a confirmation when switching discards
+ * configured payload.
  */
-export const OptionsSourceEntry: FC<EntryComponentProps> = ({
-  entry,
-  field,
-  schema,
-  onChange
-}) => {
-  const source = readSource(entry.read(field));
-  // The four kinds share no payload, so switching a configured source discards
-  // work and is gated behind a confirmation; an unconfigured source switches
-  // instantly.
+export function OptionSourceEditor({
+  allowBulkPaste = false,
+  confirmTitle = "切换选项来源将丢弃当前配置",
+  dataSources,
+  description,
+  label,
+  onChange,
+  source
+}: OptionSourceEditorProps): ReactElement {
   const kindSwitch = useConfirmableKindSwitch<OptionSourceKind>({
     current: source.kind,
     needsConfirm: optionSourceHasPayload(source),
@@ -70,13 +80,13 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
 
   return (
     <div css={wrapperCss}>
-      <span css={entryLabelCss}>{entry.label}</span>
+      <span css={entryLabelCss}>{label}</span>
 
       <Popconfirm
         cancelText="取消"
         okText="切换"
         open={kindSwitch.pendingKind !== null}
-        title="切换选项来源将丢弃当前配置"
+        title={confirmTitle}
         onCancel={kindSwitch.cancel}
         onConfirm={kindSwitch.confirm}
       >
@@ -93,10 +103,16 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
       </Popconfirm>
 
       {source.kind === "static"
-        ? <OptionListEditor options={source.options} onChange={next => onChange({ kind: "static", options: next })} />
+        ? (
+            <OptionListEditor
+              allowBulkPaste={allowBulkPaste}
+              options={source.options}
+              onChange={next => onChange({ kind: "static", options: next })}
+            />
+          )
         : null}
 
-      {source.kind === "ref" ? <RefSource dataSourceId={source.dataSourceId} dataSources={schema.dataSources ?? []} onChange={onChange} /> : null}
+      {source.kind === "ref" ? <RefSource dataSourceId={source.dataSourceId} dataSources={dataSources} onChange={onChange} /> : null}
 
       {source.kind === "remote"
         ? (
@@ -113,10 +129,28 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
         : null}
 
       {source.kind === "codeSet" ? <CodeSetSource codeSet={source.codeSet} onChange={codeSet => onChange({ kind: "codeSet", codeSet })} /> : null}
-      {entry.description ? <span css={descriptionCss}>{entry.description}</span> : null}
+      {description ? <span css={descriptionCss}>{description}</span> : null}
     </div>
   );
-};
+}
+
+/**
+ * Property-entry wrapper around {@link OptionSourceEditor} for selection fields.
+ */
+export const OptionsSourceEntry: FC<EntryComponentProps> = ({
+  entry,
+  field,
+  schema,
+  onChange
+}) => (
+  <OptionSourceEditor
+    dataSources={schema.dataSources ?? []}
+    description={entry.description}
+    label={entry.label}
+    source={readSource(entry.read(field))}
+    onChange={onChange}
+  />
+);
 
 function RefSource({
   dataSourceId,

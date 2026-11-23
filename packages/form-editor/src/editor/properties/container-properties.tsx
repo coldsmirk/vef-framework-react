@@ -1,12 +1,38 @@
 import type { DynamicIconName } from "@vef-framework-react/components";
 import type { ReactElement } from "react";
 
-import type { Block, ContainerNode, FlexAlign, FlexJustify, FlexNode, GapScale, GridNode, SectionNode, SubformNode, TableSubform, TabsNode } from "../../types";
+import type {
+  Block,
+  ContainerNode,
+  DynamicSubformRows,
+  FixedSubformRows,
+  FlexAlign,
+  FlexJustify,
+  FlexNode,
+  FormDataSource,
+  GapScale,
+  GridNode,
+  SectionNode,
+  SubformNode,
+  SubformRows,
+  TableSubform,
+  TabsNode
+} from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, InputNumber, ScrollArea, Select, Switch } from "@vef-framework-react/components";
+import { Button, globalCssVars, Input, InputNumber, Popconfirm, ScrollArea, Segmented, Select, Switch } from "@vef-framework-react/components";
+import { useState } from "react";
 
 import { createId } from "../../engine/ids";
+import { isKeyedNode, nextUniqueKey, sanitizeKey } from "../../engine/keys";
+import {
+  DEFAULT_DYNAMIC_ADD_LABEL,
+  DEFAULT_FIXED_HEADER_LABEL,
+  DEFAULT_FIXED_ITEM_KEY,
+  getDynamicSubformRows,
+  isFixedSubform
+} from "../../engine/schema/subform";
+import { walkNodes } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { ROW_COLS } from "../../types";
@@ -14,7 +40,10 @@ import { removeTabWithConfirm } from "../remove-node-confirm";
 import { panelBodyCss } from "../styles";
 import { BlockLayoutSection } from "./block-layout-section";
 import { ContainerLinkageSection } from "./entries/linkage/container-linkage-section";
+import { OptionSourceEditor } from "./entries/options-source";
+import { optionSourceHasPayload } from "./entries/options-source/source-mutators";
 import { PanelHeader } from "./panel-header";
+import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 
 const bodyCss = css({
   display: "flex",
@@ -268,17 +297,141 @@ const SUBFORM_TABLE_SIZE_OPTIONS: Array<{ label: string; value: NonNullable<Tabl
   { label: "宽松", value: "large" }
 ];
 
+const SUBFORM_ROW_MODE_OPTIONS: Array<{ label: string; value: SubformRows["mode"] }> = [
+  { label: "动态行", value: "dynamic" },
+  { label: "固定行", value: "fixed" }
+];
+
+const EMPTY_DATA_SOURCES: FormDataSource[] = [];
+
+const switchRowCss = css({
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between"
+});
+
+function collectSubformTemplateKeys(template: Block[]): Set<string> {
+  const used = new Set<string>();
+
+  walkNodes({ children: template }, (node, scope) => {
+    if (scope.length === 0 && isKeyedNode(node)) {
+      used.add(node.key);
+    }
+  });
+
+  return used;
+}
+
 function SubformEditor({ subform, update }: { subform: SubformNode; update: Update }): ReactElement {
   // The `table` layout is a PC-only concept — mobile renders every subform as a
   // free-layout stack (the runtime degrades `table` to stack there). So mobile
-  // design mode hides the layout control and its table-only density field, and
-  // shows the stack gap instead: what you configure is what mobile renders.
+  // design mode hides the layout control and its table-only density / width
+  // fields, and shows the stack gap instead: what you configure is what mobile renders.
   const showLayout = useFormEditorStore(state => state.device) === "pc";
+  const dataSources = useFormEditorStore(state => state.schema.dataSources ?? EMPTY_DATA_SOURCES);
+  const fixed = isFixedSubform(subform) ? subform.rows : undefined;
+  const dynamic = getDynamicSubformRows(subform);
+  const rowMode: SubformRows["mode"] = fixed ? "fixed" : "dynamic";
+  const [itemKeyDraft, setItemKeyDraft] = useState<string | null>(null);
 
-  // Shared base-field patch. Spreads only fields common to both variants, so it
-  // never touches the discriminant or a variant-specific prop.
-  const patch = (next: Partial<Pick<SubformNode, "label" | "addLabel" | "minRows" | "maxRows">>, coalesceKey?: string): void => {
-    update(node => node.type === "subform" ? { ...node, ...next } : node, coalesceKey);
+  const patchLabel = (label: string): void => {
+    update(node => node.type === "subform" ? { ...node, label } : node, "label");
+  };
+
+  const patchDynamic = (next: Partial<Omit<DynamicSubformRows, "mode">>, coalesceKey?: string): void => {
+    update(node => {
+      if (node.type !== "subform") {
+        return node;
+      }
+
+      const current = getDynamicSubformRows(node);
+
+      return {
+        ...node,
+        rows: {
+          ...current,
+          ...next,
+          mode: "dynamic"
+        }
+      };
+    }, coalesceKey);
+  };
+
+  const patchFixed = (next: Partial<Omit<FixedSubformRows, "mode">>, coalesceKey?: string): void => {
+    update(node => {
+      if (node.type !== "subform" || !isFixedSubform(node)) {
+        return node;
+      }
+
+      return {
+        ...node,
+        rows: {
+          ...node.rows,
+          ...next,
+          mode: "fixed"
+        }
+      };
+    }, coalesceKey);
+  };
+
+  const modeSwitch = useConfirmableKindSwitch<SubformRows["mode"]>({
+    current: rowMode,
+    needsConfirm: fixed !== undefined && optionSourceHasPayload(fixed.source),
+    commit: nextMode => {
+      update(node => {
+        if (node.type !== "subform") {
+          return node;
+        }
+
+        if (nextMode === "dynamic") {
+          return {
+            ...node,
+            rows: {
+              mode: "dynamic",
+              addLabel: DEFAULT_DYNAMIC_ADD_LABEL
+            }
+          };
+        }
+
+        const templateKeys = collectSubformTemplateKeys(node.template);
+        const itemKey = nextUniqueKey(templateKeys, DEFAULT_FIXED_ITEM_KEY);
+
+        return {
+          ...node,
+          rows: {
+            mode: "fixed",
+            itemKey,
+            headerLabel: DEFAULT_FIXED_HEADER_LABEL,
+            required: true,
+            source: {
+              kind: "static",
+              options: [
+                { label: "检查项 1", value: "item_1" },
+                { label: "检查项 2", value: "item_2" }
+              ]
+            }
+          }
+        };
+      });
+    }
+  });
+
+  const commitItemKey = (): void => {
+    if (itemKeyDraft === null || !fixed) {
+      return;
+    }
+
+    const sanitized = sanitizeKey(itemKeyDraft);
+    const templateKeys = collectSubformTemplateKeys(subform.template);
+    const nextKey = sanitized.length > 0
+      ? templateKeys.has(sanitized) ? nextUniqueKey(templateKeys, sanitized) : sanitized
+      : fixed.itemKey;
+
+    if (nextKey !== fixed.itemKey) {
+      patchFixed({ itemKey: nextKey });
+    }
+
+    setItemKeyDraft(null);
   };
 
   const setVariant = (variant: SubformNode["variant"]): void => {
@@ -323,8 +476,38 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
         <Input
           placeholder="子表单标题…"
           value={subform.label ?? ""}
-          onChange={event => patch({ label: event.target.value }, "label")}
+          onChange={event => patchLabel(event.target.value)}
         />
+      </div>
+
+      <div css={fieldCss}>
+        <span css={labelCss}>行模式</span>
+
+        <Popconfirm
+          cancelText="取消"
+          okText="切换"
+          open={modeSwitch.pendingKind !== null}
+          title="切换为动态行将丢弃当前固定行项目配置"
+          onCancel={modeSwitch.cancel}
+          onConfirm={modeSwitch.confirm}
+        >
+          <Segmented
+            block
+            options={SUBFORM_ROW_MODE_OPTIONS}
+            value={rowMode}
+            onChange={value => {
+              if (value === "dynamic" || value === "fixed") {
+                modeSwitch.requestKind(value);
+              }
+            }}
+          />
+        </Popconfirm>
+
+        <span css={hintCss}>
+          {fixed
+            ? "固定行：行项目来自预设/字典/接口，填表人仅填写各列，不可增删行"
+            : "动态行：填表人可自由新增或删除行"}
+        </span>
       </div>
 
       {showLayout
@@ -347,49 +530,118 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
           )
         : null}
 
-      <div css={fieldCss}>
-        <span css={labelCss}>"新增" 按钮文案</span>
+      {fixed
+        ? (
+            <>
+              <div css={fieldCss}>
+                <span css={labelCss}>行头列标题</span>
 
-        <Input
-          placeholder="新增一行"
-          value={subform.addLabel ?? ""}
-          onChange={event => patch({ addLabel: event.target.value }, "addLabel")}
-        />
-      </div>
+                <Input
+                  placeholder={DEFAULT_FIXED_HEADER_LABEL}
+                  value={fixed.headerLabel ?? ""}
+                  onChange={event => patchFixed({ headerLabel: event.target.value }, "headerLabel")}
+                />
+              </div>
 
-      <div css={fieldCss}>
-        <span css={labelCss}>最少行数</span>
+              {showLayout && subform.variant === "table"
+                ? (
+                    <div css={fieldCss}>
+                      <span css={labelCss}>行头列宽 (px)</span>
 
-        <InputNumber
-          max={subform.maxRows}
-          min={0}
-          style={numberInputStyle}
-          value={subform.minRows}
-          onChange={value => {
-            // No mid-typing clamp: antd fires onChange with out-of-range
-            // values while the user types ("15" fires at "1" then "15") and
-            // clamps against min/max itself on blur — clamping here would
-            // snap the input to a different number under the user's cursor.
-            // The validator flags a transiently inverted min/max until then.
-            patch({ minRows: typeof value === "number" ? value : undefined }, "minRows");
-          }}
-        />
-      </div>
+                      <InputNumber
+                        min={60}
+                        placeholder="自动"
+                        style={numberInputStyle}
+                        value={fixed.headerWidth}
+                        onChange={value => {
+                          const nextWidth = typeof value === "number" && Number.isFinite(value) && value > 0
+                            ? Math.floor(value)
+                            : undefined;
 
-      <div css={fieldCss}>
-        <span css={labelCss}>最多行数</span>
+                          patchFixed({ headerWidth: nextWidth }, "headerWidth");
+                        }}
+                      />
+                    </div>
+                  )
+                : null}
 
-        <InputNumber
-          min={Math.max(1, subform.minRows ?? 1)}
-          style={numberInputStyle}
-          value={subform.maxRows}
-          onChange={value => {
-            // Mirror of minRows: rely on the native bounds' blur clamp
-            // instead of snapping the value mid-typing.
-            patch({ maxRows: typeof value === "number" ? value : undefined }, "maxRows");
-          }}
-        />
-      </div>
+              <div css={fieldCss}>
+                <span css={labelCss}>行项目 Key (itemKey)</span>
+
+                <Input
+                  placeholder={DEFAULT_FIXED_ITEM_KEY}
+                  value={itemKeyDraft ?? fixed.itemKey}
+                  onBlur={commitItemKey}
+                  onChange={event => setItemKeyDraft(event.target.value)}
+                  onFocus={() => setItemKeyDraft(fixed.itemKey)}
+                  onPressEnter={commitItemKey}
+                />
+
+                <span css={hintCss}>每行存储 &#123; value, label &#125; 快照的键名，不能与模板列键名重复</span>
+              </div>
+
+              <div css={[fieldCss, switchRowCss]}>
+                <span css={labelCss}>必填</span>
+                <Switch checked={fixed.required ?? false} onChange={required => patchFixed({ required })} />
+              </div>
+
+              <OptionSourceEditor
+                allowBulkPaste
+                confirmTitle="切换行项目来源将丢弃当前配置"
+                dataSources={dataSources}
+                label="行项目来源"
+                source={fixed.source}
+                onChange={source => patchFixed({ source })}
+              />
+            </>
+          )
+        : (
+            <>
+              <div css={fieldCss}>
+                <span css={labelCss}>"新增" 按钮文案</span>
+
+                <Input
+                  placeholder={DEFAULT_DYNAMIC_ADD_LABEL}
+                  value={dynamic.addLabel ?? ""}
+                  onChange={event => patchDynamic({ addLabel: event.target.value }, "addLabel")}
+                />
+              </div>
+
+              <div css={fieldCss}>
+                <span css={labelCss}>最少行数</span>
+
+                <InputNumber
+                  max={dynamic.max}
+                  min={0}
+                  style={numberInputStyle}
+                  value={dynamic.min}
+                  onChange={value => {
+                    // No mid-typing clamp: antd fires onChange with out-of-range
+                    // values while the user types ("15" fires at "1" then "15") and
+                    // clamps against min/max itself on blur — clamping here would
+                    // snap the input to a different number under the user's cursor.
+                    // The validator flags a transiently inverted min/max until then.
+                    patchDynamic({ min: typeof value === "number" ? value : undefined }, "minRows");
+                  }}
+                />
+              </div>
+
+              <div css={fieldCss}>
+                <span css={labelCss}>最多行数</span>
+
+                <InputNumber
+                  min={Math.max(1, dynamic.min ?? 1)}
+                  style={numberInputStyle}
+                  value={dynamic.max}
+                  onChange={value => {
+                    // Mirror of min: rely on the native bounds' blur clamp
+                    // instead of snapping the value mid-typing.
+                    patchDynamic({ max: typeof value === "number" ? value : undefined }, "maxRows");
+                  }}
+                />
+              </div>
+            </>
+          )}
 
       {showLayout && subform.variant === "table"
         ? (
@@ -429,12 +681,6 @@ const FLEX_ALIGN_OPTIONS: Array<{ label: string; value: FlexAlign }> = [
   { label: "末尾", value: "end" },
   { label: "拉伸填充", value: "stretch" }
 ];
-
-const switchRowCss = css({
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between"
-});
 
 function FlexEditor({ flex, update }: { flex: FlexNode; update: Update }): ReactElement {
   const patch = (next: Partial<FlexNode>, coalesceKey?: string): void => {

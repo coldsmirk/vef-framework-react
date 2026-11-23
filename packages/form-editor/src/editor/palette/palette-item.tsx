@@ -157,10 +157,11 @@ export interface PaletteItemProps {
  */
 export function PaletteItem({ definition, iconOnly = false }: PaletteItemProps): ReactElement {
   const storeApi = useFormEditorStoreApi();
+  const paletteKey = definition.config.paletteId ?? definition.config.type;
   const { ref } = useDraggable({
-    id: `palette-${definition.config.type}`,
+    id: `palette-${paletteKey}`,
     type: FIELD_DRAG_TYPE,
-    data: { kind: "palette", type: definition.config.type },
+    data: { kind: "palette", type: paletteKey },
     plugins: [Feedback.configure({ feedback: "clone", dropAnimation: null })],
     sensors: palettePointerSensors
   });

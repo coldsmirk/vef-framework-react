@@ -573,6 +573,98 @@ describe("Canvas", () => {
       expect(storeApi.getState().propertiesDrawerOpen).toBe(false);
     });
   });
+
+  describe("fixed-row subform preview", () => {
+    it("renders real static rows and hides the add-row echo for fixed-row tables", () => {
+      setupCanvas({
+        schema: {
+          id: "Form_matrix",
+          version: 2,
+          presentations: {
+            pc: {
+              children: [
+                {
+                  id: "Sub_static",
+                  type: "subform",
+                  variant: "table",
+                  key: "checks",
+                  label: "资质自查",
+                  rows: {
+                    mode: "fixed",
+                    itemKey: "item",
+                    headerLabel: "自查内容",
+                    source: {
+                      kind: "static",
+                      options: [
+                        { label: "执业许可证在有效期内（5分）", value: "lic" },
+                        { label: "诊疗科目与核准登记一致（5分）", value: "scope" }
+                      ]
+                    }
+                  },
+                  template: [
+                    {
+                      id: "Col_1",
+                      type: "textfield",
+                      key: "owner",
+                      label: "责任人"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      expect(screen.getByText("自查内容")).toBeInTheDocument();
+      expect(screen.getByText("执业许可证在有效期内（5分）")).toBeInTheDocument();
+      expect(screen.getByText("诊疗科目与核准登记一致（5分）")).toBeInTheDocument();
+      expect(screen.queryByText(/新增一行/)).not.toBeInTheDocument();
+    });
+
+    it("renders placeholder rows for a remote fixed-row subform on the canvas", () => {
+      setupCanvas({
+        schema: {
+          id: "Form_matrix_remote",
+          version: 2,
+          presentations: {
+            pc: {
+              children: [
+                {
+                  id: "Sub_remote",
+                  type: "subform",
+                  variant: "table",
+                  key: "remoteChecks",
+                  label: "接口检查表",
+                  rows: {
+                    mode: "fixed",
+                    itemKey: "item",
+                    headerLabel: "自查内容",
+                    source: {
+                      kind: "remote",
+                      request: { resource: "hosp/check", action: "list" }
+                    }
+                  },
+                  template: [
+                    {
+                      id: "Col_1",
+                      type: "textfield",
+                      key: "owner",
+                      label: "责任人"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      expect(screen.getByText("运行时加载 · 示例行 1")).toBeInTheDocument();
+      expect(screen.getByText("运行时加载 · 示例行 2")).toBeInTheDocument();
+      expect(screen.queryByText(/新增一行/)).not.toBeInTheDocument();
+    });
+  });
 });
 
 function getSurface(): HTMLElement {

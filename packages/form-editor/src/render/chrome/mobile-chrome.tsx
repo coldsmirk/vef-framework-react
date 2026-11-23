@@ -24,7 +24,10 @@ import {
   subformBodyCss,
   subformRemoveCss,
   subformRowBodyCss,
-  subformRowCss
+  subformRowCardBodyCss,
+  subformRowCardCss,
+  subformRowCss,
+  subformRowHeaderCss
 } from "./subform-shell";
 
 // antd-mobile ships no antd-style `Card`, so card-like containers (the `card`
@@ -128,7 +131,24 @@ function MobileSubform({
   );
 }
 
-function MobileSubformRow({ children, removeControl }: SubformRowChromeProps): ReactElement {
+function MobileSubformRow({
+  children,
+  header,
+  removeControl
+}: SubformRowChromeProps): ReactElement {
+  if (header !== undefined) {
+    return (
+      <div css={subformRowCardCss}>
+        <div css={subformRowHeaderCss}>{header}</div>
+
+        <div css={subformRowCardBodyCss}>
+          <div css={subformRowBodyCss}>{children}</div>
+          {removeControl}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div css={subformRowCss}>
       <div css={subformRowBodyCss}>{children}</div>

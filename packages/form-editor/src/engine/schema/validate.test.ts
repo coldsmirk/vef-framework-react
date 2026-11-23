@@ -1109,16 +1109,19 @@ describe("validateSchema", () => {
     });
   });
 
-  describe("when subform bounds are wrong", () => {
-    it("rejects minRows greater than maxRows", () => {
+  describe("when subform rows are configured", () => {
+    it("rejects dynamic rows.min greater than rows.max", () => {
       const candidate = schema([
         {
           id: "Sub_1",
           type: "subform",
           variant: "stack",
           key: "lines",
-          minRows: 3,
-          maxRows: 1,
+          rows: {
+            mode: "dynamic",
+            min: 3,
+            max: 1
+          },
           template: [field("a", "amount")]
         }
       ]);
@@ -1128,7 +1131,235 @@ describe("validateSchema", () => {
       expect(result.valid).toBe(false);
       expect(result.issues).toContainEqual(expect.objectContaining({
         code: "rows_bound_invalid",
-        path: "presentations.pc.children[0].minRows"
+        path: "presentations.pc.children[0].rows.min"
+      }));
+    });
+
+    it("rejects an unknown rows.mode", () => {
+      const candidate = schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "lines",
+          rows: { mode: "paged" },
+          template: [field("a", "amount")]
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "subform_rows_invalid",
+        path: "presentations.pc.children[0].rows.mode"
+      }));
+    });
+
+    it("accepts a valid fixed-row subform with static items", () => {
+      const candidate = schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            headerLabel: "自查内容",
+            headerWidth: 280,
+            required: true,
+            source: {
+              kind: "static",
+              options: [
+                { label: "条款1", value: "c1" },
+                { label: "条款2", value: "c2" }
+              ]
+            }
+          },
+          template: [field("a", "issue")]
+        }
+      ]);
+
+      const result = validate(candidate);
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+    });
+
+    it("rejects fixed rows missing source, empty static items, blank values, and duplicate values", () => {
+      const missingSource = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: { mode: "fixed", itemKey: "item" },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(missingSource.issues).toContainEqual(expect.objectContaining({
+        code: "subform_fixed_source_required",
+        path: "presentations.pc.children[0].rows.source"
+      }));
+
+      const emptyStatic = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            source: { kind: "static", options: [] }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(emptyStatic.issues).toContainEqual(expect.objectContaining({
+        code: "subform_fixed_static_empty",
+        path: "presentations.pc.children[0].rows.source.options"
+      }));
+
+      const blankValue = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            source: { kind: "static", options: [{ label: "项", value: " " }] }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(blankValue.issues).toContainEqual(expect.objectContaining({
+        code: "subform_fixed_item_value_empty",
+        path: "presentations.pc.children[0].rows.source.options[0]"
+      }));
+
+      const duplicateValues = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            source: {
+              kind: "static",
+              options: [
+                { label: "项1", value: "dup" },
+                { label: "项2", value: "dup" }
+              ]
+            }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(duplicateValues.issues).toContainEqual(expect.objectContaining({
+        code: "subform_fixed_duplicate_value",
+        path: "presentations.pc.children[0].rows.source.options"
+      }));
+    });
+
+    it("rejects fixed rows referencing an empty static data source", () => {
+      const candidate = schema(
+        [
+          {
+            id: "Sub_1",
+            type: "subform",
+            variant: "table",
+            key: "checks",
+            rows: {
+              mode: "fixed",
+              itemKey: "item",
+              source: { kind: "ref", dataSourceId: "DS_empty" }
+            },
+            template: [field("a", "issue")]
+          }
+        ],
+        {
+          dataSources: [
+            {
+              id: "DS_empty",
+              kind: "static",
+              name: "空列表",
+              options: []
+            }
+          ]
+        }
+      );
+
+      const result = validate(candidate);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "subform_fixed_static_empty",
+        path: "presentations.pc.children[0].rows.source.dataSourceId"
+      }));
+    });
+
+    it("rejects fixed rows whose itemKey is missing, invalid, or collides with a template column", () => {
+      const missingKey = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "",
+            source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(missingKey.issues).toContainEqual(expect.objectContaining({
+        code: "key_required",
+        path: "presentations.pc.children[0].rows.itemKey"
+      }));
+
+      const invalidKey = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "bad-key",
+            source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(invalidKey.issues).toContainEqual(expect.objectContaining({
+        code: "key_invalid_charset",
+        path: "presentations.pc.children[0].rows.itemKey"
+      }));
+
+      const collidingKey = validate(schema([
+        {
+          id: "Sub_1",
+          type: "subform",
+          variant: "table",
+          key: "checks",
+          rows: {
+            mode: "fixed",
+            itemKey: "issue",
+            source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+          },
+          template: [field("a", "issue")]
+        }
+      ]));
+      expect(collidingKey.valid).toBe(false);
+      expect(collidingKey.issues).toContainEqual(expect.objectContaining({
+        code: "duplicate_key",
+        path: "presentations.pc.children[0].template[0].key"
       }));
     });
   });

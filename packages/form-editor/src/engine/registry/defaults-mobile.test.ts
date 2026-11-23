@@ -66,5 +66,6 @@ describe("createDefaultMobileRegistry", () => {
     const pc = createDefaultRegistry();
 
     expect(mobile.get("textfield")?.config).toBe(pc.get("textfield")?.config);
+    expect(mobile.getPaletteItem("matrix-table")?.config).toBe(pc.getPaletteItem("matrix-table")?.config);
   });
 });

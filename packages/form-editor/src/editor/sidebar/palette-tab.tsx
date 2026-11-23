@@ -72,10 +72,11 @@ export function PaletteTab({ keyword, onKeywordChange }: PaletteTabProps): React
   // new reference), so a memo keyed on it would serve a stale list after a
   // runtime field register/unregister.
   const trimmed = keyword.trim().toLowerCase();
-  const allDefinitions = registry.list();
+  const allDefinitions = registry.paletteList();
   const filtered = trimmed
     ? allDefinitions.filter(d => d.config.name.toLowerCase().includes(trimmed)
-      || d.config.type.toLowerCase().includes(trimmed))
+      || d.config.type.toLowerCase().includes(trimmed)
+      || (d.config.paletteId?.toLowerCase().includes(trimmed) ?? false))
     : allDefinitions;
   const groupedDefinitions = groupDefinitions(filtered);
   const isSearching = trimmed.length > 0;
@@ -119,7 +120,7 @@ export function PaletteTab({ keyword, onKeywordChange }: PaletteTabProps): React
  */
 export function PaletteRail(): ReactElement {
   const registry = useFieldRegistry();
-  const groupedDefinitions = groupDefinitions(registry.list());
+  const groupedDefinitions = groupDefinitions(registry.paletteList());
 
   return (
     <ScrollArea css={panelBodyCss} scrollbars="vertical">

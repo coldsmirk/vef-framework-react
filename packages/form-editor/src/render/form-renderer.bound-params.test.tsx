@@ -141,7 +141,7 @@ describe("FormRenderer bound data-source params", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      minRows: 2,
+      rows: { mode: "dynamic", min: 2 },
       template: [departmentField, wardSelect()]
     };
 

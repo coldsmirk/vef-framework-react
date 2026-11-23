@@ -1,7 +1,7 @@
 import { buttonDefinition } from "../../components/button";
 import { checkboxGroupFieldDefinition } from "../../components/checkbox-group-field";
 import { codeEditorDefinition } from "../../components/code-editor";
-import { flexDefinition, gridDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../../components/containers";
+import { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../../components/containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../../components/date-field";
 import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../../components/display";
 import { multiSelectFieldDefinition } from "../../components/multi-select-field";
@@ -44,6 +44,7 @@ export function registerDefaults(registry: FormFieldRegistry): void {
   registry.register(sectionDefinition);
   registry.register(tabsDefinition);
   registry.register(subformDefinition);
+  registry.register(matrixTableDefinition);
   registry.register(flexDefinition);
   registry.register(gridDefinition);
   registry.register(dividerDefinition);

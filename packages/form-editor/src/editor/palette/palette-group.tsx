@@ -162,7 +162,7 @@ export function PaletteGroup({
   if (rail) {
     return (
       <div aria-label={FIELD_GROUP_LABELS[group]} css={railGroupCss} role="group">
-        {definitions.map(definition => <PaletteItem key={definition.config.type} iconOnly definition={definition} />)}
+        {definitions.map(definition => <PaletteItem key={definition.config.paletteId ?? definition.config.type} iconOnly definition={definition} />)}
       </div>
     );
   }
@@ -194,7 +194,7 @@ export function PaletteGroup({
       ),
       children: (
         <div css={listCss}>
-          {definitions.map(def => <PaletteItem key={def.config.type} definition={def} />)}
+          {definitions.map(def => <PaletteItem key={def.config.paletteId ?? def.config.type} definition={def} />)}
         </div>
       )
     }

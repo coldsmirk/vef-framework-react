@@ -20,6 +20,7 @@ import {
   isWritableFieldPermission
 } from "../engine/linkage";
 import { containerBodies } from "../engine/schema/nodes";
+import { isFixedSubform } from "../engine/schema/subform";
 import { isContainerNode, isLeafField, nodeLabel, walkNodes } from "../engine/schema/walk";
 import { resolveScopeValues } from "../runtime/resolve-scope-values";
 
@@ -132,15 +133,31 @@ export function filterSubmitValues(args: {
     if (node.type === "subform") {
       const raw = args.values[node.key];
       const rows: unknown[] = Array.isArray(raw) ? raw : [];
+      const fixedItemKey = isFixedSubform(node) ? node.rows.itemKey : undefined;
 
       // No `fieldPermissions` for the row scope: the clamp stops at the
       // subform node — top-level permissions never address template fields.
-      submitValues[node.key] = rows.map(rowValue => filterSubmitValues({
-        blocks: node.template,
-        evaluators: args.evaluators,
-        evaluationContext: args.evaluationContext,
-        values: asRecord(rowValue)
-      }));
+      // For a fixed-row subform, carry the read-only `{ value, label }` header
+      // snapshot cell alongside the filtered template columns so it is never
+      // stripped on submit.
+      submitValues[node.key] = rows.map(rowValue => {
+        const record = asRecord(rowValue);
+        const filtered = filterSubmitValues({
+          blocks: node.template,
+          evaluators: args.evaluators,
+          evaluationContext: args.evaluationContext,
+          values: record
+        });
+
+        if (fixedItemKey !== undefined && Object.hasOwn(record, fixedItemKey)) {
+          return {
+            [fixedItemKey]: record[fixedItemKey],
+            ...filtered
+          };
+        }
+
+        return filtered;
+      });
     } else {
       submitValues[node.key] = args.values[node.key];
     }
@@ -255,9 +272,9 @@ function collectScopeSubmitErrors(
       const rows: unknown[] = Array.isArray(raw) ? raw : [];
 
       // Subform-level required means "at least one row" (matching the Go
-      // side's `len == 0` check). A subform carries no static `validate`
-      // slot, so the clamped `required` outcome — a `"required"` permission
-      // or a `require` linkage rule — is the complete truth here. The
+      // side's `len == 0` check). `evaluateLinkage` seeds `staticRequired`
+      // from `rows.min >= 1` (dynamic) or `rows.required` (fixed), and layers
+      // a `"required"` permission clamp or `require` linkage rule on top. The
       // hidden / disabled exemptions above already cover a non-writable
       // clamp (it folds into `disabled`).
       if (state.own.required && rows.length === 0) {
@@ -482,7 +499,12 @@ export function buildRuntimeFormId(schema: RuntimeSchema): string {
     // new defaults.
     const tag = scope.length > 0 ? `${scope.join("/")}/${node.id}` : node.id;
 
-    signature.push(isKeyedNode(node) ? `${tag}:${node.key}` : tag);
+    if (node.type === "subform") {
+      const modeTag = isFixedSubform(node) ? `fixed:${node.rows.itemKey}` : "dynamic";
+      signature.push(`${tag}:${node.key}:${modeTag}`);
+    } else {
+      signature.push(isKeyedNode(node) ? `${tag}:${node.key}` : tag);
+    }
   });
 
   return `${schema.id}:${signature.join("|")}`;

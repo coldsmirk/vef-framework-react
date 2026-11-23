@@ -1,6 +1,7 @@
 import type { Block, FormField, FormSchema, KeyedFormField, KeyedNodeUnion, PresentationLayer, Validatable } from "../types";
 import type { ScopePath } from "./schema/walk";
 
+import { isFixedSubform } from "./schema/subform";
 import { isRootScope, scopeEquals, walkFields, walkNodes } from "./schema/walk";
 
 /**
@@ -126,6 +127,19 @@ export function collectScopeKeys(schema: PresentationLayer, scope: ScopePath): S
   walkNodes(schema, (node, nodeScope) => {
     if (isKeyedNode(node) && scopeEquals(nodeScope, scope)) {
       used.add(node.key);
+    }
+
+    // Reserve a fixed-row subform's `itemKey` inside its row scope so newly
+    // inserted, cloned, or renamed template fields never collide with the
+    // read-only row-header cell.
+    if (
+      node.type === "subform"
+      && isKeyedNode(node)
+      && isFixedSubform(node)
+      && node.rows.itemKey.length > 0
+      && scopeEquals([...nodeScope, node.key], scope)
+    ) {
+      used.add(node.rows.itemKey);
     }
   });
 

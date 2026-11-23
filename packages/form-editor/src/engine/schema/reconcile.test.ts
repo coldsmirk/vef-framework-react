@@ -620,6 +620,33 @@ describe("reconcile", () => {
 
       expect(pruneDataSourceReferences(schema, "ds1")).toBe(schema);
     });
+
+    it("clears a fixed-row subform's dangling ref source while preserving its fixed-row shape", () => {
+      const subform: SubformNode = {
+        id: "sf1",
+        type: "subform",
+        variant: "table",
+        key: "checks",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          headerLabel: "自查内容",
+          source: { kind: "ref", dataSourceId: "ds1" }
+        },
+        template: [tf("c1", "note")]
+      };
+      const schema = schemaOf(layerOf(subform));
+
+      const next = pruneDataSourceReferences(schema, "ds1");
+      const updated = findNode(next.presentations.pc, "sf1") as SubformNode | undefined;
+
+      expect(updated?.rows).toEqual({
+        mode: "fixed",
+        itemKey: "item",
+        headerLabel: "自查内容",
+        source: { kind: "ref", dataSourceId: "" }
+      });
+    });
   });
 
   describe("date granularity literal scrubbing", () => {

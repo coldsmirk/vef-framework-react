@@ -80,6 +80,22 @@ export interface ApprovalFieldOptionSource {
 }
 
 /**
+ * Fixed-row (matrix/checklist) specification of a detail-table field
+ * (`kind === "table"`), mirroring Go `approval.TableFixedRows`.
+ *
+ * Exactly one of `items` (frozen static row items, inline or dereferenced from
+ * a form-global static data source) or `source` (`codeSet` or `remote`,
+ * post-dereference) is populated. The row-header cell lives on each row under
+ * `itemKey` as `{ value, label }` and is never part of `columns`.
+ */
+export interface ApprovalTableFixedRows {
+  itemKey: string;
+  headerLabel?: string;
+  items?: ApprovalFieldOption[];
+  source?: ApprovalFieldOptionSource;
+}
+
+/**
  * A single form field flattened to the Go backend's `FormFieldDefinition`
  * (`approval/form_field.go`). The contract's top-level artifact is a bare
  * `ApprovalFormField[]` — there is no wrapper object. The field list IS the
@@ -137,4 +153,9 @@ export interface ApprovalFormField {
    * and by the projector).
    */
   columns?: ApprovalFormField[];
+  /**
+   * Fixed-row specification of a matrix/checklist detail-table field
+   * (`kind === "table"`). Omitted for dynamic tables.
+   */
+  fixedRows?: ApprovalTableFixedRows;
 }

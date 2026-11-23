@@ -23,6 +23,31 @@ export const subformRowCss = css({
   border: `1px solid ${globalCssVars.colorBorderSecondary}`
 });
 
+export const subformRowCardCss = css({
+  display: "flex",
+  flexDirection: "column",
+  borderRadius: globalCssVars.borderRadius,
+  border: `1px solid ${globalCssVars.colorBorderSecondary}`,
+  overflow: "hidden"
+});
+
+export const subformRowHeaderCss = css({
+  padding: "8px 12px",
+  background: globalCssVars.colorFillQuaternary,
+  borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`,
+  color: globalCssVars.colorTextHeading,
+  fontWeight: globalCssVars.fontWeightStrong,
+  lineHeight: 1.5,
+  wordBreak: "break-word"
+});
+
+export const subformRowCardBodyCss = css({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 8,
+  padding: 12
+});
+
 export const subformRowBodyCss = css({
   flex: 1,
   minWidth: 0

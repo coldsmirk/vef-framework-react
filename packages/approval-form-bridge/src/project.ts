@@ -3,8 +3,10 @@ import type {
   Block,
   ColumnDataType,
   DateGranularity,
+  DynamicSubformRows,
   FieldLinkage,
   FieldOptionSource,
+  FixedSubformRows,
   FormDataSource,
   FormField,
   FormSchema,
@@ -19,15 +21,18 @@ import type {
   ApprovalFieldOption,
   ApprovalFieldOptionSource,
   ApprovalFormField,
+  ApprovalTableFixedRows,
   ApprovalValidationRule
 } from "./contract";
 import type { ProjectionIssue } from "./issues";
 
 import {
   dateGranularityMaxLength,
+  findDuplicateOptionValues,
   findParentContainer,
   inferColumnType,
   isKeyedNode,
+  isValidFixedItemValue,
   normalizeOptionMapping,
   walkNodes
 } from "@vef-framework-react/form-editor";
@@ -41,6 +46,10 @@ import {
   issueOptionsNotStatic,
   issuePatternUnsupported,
   issueTableColumnsEmpty,
+  issueTableFixedRowsItemKeyConflict,
+  issueTableFixedRowsItemKeyEmpty,
+  issueTableFixedRowsSourceInvalid,
+  issueTableRowsModeInvalid,
   issueUnknownFieldType,
   issueUnmappableFieldType
 } from "./issues";
@@ -338,12 +347,28 @@ function describeFieldShape(
 }
 
 /**
- * Contract signature of a subform's column set — the ordered, deduplicated
- * `key:kind` pairs of its template's keyed leaves (layout containers are
- * transparent, matching the projection walk). Two devices whose signatures
- * differ deploy a definition at least one of them cannot submit against.
+ * Contract signature of a subform's row shape: its row mode (dynamic vs fixed
+ * + `itemKey`) and the ordered, deduplicated `key:kind` pairs of its
+ * template's keyed leaves (layout containers are transparent, matching the
+ * projection walk). Two devices whose signatures differ deploy a definition at
+ * least one of them cannot submit against. Mirrors `peekTableSignature` in Go
+ * `internal/approval/formeditor/project.go`.
  */
 function peekTableSignature(subform: SubformNode): string {
+  let modePrefix = "dynamic|";
+
+  if (subform.rows !== undefined) {
+    const { mode } = subform.rows as { mode?: string };
+
+    if (mode === undefined || mode === "" || mode === "dynamic") {
+      modePrefix = "dynamic|";
+    } else if (mode === "fixed") {
+      modePrefix = `fixed:${(subform.rows as FixedSubformRows).itemKey}|`;
+    } else {
+      modePrefix = `invalid:${mode}|`;
+    }
+  }
+
   const parts: string[] = [];
   const seenKeys = new Set<string>();
 
@@ -368,7 +393,7 @@ function peekTableSignature(subform: SubformNode): string {
     parts.push(`${node.key}:${shape}`);
   });
 
-  return parts.join(",");
+  return `${modePrefix}${parts.join(",")}`;
 }
 
 /**
@@ -507,22 +532,82 @@ function projectSubform(
   warnOnLinkage(subform, subform.key, issues);
 
   const label = subform.label ?? subform.key;
-  const isRequired = (subform.minRows ?? 0) >= 1;
-  const rule: ApprovalValidationRule = {
-    ...subform.minRows !== undefined && subform.minRows > 0 && { minLength: subform.minRows },
-    ...subform.maxRows !== undefined && { maxLength: subform.maxRows }
+  const rows = subform.rows as { mode?: string } | undefined;
+
+  if (rows === undefined || rows.mode === undefined || rows.mode === "" || rows.mode === "dynamic") {
+    const dynamicRows = rows as DynamicSubformRows | undefined;
+    const isRequired = (dynamicRows?.min ?? 0) >= 1;
+    const rule: ApprovalValidationRule = {
+      ...dynamicRows?.min !== undefined && dynamicRows.min > 0 && { minLength: dynamicRows.min },
+      ...dynamicRows?.max !== undefined && { maxLength: dynamicRows.max }
+    };
+    const hasRule = rule.minLength !== undefined || rule.maxLength !== undefined;
+
+    const approval: Omit<ApprovalFormField, "sortOrder"> = {
+      key: subform.key,
+      kind: "table",
+      label,
+      ...isRequired && { isRequired },
+      ...hasRule && { validation: rule },
+      columns
+    };
+
+    const flow: FlowFormFieldDefinition = {
+      key: subform.key,
+      kind: "table",
+      label,
+      columns: flowColumns
+    };
+
+    return { approval, flow };
+  }
+
+  if (rows.mode !== "fixed") {
+    issues.push(issueTableRowsModeInvalid(subform.key, rows.mode));
+
+    return undefined;
+  }
+
+  const fixed = rows as FixedSubformRows;
+
+  if (typeof fixed.itemKey !== "string" || fixed.itemKey.trim().length === 0) {
+    issues.push(issueTableFixedRowsItemKeyEmpty(subform.key));
+
+    return undefined;
+  }
+
+  if (seenColumns.has(fixed.itemKey)) {
+    issues.push(issueTableFixedRowsItemKeyConflict(subform.key, fixed.itemKey));
+
+    return undefined;
+  }
+
+  const { options, optionSource } = resolveOptionSourceValue(fixed.source, dataSources);
+
+  if (optionSource === undefined && !isValidStaticFixedRowItems(options)) {
+    issues.push(issueTableFixedRowsSourceInvalid(subform.key));
+
+    return undefined;
+  }
+
+  const fixedRows: ApprovalTableFixedRows = {
+    itemKey: fixed.itemKey,
+    ...fixed.headerLabel !== undefined && fixed.headerLabel.length > 0 && { headerLabel: fixed.headerLabel },
+    ...optionSource === undefined ? { items: options } : { source: optionSource }
   };
-  const hasRule = rule.minLength !== undefined || rule.maxLength !== undefined;
 
   const approval: Omit<ApprovalFormField, "sortOrder"> = {
     key: subform.key,
     kind: "table",
     label,
-    ...isRequired && { isRequired },
-    ...hasRule && { validation: rule },
-    columns
+    ...fixed.required === true && { isRequired: true },
+    columns,
+    fixedRows
   };
 
+  // `itemKey` is a read-only row header, never a numeric template column, so
+  // `flowColumns` omits it — the flow condition editor's aggregate picker only
+  // ever sees template columns.
   const flow: FlowFormFieldDefinition = {
     key: subform.key,
     kind: "table",
@@ -531,6 +616,18 @@ function projectSubform(
   };
 
   return { approval, flow };
+}
+
+function isValidStaticFixedRowItems(items: ApprovalFieldOption[] | undefined): items is ApprovalFieldOption[] {
+  if (items === undefined || items.length === 0) {
+    return false;
+  }
+
+  if (items.some(item => !isValidFixedItemValue(item.value))) {
+    return false;
+  }
+
+  return findDuplicateOptionValues(items).length === 0;
 }
 
 /**
@@ -561,6 +658,28 @@ function resolveOptionSource(
     return {};
   }
 
+  const result = resolveOptionSourceValue(source, dataSources);
+
+  if (result.options === undefined && result.optionSource?.kind !== "codeSet") {
+    issues.push(issueOptionsNotStatic(path));
+  }
+
+  return result;
+}
+
+/**
+ * Pure dereference + projection of a {@link FieldOptionSource}, shared between
+ * leaf selection fields and fixed-row subform sources. Mirrors
+ * `resolveOptionSourceValue` in Go `internal/approval/formeditor/project.go`.
+ */
+function resolveOptionSourceValue(
+  source: FieldOptionSource | undefined,
+  dataSources: Map<string, FormDataSource>
+): { options?: ApprovalFieldOption[]; optionSource?: ApprovalFieldOptionSource } {
+  if (source === undefined) {
+    return {};
+  }
+
   const resolved = source.kind === "ref" ? dataSources.get(source.dataSourceId) : source;
 
   if (resolved?.kind === "static") {
@@ -577,8 +696,6 @@ function resolveOptionSource(
       }
     };
   }
-
-  issues.push(issueOptionsNotStatic(path));
 
   if (resolved?.kind === "remote") {
     const mapping = normalizeOptionMapping(resolved.mapping);

@@ -68,6 +68,13 @@ export type FieldCreateResult = DistributedOmit<Block, "id" | "key">;
 export interface FieldDefinitionConfig {
   type: Block["type"];
   /**
+   * Optional unique palette identifier when multiple palette entries create
+   * blocks of the same schema `type` (e.g. `"matrix-table"` creating a
+   * fixed-row `"subform"`). Omit for primary type definitions (defaults to
+   * `type`).
+   */
+  paletteId?: string;
+  /**
    * Display name for palette entries.
    */
   name: string;

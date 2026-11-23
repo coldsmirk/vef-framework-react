@@ -24,7 +24,7 @@ import type {
 import { defineFieldDefinition } from "../../types";
 import { buttonDefinition } from "../button";
 import { checkboxGroupFieldDefinition } from "../checkbox-group-field";
-import { flexDefinition, gridDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../containers";
+import { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../date-field";
 import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../display";
 import { multiSelectFieldDefinition } from "../multi-select-field";
@@ -98,6 +98,7 @@ export const mobileFieldDefinitions: FieldDefinition[] = [
   sectionDefinition,
   tabsDefinition,
   subformDefinition,
+  matrixTableDefinition,
   flexDefinition,
   gridDefinition
 ];

@@ -7,10 +7,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { OptionListEditor, reorderOptionRows } from "./option-editors";
+import { OptionListEditor, parseBulkOptionLines, reorderOptionRows } from "./option-editors";
 
 interface HarnessProps {
   initial: FieldOption[];
+  allowBulkPaste?: boolean;
   onCommit?: (next: FieldOption[]) => void;
 }
 
@@ -18,11 +19,16 @@ interface HarnessProps {
  * Stateful round-trip harness mirroring the controlled usage in the
  * option-source entry and the data-source panel.
  */
-function Harness({ initial, onCommit }: HarnessProps): ReactElement {
+function Harness({
+  allowBulkPaste,
+  initial,
+  onCommit
+}: HarnessProps): ReactElement {
   const [options, setOptions] = useState(initial);
 
   return (
     <OptionListEditor
+      allowBulkPaste={allowBulkPaste}
       options={options}
       onChange={next => {
         onCommit?.(next);
@@ -161,6 +167,45 @@ describe("OptionListEditor", () => {
       await user.click(screen.getByRole("button", { name: /添加选项/ }));
 
       expect(onCommit).toHaveBeenLastCalledWith([...threeOptions(), { label: "", value: "" }]);
+    });
+  });
+
+  describe("bulk paste", () => {
+    it("parses trimmed non-blank lines into unique item_N options", () => {
+      expect(parseBulkOptionLines("  虚构手术（8分） \n\n非卫生技术人员（10分）\r\n  ")).toEqual([
+        { label: "虚构手术（8分）", value: "item_1" },
+        { label: "非卫生技术人员（10分）", value: "item_2" }
+      ]);
+    });
+
+    it("skips existing values when generating sequential item keys", () => {
+      expect(parseBulkOptionLines("新条款A\n新条款B", new Set(["item_1", "item_3"]))).toEqual([
+        { label: "新条款A", value: "item_2" },
+        { label: "新条款B", value: "item_4" }
+      ]);
+    });
+
+    it("imports and appends pasted lines when allowBulkPaste is enabled", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(<Harness allowBulkPaste initial={[{ label: "原项", value: "item_1" }]} onCommit={onCommit} />);
+
+      await user.click(screen.getByRole("button", { name: /批量粘贴/ }));
+      await user.type(screen.getByRole("textbox", { name: "批量粘贴行项目" }), "条款甲\n条款乙");
+      await user.click(screen.getByRole("button", { name: /追\s*加/ }));
+
+      expect(onCommit).toHaveBeenLastCalledWith([
+        { label: "原项", value: "item_1" },
+        { label: "条款甲", value: "item_2" },
+        { label: "条款乙", value: "item_3" }
+      ]);
+
+      await user.click(screen.getByRole("button", { name: /批量粘贴/ }));
+      await user.type(screen.getByRole("textbox", { name: "批量粘贴行项目" }), "全新条款");
+      await user.click(screen.getByRole("button", { name: "替换全部" }));
+
+      expect(onCommit).toHaveBeenLastCalledWith([{ label: "全新条款", value: "item_1" }]);
     });
   });
 });

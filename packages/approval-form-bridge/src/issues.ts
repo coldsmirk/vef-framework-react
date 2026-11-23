@@ -9,6 +9,10 @@ export type ProjectionIssueCode
     | "unknown_field_type_unprojectable"
     | "nested_subform_unsupported"
     | "table_columns_empty"
+    | "table_rows_mode_invalid"
+    | "table_fixed_rows_item_key_empty"
+    | "table_fixed_rows_item_key_conflict"
+    | "table_fixed_rows_source_invalid"
     | "pattern_unsupported"
     | "decimal_scale_missing"
     | "options_not_static"
@@ -68,6 +72,42 @@ export function issueTableColumnsEmpty(path: string): ProjectionIssue {
   };
 }
 
+export function issueTableRowsModeInvalid(path: string, mode: string): ProjectionIssue {
+  return {
+    path,
+    code: "table_rows_mode_invalid",
+    severity: "error",
+    message: `明细表 "${path}" 的行模式 "${mode}" 无效(仅支持 dynamic 或 fixed)`
+  };
+}
+
+export function issueTableFixedRowsItemKeyEmpty(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "table_fixed_rows_item_key_empty",
+    severity: "error",
+    message: `固定行明细表 "${path}" 缺少行项目字段键(itemKey)`
+  };
+}
+
+export function issueTableFixedRowsItemKeyConflict(path: string, itemKey: string): ProjectionIssue {
+  return {
+    path,
+    code: "table_fixed_rows_item_key_conflict",
+    severity: "error",
+    message: `固定行明细表 "${path}" 的行项目字段键 "${itemKey}" 与模板列键冲突`
+  };
+}
+
+export function issueTableFixedRowsSourceInvalid(path: string): ProjectionIssue {
+  return {
+    path,
+    code: "table_fixed_rows_source_invalid",
+    severity: "error",
+    message: `固定行明细表 "${path}" 的行项目来源无效(静态来源须非空且值唯一,或配置有效的字典/接口来源)`
+  };
+}
+
 export function issuePatternUnsupported(path: string): ProjectionIssue {
   return {
     path,
@@ -118,6 +158,6 @@ export function issueCrossDeviceTableMismatch(path: string): ProjectionIssue {
     path,
     code: "cross_device_table_mismatch",
     severity: "error",
-    message: `明细表 "${path}" 在 PC 与移动端的列结构不一致,投影以 PC 为准——另一端提交的行包含未定义的列,提交将被服务端拒绝`
+    message: `明细表 "${path}" 在 PC 与移动端的行模式或列结构不一致,投影以 PC 为准——另一端提交的行结构不符,提交将被服务端拒绝`
   };
 }

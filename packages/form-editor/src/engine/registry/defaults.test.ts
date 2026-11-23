@@ -63,6 +63,25 @@ describe("createDefaultRegistry", () => {
     });
   });
 
+  it("registers the matrix-table palette preset alongside subform without polluting type lookups", () => {
+    const registry = createDefaultRegistry();
+
+    expect(registry.has("matrix-table")).toBe(false);
+    expect(registry.getPaletteItem("matrix-table")?.config).toMatchObject({
+      type: "subform",
+      paletteId: "matrix-table",
+      name: "矩阵表格",
+      group: "container",
+      keyed: true
+    });
+    expect(registry.paletteList().some(item => item.config.paletteId === "matrix-table")).toBe(true);
+    expect(registry.list().filter(item => item.config.type === "subform")).toHaveLength(1);
+
+    registry.unregister("subform");
+    expect(registry.has("subform")).toBe(false);
+    expect(registry.getPaletteItem("matrix-table")).toBeUndefined();
+  });
+
   it("registers the grid layout container", () => {
     const registry = createDefaultRegistry();
 

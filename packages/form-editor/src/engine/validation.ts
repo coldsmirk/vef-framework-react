@@ -57,6 +57,11 @@ export type ValidationIssueCode
     | "title_invalid"
     | "display_text_invalid"
     | "rows_bound_invalid"
+    | "subform_rows_invalid"
+    | "subform_fixed_source_required"
+    | "subform_fixed_static_empty"
+    | "subform_fixed_item_value_empty"
+    | "subform_fixed_duplicate_value"
     | "subform_table_column"
   // Static field validation rules
     | "validate_malformed"
@@ -149,6 +154,7 @@ interface ValidationIssueParams {
   span_invalid: { max: number };
   columns_invalid: { max: number };
   display_text_invalid: { prop: string };
+  subform_fixed_duplicate_value: { values: string };
   validate_range_invalid: { lower: string; upper: string };
   data_source_ref_unknown: { id: string };
   request_incomplete: { missing: string };
@@ -209,7 +215,11 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   variant_invalid: "variant 必须为 \"card\" 或 \"collapse\"",
   subform_variant_invalid: "variant 必须为 \"stack\" 或 \"table\"",
   title_invalid: "title 必须为字符串",
-  rows_bound_invalid: "行数限制无效：minRows / maxRows 须为非负整数且 minRows ≤ maxRows",
+  rows_bound_invalid: "行数限制无效：rows.min / rows.max 须为非负整数且 min ≤ max",
+  subform_rows_invalid: "子表单 rows 配置无效：mode 须为 \"dynamic\" 或 \"fixed\"",
+  subform_fixed_source_required: "固定行子表单必须配置行项目来源（rows.source）",
+  subform_fixed_static_empty: "固定行子表单的静态行项目列表至少需要包含一项",
+  subform_fixed_item_value_empty: "固定行子表单的静态行项目值不能为空",
   subform_table_column: "表格子表单的列必须是绑定字段（不能是容器或展示 / 按钮类组件）",
   validate_malformed: "validate 必须是对象",
   pattern_invalid: "pattern 不是合法的正则表达式",
@@ -259,6 +269,7 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
   duplicate_key: "key 在同一作用域内重复：{key}",
   key_invalid_charset: "key 只能包含字母、数字和下划线：{key}",
   display_text_invalid: "{prop} 必须为字符串",
+  subform_fixed_duplicate_value: "固定行子表单的静态行项目值不能重复：{values}",
   span_invalid: "span 必须为 1..{max} 的整数",
   columns_invalid: "columns 必须为 1 到 {max} 之间的整数",
   validate_range_invalid: "{lower} 不能大于 {upper}",

@@ -536,6 +536,19 @@ export function pruneDataSourceReferences(schema: FormSchema, dataSourceId: stri
 
       if (isLeafField(result)) {
         result = pruneFieldDataSource(result, dataSourceId);
+      } else if (
+        result.type === "subform"
+        && result.rows?.mode === "fixed"
+        && result.rows.source.kind === "ref"
+        && result.rows.source.dataSourceId === dataSourceId
+      ) {
+        result = {
+          ...result,
+          rows: {
+            ...result.rows,
+            source: { kind: "ref", dataSourceId: "" }
+          }
+        };
       }
 
       if (result.linkage !== undefined) {

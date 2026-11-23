@@ -140,7 +140,7 @@ function probedSubform(): SubformNode {
     type: "subform",
     variant: "stack",
     key: "lines",
-    addLabel: "新增一行",
+    rows: { mode: "dynamic", addLabel: "新增一行" },
     template: [
       probe("tag"),
       probe("gated", {
@@ -209,7 +209,7 @@ describe("FormRenderer render bound", () => {
       type: "subform",
       variant: "stack",
       key: "lines",
-      minRows: 2,
+      rows: { mode: "dynamic", min: 2 },
       template: [
         probe("category"),
         probe("note", { linkage: showWhen("category", "other") })
@@ -259,7 +259,7 @@ describe("FormRenderer render bound", () => {
       type: "subform",
       variant: "stack",
       key: "lines",
-      minRows: 2,
+      rows: { mode: "dynamic", min: 2 },
       template: [probe("amount")]
     };
     renderRuntime({

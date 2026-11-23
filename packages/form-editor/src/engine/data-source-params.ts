@@ -1,7 +1,8 @@
 import type { DynamicValue, RemoteDataSourceRequest, ResolvedDataSourceRequest, RuntimeSchema } from "../types";
 
 import { linkageRules, ruleActions } from "./linkage/shape";
-import { walkFields } from "./schema/walk";
+import { isFixedSubform } from "./schema/subform";
+import { walkNodes } from "./schema/walk";
 
 /**
  * Evaluates one bound parameter. Both lanes that resolve a request — the
@@ -32,12 +33,14 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
 
   let bound = false;
 
-  walkFields(schema, field => {
+  walkNodes(schema, node => {
     if (bound) {
       return;
     }
 
-    const source = "dataSource" in field ? field.dataSource : undefined;
+    const source = node.type === "subform"
+      ? isFixedSubform(node) ? node.rows.source : undefined
+      : "dataSource" in node ? node.dataSource : undefined;
 
     if (source?.kind === "remote" && hasBoundParams(source.request)) {
       bound = true;
@@ -45,7 +48,7 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
       return;
     }
 
-    for (const rule of linkageRules(field.linkage)) {
+    for (const rule of linkageRules(node.linkage)) {
       for (const action of ruleActions(rule)) {
         if (action.type === "api_call" && hasBoundParams(action.request)) {
           bound = true;

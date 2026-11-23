@@ -36,6 +36,12 @@ export interface SubformChromeProps {
 }
 
 export interface SubformRowChromeProps {
+  /**
+   * Optional row-header title rendered above the row body (used by fixed-row
+   * subforms in `stack` variant and on mobile, where each item renders as a
+   * card titled by its snapshotted item label).
+   */
+  header?: ReactNode;
   removeControl?: ReactNode;
   children: ReactNode;
 }

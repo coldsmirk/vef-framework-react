@@ -88,6 +88,25 @@ describe("keys", () => {
       expect(collectScopeKeys(schema, [])).toEqual(new Set(["name", "lines"]));
       expect(collectScopeKeys(schema, ["lines"])).toEqual(new Set(["amount"]));
     });
+
+    it("reserves a fixed-row subform's itemKey in its inner scope", () => {
+      const subform: SubformNode = {
+        id: "Sub_1",
+        type: "subform",
+        variant: "table",
+        key: "checks",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          source: { kind: "static", options: [{ label: "A", value: "a" }] }
+        },
+        template: [tf("Field_t", "note")]
+      };
+      const schema: PresentationLayer = { children: [subform] };
+
+      expect(collectScopeKeys(schema, ["checks"])).toEqual(new Set(["item", "note"]));
+      expect(generateUniqueKey(schema, "item", ["checks"])).toBe("item_2");
+    });
   });
 
   describe("isKeyedNode", () => {

@@ -140,4 +140,24 @@ describe("schemaHasBoundParams", () => {
 
     expect(schemaHasBoundParams(schemaWith([field as never]))).toBe(true);
   });
+
+  it("固定行子表单内联远程来源绑定参数时为 true", () => {
+    const bound = request({ deptId: expression("$form.deptId") });
+    const schema = schemaWith([
+      {
+        id: "Sub_1",
+        type: "subform",
+        variant: "table",
+        key: "checks",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          source: { kind: "remote", request: bound }
+        },
+        template: []
+      }
+    ]);
+
+    expect(schemaHasBoundParams(schema)).toBe(true);
+  });
 });

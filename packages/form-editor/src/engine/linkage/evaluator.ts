@@ -2,6 +2,7 @@ import type {
   Block,
   EvaluationContext,
   FieldPermission,
+  FormDataSource,
   KeyedFormField,
   LinkageActionValue,
   LinkageCondition,
@@ -13,6 +14,7 @@ import type {
 
 import { exhaustive } from "../assert-never";
 import { isKeyedField, isKeyedNode, isValidatableField } from "../keys";
+import { getDynamicSubformRows, isFixedSubform, resolveStaticFixedRowItems } from "../schema/subform";
 import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
 import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
@@ -182,7 +184,12 @@ function evaluateLinkageResolved(
   // can relax it. Or-ing afterwards made both a no-op on any field the designer
   // had marked required — with no way for the user to tell, since the action is
   // labelled 取消必填 in the designer.
-  const staticRequired = isLeafField(node) && isValidatableField(node) && node.validate?.required === true;
+  const staticRequired = (isLeafField(node) && isValidatableField(node) && node.validate?.required === true)
+    || (node.type === "subform" && (
+      isFixedSubform(node)
+        ? node.rows.required === true
+        : (getDynamicSubformRows(node).min ?? 0) >= 1
+    ));
 
   if (!linkage) {
     return staticRequired ? staticRequiredRuntimeState : emptyRuntimeState;
@@ -467,17 +474,32 @@ export function deriveDefaultValues(
 
     if (node.type === "subform") {
       const seeded = seedFor(initialValues, node.key);
-      values[node.key] = Array.isArray(seeded)
-        ? seeded.map(row => {
-            // Fresh seed per row: nested subform arrays must not share refs.
-            return {
-              ...deriveDefaultValues({ id: node.id, children: node.template }),
-              // isRecord (not a bare typeof check): an array row must fall
-              // back to the blank seed, not spread its indices into the record.
-              ...isRecord(row) && row
-            };
-          })
-        : seedSubformRows(node);
+
+      if (Array.isArray(seeded) && seeded.length > 0) {
+        values[node.key] = seeded.map(row => {
+          // Fresh seed per row: nested subform arrays must not share refs.
+          return {
+            ...deriveDefaultValues({
+              id: node.id,
+              children: node.template,
+              dataSources: schema.dataSources
+            }),
+            // isRecord (not a bare typeof check): an array row must fall
+            // back to the blank seed, not spread its indices into the record.
+            ...isRecord(row) && row
+          };
+        });
+      } else if (Array.isArray(seeded)) {
+        // Explicit empty array on a dynamic subform stays empty; on a fixed-row
+        // subform an empty initial value means "new fill", so static items seed
+        // immediately while async sources stay `[]` until resolved.
+        values[node.key] = isFixedSubform(node)
+          ? seedSubformRows(node, schema.dataSources)
+          : [];
+      } else {
+        values[node.key] = seedSubformRows(node, schema.dataSources);
+      }
+
       return;
     }
 
@@ -501,15 +523,46 @@ function seedFor(initialValues: Record<string, unknown>, key: string): unknown {
 }
 
 /**
- * Build `minRows` blank rows for a subform, each a fresh record seeded from the
- * template (nested subforms recurse to their own `minRows`).
+ * Build initial rows for a subform on a new fill: `rows.min` blank rows for a
+ * dynamic subform, or one seeded row per static item (with its `{ value, label }`
+ * snapshot under `itemKey`) for a fixed-row subform whose source resolves
+ * synchronously; async fixed sources (`codeSet` / `remote`) start as `[]` and
+ * are seeded by the runtime once resolved.
  */
-function seedSubformRows(subform: SubformNode): Array<Record<string, unknown>> {
-  const count = subform.minRows ?? 0;
+function seedSubformRows(
+  subform: SubformNode,
+  dataSources: readonly FormDataSource[] | undefined
+): Array<Record<string, unknown>> {
+  const mutableDataSources = dataSources ? [...dataSources] : undefined;
+
+  if (isFixedSubform(subform)) {
+    const items = resolveStaticFixedRowItems(subform.rows, dataSources);
+
+    if (!items || items.length === 0) {
+      return [];
+    }
+
+    return items.map(option => {
+      return {
+        ...deriveDefaultValues({
+          id: subform.id,
+          children: subform.template,
+          dataSources: mutableDataSources
+        }),
+        [subform.rows.itemKey]: {
+          value: option.value,
+          label: option.label
+        }
+      };
+    });
+  }
+
+  const count = getDynamicSubformRows(subform).min ?? 0;
 
   return Array.from({ length: count }, () => deriveDefaultValues({
     id: subform.id,
-    children: subform.template
+    children: subform.template,
+    dataSources: mutableDataSources
   }));
 }
 

@@ -5,6 +5,7 @@ import type { ValidationIssue } from "../validation";
 import { CONTAINER_TYPES, GAP_SCALES, ROW_COLS } from "../../types";
 import { validateLinkageSchema } from "../linkage";
 import { createIssue, hasErrorIssues, isRecord, validateRemoteRequest } from "../validation";
+import { findDuplicateOptionValues, isValidFixedItemValue } from "./subform";
 
 /**
  * Result of a `validateSchema` run. `valid` is true when no issue carries
@@ -75,6 +76,11 @@ interface Ctx {
    * field-level `ref` option sources.
    */
   dataSourceIds: ReadonlySet<string>;
+  /**
+   * Well-formed form-global data source records keyed by id, so fixed-row
+   * subforms referencing a global static source can validate its items.
+   */
+  dataSourcesById: ReadonlyMap<string, Record<string, unknown>>;
 }
 
 /**
@@ -109,7 +115,7 @@ export function validateSchema(candidate: unknown, registries: DeviceRegistries)
 
   validateVariables(schema.variables, issues);
 
-  const dataSourceIds = validateDataSources(schema.dataSources, issues);
+  const { dataSourceIds, dataSourcesById } = validateDataSources(schema.dataSources, issues);
 
   const { presentations } = schema;
 
@@ -123,6 +129,7 @@ export function validateSchema(candidate: unknown, registries: DeviceRegistries)
   // its own.
   validatePresentation({
     dataSourceIds,
+    dataSourcesById,
     formLinkage: schema.linkage,
     issues,
     layer: presentations.pc,
@@ -133,6 +140,7 @@ export function validateSchema(candidate: unknown, registries: DeviceRegistries)
   if (presentations.mobile !== undefined) {
     validatePresentation({
       dataSourceIds,
+      dataSourcesById,
       formLinkage: undefined,
       issues,
       layer: presentations.mobile,
@@ -206,16 +214,20 @@ function validateVariables(variables: unknown, issues: ValidationIssue[]): void 
  * with other problems — so `ref` option sources resolve as leniently as
  * possible while the issues still surface.
  */
-function validateDataSources(dataSources: unknown, issues: ValidationIssue[]): ReadonlySet<string> {
+function validateDataSources(
+  dataSources: unknown,
+  issues: ValidationIssue[]
+): { dataSourceIds: ReadonlySet<string>; dataSourcesById: ReadonlyMap<string, Record<string, unknown>> } {
   const ids = new Set<string>();
+  const byId = new Map<string, Record<string, unknown>>();
 
   if (dataSources === undefined) {
-    return ids;
+    return { dataSourceIds: ids, dataSourcesById: byId };
   }
 
   if (!Array.isArray(dataSources)) {
     issues.push(createIssue("dataSources", "data_sources_invalid"));
-    return ids;
+    return { dataSourceIds: ids, dataSourcesById: byId };
   }
 
   const entries: unknown[] = dataSources;
@@ -232,6 +244,7 @@ function validateDataSources(dataSources: unknown, issues: ValidationIssue[]): R
       issues.push(createIssue(`${where}.id`, "data_sources_invalid"));
     } else {
       ids.add(entry.id);
+      byId.set(entry.id, entry);
     }
 
     if (typeof entry.name !== "string") {
@@ -241,7 +254,7 @@ function validateDataSources(dataSources: unknown, issues: ValidationIssue[]): R
     validateDataSourcePayload(entry, where, issues);
   }
 
-  return ids;
+  return { dataSourceIds: ids, dataSourcesById: byId };
 }
 
 function validateDataSourcePayload(entry: Record<string, unknown>, where: string, issues: ValidationIssue[]): void {
@@ -327,6 +340,7 @@ function validateOptionMapping(
  */
 function validatePresentation(args: {
   dataSourceIds: ReadonlySet<string>;
+  dataSourcesById: ReadonlyMap<string, Record<string, unknown>>;
   formLinkage: FieldLinkage | undefined;
   issues: ValidationIssue[];
   layer: PresentationLayer | undefined;
@@ -335,6 +349,7 @@ function validatePresentation(args: {
 }): void {
   const {
     dataSourceIds,
+    dataSourcesById,
     formLinkage,
     issues,
     layer,
@@ -357,7 +372,8 @@ function validatePresentation(args: {
     registry,
     seenIds: new Set(),
     keysByScope: new Map(),
-    dataSourceIds
+    dataSourceIds,
+    dataSourcesById
   };
 
   const before = issues.length;
@@ -736,25 +752,12 @@ function validateSubform(raw: Record<string, unknown>, where: string, scope: str
 
   validateGapScale(raw.gap, where, ctx);
 
-  if (raw.minRows !== undefined && !isNonNegativeInteger(raw.minRows)) {
-    ctx.issues.push(createIssue(`${where}.minRows`, "rows_bound_invalid"));
-  }
-
-  if (raw.maxRows !== undefined && !isNonNegativeInteger(raw.maxRows)) {
-    ctx.issues.push(createIssue(`${where}.maxRows`, "rows_bound_invalid"));
-  }
-
-  if (
-    typeof raw.minRows === "number"
-    && typeof raw.maxRows === "number"
-    && raw.minRows > raw.maxRows
-  ) {
-    ctx.issues.push(createIssue(`${where}.minRows`, "rows_bound_invalid"));
-  }
-
-  // The template opens a new value scope under the subform's key.
+  // The template opens a new value scope under the subform's key. Validate
+  // `rows` BEFORE `template` so a fixed-row `itemKey` claims its slot in the
+  // inner scope and any colliding template field raises `duplicate_key`.
   const inner = hasKey ? [...scope, raw.key as string] : scope;
 
+  validateSubformRows(raw.rows, `${where}.rows`, inner, ctx);
   validateBlockList(raw.template, `${where}.template`, inner, ctx);
 
   // The table variant edits each template field as a column, so its template
@@ -771,6 +774,128 @@ function validateSubform(raw: Record<string, unknown>, where: string, scope: str
         ctx.issues.push(createIssue(`${where}.template[${index}]`, "subform_table_column"));
       }
     }
+  }
+}
+
+function validateSubformRows(rows: unknown, where: string, innerScope: string[], ctx: Ctx): void {
+  if (rows === undefined) {
+    return;
+  }
+
+  if (!isRecord(rows)) {
+    ctx.issues.push(createIssue(where, "subform_rows_invalid"));
+    return;
+  }
+
+  if (rows.mode === "dynamic") {
+    if (rows.min !== undefined && !isNonNegativeInteger(rows.min)) {
+      ctx.issues.push(createIssue(`${where}.min`, "rows_bound_invalid"));
+    }
+
+    if (rows.max !== undefined && !isNonNegativeInteger(rows.max)) {
+      ctx.issues.push(createIssue(`${where}.max`, "rows_bound_invalid"));
+    }
+
+    if (typeof rows.min === "number" && typeof rows.max === "number" && rows.min > rows.max) {
+      ctx.issues.push(createIssue(`${where}.min`, "rows_bound_invalid"));
+    }
+
+    if (rows.addLabel !== undefined && typeof rows.addLabel !== "string") {
+      ctx.issues.push(createIssue(`${where}.addLabel`, "display_text_invalid", { prop: "addLabel" }));
+    }
+
+    return;
+  }
+
+  if (rows.mode !== "fixed") {
+    ctx.issues.push(createIssue(`${where}.mode`, "subform_rows_invalid"));
+    return;
+  }
+
+  if (typeof rows.itemKey === "string" && rows.itemKey.length > 0) {
+    registerKeyAtPath(rows.itemKey, innerScope, `${where}.itemKey`, ctx);
+  } else {
+    ctx.issues.push(createIssue(`${where}.itemKey`, "key_required", { type: "subform" }));
+  }
+
+  if (rows.headerLabel !== undefined && typeof rows.headerLabel !== "string") {
+    ctx.issues.push(createIssue(`${where}.headerLabel`, "display_text_invalid", { prop: "headerLabel" }));
+  }
+
+  if (rows.headerWidth !== undefined && (typeof rows.headerWidth !== "number" || !Number.isFinite(rows.headerWidth) || rows.headerWidth <= 0)) {
+    ctx.issues.push(createIssue(`${where}.headerWidth`, "column_width_invalid"));
+  }
+
+  if (rows.required !== undefined && typeof rows.required !== "boolean") {
+    ctx.issues.push(createIssue(`${where}.required`, "subform_rows_invalid"));
+  }
+
+  if (rows.source === undefined) {
+    ctx.issues.push(createIssue(`${where}.source`, "subform_fixed_source_required"));
+    return;
+  }
+
+  validateFieldOptionSource(rows.source, `${where}.source`, ctx);
+  validateFixedRowStaticItems(rows.source, `${where}.source`, ctx);
+}
+
+/**
+ * Fixed-row tables backed by static items (inline or via a `ref` to a
+ * form-global static source) must list at least one item with non-empty,
+ * unique values — an empty list yields zero rows and duplicate values make
+ * row identity ambiguous.
+ */
+function validateFixedRowStaticItems(source: unknown, where: string, ctx: Ctx): void {
+  if (!isRecord(source)) {
+    return;
+  }
+
+  let options: unknown;
+  let optionsPath = `${where}.options`;
+
+  if (source.kind === "static") {
+    options = source.options;
+  } else if (source.kind === "ref" && typeof source.dataSourceId === "string") {
+    const referenced = ctx.dataSourcesById.get(source.dataSourceId);
+
+    if (referenced?.kind !== "static") {
+      return;
+    }
+
+    options = referenced.options;
+    optionsPath = `${where}.dataSourceId`;
+  } else {
+    return;
+  }
+
+  if (!Array.isArray(options)) {
+    return;
+  }
+
+  if (options.length === 0) {
+    ctx.issues.push(createIssue(optionsPath, "subform_fixed_static_empty"));
+    return;
+  }
+
+  const validOptions: Array<{ label: string; value: string | number }> = [];
+
+  for (const [index, entry] of options.entries()) {
+    if (!isRecord(entry) || typeof entry.label !== "string" || (typeof entry.value !== "string" && typeof entry.value !== "number")) {
+      continue;
+    }
+
+    if (!isValidFixedItemValue(entry.value)) {
+      ctx.issues.push(createIssue(`${optionsPath}[${index}]`, "subform_fixed_item_value_empty"));
+      continue;
+    }
+
+    validOptions.push({ label: entry.label, value: entry.value });
+  }
+
+  const duplicates = findDuplicateOptionValues(validOptions);
+
+  if (duplicates.length > 0) {
+    ctx.issues.push(createIssue(optionsPath, "subform_fixed_duplicate_value", { values: duplicates.join("、") }));
   }
 }
 
@@ -802,15 +927,19 @@ function registerId(id: unknown, where: string, ctx: Ctx): void {
 }
 
 function registerKey(key: string, scope: string[], where: string, ctx: Ctx): void {
+  registerKeyAtPath(key, scope, `${where}.key`, ctx);
+}
+
+function registerKeyAtPath(key: string, scope: string[], keyPath: string, ctx: Ctx): void {
   if (!KEY_CHARSET.test(key)) {
-    ctx.issues.push(createIssue(`${where}.key`, "key_invalid_charset", { key }));
+    ctx.issues.push(createIssue(keyPath, "key_invalid_charset", { key }));
   }
 
   const scopeKey = scope.join("/");
   const used = ctx.keysByScope.get(scopeKey) ?? new Set<string>();
 
   if (used.has(key)) {
-    ctx.issues.push(createIssue(`${where}.key`, "duplicate_key", { key }));
+    ctx.issues.push(createIssue(keyPath, "duplicate_key", { key }));
   } else {
     used.add(key);
   }

@@ -1,7 +1,7 @@
 import type { EditableColumn } from "@vef-framework-react/components";
 import type { ReactNode } from "react";
 
-import type { Block, FieldOption, FieldOptionSource, KeyedFormField, SubformNode } from "../types";
+import type { Block, FieldOption, FieldOptionSource, FixedSubformRows, KeyedFormField, SubformNode } from "../types";
 import type { FormRendererProps } from "./form-renderer";
 
 import { createEditableColumn, filterOptionByLabel, Flex, Text } from "@vef-framework-react/components";
@@ -9,7 +9,9 @@ import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framewor
 
 import { isKeyedField, isValidatableField } from "../engine/keys";
 import { antdPickerForGranularity } from "../engine/schema/date-granularity";
+import { DEFAULT_FIXED_HEADER_LABEL, isFixedSubform } from "../engine/schema/subform";
 import { isContainerNode } from "../engine/schema/walk";
+import { isRecord } from "../engine/validation";
 import { validateKeyedFieldValue } from "./submit";
 
 /**
@@ -230,14 +232,42 @@ function columnFor(field: KeyedFormField, codeSets: CodeSetOptions): EditableCol
 
 /**
  * Build the `EditableTable` columns for a subform template, one per keyed leaf
- * field in document order. Non-keyed blocks are dropped.
+ * field in document order. Non-keyed blocks are dropped. For a fixed-row
+ * subform, a read-only row-header column for `itemKey` is prepended first.
  */
 export function buildSubformColumns(
   template: Block[],
   codeSets?: CodeSetOptions,
-  extras?: { subform: SubformNode; render: NonNullable<FormRendererProps["renderFieldExtra"]> }
+  extras?: { subform: SubformNode; render: NonNullable<FormRendererProps["renderFieldExtra"]> },
+  fixedRows?: FixedSubformRows
 ): Array<EditableColumn<Row>> {
   const columns: Array<EditableColumn<Row>> = [];
+  const effectiveFixed = fixedRows ?? (extras && isFixedSubform(extras.subform) ? extras.subform.rows : undefined);
+
+  if (effectiveFixed) {
+    const headerTitle = effectiveFixed.headerLabel && effectiveFixed.headerLabel.length > 0
+      ? effectiveFixed.headerLabel
+      : DEFAULT_FIXED_HEADER_LABEL;
+
+    columns.push(createEditableColumn<Row>(effectiveFixed.itemKey, {
+      title: headerTitle,
+      width: effectiveFixed.headerWidth,
+      editable: false,
+      renderView: (value, _record, index) => {
+        const label = isRecord(value) && typeof value.label === "string" ? value.label : "";
+        const heading = extras && subformRowHeading(extras.subform, index, extras.render);
+
+        return heading
+          ? (
+              <>
+                {heading}
+                <span>{label}</span>
+              </>
+            )
+          : <span>{label}</span>;
+      }
+    }));
+  }
 
   for (const field of template) {
     if (isContainerNode(field) || !isKeyedField(field)) {

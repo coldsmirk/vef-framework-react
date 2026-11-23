@@ -1,6 +1,7 @@
 import type { FieldDefinition } from "../../types";
 
 import { createId } from "../../engine/ids";
+import { DEFAULT_DYNAMIC_ADD_LABEL, DEFAULT_FIXED_HEADER_LABEL, DEFAULT_FIXED_ITEM_KEY } from "../../engine/schema/subform";
 import { defineContainerDefinition } from "../../types";
 
 /**
@@ -67,7 +68,47 @@ export const subformDefinition: FieldDefinition = defineContainerDefinition({
         type: "subform",
         variant: "stack",
         label: "子表单",
-        addLabel: "新增一行",
+        rows: {
+          mode: "dynamic",
+          addLabel: DEFAULT_DYNAMIC_ADD_LABEL
+        },
+        template: []
+      };
+    }
+  }
+});
+
+/**
+ * Palette preset that inserts a `table`-variant subform already configured in
+ * `fixed` row mode (checklist / matrix table), so designers can discover it
+ * directly in the container palette without knowing it is a subform row mode.
+ */
+export const matrixTableDefinition: FieldDefinition = defineContainerDefinition({
+  config: {
+    type: "subform",
+    paletteId: "matrix-table",
+    name: "矩阵表格",
+    group: "container",
+    keyed: true,
+    icon: "clipboard-list",
+    create: () => {
+      return {
+        type: "subform",
+        variant: "table",
+        label: "矩阵表格",
+        rows: {
+          mode: "fixed",
+          itemKey: DEFAULT_FIXED_ITEM_KEY,
+          headerLabel: DEFAULT_FIXED_HEADER_LABEL,
+          required: true,
+          source: {
+            kind: "static",
+            options: [
+              { label: "检查项 1", value: "item_1" },
+              { label: "检查项 2", value: "item_2" }
+            ]
+          }
+        },
         template: []
       };
     }

@@ -840,7 +840,7 @@ describe("FormRenderer", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
+      rows: { mode: "dynamic", addLabel: "新增一行" },
       template: [makeField("amount")]
     };
     const schema = stack(subform, submitButton());
@@ -915,7 +915,7 @@ describe("FormRenderer", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
+      rows: { mode: "dynamic", addLabel: "新增一行" },
       template: [
         makeField("category"),
         makeField("note", {
@@ -960,7 +960,7 @@ describe("FormRenderer", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
+      rows: { mode: "dynamic", addLabel: "新增一行" },
       template: [
         makeField("category"),
         makeField("code", {
@@ -1004,7 +1004,7 @@ describe("FormRenderer", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
+      rows: { mode: "dynamic", addLabel: "新增一行" },
       template: [makeField("amount")]
     };
 
@@ -1018,15 +1018,18 @@ describe("FormRenderer", () => {
     expect(onSubmit).toHaveBeenCalledWith({ lines: [] });
   });
 
-  it("seeds minRows blank rows on mount", () => {
+  it("seeds dynamic rows.min blank rows on mount", () => {
     const subform: SubformNode = {
       id: "Subform_lines",
       type: "subform",
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
-      minRows: 2,
+      rows: {
+        mode: "dynamic",
+        addLabel: "新增一行",
+        min: 2
+      },
       template: [makeField("amount")]
     };
 
@@ -1035,7 +1038,7 @@ describe("FormRenderer", () => {
     expect(screen.getAllByRole("textbox", { name: "amount" })).toHaveLength(2);
   });
 
-  it("hides the add control once maxRows is reached", async () => {
+  it("hides the add control once dynamic rows.max is reached", async () => {
     const user = userEvent.setup();
     const subform: SubformNode = {
       id: "Subform_lines",
@@ -1043,8 +1046,11 @@ describe("FormRenderer", () => {
       variant: "stack",
       key: "lines",
       label: "明细",
-      addLabel: "新增一行",
-      maxRows: 1,
+      rows: {
+        mode: "dynamic",
+        addLabel: "新增一行",
+        max: 1
+      },
       template: [makeField("amount")]
     };
 

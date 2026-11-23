@@ -6,8 +6,9 @@ import type { FieldOption } from "../../types";
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Input } from "@vef-framework-react/components";
 import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
+import { findDuplicateOptionValues } from "../../engine/schema/subform";
 import { EditorIcon } from "../../icons";
 
 const emptyCss = css({
@@ -82,9 +83,72 @@ const duplicateWarningCss = css({
   lineHeight: 1.5
 });
 
+const footerActionsCss = css({
+  display: "flex",
+  gap: 8
+});
+
+const bulkPanelCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: 10,
+  borderRadius: globalCssVars.borderRadius,
+  border: `1px solid ${globalCssVars.colorBorderSecondary}`,
+  background: globalCssVars.colorFillQuaternary
+});
+
+const bulkHintCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary,
+  lineHeight: 1.4
+});
+
+const bulkActionsCss = css({
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 8
+});
+
 export interface OptionListEditorProps {
   options: FieldOption[];
   onChange: (next: FieldOption[]) => void;
+  /**
+   * Offer a "批量粘贴" inline mode (one item per line, auto-generating unique
+   * `item_N` values) for long lists such as fixed-row checklist items.
+   */
+  allowBulkPaste?: boolean;
+}
+
+/**
+ * Parse newline-separated lines into `{ label, value }` options, trimming each
+ * line and skipping blank lines. Values are minted sequentially as `item_1`,
+ * `item_2`, … skipping any value already present in `existingValues`.
+ */
+export function parseBulkOptionLines(text: string, existingValues: ReadonlySet<string> = new Set()): FieldOption[] {
+  const used = new Set(existingValues);
+  const parsed: FieldOption[] = [];
+  let seq = 1;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const label = rawLine.trim();
+
+    if (label.length === 0) {
+      continue;
+    }
+
+    while (used.has(`item_${seq}`)) {
+      seq += 1;
+    }
+
+    const value = `item_${seq}`;
+
+    used.add(value);
+    seq += 1;
+    parsed.push({ label, value });
+  }
+
+  return parsed;
 }
 
 let optionRowIdCounter = 0;
@@ -124,28 +188,6 @@ export function reorderOptionRows(
     .filter((option): option is FieldOption => option !== undefined);
 
   return { options: nextOptions, rowIds: nextIds };
-}
-
-/**
- * The option VALUES that appear more than once in the list. Surfaced as an
- * inline warning (duplicates make selections ambiguous at runtime) — never
- * silently deduplicated, since the user may be mid-edit.
- */
-function duplicateValues(options: FieldOption[]): string[] {
-  const seen = new Set<string>();
-  const duplicated = new Set<string>();
-
-  for (const option of options) {
-    const value = String(option.value);
-
-    if (seen.has(value)) {
-      duplicated.add(value);
-    }
-
-    seen.add(value);
-  }
-
-  return [...duplicated];
 }
 
 interface OptionRowProps {
@@ -220,10 +262,11 @@ function OptionRow({
 
 /**
  * Inline editor for a positional `{ label, value }` option list. Shared by the
- * field option-source entry and the form-global data-source panel so the row
- * layout, empty hint, and value coercion live in exactly one place. The editor
- * authors STRING option values: a backend-sourced numeric value renders via
- * `String()` and is committed back as a string once edited.
+ * field option-source entry, the fixed-row subform source editor, and the
+ * form-global data-source panel so the row layout, empty hint, and value
+ * coercion live in exactly one place. The editor authors STRING option values:
+ * a backend-sourced numeric value renders via `String()` and is committed back
+ * as a string once edited.
  *
  * Options carry no persistent id, so rows are keyed by ephemeral local ids
  * kept in lockstep with every list mutation made here — removing a middle row
@@ -233,15 +276,21 @@ function OptionRow({
  * undo that swaps values without changing the count) keeps the existing ids, so
  * a focused cell may briefly pin to the wrong logical row.
  */
-export function OptionListEditor({ onChange, options }: OptionListEditorProps): ReactElement {
+export function OptionListEditor({
+  allowBulkPaste = false,
+  onChange,
+  options
+}: OptionListEditorProps): ReactElement {
   const rowIdsRef = useRef<string[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   if (rowIdsRef.current.length !== options.length) {
     rowIdsRef.current = options.map(() => nextOptionRowId());
   }
 
   const rowIds = rowIdsRef.current;
-  const duplicated = duplicateValues(options);
+  const duplicated = findDuplicateOptionValues(options);
 
   const setRow = (index: number, patch: Partial<FieldOption>): void => {
     onChange(options.map((option, current) => current === index ? { ...option, ...patch } : option));
@@ -255,6 +304,24 @@ export function OptionListEditor({ onChange, options }: OptionListEditorProps): 
   const addRow = (): void => {
     rowIdsRef.current = [...rowIds, nextOptionRowId()];
     onChange([...options, { label: "", value: "" }]);
+  };
+
+  const applyBulkPaste = (mode: "append" | "replace"): void => {
+    const existingValues = mode === "append" ? new Set(options.map(option => String(option.value))) : new Set<string>();
+    const parsed = parseBulkOptionLines(bulkText, existingValues);
+
+    if (parsed.length === 0) {
+      setBulkOpen(false);
+      setBulkText("");
+      return;
+    }
+
+    const next = mode === "append" ? [...options, ...parsed] : parsed;
+
+    rowIdsRef.current = next.map(() => nextOptionRowId());
+    onChange(next);
+    setBulkOpen(false);
+    setBulkText("");
   };
 
   const handleDragEnd = (event: DragEndEvent): void => {
@@ -307,9 +374,59 @@ export function OptionListEditor({ onChange, options }: OptionListEditorProps): 
         ? <span css={duplicateWarningCss}>{`选项值重复：${duplicated.join("、")}`}</span>
         : null}
 
-      <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={addRow}>
-        添加选项
-      </Button>
+      {bulkOpen
+        ? (
+            <div css={bulkPanelCss}>
+              <span css={bulkHintCss}>每行一项，空行自动忽略；系统将自动生成唯一值</span>
+
+              <Input.TextArea
+                aria-label="批量粘贴行项目"
+                autoSize={{ minRows: 4, maxRows: 10 }}
+                placeholder={"例如：\n虚构不存在手术加收患者费用的（8分）\n使用非卫生技术人员从事诊疗工作的（10分）"}
+                value={bulkText}
+                onChange={event => setBulkText(event.target.value)}
+              />
+
+              <div css={bulkActionsCss}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setBulkOpen(false);
+                    setBulkText("");
+                  }}
+                >
+                  取消
+                </Button>
+
+                {options.length > 0
+                  ? (
+                      <Button size="small" onClick={() => applyBulkPaste("append")}>
+                        追加
+                      </Button>
+                    )
+                  : null}
+
+                <Button size="small" type="primary" onClick={() => applyBulkPaste("replace")}>
+                  {options.length > 0 ? "替换全部" : "导入"}
+                </Button>
+              </div>
+            </div>
+          )
+        : (
+            <div css={footerActionsCss}>
+              <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={addRow}>
+                添加选项
+              </Button>
+
+              {allowBulkPaste
+                ? (
+                    <Button block icon={<EditorIcon name="clipboard-list" />} onClick={() => setBulkOpen(true)}>
+                      批量粘贴
+                    </Button>
+                  )
+                : null}
+            </div>
+          )}
     </>
   );
 }

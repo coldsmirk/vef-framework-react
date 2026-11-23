@@ -20,7 +20,10 @@ import {
   subformBodyCss,
   subformRemoveCss,
   subformRowBodyCss,
-  subformRowCss
+  subformRowCardBodyCss,
+  subformRowCardCss,
+  subformRowCss,
+  subformRowHeaderCss
 } from "./subform-shell";
 
 function PcSection({
@@ -73,7 +76,24 @@ function PcSubform({
   );
 }
 
-function PcSubformRow({ children, removeControl }: SubformRowChromeProps): ReactElement {
+function PcSubformRow({
+  children,
+  header,
+  removeControl
+}: SubformRowChromeProps): ReactElement {
+  if (header !== undefined) {
+    return (
+      <div css={subformRowCardCss}>
+        <div css={subformRowHeaderCss}>{header}</div>
+
+        <div css={subformRowCardBodyCss}>
+          <div css={subformRowBodyCss}>{children}</div>
+          {removeControl}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div css={subformRowCss}>
       <div css={subformRowBodyCss}>{children}</div>

@@ -412,7 +412,7 @@ describe("FormRenderer field permissions", () => {
         <FormRenderer
           defaultValues={{ lines: [{ amount: "1" }] }}
           fieldPermissions={{ lines: "visible" }}
-          schema={stack(stackSubform({ addLabel: "新增一行" }))}
+          schema={stack(stackSubform({ rows: { mode: "dynamic", addLabel: "新增一行" } }))}
         />
       );
 

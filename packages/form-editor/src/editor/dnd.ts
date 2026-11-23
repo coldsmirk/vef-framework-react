@@ -230,7 +230,7 @@ export function useEditorDragEnd(): (event: DragEndEvent) => void {
     const dropTarget = toDropTarget(zoneData);
 
     if (dragData.kind === "palette") {
-      const definition = registry.get(dragData.type);
+      const definition = registry.getPaletteItem(dragData.type);
 
       if (definition) {
         storeApi.getState().insertField({ definition, target: dropTarget });

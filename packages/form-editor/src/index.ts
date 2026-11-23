@@ -1,7 +1,7 @@
 export { buttonDefinition } from "./components/button";
 export { checkboxGroupFieldDefinition } from "./components/checkbox-group-field";
 export { codeEditorDefinition } from "./components/code-editor";
-export { flexDefinition, gridDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "./components/containers";
+export { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "./components/containers";
 export { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "./components/date-field";
 export { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "./components/display";
 export { mobileFieldDefinitions } from "./components/mobile/definitions";
@@ -117,6 +117,18 @@ export {
   toRuntimeSchema,
   withPresentation
 } from "./engine/schema/presentation";
+export {
+  DEFAULT_DYNAMIC_ADD_LABEL,
+  DEFAULT_FIXED_HEADER_LABEL,
+  DEFAULT_FIXED_ITEM_KEY,
+  findDuplicateOptionValues,
+  fixedRowItemLabel,
+  getDynamicSubformRows,
+  isFixedSubform,
+  isValidFixedItemValue,
+  readFixedRowItem,
+  resolveStaticFixedRowItems
+} from "./engine/schema/subform";
 export { validateSchema, type ValidateSchemaResult } from "./engine/schema/validate";
 export {
   findField,

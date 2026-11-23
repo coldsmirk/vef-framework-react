@@ -17,9 +17,16 @@ import { assertNever } from "../../engine/assert-never";
 import { collectCodeSets } from "../../engine/code-sets";
 import { isValidatableField } from "../../engine/keys";
 import { resolvePresentation } from "../../engine/schema/presentation";
+import {
+  DEFAULT_DYNAMIC_ADD_LABEL,
+  DEFAULT_FIXED_HEADER_LABEL,
+  getDynamicSubformRows,
+  isFixedSubform,
+  resolveStaticFixedRowItems
+} from "../../engine/schema/subform";
 import { isContainerNode } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
-import { CodeSetProvider } from "../../render/code-set-context";
+import { CodeSetProvider, useCodeSetState } from "../../render/code-set-context";
 import { DataSourceProvider } from "../../render/data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "../../render/flex-style";
 import { FormFieldRenderer } from "../../render/form-field";
@@ -770,23 +777,190 @@ function SubformPreview({ subform }: { subform: SubformNode }): ReactElement {
   return <SubformStackPreview subform={subform} />;
 }
 
+const fixedPreviewBannerCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  marginBottom: 10,
+  padding: "8px 10px",
+  borderRadius: globalCssVars.borderRadius,
+  border: `1px dashed ${globalCssVars.colorBorderSecondary}`,
+  background: globalCssVars.colorFillQuaternary,
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextSecondary
+});
+
+const fixedPreviewItemsCss = css({
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6
+});
+
+const fixedPreviewChipCss = css({
+  padding: "2px 8px",
+  borderRadius: globalCssVars.borderRadiusSm,
+  background: globalCssVars.colorBgContainer,
+  border: `1px solid ${globalCssVars.colorBorderSecondary}`,
+  color: globalCssVars.colorText,
+  fontSize: globalCssVars.fontSizeSm
+});
+
+const subformFixedRowCss = css({
+  display: "flex",
+  alignItems: "stretch",
+  borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`
+});
+
+const subformFixedHeaderCellCss = css({
+  padding: "8px 12px",
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorText,
+  lineHeight: 1.5,
+  wordBreak: "break-word"
+});
+
+const subformFixedPlaceholderCss = css({
+  padding: "8px 12px",
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary,
+  fontStyle: "italic"
+});
+
+const subformFixedFooterCss = css({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 8,
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary
+});
+
+const MAX_CANVAS_FIXED_ROWS = 8;
+
+type CanvasFixedRowPreview
+  = | { kind: "real"; sourceTag: string; labels: string[] }
+    | { kind: "remote"; sourceTag: string; labels: string[] }
+    | { kind: "loading"; sourceTag: string };
+
+function useCanvasFixedRowPreview(subform: SubformNode): CanvasFixedRowPreview | null {
+  const dataSources = useFormEditorStore(state => state.schema.dataSources);
+  const codeSets = useCodeSetState();
+
+  if (!isFixedSubform(subform)) {
+    return null;
+  }
+
+  const { source } = subform.rows;
+
+  if (source.kind === "static" || source.kind === "ref") {
+    const staticItems = resolveStaticFixedRowItems(subform.rows, dataSources);
+
+    if (staticItems !== undefined) {
+      return {
+        kind: "real",
+        sourceTag: `静态 ${staticItems.length} 项`,
+        labels: staticItems.map(item => item.label)
+      };
+    }
+
+    if (source.kind === "ref") {
+      const referenced = dataSources?.find(entry => entry.id === source.dataSourceId);
+
+      if (referenced?.kind === "remote") {
+        return {
+          kind: "remote",
+          sourceTag: "远程数据源（运行时加载）",
+          labels: ["运行时加载 · 示例行 1", "运行时加载 · 示例行 2"]
+        };
+      }
+    }
+
+    return {
+      kind: "real",
+      sourceTag: "未配置行项目",
+      labels: []
+    };
+  }
+
+  if (source.kind === "codeSet") {
+    if (source.codeSet.trim().length === 0) {
+      return {
+        kind: "real",
+        sourceTag: "数据字典（未选择）",
+        labels: []
+      };
+    }
+
+    if (codeSets.loading) {
+      return { kind: "loading", sourceTag: `数据字典 ${source.codeSet} 加载中…` };
+    }
+
+    const items = codeSets.options?.[source.codeSet] ?? [];
+
+    return {
+      kind: "real",
+      sourceTag: `数据字典 · ${source.codeSet}（${items.length} 项）`,
+      labels: items.map(item => item.label)
+    };
+  }
+
+  return {
+    kind: "remote",
+    sourceTag: "远程接口（运行时加载）",
+    labels: ["运行时加载 · 示例行 1", "运行时加载 · 示例行 2"]
+  };
+}
+
 function SubformStackPreview({ subform }: { subform: SubformNode }): ReactElement {
   const chrome = useContainerChrome();
   const tailTarget = useMemo<DropZoneData>(() => {
     return { zone: "container", containerId: subform.id };
   }, [subform.id]);
+  const fixedPreview = useCanvasFixedRowPreview(subform);
 
   return (
     <chrome.Subform title={subform.label ?? "子表单"}>
+      {fixedPreview
+        ? (
+            <div css={fixedPreviewBannerCss}>
+              <span>{`固定行 · ${fixedPreview.sourceTag}`}</span>
+
+              {fixedPreview.kind === "real" && fixedPreview.labels.length > 0
+                ? (
+                    <div css={fixedPreviewItemsCss}>
+                      {fixedPreview.labels.slice(0, MAX_CANVAS_FIXED_ROWS).map((label, index) => <span key={`${index}-${label}`} css={fixedPreviewChipCss}>{label}</span>)}
+
+                      {fixedPreview.labels.length > MAX_CANVAS_FIXED_ROWS
+                        ? <span css={fixedPreviewChipCss}>{`… 共 ${fixedPreview.labels.length} 项`}</span>
+                        : null}
+                    </div>
+                  )
+                : null}
+            </div>
+          )
+        : null}
+
       <StackBody blocks={subform.template} gap={subform.variant === "stack" ? subform.gap : undefined} tailTarget={tailTarget} />
     </chrome.Subform>
   );
 }
 
+// Horizontally scroll wide tables inside the subform card while reserving
+// 28px of top headroom (pulled back via negative margin) so each column's
+// floating action bar (`bottom: 100%`) is never clipped by the scroll container.
+const subformTableScrollCss = css({
+  overflowX: "auto",
+  paddingTop: 28,
+  marginTop: -28
+});
+
 const subformTableCss = css({
   // No `overflow: hidden`: each column's floating action bar hangs above its
-  // header (`bottom: 100%`), so clipping would swallow it. The outer frame is
-  // drawn by the cells' own borders instead.
+  // header (`bottom: 100%`), so clipping would swallow it. `fit-content` with
+  // `minWidth: 100%` keeps the outer border wrapped around every column even
+  // when wide tables scroll horizontally.
+  width: "fit-content",
+  minWidth: "100%",
   border: `1px solid ${globalCssVars.colorBorderSecondary}`,
   borderRadius: globalCssVars.borderRadius
 });
@@ -929,48 +1103,116 @@ function SubformTablePreview({ subform }: { subform: TableSubform }): ReactEleme
   });
 
   const columns = subform.template.filter(block => isTableColumnField(block));
+  const fixed = isFixedSubform(subform) ? subform.rows : undefined;
+  const fixedPreview = useCanvasFixedRowPreview(subform);
+  const dynamic = getDynamicSubformRows(subform);
 
   if (columns.length === 0) {
     return (
       <chrome.Subform title={subform.label ?? "子表单"}>
+        {fixedPreview ? <div css={subformFixedFooterCss}>{`固定行 · ${fixedPreview.sourceTag}`}</div> : null}
         <EmptyZone accept={accept} disabled={suppressed} hint="从左侧拖入字段作为表格列" tailTarget={tailTarget} />
       </chrome.Subform>
     );
   }
 
   const inline = inlineSlots(columns);
+  const headerTitle = fixed && fixed.headerLabel && fixed.headerLabel.length > 0
+    ? fixed.headerLabel
+    : DEFAULT_FIXED_HEADER_LABEL;
+  const previewRows = fixedPreview && fixedPreview.kind !== "loading"
+    ? fixedPreview.labels.slice(0, MAX_CANVAS_FIXED_ROWS)
+    : [];
+  const firstRowLabel = fixedPreview?.kind === "loading"
+    ? "加载中…"
+    : (previewRows[0] ?? "暂无行项目");
+  const extraRows = previewRows.slice(1);
+  const overflowCount = fixedPreview?.kind === "real" && fixedPreview.labels.length > MAX_CANVAS_FIXED_ROWS
+    ? fixedPreview.labels.length - MAX_CANVAS_FIXED_ROWS
+    : 0;
+  const isRemotePreview = fixedPreview?.kind === "remote";
 
   return (
     <chrome.Subform title={subform.label ?? "子表单"}>
-      <div ref={ref} css={[subformTableCss, isDropTarget && subformTableActiveCss]}>
-        <div css={subformTableRowCss}>
-          {columns.map((field, index) => {
-            const beside = inline[index]?.beside ?? [];
+      <div css={subformTableScrollCss}>
+        <div ref={ref} css={[subformTableCss, isDropTarget && subformTableActiveCss]}>
+          <div css={subformTableRowCss}>
+            {fixed
+              ? (
+                  <div css={subformTableColCss} style={subformColumnWidthStyle(fixed.headerWidth)}>
+                    <div css={subformColumnCss}>
+                      <div css={subformColumnHeaderCss}>
+                        <span css={subformColumnTitleCss}>{headerTitle}</span>
+                      </div>
 
-            return (
-              <div key={field.id} css={subformTableColCss} style={subformColumnWidthStyle(field.columnWidth)}>
-                <CanvasField block={field}>
-                  <SubformColumn field={field} />
-                </CanvasField>
+                      <div css={isRemotePreview || previewRows.length === 0 ? subformFixedPlaceholderCss : subformFixedHeaderCellCss}>
+                        {firstRowLabel}
+                      </div>
+                    </div>
+                  </div>
+                )
+              : null}
 
-                {/* Layer the column-eligibility test over the zone's built-in
+            {columns.map((field, index) => {
+              const beside = inline[index]?.beside ?? [];
+
+              return (
+                <div key={field.id} css={subformTableColCss} style={subformColumnWidthStyle(field.columnWidth)}>
+                  <CanvasField block={field}>
+                    <SubformColumn field={field} />
+                  </CanvasField>
+
+                  {/* Layer the column-eligibility test over the zone's built-in
                     self-anchor suppression rather than replacing it. */}
-                {suppressed ? null : beside.map(zone => <Zone key={zone.id} descriptor={{ ...zone, accept: composeAccept(zone.accept, accept) }} />)}
-              </div>
-            );
-          })}
+                  {suppressed ? null : beside.map(zone => <Zone key={zone.id} descriptor={{ ...zone, accept: composeAccept(zone.accept, accept) }} />)}
+                </div>
+              );
+            })}
 
-          <div aria-hidden css={subformAppendColCss}>
-            <EditorIcon name="plus" />
-            <span>拖入列</span>
+            <div aria-hidden css={subformAppendColCss}>
+              <EditorIcon name="plus" />
+              <span>拖入列</span>
+            </div>
           </div>
+
+          {fixed
+            ? extraRows.map((label, rowIndex) => (
+                <div key={`${rowIndex}-${label}`} aria-hidden css={subformFixedRowCss}>
+                  <div css={subformTableColCss} style={subformColumnWidthStyle(fixed.headerWidth)}>
+                    <div css={isRemotePreview ? subformFixedPlaceholderCss : subformFixedHeaderCellCss}>
+                      {label}
+                    </div>
+                  </div>
+
+                  {columns.map(field => (
+                    <div key={field.id} css={subformTableColCss} style={subformColumnWidthStyle(field.columnWidth)}>
+                      <div css={subformColumnCellCss}>
+                        <SampleCell field={field} />
+                      </div>
+                    </div>
+                  ))}
+
+                  <div css={subformAppendColCss} />
+                </div>
+              ))
+            : null}
         </div>
       </div>
 
-      <span aria-hidden css={subformAddRowCss}>
-        <EditorIcon name="plus" />
-        {subform.addLabel ?? "新增一行"}
-      </span>
+      {fixed && fixedPreview
+        ? (
+            <span aria-hidden css={subformFixedFooterCss}>
+              {overflowCount > 0
+                ? `固定行 · ${fixedPreview.sourceTag}（画布仅预览前 ${MAX_CANVAS_FIXED_ROWS} 项，另有 ${overflowCount} 项）`
+                : `固定行 · ${fixedPreview.sourceTag}`}
+            </span>
+          )
+        : (
+            <span aria-hidden css={subformAddRowCss}>
+              <EditorIcon name="plus" />
+              {dynamic.addLabel ?? DEFAULT_DYNAMIC_ADD_LABEL}
+            </span>
+          )}
     </chrome.Subform>
   );
 }

@@ -118,24 +118,78 @@ describe("ContainerProperties", () => {
 
     it("clamps a minimum above the current maximum down to it", async () => {
       const user = userEvent.setup();
-      const api = setup(subformNode({ maxRows: 5 }));
+      const api = setup(subformNode({ rows: { mode: "dynamic", max: 5 } }));
 
       const minRowsRow = screen.getByText("最少行数").closest("div") as HTMLElement;
       await user.type(within(minRowsRow).getByRole("spinbutton"), "9");
       await user.tab();
 
-      expect(storeSubform(api).minRows).toBe(5);
+      expect(storeSubform(api).rows).toEqual({
+        mode: "dynamic",
+        min: 5,
+        max: 5
+      });
     });
 
     it("clamps a maximum below the current minimum up to it", async () => {
       const user = userEvent.setup();
-      const api = setup(subformNode({ minRows: 4 }));
+      const api = setup(subformNode({ rows: { mode: "dynamic", min: 4 } }));
 
       const maxRowsRow = screen.getByText("最多行数").closest("div") as HTMLElement;
       await user.type(within(maxRowsRow).getByRole("spinbutton"), "2");
       await user.tab();
 
-      expect(storeSubform(api).maxRows).toBe(4);
+      expect(storeSubform(api).rows).toEqual({
+        mode: "dynamic",
+        min: 4,
+        max: 4
+      });
+    });
+
+    it("switches between dynamic and fixed row modes and avoids template key collisions", async () => {
+      const user = userEvent.setup();
+      const api = setup(subformNode({
+        template: [
+          {
+            id: "Col_1",
+            type: "textfield",
+            key: "item",
+            label: "已有列"
+          }
+        ]
+      }));
+
+      await user.click(screen.getByText("固定行"));
+
+      expect(storeSubform(api).rows).toMatchObject({
+        mode: "fixed",
+        itemKey: "item_2",
+        headerLabel: "自查内容",
+        source: { kind: "static" }
+      });
+
+      expect(screen.getByText("行项目来源")).toBeInTheDocument();
+      expect(screen.queryByText("最少行数")).not.toBeInTheDocument();
+
+      await user.click(screen.getByText("动态行"));
+      await user.click(await screen.findByRole("button", { name: /切\s*换/ }));
+
+      expect(storeSubform(api).rows).toEqual({ mode: "dynamic", addLabel: "新增一行" });
+      expect(screen.getByText("最少行数")).toBeInTheDocument();
+    });
+
+    it("shows headerWidth only for fixed-row table subforms on PC", () => {
+      setup(subformNode({
+        variant: "table",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          headerLabel: "自查内容",
+          source: { kind: "static", options: [{ label: "项1", value: "1" }] }
+        }
+      }));
+
+      expect(screen.getByText("行头列宽 (px)")).toBeInTheDocument();
     });
 
     it("renders the container linkage section", () => {

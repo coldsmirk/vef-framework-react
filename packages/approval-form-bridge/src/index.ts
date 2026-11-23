@@ -4,6 +4,7 @@ export {
   type ApprovalFieldOptionSource,
   type ApprovalFormField,
   type ApprovalOptionSourceKind,
+  type ApprovalTableFixedRows,
   type ApprovalValidationRule
 } from "./contract";
 export { type ProjectionIssue, type ProjectionIssueCode } from "./issues";

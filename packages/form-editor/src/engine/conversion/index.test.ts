@@ -216,6 +216,37 @@ describe("convertPresentation", () => {
       expect(converted.template[0]).toMatchObject({ type: "textfield", key: "amount" });
       expect(converted.template[0]?.span).toBeUndefined();
     });
+
+    it("preserves fixed-row configuration cleanly when converting a table subform to mobile", () => {
+      const subform: SubformNode = {
+        id: "sf_fixed",
+        type: "subform",
+        variant: "table",
+        key: "checks",
+        label: "自查表",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          headerLabel: "自查内容",
+          headerWidth: 320,
+          required: true,
+          source: {
+            kind: "static",
+            options: [{ label: "条款一", value: "c1" }]
+          }
+        },
+        template: [textfield("a", "issue", 12)]
+      };
+
+      const { layer } = convertPresentation(layerOf([subform]), rules, createDefaultRegistry());
+      const converted = layer.children[0] as SubformNode;
+
+      expect(converted.type).toBe("subform");
+      expect(converted.key).toBe("checks");
+      expect(converted.rows).toEqual(subform.rows);
+      // Cloned deeply so editing PC options does not mutate mobile options.
+      expect(converted.rows).not.toBe(subform.rows);
+    });
   });
 
   describe("id and rule identity", () => {

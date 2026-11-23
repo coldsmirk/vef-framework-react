@@ -1,4 +1,4 @@
-import type { Block, FormDataSource, FormSchema, PresentationLayer } from "@vef-framework-react/form-editor";
+import type { Block, FormDataSource, FormSchema, PresentationLayer, SubformNode } from "@vef-framework-react/form-editor";
 
 import { describe, expect, it } from "vitest";
 
@@ -645,8 +645,11 @@ describe("projectFormSchema", () => {
           variant: "table",
           key: "items",
           label: "明细",
-          minRows: 2,
-          maxRows: 5,
+          rows: {
+            mode: "dynamic",
+            min: 2,
+            max: 5
+          },
           template: [
             {
               id: "C1",
@@ -998,6 +1001,158 @@ describe("projectFormSchema", () => {
       expect(result.issues).toEqual([]);
       expect(result.fields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
       expect(result.formFields[0]?.columns?.[0]?.options).toEqual([{ label: "个", value: "pcs" }]);
+    });
+
+    it("projects fixed-row subforms (static, codeSet, remote) without exposing itemKey in columns", () => {
+      const result = projectFormSchema(schemaOf([
+        {
+          id: "Sub1",
+          type: "subform",
+          variant: "table",
+          key: "qualCheck",
+          label: "资质自查",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            headerLabel: "自查内容",
+            required: true,
+            source: {
+              kind: "static",
+              options: [
+                { label: "项1", value: "c1" },
+                { label: "项2", value: "c2" }
+              ]
+            }
+          },
+          template: [
+            {
+              id: "C1",
+              type: "number",
+              key: "score",
+              label: "扣分"
+            }
+          ]
+        },
+        {
+          id: "Sub2",
+          type: "subform",
+          variant: "table",
+          key: "dictCheck",
+          label: "字典自查",
+          rows: {
+            mode: "fixed",
+            itemKey: "clause",
+            source: { kind: "codeSet", codeSet: "hosp.check" }
+          },
+          template: [
+            {
+              id: "C2",
+              type: "textfield",
+              key: "note",
+              label: "说明"
+            }
+          ]
+        }
+      ]));
+
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.fields[0]?.fixedRows).toEqual({
+        itemKey: "item",
+        headerLabel: "自查内容",
+        items: [
+          { label: "项1", value: "c1" },
+          { label: "项2", value: "c2" }
+        ]
+      });
+      expect(result.fields[0]?.isRequired).toBe(true);
+      expect(result.fields[0]?.validation).toBeUndefined();
+      // Header cell is never included in flowColumns (aggregate pickers only see template columns).
+      expect(result.formFields[0]?.columns?.map(column => column.key)).toEqual(["score"]);
+      expect(result.fields[1]?.fixedRows).toEqual({
+        itemKey: "clause",
+        source: { kind: "codeSet", codeSet: "hosp.check" }
+      });
+      expect(result.fields[1]?.isRequired).toBeUndefined();
+    });
+
+    it("rejects fixed-row subforms with empty itemKey, column collision, invalid mode, or invalid source", () => {
+      const baseTemplate = [
+        {
+          id: "C1",
+          type: "textfield" as const,
+          key: "note",
+          label: "说明"
+        }
+      ];
+
+      const badMode = projectFormSchema(schemaOf([
+        {
+          id: "Sub",
+          type: "subform",
+          variant: "table",
+          key: "t",
+          label: "表",
+          rows: { mode: "paged" } as unknown as SubformNode["rows"],
+          template: baseTemplate
+        }
+      ]));
+      expect(badMode.valid).toBe(false);
+      expect(badMode.issues).toContainEqual(expect.objectContaining({ code: "table_rows_mode_invalid", path: "t" }));
+
+      const emptyItemKey = projectFormSchema(schemaOf([
+        {
+          id: "Sub",
+          type: "subform",
+          variant: "table",
+          key: "t",
+          label: "表",
+          rows: {
+            mode: "fixed",
+            itemKey: " ",
+            source: { kind: "static", options: [{ label: "A", value: "a" }] }
+          },
+          template: baseTemplate
+        }
+      ]));
+      expect(emptyItemKey.valid).toBe(false);
+      expect(emptyItemKey.issues).toContainEqual(expect.objectContaining({ code: "table_fixed_rows_item_key_empty", path: "t" }));
+
+      const collision = projectFormSchema(schemaOf([
+        {
+          id: "Sub",
+          type: "subform",
+          variant: "table",
+          key: "t",
+          label: "表",
+          rows: {
+            mode: "fixed",
+            itemKey: "note",
+            source: { kind: "static", options: [{ label: "A", value: "a" }] }
+          },
+          template: baseTemplate
+        }
+      ]));
+      expect(collision.valid).toBe(false);
+      expect(collision.issues).toContainEqual(expect.objectContaining({ code: "table_fixed_rows_item_key_conflict", path: "t" }));
+
+      const danglingRef = projectFormSchema(schemaOf([
+        {
+          id: "Sub",
+          type: "subform",
+          variant: "table",
+          key: "t",
+          label: "表",
+          rows: {
+            mode: "fixed",
+            itemKey: "item",
+            source: { kind: "ref", dataSourceId: "missing" }
+          },
+          template: baseTemplate
+        }
+      ]));
+      expect(danglingRef.valid).toBe(false);
+      expect(danglingRef.issues).toContainEqual(expect.objectContaining({ code: "table_fixed_rows_source_invalid", path: "t" }));
     });
   });
 

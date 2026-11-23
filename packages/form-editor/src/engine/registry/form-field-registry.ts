@@ -15,6 +15,13 @@ type Listener = () => void;
  */
 export class FormFieldRegistry {
   private readonly fields = new Map<string, FieldDefinition>();
+  /**
+   * Palette entries in registration order, keyed by `paletteId ?? type`. Holds
+   * both primary type definitions and alternate presets (e.g. `matrix-table`
+   * creating a fixed-row `subform`) without polluting the schema-type `fields`
+   * map.
+   */
+  private readonly paletteEntries = new Map<string, FieldDefinition>();
   private readonly entries = new Map<EntryType, FC<EntryComponentProps>>();
   private readonly listeners = new Set<Listener>();
   private containerChrome: ContainerChromeSet | undefined;
@@ -33,18 +40,35 @@ export class FormFieldRegistry {
   }
 
   register(definition: FieldDefinition): void {
-    this.fields.set(definition.config.type, definition);
+    const { paletteId, type } = definition.config;
+    const isPreset = paletteId !== undefined && paletteId !== type;
+
+    if (!isPreset) {
+      this.fields.set(type, definition);
+    }
+
+    this.paletteEntries.set(paletteId ?? type, definition);
     this.notify();
   }
 
   unregister(type: string): boolean {
-    const removed = this.fields.delete(type);
+    const removedField = this.fields.delete(type);
+    let removedPalette = this.paletteEntries.delete(type);
 
-    if (removed) {
+    for (const [key, def] of this.paletteEntries) {
+      if (def.config.type !== type) {
+        continue;
+      }
+
+      this.paletteEntries.delete(key);
+      removedPalette = true;
+    }
+
+    if (removedField || removedPalette) {
       this.notify();
     }
 
-    return removed;
+    return removedField || removedPalette;
   }
 
   get(type: string): FieldDefinition | undefined {
@@ -57,6 +81,22 @@ export class FormFieldRegistry {
 
   list(): FieldDefinition[] {
     return this.fields.values().toArray();
+  }
+
+  /**
+   * Palette entries in registration order, including presets that share a
+   * schema `type` (e.g. `matrix-table` → `subform`).
+   */
+  paletteList(): FieldDefinition[] {
+    return this.paletteEntries.values().toArray();
+  }
+
+  /**
+   * Resolve a palette entry by its `paletteId ?? type` key (falls back to
+   * primary type lookup).
+   */
+  getPaletteItem(paletteKey: string): FieldDefinition | undefined {
+    return this.paletteEntries.get(paletteKey) ?? this.fields.get(paletteKey);
   }
 
   /**
