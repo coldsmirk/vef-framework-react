@@ -12,7 +12,6 @@ import type {
 import { isDeepEqual } from "@vef-framework-react/shared";
 
 import { isKeyedNode } from "../keys";
-import { isDateGranularityField, withFieldGranularity } from "./date-granularity";
 import { getDynamicSubformRows, isFixedSubform } from "./subform";
 import { isLeafField } from "./walk";
 
@@ -27,6 +26,11 @@ import { isLeafField } from "./walk";
  * (`label`, `placeholder`, `helperText`, `size`, `headerLabel`, `headerWidth`,
  * `addLabel`, `variant`, layout sizing, `template` columns, etc.) stay
  * device-local.
+ *
+ * Date granularity is a data-contract property too, but it is deliberately not
+ * handled here: switching it also invalidates date literals in linkage, so the
+ * store's `setDateGranularity` action owns it end to end — field, twin and
+ * linkage scrub in one step.
  *
  * Identity contract: when no data-contract property changed or the twin is
  * already aligned (or incompatible), the input twin reference is returned
@@ -149,14 +153,6 @@ function leafContractChanged(before: FormField, after: FormField): boolean {
   if (
     OPTION_SOURCE_FIELD_TYPES.has(before.type)
     && !isDeepEqual(readDataSource(before), readDataSource(after))
-  ) {
-    return true;
-  }
-
-  if (
-    isDateGranularityField(before)
-    && isDateGranularityField(after)
-    && (before.granularity ?? "day") !== (after.granularity ?? "day")
   ) {
     return true;
   }
@@ -305,25 +301,6 @@ function syncLeafContractToTwin(before: FormField, after: FormField, twin: FormF
 
     if (!isDeepEqual(beforeSource, afterSource) && !isDeepEqual(readDataSource(next), afterSource)) {
       setOrDeleteProperty(mutable(), "dataSource", afterSource);
-    }
-  }
-
-  if (
-    isDateGranularityField(before)
-    && isDateGranularityField(after)
-    && isDateGranularityField(next)
-    && after.type === next.type
-  ) {
-    const beforeGranularity = before.granularity ?? "day";
-    const afterGranularity = after.granularity ?? "day";
-
-    if (beforeGranularity !== afterGranularity) {
-      const updated = withFieldGranularity(next, afterGranularity);
-
-      if (updated !== next) {
-        next = updated;
-        cloned = true;
-      }
     }
   }
 

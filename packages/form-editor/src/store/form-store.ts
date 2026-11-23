@@ -244,9 +244,11 @@ export interface FormEditorStoreState {
    * updaters from each `PropertyEntry.write` lens, keeping the action
    * property-agnostic while per-property type safety lives at the entry's
    * declaration site. Any data-contract property that changed (`validate`,
-   * `dataSource`, `granularity`, `columnType`, `precision`, upload `maxCount`)
-   * propagates to the same-scope, same-key twin on the other device presentation
-   * within the same undo step; purely presentational edits stay device-local.
+   * `dataSource`, `columnType`, `precision`, upload `maxCount`) propagates to
+   * the same-scope, same-key twin on the other device presentation within the
+   * same undo step; purely presentational edits stay device-local. Date
+   * granularity is switched through `setDateGranularity`, which also
+   * scrubs the linkage literals the switch invalidates.
    */
   editField: (args: { fieldId: string; updater: (field: FormField) => FormField }, options?: EditCoalesceOptions) => void;
   /**

@@ -161,7 +161,7 @@ describe("contract-sync", () => {
       expect(syncedCheckbox.dataSource).toEqual({ kind: "codeSet", codeSet: "new.tags" });
     });
 
-    it("syncs number precision, columnType, date granularity, and upload maxCount", () => {
+    it("syncs number precision, columnType, and upload maxCount but leaves date granularity to setDateGranularity", () => {
       const beforeNum: NumberField = {
         id: "P1",
         type: "number",
@@ -197,7 +197,8 @@ describe("contract-sync", () => {
         key: "period"
       };
 
-      expect((syncNodeContractToTwin(beforeDate, afterDate, twinDate) as DateField).granularity).toBe("month");
+      expect(hasNodeContractChange(beforeDate, afterDate)).toBe(false);
+      expect(syncNodeContractToTwin(beforeDate, afterDate, twinDate)).toBe(twinDate);
 
       const beforeUpload: UploadField = {
         id: "P3",
