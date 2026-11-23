@@ -44,6 +44,29 @@ describe("condition-operators", () => {
     expect(isOperatorValidForField(field, "in")).toBe(true);
   });
 
+  it("returns ordering and emptiness operators for datetime fields", () => {
+    expect(getOperatorsForField({ kind: "datetime" })).toEqual([
+      "eq",
+      "ne",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      "is_empty",
+      "is_not_empty"
+    ]);
+    expect(isOperatorValidForField({ kind: "datetime" }, "gte")).toBe(true);
+    expect(isOperatorValidForField({ kind: "datetime" }, "contains")).toBe(false);
+  });
+
+  it("returns emptiness operators only for daterange fields", () => {
+    expect(getOperatorsForField({ kind: "daterange" })).toEqual(["is_empty", "is_not_empty"]);
+    expect(isOperatorValidForField({ kind: "daterange" }, "is_empty")).toBe(true);
+    expect(isOperatorValidForField({ kind: "daterange" }, "is_not_empty")).toBe(true);
+    expect(isOperatorValidForField({ kind: "daterange" }, "eq")).toBe(false);
+    expect(isOperatorValidForField({ kind: "daterange" }, "gt")).toBe(false);
+  });
+
   it("returns emptiness operators only for upload fields", () => {
     expect(getOperatorsForField({ kind: "upload" })).toEqual(["is_empty", "is_not_empty"]);
   });

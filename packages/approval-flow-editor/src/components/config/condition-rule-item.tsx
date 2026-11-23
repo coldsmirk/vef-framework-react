@@ -4,7 +4,14 @@ import type { AggregateKind, ConditionDefinition, ConditionOperator, PrincipalKi
 
 import { css } from "@emotion/react";
 import { Button, DatePicker, globalCssVars, Input, InputNumber, Select } from "@vef-framework-react/components";
-import dayjs from "dayjs";
+import {
+  DEFAULT_DATETIME_FORMAT,
+  formatDate,
+  formatDateByGranularity,
+  getDateGranularityFormat,
+  tryParseDate,
+  tryParseDateByGranularity
+} from "@vef-framework-react/shared";
 import { XIcon } from "lucide-react";
 import { useMemo } from "react";
 
@@ -347,18 +354,37 @@ export const ConditionRuleItem: FC<ConditionRuleItemProps> = ({
     }
 
     if (kind === "date") {
-      // The condition stores the wire value as a string; antd's DatePicker only
-      // accepts dayjs at runtime (a string value type-checks via the ValueType
-      // generic but throws on render), so convert at this boundary.
+      // The condition stores the wire value as a canonical string for the
+      // field's granularity; antd's DatePicker only accepts dayjs at runtime,
+      // so parse and format through `@vef-framework-react/shared`.
+      const granularity = selectedField.granularity ?? "day";
       const stringValue = asStringValue(condition.value);
-      const dateValue = stringValue ? dayjs(stringValue) : null;
+      const dateValue = stringValue ? tryParseDateByGranularity(stringValue, granularity) : null;
 
       return (
         <DatePicker
           disabled={readonly}
+          format={getDateGranularityFormat(granularity)}
+          picker={granularity === "day" ? "date" : granularity}
           style={FULL_WIDTH_STYLE}
-          value={dateValue?.isValid() ? dateValue : null}
-          onChange={(_date, dateString) => onChange({ ...condition, value: dateString })}
+          value={dateValue}
+          onChange={date => onChange({ ...condition, value: date ? formatDateByGranularity(date, granularity) : "" })}
+        />
+      );
+    }
+
+    if (kind === "datetime") {
+      const stringValue = asStringValue(condition.value);
+      const dateValue = stringValue ? tryParseDate(stringValue) : null;
+
+      return (
+        <DatePicker
+          showTime
+          disabled={readonly}
+          format={DEFAULT_DATETIME_FORMAT}
+          style={FULL_WIDTH_STYLE}
+          value={dateValue}
+          onChange={date => onChange({ ...condition, value: date ? formatDate(date, DEFAULT_DATETIME_FORMAT) : "" })}
         />
       );
     }

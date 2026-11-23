@@ -367,3 +367,123 @@ describe("ConditionRuleItem multi-value select fields", () => {
     }));
   });
 });
+
+describe("ConditionRuleItem date, datetime, and daterange fields", () => {
+  const temporalPlugins: EditorPlugins = {
+    formFields: [
+      {
+        key: "billingMonth",
+        kind: "date",
+        label: "账期",
+        granularity: "month"
+      },
+      {
+        key: "fiscalQuarter",
+        kind: "date",
+        label: "季度",
+        granularity: "quarter"
+      },
+      {
+        key: "meetingAt",
+        kind: "datetime",
+        label: "会议时间"
+      },
+      {
+        key: "leaveSpan",
+        kind: "daterange",
+        label: "请假区间",
+        granularity: "day"
+      }
+    ]
+  };
+
+  it("hydrates and commits canonical month values for a month-granularity date field", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    renderRule({
+      condition: condition({
+        subject: "billingMonth",
+        operator: "gte",
+        value: "2026-04"
+      }),
+      plugins: temporalPlugins,
+      onChange
+    });
+
+    const input = screen.getByRole("textbox");
+    expect(input).toHaveValue("2026-04");
+
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, "2026-09{Enter}");
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      subject: "billingMonth",
+      operator: "gte",
+      value: "2026-09"
+    }));
+  });
+
+  it("hydrates canonical quarter values for a quarter-granularity date field", () => {
+    renderRule({
+      condition: condition({
+        subject: "fiscalQuarter",
+        operator: "eq",
+        value: "2026-Q3"
+      }),
+      plugins: temporalPlugins
+    });
+
+    expect(screen.getByRole("textbox")).toHaveValue("2026-Q3");
+  });
+
+  it("hydrates and commits canonical datetime values for a datetime field", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    renderRule({
+      condition: condition({
+        subject: "meetingAt",
+        operator: "gt",
+        value: "2026-04-15 09:30:00"
+      }),
+      plugins: temporalPlugins,
+      onChange
+    });
+
+    const input = screen.getByRole("textbox");
+    expect(input).toHaveValue("2026-04-15 09:30:00");
+
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, "2026-05-01 14:00:00{Enter}");
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      subject: "meetingAt",
+      operator: "gt",
+      value: "2026-05-01 14:00:00"
+    }));
+  });
+
+  it("offers only emptiness operators and no value input for a daterange field", async () => {
+    const user = userEvent.setup();
+
+    renderRule({
+      condition: condition({
+        subject: "leaveSpan",
+        operator: "is_not_empty",
+        value: undefined
+      }),
+      plugins: temporalPlugins
+    });
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: "运算符" }));
+
+    expect(await screen.findByText("为空")).toBeInTheDocument();
+    expect(screen.queryByText("等于")).not.toBeInTheDocument();
+    expect(screen.queryByText("大于")).not.toBeInTheDocument();
+  });
+});

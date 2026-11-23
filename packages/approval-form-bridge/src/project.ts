@@ -2,6 +2,7 @@ import type { FormFieldDefinition as FlowFormFieldDefinition } from "@vef-framew
 import type {
   Block,
   ColumnDataType,
+  DateGranularity,
   FieldLinkage,
   FieldOptionSource,
   FormDataSource,
@@ -22,7 +23,14 @@ import type {
 } from "./contract";
 import type { ProjectionIssue } from "./issues";
 
-import { findParentContainer, inferColumnType, isKeyedNode, normalizeOptionMapping, walkNodes } from "@vef-framework-react/form-editor";
+import {
+  dateGranularityMaxLength,
+  findParentContainer,
+  inferColumnType,
+  isKeyedNode,
+  normalizeOptionMapping,
+  walkNodes
+} from "@vef-framework-react/form-editor";
 
 import {
   issueCrossDeviceKindMismatch,
@@ -67,13 +75,12 @@ type KeyedField = FormField & KeyedNode;
 /**
  * Designer widget type → approval field kind, for every widget whose runtime
  * value satisfies the Go kind's submit validation (string for input /
- * textarea / date, JSON number for number, scalar-or-array for select).
+ * textarea / date / datetime, `[start, end]` pair for daterange, JSON number
+ * for number, scalar-or-array for select).
  *
- * `switch` (boolean) and `daterange` ([start, end] array) are deliberately
- * absent: the Go runtime validates input / date values with `MustBeString`,
- * so both would deploy fine and then reject every submission. They surface
- * as `unmappable_field_type` errors instead (and the approval registry
- * profile excludes their widgets up front).
+ * `switch` (boolean) is deliberately absent: it surfaces as an
+ * `unmappable_field_type` error instead (and the approval registry profile
+ * excludes it up front).
  */
 const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
   textfield: "input",
@@ -85,7 +92,8 @@ const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
   radio: "select",
   "checkbox-group": "select",
   date: "date",
-  datetime: "date",
+  datetime: "datetime",
+  daterange: "daterange",
   upload: "upload"
 };
 
@@ -100,7 +108,7 @@ const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group",
  * Widget types that bind a value the approval contract cannot carry (as
  * opposed to unknown consumer-registered types).
  */
-const UNMAPPABLE_TYPES: ReadonlySet<string> = new Set(["switch", "daterange"]);
+const UNMAPPABLE_TYPES: ReadonlySet<string> = new Set(["switch"]);
 
 interface ProjectedField {
   approval: Omit<ApprovalFormField, "sortOrder">;
@@ -114,6 +122,7 @@ interface ProjectedField {
 interface SeenProjection {
   kind: ApprovalFieldKind;
   isMultiple: boolean;
+  granularity?: DateGranularity;
   /**
    * Column signature of a table field ({@link peekTableSignature}); absent
    * for scalar kinds.
@@ -168,14 +177,14 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
       const previous = seen.get(node.key);
 
       // Classify the widget's type BEFORE resolving the dedupe: an unmappable
-      // (switch / daterange) or unknown widget breaks the submit contract on
-      // EVERY device, so a key first sighted as a mappable widget and again as
-      // an unmappable one must still error — otherwise the losing device
-      // submits values the deployed definition rejects, the exact hazard the
-      // cross-device check exists to prevent. Mirrors the Go parser's
-      // classifyWidget-before-seen order (internal/approval/formeditor,
-      // parser.go). A repeat unprojectable sighting of an already-failed key
-      // (previous === null) is deduped to a single issue.
+      // (switch) or unknown widget breaks the submit contract on EVERY device,
+      // so a key first sighted as a mappable widget and again as an unmappable
+      // one must still error — otherwise the losing device submits values the
+      // deployed definition rejects, the exact hazard the cross-device check
+      // exists to prevent. Mirrors the Go parser's classifyWidget-before-seen
+      // order (internal/approval/formeditor, parser.go). A repeat unprojectable
+      // sighting of an already-failed key (previous === null) is deduped to a
+      // single issue.
       const classification = classifyWidget(node);
 
       if (classification !== undefined) {
@@ -191,21 +200,26 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
         // The submitted data contract is shared across devices, so a second
         // sighting that would project a DIFFERENT contract means the losing
         // device submits values the deployed definition rejects — an error,
-        // not a preference. Kind conflicts and table column-set conflicts
-        // are detected; a same-kind options/validation divergence is not
-        // (documented limitation). classifyWidget passed, so peekKind resolves
-        // to a real kind here; previous === null (first sighting unprojectable)
-        // deduped the losing device away, matching Go's abort-on-first-error.
+        // not a preference. Kind, multiplicity, date granularity, and table
+        // column-set conflicts are detected; a same-kind options/validation
+        // divergence is not (documented limitation). classifyWidget passed, so
+        // peekKind resolves to a real kind here; previous === null (first
+        // sighting unprojectable) deduped the losing device away, matching Go's
+        // abort-on-first-error.
         if (previous !== null) {
           const kind = peekKind(node);
           const isMultiple = MULTI_VALUE_SELECT_TYPES.has(node.type);
+          const granularity = peekGranularity(node);
 
-          if (kind !== null && (kind !== previous.kind || isMultiple !== previous.isMultiple)) {
+          if (
+            kind !== null
+            && (kind !== previous.kind || isMultiple !== previous.isMultiple || granularity !== previous.granularity)
+          ) {
             issues.push(
               issueCrossDeviceKindMismatch(
                 node.key,
-                describeFieldShape(previous.kind, previous.isMultiple),
-                describeFieldShape(kind, isMultiple)
+                describeFieldShape(previous.kind, previous.isMultiple, previous.granularity),
+                describeFieldShape(kind, isMultiple, granularity)
               )
             );
           } else if (
@@ -230,6 +244,7 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
         : {
             kind: projected.approval.kind,
             isMultiple: projected.approval.isMultiple === true,
+            granularity: peekGranularity(node),
             ...isSubform && { tableSignature: peekTableSignature(node as SubformNode) }
           });
 
@@ -257,12 +272,11 @@ export function projectFormSchema(schema: FormSchema): ProjectionResult {
 
 /**
  * The projection-blocking fault of a root-scope keyed node's widget type: an
- * unmappable (switch / daterange) or unknown type. A subform (table) and every
- * mapped leaf widget pass (return `undefined`). Run BEFORE the cross-device
- * dedupe so a type conflict raises identically no matter which device sees the
- * key first — mirrors the Go parser's `classifyWidget` (internal/approval/
- * formeditor, project.go), whose walk (parser.go) classifies before the seen
- * check.
+ * unmappable (switch) or unknown type. A subform (table) and every mapped leaf
+ * widget pass (return `undefined`). Run BEFORE the cross-device dedupe so a
+ * type conflict raises identically no matter which device sees the key first —
+ * mirrors the Go parser's `classifyWidget` (internal/approval/formeditor,
+ * project.go), whose walk (parser.go) classifies before the seen check.
  */
 function classifyWidget(node: Block & KeyedNode): ProjectionIssue | undefined {
   if (node.type === "subform" || KIND_BY_TYPE[node.type] !== undefined) {
@@ -287,12 +301,40 @@ function peekKind(node: Block & KeyedNode): ApprovalFieldKind | null {
 }
 
 /**
- * Formats a projected kind + multiplicity for cross-device comparison and
- * diagnostics, mirroring `describeFieldShape` in Go `internal/approval/
+ * Effective calendar granularity of a `date` or `daterange` node for
+ * cross-device comparison (omitted resolves to `"day"`), or `undefined` for
+ * other widget types. Mirrors `peekGranularity` in Go `internal/approval/
  * formeditor/project.go`.
  */
-function describeFieldShape(kind: ApprovalFieldKind, isMultiple: boolean): string {
-  return kind === "select" && isMultiple ? `${kind} (multiple)` : kind;
+function peekGranularity(node: Block & KeyedNode): DateGranularity | undefined {
+  if (node.type === "date" || node.type === "daterange") {
+    const { granularity } = node as { granularity?: DateGranularity };
+
+    return (granularity && granularity.length > 0 ? granularity : "day") as DateGranularity;
+  }
+
+  return undefined;
+}
+
+/**
+ * Formats a projected kind + multiplicity / granularity for cross-device
+ * comparison and diagnostics, mirroring `describeFieldShape` in Go
+ * `internal/approval/formeditor/project.go`.
+ */
+function describeFieldShape(
+  kind: ApprovalFieldKind,
+  isMultiple: boolean,
+  granularity: DateGranularity | undefined
+): string {
+  if (kind === "select" && isMultiple) {
+    return `${kind} (multiple)`;
+  }
+
+  if ((kind === "date" || kind === "daterange") && granularity !== undefined && granularity !== "day") {
+    return `${kind} (${granularity})`;
+  }
+
+  return kind;
 }
 
 /**
@@ -316,7 +358,11 @@ function peekTableSignature(subform: SubformNode): string {
     if (node.type === "subform") {
       shape = "table";
     } else if (KIND_BY_TYPE[node.type] !== undefined) {
-      shape = describeFieldShape(KIND_BY_TYPE[node.type]!, MULTI_VALUE_SELECT_TYPES.has(node.type));
+      shape = describeFieldShape(
+        KIND_BY_TYPE[node.type]!,
+        MULTI_VALUE_SELECT_TYPES.has(node.type),
+        peekGranularity(node)
+      );
     }
 
     parts.push(`${node.key}:${shape}`);
@@ -368,6 +414,20 @@ function projectLeaf(
   }
 
   const isMultiple = MULTI_VALUE_SELECT_TYPES.has(field.type);
+  const rawGranularity = field.type === "date" || field.type === "daterange"
+    ? (field as { granularity?: DateGranularity }).granularity
+    : undefined;
+  const granularity = rawGranularity && rawGranularity.length > 0 ? rawGranularity : undefined;
+
+  let validation = rule;
+
+  if (field.type === "date" && columnType === "string" && validation?.maxLength === undefined) {
+    const maxLength = dateGranularityMaxLength(granularity);
+
+    if (maxLength !== undefined) {
+      validation = { ...validation, maxLength };
+    }
+  }
 
   const approval: Omit<ApprovalFormField, "sortOrder"> = {
     key: field.key,
@@ -376,9 +436,10 @@ function projectLeaf(
     ...placeholder !== undefined && { placeholder },
     ...isRequired && { isRequired },
     ...isMultiple && { isMultiple },
+    ...granularity !== undefined && { granularity },
     ...options !== undefined && { options },
     ...optionSource !== undefined && { optionSource },
-    ...rule !== undefined && { validation: rule },
+    ...validation !== undefined && { validation },
     ...columnType !== undefined && { columnType },
     ...columnType === "decimal" && hasScale && { scale: precision }
   };
@@ -388,6 +449,7 @@ function projectLeaf(
     kind,
     label,
     ...isMultiple && { isMultiple },
+    ...granularity !== undefined && { granularity },
     ...options !== undefined && { options }
   };
 

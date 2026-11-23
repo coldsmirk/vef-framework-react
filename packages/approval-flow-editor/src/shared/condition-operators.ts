@@ -37,6 +37,8 @@ const OPERATORS_BY_KIND: Record<FieldKind, readonly ConditionOperator[]> = {
   textarea: ["eq", "ne", "contains", "not_contains", "starts_with", "ends_with", "is_empty", "is_not_empty"],
   number: ["eq", "ne", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
   date: ["eq", "ne", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
+  datetime: ["eq", "ne", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
+  daterange: ["is_empty", "is_not_empty"],
   select: ["eq", "ne", "in", "not_in", "is_empty", "is_not_empty"],
   upload: ["is_empty", "is_not_empty"],
   // Table subjects always compare through an aggregate; the rule item

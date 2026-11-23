@@ -109,10 +109,44 @@ describe("projectFormSchema", () => {
           label: "日期"
         },
         {
+          id: "F4Y",
+          type: "date",
+          key: "fiscalYear",
+          label: "年度",
+          granularity: "year"
+        },
+        {
+          id: "F4Q",
+          type: "date",
+          key: "fiscalQuarter",
+          label: "季度",
+          granularity: "quarter"
+        },
+        {
+          id: "F4M",
+          type: "date",
+          key: "billingMonth",
+          label: "月份",
+          granularity: "month"
+        },
+        {
           id: "F5",
           type: "datetime",
           key: "moment",
           label: "时刻"
+        },
+        {
+          id: "F5R",
+          type: "daterange",
+          key: "span",
+          label: "日期区间"
+        },
+        {
+          id: "F5RQ",
+          type: "daterange",
+          key: "quarterSpan",
+          label: "季度区间",
+          granularity: "quarter"
         },
         {
           id: "F6",
@@ -165,9 +199,41 @@ describe("projectFormSchema", () => {
           columnType: "date"
         },
         {
-          key: "moment",
+          key: "fiscalYear",
           kind: "date",
+          granularity: "year",
+          columnType: "string",
+          validation: { maxLength: 4 }
+        },
+        {
+          key: "fiscalQuarter",
+          kind: "date",
+          granularity: "quarter",
+          columnType: "string",
+          validation: { maxLength: 7 }
+        },
+        {
+          key: "billingMonth",
+          kind: "date",
+          granularity: "month",
+          columnType: "string",
+          validation: { maxLength: 7 }
+        },
+        {
+          key: "moment",
+          kind: "datetime",
           columnType: "datetime"
+        },
+        {
+          key: "span",
+          kind: "daterange",
+          columnType: "json"
+        },
+        {
+          key: "quarterSpan",
+          kind: "daterange",
+          granularity: "quarter",
+          columnType: "json"
         },
         {
           key: "tags",
@@ -195,6 +261,18 @@ describe("projectFormSchema", () => {
         label: "技能",
         isMultiple: true,
         options: [{ label: "Go", value: "go" }]
+      });
+      expect(result.formFields).toContainEqual({
+        key: "fiscalQuarter",
+        kind: "date",
+        label: "季度",
+        granularity: "quarter"
+      });
+      expect(result.formFields).toContainEqual({
+        key: "quarterSpan",
+        kind: "daterange",
+        label: "季度区间",
+        granularity: "quarter"
       });
     });
 
@@ -936,16 +1014,6 @@ describe("projectFormSchema", () => {
         "unmappable_field_type"
       ],
       [
-        "daterange",
-        {
-          id: "F1",
-          type: "daterange",
-          key: "bound",
-          label: "日期区间"
-        },
-        "unmappable_field_type"
-      ],
-      [
         "unknown",
         {
           id: "F1",
@@ -1076,6 +1144,41 @@ describe("projectFormSchema", () => {
           code: "cross_device_kind_mismatch",
           severity: "error",
           path: "value"
+        })
+      ]);
+    });
+
+    it("raises an error when the same date key has different granularities across devices", () => {
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "date",
+            key: "period",
+            label: "期间",
+            granularity: "month"
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "date",
+                key: "period",
+                label: "期间"
+              }
+            ]
+          }
+        }
+      ));
+
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          code: "cross_device_kind_mismatch",
+          severity: "error",
+          path: "period"
         })
       ]);
     });

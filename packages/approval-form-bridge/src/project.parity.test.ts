@@ -1,7 +1,15 @@
-import type { CcFieldPermission, FieldPermission as FlowFieldPermission } from "@vef-framework-react/approval-flow-editor";
-import type { FieldPermission as FormFieldPermission, FormSchema } from "@vef-framework-react/form-editor";
+import type {
+  CcFieldPermission,
+  FieldKind as FlowFieldKind,
+  FieldPermission as FlowFieldPermission
+} from "@vef-framework-react/approval-flow-editor";
+import type {
+  FieldKind as FormEditorFieldKind,
+  FieldPermission as FormFieldPermission,
+  FormSchema
+} from "@vef-framework-react/form-editor";
 
-import type { ApprovalFormField } from "./contract";
+import type { ApprovalFieldKind, ApprovalFormField } from "./contract";
 
 import { expectTypeOf } from "vitest";
 
@@ -96,5 +104,15 @@ describe("FieldPermission lockstep", () => {
   // eslint-disable-next-line vitest/expect-expect -- expectTypeOf is a compile-time assertion; a union drift fails `tsc --noEmit`
   it("keeps CcFieldPermission a subset of form-editor's FieldPermission", () => {
     expectTypeOf<CcFieldPermission>().toExtend<FormFieldPermission>();
+  });
+
+  // eslint-disable-next-line vitest/expect-expect -- expectTypeOf is a compile-time assertion; a union drift fails `tsc --noEmit`
+  it("keeps ApprovalFieldKind identical to approval-flow-editor's FieldKind", () => {
+    expectTypeOf<ApprovalFieldKind>().toEqualTypeOf<FlowFieldKind>();
+  });
+
+  // eslint-disable-next-line vitest/expect-expect -- expectTypeOf is a compile-time assertion; a union drift fails `tsc --noEmit`
+  it("keeps form-editor's FieldKind a subset of ApprovalFieldKind", () => {
+    expectTypeOf<FormEditorFieldKind>().toExtend<ApprovalFieldKind>();
   });
 });

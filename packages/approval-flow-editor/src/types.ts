@@ -1,4 +1,7 @@
+import type { DateGranularity } from "@vef-framework-react/shared";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
+
+export type { DateGranularity } from "@vef-framework-react/shared";
 
 /**
  * Node kind aligned with backend NodeKind enum.
@@ -305,7 +308,7 @@ export interface ConditionDefinition {
 /**
  * Field kind for form field metadata
  */
-export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "upload" | "table";
+export type FieldKind = "input" | "textarea" | "select" | "number" | "date" | "datetime" | "daterange" | "upload" | "table";
 
 /**
  * Option for select-type form fields
@@ -330,6 +333,12 @@ export interface FormFieldDefinition {
    * `approval.FormFieldDefinition.IsMultiple`.
    */
   isMultiple?: boolean;
+  /**
+   * Calendar granularity for `date` and `daterange` fields (`year`, `quarter`,
+   * `month`, or `day`; omitted means `day`). Drives the condition value picker
+   * format and mirrors Go `approval.FormFieldDefinition.Granularity`.
+   */
+  granularity?: DateGranularity;
   options?: FieldOptionDefinition[];
   /**
    * Row shape of a detail-table field (kind === "table"): the condition

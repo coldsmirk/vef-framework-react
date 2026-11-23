@@ -5,15 +5,15 @@ import { createDefaultMobileRegistry, createDefaultRegistry } from "@vef-framewo
 /**
  * Widget types the approval profile removes from the default registries.
  *
- * - `switch` / `daterange`: bind values (boolean / [start, end] array) the
- * approval contract cannot carry — see the projector's `KIND_BY_TYPE`.
+ * - `switch`: binds a boolean value the approval contract cannot carry — see
+ * the projector's `KIND_BY_TYPE`.
  * - `button`: binds no value, but its `submit` / `reset` actions fight the
  * approval shell's own submission control.
  *
  * A host that disagrees builds its own registries instead of calling
  * {@link createApprovalRegistries}.
  */
-export const APPROVAL_EXCLUDED_FIELD_TYPES = ["switch", "daterange", "button"] as const;
+export const APPROVAL_EXCLUDED_FIELD_TYPES = ["switch", "button"] as const;
 
 /**
  * Build the approval-profile device registries: the form-editor defaults

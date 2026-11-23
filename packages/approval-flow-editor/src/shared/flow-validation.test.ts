@@ -882,6 +882,17 @@ describe("validateFlowDefinition field condition operator compatibility", () => 
       label: "附件"
     },
     {
+      key: "meetingAt",
+      kind: "datetime",
+      label: "会议时间"
+    },
+    {
+      key: "leaveSpan",
+      kind: "daterange",
+      label: "请假区间",
+      granularity: "month"
+    },
+    {
       key: "applicantId",
       kind: "select",
       label: "同名字段",
@@ -910,6 +921,22 @@ describe("validateFlowDefinition field condition operator compatibility", () => 
 
   it("rejects eq on an upload field", () => {
     expect(codesForScalar("attachment", "eq", fields))
+      .toContain("condition_operator_not_allowed");
+  });
+
+  it("accepts ordering operators and rejects contains on a datetime field", () => {
+    expect(codesForScalar("meetingAt", "gte", fields)).toEqual([]);
+    expect(codesForScalar("meetingAt", "eq", fields)).toEqual([]);
+    expect(codesForScalar("meetingAt", "contains", fields))
+      .toContain("condition_operator_not_allowed");
+  });
+
+  it("accepts only emptiness operators on a daterange field", () => {
+    expect(codesForScalar("leaveSpan", "is_empty", fields)).toEqual([]);
+    expect(codesForScalar("leaveSpan", "is_not_empty", fields)).toEqual([]);
+    expect(codesForScalar("leaveSpan", "eq", fields))
+      .toContain("condition_operator_not_allowed");
+    expect(codesForScalar("leaveSpan", "gt", fields))
       .toContain("condition_operator_not_allowed");
   });
 

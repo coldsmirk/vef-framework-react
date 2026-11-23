@@ -73,6 +73,7 @@ export type {
   ConditionNodeData,
   ConditionOperator,
   ConsecutiveApproverAction,
+  DateGranularity,
   EdgeDefinition,
   EmptyAssigneeAction,
   EndNodeData,

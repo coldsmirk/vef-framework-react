@@ -1,4 +1,4 @@
-import type { ColumnDataType, RemoteDataSourceRequest, RemoteOptionMapping } from "@vef-framework-react/form-editor";
+import type { ColumnDataType, DateGranularity, RemoteDataSourceRequest, RemoteOptionMapping } from "@vef-framework-react/form-editor";
 
 /**
  * Field kind stored by the approval backend (`approval/form_field.go`
@@ -12,6 +12,8 @@ export type ApprovalFieldKind
     | "select"
     | "number"
     | "date"
+    | "datetime"
+    | "daterange"
     | "upload"
     | "table";
 
@@ -102,6 +104,12 @@ export interface ApprovalFormField {
    * operator selection and deploy-time operator validation.
    */
   isMultiple?: boolean;
+  /**
+   * Calendar granularity for `date` and `daterange` fields (`year`, `quarter`,
+   * `month`, or `day`; omitted means `day`), mirroring Go
+   * `approval.FormFieldDefinition.Granularity`.
+   */
+  granularity?: DateGranularity;
   options?: ApprovalFieldOption[];
   /**
    * Where the options come from when they could not be enumerated into

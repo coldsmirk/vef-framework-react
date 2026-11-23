@@ -7,6 +7,8 @@ const FIELD_LABELS: Record<ApprovalFormField["kind"], string> = {
   textarea: "多行文本",
   number: "数字",
   date: "日期",
+  datetime: "日期时间",
+  daterange: "日期区间",
   select: "选项",
   upload: "附件",
   table: "明细表"
