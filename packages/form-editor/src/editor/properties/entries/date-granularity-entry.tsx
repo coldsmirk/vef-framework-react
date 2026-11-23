@@ -5,17 +5,12 @@ import type { DateGranularity, EntryComponentProps } from "../../../types";
 import { Popconfirm, Select } from "@vef-framework-react/components";
 import { isDateGranularity } from "@vef-framework-react/shared";
 
-import {
-  DATE_GRANULARITY_OPTIONS,
-  hasAuthoredDateLiteralsInSchema,
-  reconcileDateGranularityInSchema
-} from "../../../engine/schema/date-granularity";
-import { useFormEditorStoreApi } from "../../../store/form-store";
+import { DATE_GRANULARITY_OPTIONS, isDateGranularityField } from "../../../engine/schema/date-granularity";
+import { hasDateGranularityLiterals, useFormEditorStore, useFormEditorStoreApi } from "../../../store/form-store";
 import { useConfirmableKindSwitch } from "../use-confirmable-kind-switch";
 import { EntryField } from "./entry-field";
 
 const selectStyle = { width: "100%" } as const;
-const HISTORY_LIMIT = 100;
 
 /**
  * Property entry for a `date` or `daterange` field's `granularity`（「精度」）.
@@ -23,9 +18,9 @@ const HISTORY_LIMIT = 100;
  * Switching granularity changes the field's value format (`YYYY` / `YYYY-Qn` /
  * `YYYY-MM` / `YYYY-MM-DD`), so any linkage literal targeting the field becomes
  * incompatible. When none exist the switch commits immediately; otherwise it
- * gates behind a confirmation (`useConfirmableKindSwitch`), then updates the
- * field (and any same-key twin on the other device) and scrubs incompatible
- * linkage literals across the schema in one undoable step.
+ * gates behind a confirmation (`useConfirmableKindSwitch`), then delegates to
+ * the store's `setDateGranularity` action so the field, its cross-device twin,
+ * and every incompatible linkage literal update in one undoable step.
  */
 export const DateGranularityEntry: FC<EntryComponentProps> = ({
   entry,
@@ -34,10 +29,11 @@ export const DateGranularityEntry: FC<EntryComponentProps> = ({
   onChange
 }) => {
   const storeApi = useFormEditorStoreApi();
+  const device = useFormEditorStore(state => state.device);
   const raw = entry.read(field);
   const current: DateGranularity = isDateGranularity(raw) ? raw : "day";
-  const dateField = field.type === "date" || field.type === "daterange" ? field : undefined;
-  const needsConfirm = dateField ? hasAuthoredDateLiteralsInSchema(schema, dateField) : false;
+  const dateField = isDateGranularityField(field) ? field : undefined;
+  const needsConfirm = dateField ? hasDateGranularityLiterals(schema, device, dateField.id) : false;
 
   const commit = (nextGranularity: DateGranularity): void => {
     if (!dateField) {
@@ -45,23 +41,9 @@ export const DateGranularityEntry: FC<EntryComponentProps> = ({
       return;
     }
 
-    const currentState = storeApi.getState();
-    const nextSchema = reconcileDateGranularityInSchema(currentState.schema, dateField.id, nextGranularity);
-
-    if (nextSchema === currentState.schema) {
-      return;
-    }
-
-    const past = [...currentState.past, { schema: currentState.schema, device: currentState.device }];
-
-    if (past.length > HISTORY_LIMIT) {
-      past.splice(0, past.length - HISTORY_LIMIT);
-    }
-
-    storeApi.setState({
-      past,
-      future: [],
-      schema: nextSchema
+    storeApi.getState().setDateGranularity({
+      fieldId: dateField.id,
+      granularity: nextGranularity
     });
   };
 

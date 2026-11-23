@@ -1,13 +1,16 @@
 import type { ReturnedComponentStoreResult, UnboundStore } from "@vef-framework-react/core";
 
+import type { DateGranularityField } from "../engine/schema/date-granularity";
 import type { DropTarget } from "../engine/schema/edit-ops";
+import type { DateGranularityScrubTarget } from "../engine/schema/reconcile";
 import type { ScopePath } from "../engine/schema/walk";
-import type { Block, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
+import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
 
 import { createComponentStore } from "@vef-framework-react/core";
 
 import { createId, idPrefixForType } from "../engine/ids";
 import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedField, nextUniqueKey, sanitizeKey } from "../engine/keys";
+import { isDateGranularityField, withFieldGranularity } from "../engine/schema/date-granularity";
 import { cloneBlock, insertBlock, moveBlock, setColumnWidth as setColumnWidthOp, setFlex as setFlexOp, setSpan as setSpanOp, setStackSlot as setStackSlotOp, targetScope } from "../engine/schema/edit-ops";
 import {
   editField as editFieldOp,
@@ -17,12 +20,16 @@ import {
 import { createEmptySchema } from "../engine/schema/nodes";
 import { currentLayer, resolvePresentation, withPresentation } from "../engine/schema/presentation";
 import {
+  hasLinkageDateLiterals,
+  hasScopedDateLiterals,
   pruneDataSourceReferences,
   pruneFormLinkageForRootBucket,
   pruneScopedReferences,
   renameKeyReferences,
   renameLinkageKeyReferences,
-  renameVariableReferences
+  renameVariableReferences,
+  scrubDateLiterals,
+  scrubLinkageDateLiterals
 } from "../engine/schema/reconcile";
 import { removeTabBody } from "../engine/schema/removal-impact";
 import { isValidVariableName } from "../engine/schema/validate";
@@ -246,6 +253,15 @@ export interface FormEditorStoreState {
    * keys), so the editor never leaves them dangling.
    */
   setFieldKey: (args: { fieldId: string; key: string }) => void;
+  /**
+   * Switch a `date` or `daterange` field's calendar granularity (`year` /
+   * `quarter` / `month` / `day`, with `"day"` normalized to omitted), sync its
+   * same-key, same-type twin on the other device presentation, and scrub
+   * incompatible linkage literals in its value scope (and in the PC root
+   * `schema.linkage` when affected) — all in one undo step. A no-op when the
+   * field is missing, not a date/daterange field, or nothing changes.
+   */
+  setDateGranularity: (args: { fieldId: string; granularity: DateGranularity }) => void;
   /**
    * Apply a pure updater to any node (field or container) by id.
    */
@@ -920,6 +936,64 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({ schema: nextSchema });
       },
 
+      setDateGranularity: ({ fieldId, granularity }) => {
+        const { device, schema } = get();
+        const layer = currentLayer(schema, device);
+        const field = findField(layer, fieldId);
+
+        if (!field || !isDateGranularityField(field)) {
+          return;
+        }
+
+        const scope = findScope(layer, fieldId) ?? [];
+        const target: DateGranularityScrubTarget = {
+          key: field.key,
+          fieldType: field.type,
+          nextGranularity: granularity
+        };
+
+        let nextSchema = schema;
+        const nextLayer = applyGranularityToLayer(layer, scope, fieldId, target);
+
+        if (nextLayer !== layer) {
+          nextSchema = withPresentation(nextSchema, device, nextLayer);
+        }
+
+        // Sync the cross-device twin (same key, same scope, same date/daterange
+        // type) so PC and mobile never drift on granularity, and scrub its
+        // scope's incompatible linkage literals in the same undo step.
+        const {
+          otherDevice,
+          otherLayer,
+          twin
+        } = findDateGranularityTwin(nextSchema, device, scope, field);
+
+        if (otherLayer !== undefined && twin !== undefined) {
+          const nextOtherLayer = applyGranularityToLayer(otherLayer, scope, twin.id, target);
+
+          if (nextOtherLayer !== otherLayer) {
+            nextSchema = withPresentation(nextSchema, otherDevice, nextOtherLayer);
+          }
+        }
+
+        const pcRootAffected = scope.length === 0 && (device === "pc" || twin !== undefined);
+
+        if (pcRootAffected && nextSchema.linkage !== undefined) {
+          const linkage = scrubLinkageDateLiterals(nextSchema.linkage, target);
+
+          if (linkage !== nextSchema.linkage) {
+            nextSchema = { ...nextSchema, linkage };
+          }
+        }
+
+        if (nextSchema === schema) {
+          return;
+        }
+
+        checkpoint();
+        set({ schema: nextSchema });
+      },
+
       updateBlock: ({ nodeId, updater }, options) => {
         const { device, schema } = get();
         const layer = currentLayer(schema, device);
@@ -1136,19 +1210,98 @@ function collectScopeKeysAcrossDevices(schema: FormSchema, scope: ScopePath): Se
 
 /**
  * The field bound to `key` at exactly `scope` in `layer` — the other device's
- * counterpart of a field being renamed, when it carries one.
+ * counterpart of a field being renamed or having its granularity switched, when
+ * it carries one.
  */
 function findFieldByKeyInScope(layer: PresentationLayer, scope: ScopePath, key: string): FormField | undefined {
-  const scopeId = scope.join("/");
   let found: FormField | undefined;
 
   walkFields(layer, (field, fieldScope) => {
-    if (found === undefined && fieldScope.join("/") === scopeId && isKeyedField(field) && field.key === key) {
+    if (found === undefined && scopeEquals(fieldScope, scope) && isKeyedField(field) && field.key === key) {
       found = field;
     }
   });
 
   return found;
+}
+
+function applyGranularityToLayer(
+  layer: PresentationLayer,
+  scope: ScopePath,
+  fieldId: string,
+  target: DateGranularityScrubTarget
+): PresentationLayer {
+  const updated = editFieldOp(
+    layer,
+    fieldId,
+    current => isDateGranularityField(current) ? withFieldGranularity(current, target.nextGranularity) : current
+  );
+
+  return scrubDateLiterals(updated, scope, fieldId, target);
+}
+
+/**
+ * Look up the cross-device twin of a `date` or `daterange` field — same key,
+ * same value scope, and same field type on the opposite presentation — reusing
+ * {@link findFieldByKeyInScope}.
+ */
+function findDateGranularityTwin(
+  schema: FormSchema,
+  device: PresentationDevice,
+  scope: ScopePath,
+  field: DateGranularityField
+): {
+  otherDevice: PresentationDevice;
+  otherLayer: PresentationLayer | undefined;
+  twin: DateGranularityField | undefined;
+} {
+  const otherDevice: PresentationDevice = device === "pc" ? "mobile" : "pc";
+  const otherLayer = resolvePresentation(schema, otherDevice);
+  const candidate = otherLayer === undefined ? undefined : findFieldByKeyInScope(otherLayer, scope, field.key);
+  const twin = candidate !== undefined && candidate.type === field.type ? candidate : undefined;
+
+  return {
+    otherDevice,
+    otherLayer,
+    twin
+  };
+}
+
+/**
+ * Report whether switching `fieldId` on `device` to another granularity would
+ * discard any authored linkage literal anywhere in `schema` — across the active
+ * presentation, its cross-device twin's presentation, and the PC root
+ * `schema.linkage` when affected. Shares {@link findDateGranularityTwin} with
+ * {@link FormEditorStoreState.setDateGranularity} so the confirmation prompt
+ * and the mutation always cover the exact same scope and layers.
+ */
+export function hasDateGranularityLiterals(
+  schema: FormSchema,
+  device: EditorDeviceMode,
+  fieldId: string
+): boolean {
+  const layer = resolvePresentation(schema, device);
+  const field = layer === undefined ? undefined : findField(layer, fieldId);
+
+  if (layer === undefined || field === undefined || !isDateGranularityField(field)) {
+    return false;
+  }
+
+  const scope = findScope(layer, fieldId) ?? [];
+
+  if (hasScopedDateLiterals(layer, scope, field.id, field.key)) {
+    return true;
+  }
+
+  const { otherLayer, twin } = findDateGranularityTwin(schema, device, scope, field);
+
+  if (otherLayer !== undefined && twin !== undefined && hasScopedDateLiterals(otherLayer, scope, twin.id, field.key)) {
+    return true;
+  }
+
+  const pcRootAffected = scope.length === 0 && (device === "pc" || twin !== undefined);
+
+  return pcRootAffected && schema.linkage !== undefined && hasLinkageDateLiterals(schema.linkage, field.key);
 }
 
 export function selectFieldCount(state: FormEditorStoreState): number {

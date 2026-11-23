@@ -1,5 +1,6 @@
 import type {
   Block,
+  DateGranularity,
   FieldLinkage,
   FieldLinkageAction,
   FieldLinkageRule,
@@ -14,30 +15,34 @@ import type { ScopePath } from "./walk";
 
 import { assertNever } from "../assert-never";
 import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
+import { isDateLiteralCompatible, isEmptyDateLiteral } from "./date-granularity";
 import { bodyScopeKey, mapPreservingIdentity } from "./nodes";
 import { rewriteContainerBodies } from "./rewrite";
-import { isContainerNode, isLeafField, isRootScope, scopeEquals } from "./walk";
+import { isContainerNode, isLeafField, isRootScope, scopeEquals, walkNodes } from "./walk";
 
 /**
- * Reference-consistency reconciliation. Structural edits (remove / rename) and
- * declaration edits (variables / data sources) can leave the rest of the schema
- * pointing at things that no longer exist; the functions here rewrite or prune
- * those references so the editor never emits a schema with dangling links.
+ * Reference-consistency reconciliation. Structural edits (remove / rename),
+ * declaration edits (variables / data sources), and date-granularity switches
+ * can leave the rest of the schema pointing at things that no longer exist or
+ * literals that no longer match the target format; the functions here rewrite,
+ * prune, or scrub those references so the editor never emits a broken schema.
  *
  * Scope model:
  *
  * - **Keys are per value scope.** A node's linkage resolves `leaf.sourceKey` /
  * `set_field.targetKey` against the node's *own* enclosing scope, so the
- * key-level functions take the affected {@link ScopePath} and rewrite only
- * nodes sitting in exactly that scope — a same-named key in an outer scope or
- * another subform template is a different binding and stays untouched.
+ * key-level and date-granularity functions take the affected {@link ScopePath}
+ * and rewrite only nodes sitting in exactly that scope — a same-named key in an
+ * outer scope or another subform template is a different binding and stays
+ * untouched.
  * - **Variables and data sources are form-global.** Their functions rewrite
  * every node across **both** presentations plus the form-level
  * `schema.linkage`, with no scope filter.
  * - **The form-level `schema.linkage` resolves against the PC root scope.**
  * The layer-level key functions cannot see it, so the store reconciles it via
- * the exported linkage-level helpers whenever a *pc root-scope* key is renamed
- * or removed; mobile-layer key changes never touch it.
+ * the exported linkage-level helpers whenever a *pc root-scope* key is renamed,
+ * removed, or switched to a new date granularity; mobile-layer-only changes
+ * never touch it.
  *
  * Identity contract (shared with `mutate.ts` / `edit-ops.ts`): a call that
  * changes nothing returns the **input reference unchanged**, and a change
@@ -545,4 +550,250 @@ export function pruneDataSourceReferences(schema: FormSchema, dataSourceId: stri
     })),
     linkage => pruneLinkageDataSourceReferences(linkage, dataSourceId)
   );
+}
+
+/* -------------------------------------------------------- date granularity */
+
+/**
+ * Target of a date-granularity literal scrub: a `date` or `daterange` field
+ * identified by its `key` and `fieldType`, switching to `nextGranularity`.
+ */
+export interface DateGranularityScrubTarget {
+  key: string;
+  fieldType: "date" | "daterange";
+  nextGranularity: DateGranularity;
+}
+
+type DateConditionLeaf = Extract<LinkageCondition, { kind: "leaf" }>;
+
+type DateLiteralAction = Extract<FieldLinkageAction, { type: "assign" | "set_field" }> & {
+  value: { kind: "literal"; value: unknown };
+};
+
+function isTargetDateConditionLeaf(condition: DateConditionLeaf, key: string): boolean {
+  return leafSourceFormKey(condition.sourceKey) === key
+    && condition.operator !== "empty"
+    && condition.operator !== "notEmpty";
+}
+
+function isTargetDateLiteralAction(
+  action: FieldLinkageAction,
+  key: string,
+  includeOwnAssign: boolean
+): action is DateLiteralAction {
+  if (action.type === "assign") {
+    return includeOwnAssign && action.value.kind === "literal";
+  }
+
+  return action.type === "set_field" && action.targetKey === key && action.value.kind === "literal";
+}
+
+function conditionHasDateLiterals(condition: LinkageCondition, key: string): boolean {
+  switch (condition.kind) {
+    case "leaf": {
+      return isTargetDateConditionLeaf(condition, key) && !isEmptyDateLiteral(condition.value);
+    }
+
+    case "group": {
+      return condition.children.some(child => conditionHasDateLiterals(child, key));
+    }
+
+    case "expression": {
+      return false;
+    }
+
+    default: {
+      return assertNever(condition);
+    }
+  }
+}
+
+/**
+ * Report whether one linkage payload carries any non-empty literal targeting
+ * `key` (value-bearing leaf conditions on `key`, `set_field` literal actions
+ * targeting `key`, and — when `includeOwnAssign` is set — `assign` literal
+ * actions). Shares its matching predicates with {@link scrubLinkageDateLiterals}
+ * so the confirmation gate and the scrub stay in lockstep.
+ */
+export function hasLinkageDateLiterals(
+  linkage: FieldLinkage,
+  key: string,
+  options?: { includeOwnAssign?: boolean }
+): boolean {
+  if (!linkage.rules) {
+    return false;
+  }
+
+  const includeOwnAssign = options?.includeOwnAssign === true;
+
+  return linkage.rules.some(rule => {
+    if (rule.trigger.kind === "condition" && conditionHasDateLiterals(rule.trigger.condition, key)) {
+      return true;
+    }
+
+    return rule.actions.some(
+      action => isTargetDateLiteralAction(action, key, includeOwnAssign) && !isEmptyDateLiteral(action.value.value)
+    );
+  });
+}
+
+/**
+ * Report whether any node in `scope` of `layer` carries an authored linkage
+ * literal targeting `key` (including own `assign` literals on `targetFieldId`).
+ */
+export function hasScopedDateLiterals(
+  layer: PresentationLayer,
+  scope: ScopePath,
+  targetFieldId: string,
+  key: string
+): boolean {
+  let found = false;
+
+  walkNodes(layer, (node, nodeScope) => {
+    if (found || node.linkage === undefined || !scopeEquals(nodeScope, scope)) {
+      return;
+    }
+
+    if (hasLinkageDateLiterals(node.linkage, key, { includeOwnAssign: node.id === targetFieldId })) {
+      found = true;
+    }
+  });
+
+  return found;
+}
+
+function scrubConditionDateLiterals(
+  condition: LinkageCondition,
+  target: DateGranularityScrubTarget
+): LinkageCondition {
+  switch (condition.kind) {
+    case "leaf": {
+      if (
+        !isTargetDateConditionLeaf(condition, target.key)
+        || isDateLiteralCompatible(target.fieldType, condition.value, target.nextGranularity, condition.operator)
+      ) {
+        return condition;
+      }
+
+      return { ...condition, value: "" };
+    }
+
+    case "group": {
+      const children = mapPreservingIdentity(
+        condition.children,
+        child => scrubConditionDateLiterals(child, target)
+      );
+
+      return children === condition.children ? condition : { ...condition, children };
+    }
+
+    case "expression": {
+      return condition;
+    }
+
+    default: {
+      return assertNever(condition);
+    }
+  }
+}
+
+function scrubActionDateLiterals(
+  action: FieldLinkageAction,
+  target: DateGranularityScrubTarget,
+  includeOwnAssign: boolean
+): FieldLinkageAction {
+  if (
+    isTargetDateLiteralAction(action, target.key, includeOwnAssign)
+    && !isDateLiteralCompatible(target.fieldType, action.value.value, target.nextGranularity)
+  ) {
+    return { ...action, value: { kind: "literal", value: "" } };
+  }
+
+  return action;
+}
+
+function scrubRuleDateLiterals(
+  rule: FieldLinkageRule,
+  target: DateGranularityScrubTarget,
+  includeOwnAssign: boolean
+): FieldLinkageRule {
+  let { trigger } = rule;
+
+  if (trigger.kind === "condition") {
+    const condition = scrubConditionDateLiterals(trigger.condition, target);
+
+    if (condition !== trigger.condition) {
+      trigger = { ...trigger, condition };
+    }
+  }
+
+  const actions = mapPreservingIdentity(
+    rule.actions,
+    action => scrubActionDateLiterals(action, target, includeOwnAssign)
+  );
+
+  return trigger === rule.trigger && actions === rule.actions
+    ? rule
+    : {
+        ...rule,
+        trigger,
+        actions
+      };
+}
+
+/**
+ * Clear every literal inside one linkage payload that is incompatible with
+ * `target.nextGranularity` — condition leaves on `target.key`, `set_field`
+ * literal actions targeting `target.key`, and (when `includeOwnAssign` is set)
+ * own `assign` literal actions. Scope-blind by design, mirroring
+ * {@link renameLinkageKeyReferences} and {@link pruneLinkageKeyReferences}: the
+ * store applies this directly to the PC root `schema.linkage` when affected.
+ *
+ * Identity contract: no incompatible literal ⇒ the input linkage reference is
+ * returned.
+ */
+export function scrubLinkageDateLiterals(
+  linkage: FieldLinkage,
+  target: DateGranularityScrubTarget,
+  options?: { includeOwnAssign?: boolean }
+): FieldLinkage {
+  if (!linkage.rules) {
+    return linkage;
+  }
+
+  const includeOwnAssign = options?.includeOwnAssign === true;
+  const rules = mapPreservingIdentity(
+    linkage.rules,
+    rule => scrubRuleDateLiterals(rule, target, includeOwnAssign)
+  );
+
+  return rules === linkage.rules ? linkage : { ...linkage, rules };
+}
+
+/**
+ * Clear every linkage literal incompatible with `target.nextGranularity` across
+ * the nodes of `layer` whose linkage resolves in exactly `scope` (including own
+ * `assign` literals on `targetFieldId`). Subform templates open their own
+ * scope, so a same-named key in another scope is left untouched.
+ *
+ * Identity contract: no incompatible literal in that scope ⇒ the input layer
+ * reference is returned.
+ */
+export function scrubDateLiterals(
+  layer: PresentationLayer,
+  scope: ScopePath,
+  targetFieldId: string,
+  target: DateGranularityScrubTarget
+): PresentationLayer {
+  return reconcileLayer(layer, (node, nodeScope) => {
+    if (node.linkage === undefined || !scopeEquals(nodeScope, scope)) {
+      return node;
+    }
+
+    const linkage = scrubLinkageDateLiterals(node.linkage, target, {
+      includeOwnAssign: node.id === targetFieldId
+    });
+
+    return linkage === node.linkage ? node : { ...node, linkage };
+  });
 }

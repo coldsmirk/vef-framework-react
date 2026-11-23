@@ -1,212 +1,140 @@
-import type { DateField, FormSchema } from "../../types";
-
-import { describe, expect, it } from "vitest";
+import type { DateField, DateRangeField, DatetimeField, TextfieldField } from "../../types";
 
 import {
-  applyDateGranularityToField,
-  hasAuthoredDateLiteralsInSchema,
-  reconcileDateGranularityInSchema
+  antdPickerForGranularity,
+  isDateGranularityField,
+  isDateLiteralCompatible,
+  isEmptyDateLiteral,
+  withFieldGranularity
 } from "./date-granularity";
 
-function makeSchemaWithDateLiterals(): FormSchema {
-  return {
-    id: "Form_1",
-    version: 2,
-    linkage: {
-      rules: [
-        {
-          id: "form-r1",
-          trigger: { kind: "load" },
-          actions: [
-            {
-              type: "set_field",
-              targetKey: "period",
-              value: { kind: "literal", value: "2026-04-15" }
-            }
-          ]
-        }
-      ]
-    },
-    presentations: {
-      pc: {
-        children: [
-          {
-            id: "D1",
-            type: "date",
-            key: "period",
-            label: "期间",
-            linkage: {
-              rules: [
-                {
-                  id: "r-assign",
-                  trigger: {
-                    kind: "condition",
-                    condition: {
-                      kind: "group",
-                      logic: "all",
-                      children: [
-                        {
-                          kind: "leaf",
-                          sourceKey: "period",
-                          operator: "eq",
-                          value: "2026-04-15"
-                        }
-                      ]
-                    }
-                  },
-                  actions: [
-                    {
-                      type: "assign",
-                      value: { kind: "literal", value: "2026-04-01" }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            id: "T1",
-            type: "textfield",
-            key: "note",
-            label: "备注",
-            linkage: {
-              rules: [
-                {
-                  id: "r-sibling",
-                  trigger: {
-                    kind: "condition",
-                    condition: {
-                      kind: "group",
-                      logic: "all",
-                      children: [
-                        {
-                          kind: "leaf",
-                          sourceKey: "period",
-                          operator: "gte",
-                          value: "2026-01-01"
-                        },
-                        {
-                          kind: "leaf",
-                          sourceKey: "period",
-                          operator: "notEmpty"
-                        }
-                      ]
-                    }
-                  },
-                  actions: [
-                    { type: "show" },
-                    {
-                      type: "set_field",
-                      targetKey: "period",
-                      value: { kind: "literal", value: "2026-05-01" }
-                    },
-                    {
-                      type: "set_field",
-                      targetKey: "period",
-                      value: { kind: "expression", source: "'2026-05'" }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        ]
-      },
-      mobile: {
-        children: [
-          {
-            id: "MD1",
-            type: "date",
-            key: "period",
-            label: "期间"
-          }
-        ]
-      }
-    }
-  };
-}
-
-describe("date-granularity reconciliation", () => {
-  it("detects authored linkage literals targeting the date field across the scope", () => {
-    const schema = makeSchemaWithDateLiterals();
-    const field = schema.presentations.pc.children[0] as DateField;
-
-    expect(hasAuthoredDateLiteralsInSchema(schema, field)).toBe(true);
-
-    const clean: FormSchema = {
-      id: "Form_clean",
-      version: 2,
-      presentations: {
-        pc: {
-          children: [
-            {
-              id: "D1",
-              type: "date",
-              key: "period",
-              label: "期间"
-            }
-          ]
-        }
-      }
-    };
-
-    expect(hasAuthoredDateLiteralsInSchema(clean, clean.presentations.pc.children[0] as DateField)).toBe(false);
-  });
-
-  it("switches granularity, syncs the cross-device twin, and scrubs incompatible linkage literals", () => {
-    const schema = makeSchemaWithDateLiterals();
-    const next = reconcileDateGranularityInSchema(schema, "D1", "month");
-
-    const pcDate = next.presentations.pc.children[0] as DateField;
-    const pcNote = next.presentations.pc.children[1];
-    const mobileDate = next.presentations.mobile?.children[0] as DateField;
-
-    expect(pcDate.granularity).toBe("month");
-    expect(mobileDate.granularity).toBe("month");
-
-    // Own assign literal and self condition literal scrubbed.
-    const ownRule = pcDate.linkage?.rules?.[0];
-
-    expect(ownRule?.actions[0]).toEqual({ type: "assign", value: { kind: "literal", value: "" } });
-    expect(ownRule?.trigger.kind === "condition" && ownRule.trigger.condition.kind === "group"
-      ? ownRule.trigger.condition.children[0]
-      : undefined).toMatchObject({ sourceKey: "period", value: "" });
-
-    // Sibling condition literal and set_field literal scrubbed; expression action kept.
-    const siblingRule = pcNote?.linkage?.rules?.[0];
-
-    expect(siblingRule?.trigger.kind === "condition" && siblingRule.trigger.condition.kind === "group"
-      ? siblingRule.trigger.condition.children[0]
-      : undefined).toMatchObject({ sourceKey: "period", value: "" });
-    expect(siblingRule?.actions[1]).toEqual({
-      type: "set_field",
-      targetKey: "period",
-      value: { kind: "literal", value: "" }
-    });
-    expect(siblingRule?.actions[2]).toEqual({
-      type: "set_field",
-      targetKey: "period",
-      value: { kind: "expression", source: "'2026-05'" }
+describe("date-granularity helpers", () => {
+  describe("antdPickerForGranularity", () => {
+    it("maps omitted and day granularity to date", () => {
+      expect(antdPickerForGranularity(undefined)).toBe("date");
+      expect(antdPickerForGranularity("day")).toBe("date");
     });
 
-    // Root form-level linkage literal scrubbed.
-    expect(next.linkage?.rules?.[0]?.actions[0]).toEqual({
-      type: "set_field",
-      targetKey: "period",
-      value: { kind: "literal", value: "" }
+    it("maps year, quarter, and month to their matching antd pickers", () => {
+      expect(antdPickerForGranularity("year")).toBe("year");
+      expect(antdPickerForGranularity("quarter")).toBe("quarter");
+      expect(antdPickerForGranularity("month")).toBe("month");
     });
   });
 
-  it("drops the granularity key when switching back to default day", () => {
-    const field: DateField = {
-      id: "D1",
-      type: "date",
-      key: "period",
-      granularity: "quarter"
-    };
+  describe("isDateGranularityField", () => {
+    it("accepts date and daterange fields", () => {
+      const date: DateField = {
+        id: "d1",
+        type: "date",
+        key: "period"
+      };
+      const range: DateRangeField = {
+        id: "r1",
+        type: "daterange",
+        key: "span"
+      };
 
-    const updated = applyDateGranularityToField(field, "day");
+      expect(isDateGranularityField(date)).toBe(true);
+      expect(isDateGranularityField(range)).toBe(true);
+    });
 
-    expect("granularity" in updated).toBe(false);
+    it("rejects datetime and non-date fields", () => {
+      const datetime: DatetimeField = {
+        id: "dt1",
+        type: "datetime",
+        key: "at"
+      };
+      const text: TextfieldField = {
+        id: "t1",
+        type: "textfield",
+        key: "note"
+      };
+
+      expect(isDateGranularityField(datetime)).toBe(false);
+      expect(isDateGranularityField(text)).toBe(false);
+    });
+  });
+
+  describe("isEmptyDateLiteral", () => {
+    it("treats nullish, empty string, and empty array as empty", () => {
+      expect(isEmptyDateLiteral(undefined)).toBe(true);
+      expect(isEmptyDateLiteral(null)).toBe(true);
+      expect(isEmptyDateLiteral("")).toBe(true);
+      expect(isEmptyDateLiteral([])).toBe(true);
+    });
+
+    it("treats non-empty strings and populated arrays as non-empty", () => {
+      expect(isEmptyDateLiteral("2026-04")).toBe(false);
+      expect(isEmptyDateLiteral(["2026-01", "2026-04"])).toBe(false);
+    });
+  });
+
+  describe("isDateLiteralCompatible", () => {
+    it("always accepts empty values", () => {
+      expect(isDateLiteralCompatible("date", "", "month")).toBe(true);
+      expect(isDateLiteralCompatible("daterange", [], "quarter")).toBe(true);
+    });
+
+    it("validates single date strings strictly against the target granularity", () => {
+      expect(isDateLiteralCompatible("date", "2026", "year")).toBe(true);
+      expect(isDateLiteralCompatible("date", "2026-Q2", "quarter")).toBe(true);
+      expect(isDateLiteralCompatible("date", "2026-04", "month")).toBe(true);
+      expect(isDateLiteralCompatible("date", "2026-04-15", "day")).toBe(true);
+      expect(isDateLiteralCompatible("date", "2026-04-15", "month")).toBe(false);
+      expect(isDateLiteralCompatible("date", "2026-04", "quarter")).toBe(false);
+    });
+
+    it("validates daterange pairs and allows single-date contains operands", () => {
+      expect(isDateLiteralCompatible("daterange", ["2026-Q1", "2026-Q4"], "quarter")).toBe(true);
+      expect(isDateLiteralCompatible("daterange", ["2026-01-01", "2026-12-31"], "quarter")).toBe(false);
+      expect(isDateLiteralCompatible("daterange", "2026-Q2", "quarter", "contains")).toBe(true);
+      expect(isDateLiteralCompatible("daterange", "2026-04-15", "quarter", "contains")).toBe(false);
+    });
+  });
+
+  describe("withFieldGranularity", () => {
+    it("sets non-default granularity on a date field", () => {
+      const field: DateField = {
+        id: "D1",
+        type: "date",
+        key: "period"
+      };
+
+      const updated = withFieldGranularity(field, "month");
+
+      expect(updated.granularity).toBe("month");
+      expect(updated).not.toBe(field);
+    });
+
+    it("drops the granularity key when switching back to default day", () => {
+      const field: DateField = {
+        id: "D1",
+        type: "date",
+        key: "period",
+        granularity: "quarter"
+      };
+
+      const updated = withFieldGranularity(field, "day");
+
+      expect("granularity" in updated).toBe(false);
+    });
+
+    it("returns the input reference unchanged when the normalized granularity already matches", () => {
+      const defaultField: DateField = {
+        id: "D1",
+        type: "date",
+        key: "period"
+      };
+      const monthField: DateField = {
+        id: "D2",
+        type: "date",
+        key: "period",
+        granularity: "month"
+      };
+
+      expect(withFieldGranularity(defaultField, "day")).toBe(defaultField);
+      expect(withFieldGranularity(monthField, "month")).toBe(monthField);
+    });
   });
 });

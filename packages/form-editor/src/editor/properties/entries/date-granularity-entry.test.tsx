@@ -2,18 +2,23 @@ import type { DateField, FormSchema } from "../../../types";
 
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
 
 import { dateGranularityEntry } from "../../../components/field-entries";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../../store/form-store";
 import { DateGranularityEntry } from "./date-granularity-entry";
+
+interface HarnessControls {
+  getSchema: () => FormSchema;
+  getPastLength: () => number;
+  undo: () => void;
+}
 
 function TestHarness({
   initialSchema,
   onReady
 }: {
   initialSchema: FormSchema;
-  onReady?: (getSchema: () => FormSchema, undo: () => void) => void;
+  onReady?: (controls: HarnessControls) => void;
 }) {
   return (
     <FormEditorStoreProvider initialState={{ schema: initialSchema }}>
@@ -22,15 +27,16 @@ function TestHarness({
   );
 }
 
-function HarnessInner({ onReady }: { onReady?: (getSchema: () => FormSchema, undo: () => void) => void }) {
+function HarnessInner({ onReady }: { onReady?: (controls: HarnessControls) => void }) {
   const storeApi = useFormEditorStoreApi();
   const schema = useFormEditorStore(state => state.schema);
   const field = schema.presentations.pc.children[0] as DateField | undefined;
 
-  onReady?.(
-    () => storeApi.getState().schema,
-    () => storeApi.getState().undo()
-  );
+  onReady?.({
+    getSchema: () => storeApi.getState().schema,
+    getPastLength: () => storeApi.getState().past.length,
+    undo: () => storeApi.getState().undo()
+  });
 
   if (!field) {
     return null;
@@ -66,13 +72,13 @@ describe("DateGranularityEntry", () => {
       }
     };
 
-    let getSchema: (() => FormSchema) | undefined;
+    let controls: HarnessControls | undefined;
 
     render(
       <TestHarness
         initialSchema={schema}
-        onReady={readSchema => {
-          getSchema = readSchema;
+        onReady={next => {
+          controls = next;
         }}
       />
     );
@@ -81,14 +87,30 @@ describe("DateGranularityEntry", () => {
     await user.click(await screen.findByText("季度 (YYYY-Qn)"));
 
     expect(screen.queryByText("切换精度将清空该字段关联的联动字面量值")).not.toBeInTheDocument();
-    expect((getSchema?.().presentations.pc.children[0] as DateField).granularity).toBe("quarter");
+    expect((controls?.getSchema().presentations.pc.children[0] as DateField).granularity).toBe("quarter");
+    expect(controls?.getPastLength()).toBe(1);
   });
 
-  it("asks confirmation before discarding authored linkage literals", async () => {
+  it("asks confirmation before discarding authored linkage literals, respects cancel, and supports one-step undo", async () => {
     const user = userEvent.setup();
     const schema: FormSchema = {
       id: "Form_1",
       version: 2,
+      linkage: {
+        rules: [
+          {
+            id: "form-r1",
+            trigger: { kind: "load" },
+            actions: [
+              {
+                type: "set_field",
+                targetKey: "period",
+                value: { kind: "literal", value: "2026-04-15" }
+              }
+            ]
+          }
+        ]
+      },
       presentations: {
         pc: {
           children: [
@@ -113,19 +135,27 @@ describe("DateGranularityEntry", () => {
               }
             }
           ]
+        },
+        mobile: {
+          children: [
+            {
+              id: "MD1",
+              type: "date",
+              key: "period",
+              label: "期间"
+            }
+          ]
         }
       }
     };
 
-    let getSchema: (() => FormSchema) | undefined;
-    let undo: (() => void) | undefined;
+    let controls: HarnessControls | undefined;
 
     render(
       <TestHarness
         initialSchema={schema}
-        onReady={(readSchema, triggerUndo) => {
-          getSchema = readSchema;
-          undo = triggerUndo;
+        onReady={next => {
+          controls = next;
         }}
       />
     );
@@ -135,32 +165,36 @@ describe("DateGranularityEntry", () => {
 
     expect(await screen.findByText("切换精度将清空该字段关联的联动字面量值")).toBeInTheDocument();
 
-    // Before confirming, the granularity and linkage literal remain untouched.
-    const pendingField = getSchema?.().presentations.pc.children[0] as DateField;
-    expect(pendingField.granularity).toBeUndefined();
-    expect(pendingField.linkage?.rules?.[0]?.actions[0]).toEqual({
-      type: "assign",
-      value: { kind: "literal", value: "2026-04-15" }
-    });
+    // Canceling leaves schema and undo stack untouched.
+    await user.click(screen.getByRole("button", { name: "取 消" }));
+    expect(controls?.getSchema()).toBe(schema);
+    expect(controls?.getPastLength()).toBe(0);
 
-    await user.click(screen.getByRole("button", { name: "切 换" }));
+    // Re-request and confirm.
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText("月 (YYYY-MM)"));
+    await user.click(await screen.findByRole("button", { name: "切 换" }));
 
-    const updatedField = getSchema?.().presentations.pc.children[0] as DateField;
+    const updated = controls?.getSchema();
+    const updatedField = updated?.presentations.pc.children[0] as DateField;
+    const updatedTwin = updated?.presentations.mobile?.children[0] as DateField;
     expect(updatedField.granularity).toBe("month");
+    expect(updatedTwin.granularity).toBe("month");
     expect(updatedField.linkage?.rules?.[0]?.actions[0]).toEqual({
       type: "assign",
       value: { kind: "literal", value: "" }
     });
+    expect(updated?.linkage?.rules?.[0]?.actions[0]).toEqual({
+      type: "set_field",
+      targetKey: "period",
+      value: { kind: "literal", value: "" }
+    });
+    expect(controls?.getPastLength()).toBe(1);
 
-    // Undoing restores both the previous granularity and the linkage literal in one step.
+    // Undoing restores field, twin, own literal, and root form linkage in one step.
     act(() => {
-      undo?.();
+      controls?.undo();
     });
-    const restoredField = getSchema?.().presentations.pc.children[0] as DateField;
-    expect(restoredField.granularity).toBeUndefined();
-    expect(restoredField.linkage?.rules?.[0]?.actions[0]).toEqual({
-      type: "assign",
-      value: { kind: "literal", value: "2026-04-15" }
-    });
+    expect(controls?.getSchema()).toBe(schema);
   });
 });

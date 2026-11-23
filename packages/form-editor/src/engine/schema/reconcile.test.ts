@@ -1,5 +1,7 @@
 import type {
   Block,
+  DateField,
+  DateRangeField,
   FieldLinkage,
   FieldLinkageRule,
   FormSchema,
@@ -10,12 +12,16 @@ import type {
 } from "../../types";
 
 import {
+  hasLinkageDateLiterals,
+  hasScopedDateLiterals,
   pruneDataSourceReferences,
   pruneKeyReferences,
   pruneLinkageKeyReferences,
   renameKeyReferences,
   renameLinkageKeyReferences,
-  renameVariableReferences
+  renameVariableReferences,
+  scrubDateLiterals,
+  scrubLinkageDateLiterals
 } from "./reconcile";
 import { findField, findNode } from "./walk";
 
@@ -90,6 +96,24 @@ function selectWithRef(id: string, key: string, dataSourceId: string): SelectFie
     type: "select",
     key,
     dataSource: { kind: "ref", dataSourceId }
+  };
+}
+
+function dateFieldOf(id: string, key: string, extra: Partial<DateField> = {}): DateField {
+  return {
+    id,
+    type: "date",
+    key,
+    ...extra
+  };
+}
+
+function dateRangeFieldOf(id: string, key: string, extra: Partial<DateRangeField> = {}): DateRangeField {
+  return {
+    id,
+    type: "daterange",
+    key,
+    ...extra
   };
 }
 
@@ -595,6 +619,377 @@ describe("reconcile", () => {
       const schema = schemaOf(layerOf(tf("f1", "a")));
 
       expect(pruneDataSourceReferences(schema, "ds1")).toBe(schema);
+    });
+  });
+
+  describe("date granularity literal scrubbing", () => {
+    it("scrubs own assign, self condition, sibling condition, and set_field literals while preserving expressions and non-value operators", () => {
+      const dateField = dateFieldOf("D1", "period", {
+        linkage: {
+          rules: [
+            {
+              id: "r-own",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: [
+                    {
+                      kind: "leaf",
+                      sourceKey: "period",
+                      operator: "eq",
+                      value: "2026-04-15"
+                    }
+                  ]
+                }
+              },
+              actions: [
+                {
+                  type: "assign",
+                  value: { kind: "literal", value: "2026-04-01" }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const sibling = tf("T1", "note", {
+        linkage: {
+          rules: [
+            {
+              id: "r-sibling",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: [
+                    {
+                      kind: "leaf",
+                      sourceKey: "$form.period",
+                      operator: "gte",
+                      value: "2026-01-01"
+                    },
+                    {
+                      kind: "leaf",
+                      sourceKey: "period",
+                      operator: "notEmpty"
+                    }
+                  ]
+                }
+              },
+              actions: [
+                {
+                  type: "assign",
+                  value: { kind: "literal", value: "keep-sibling-assign" }
+                },
+                {
+                  type: "set_field",
+                  targetKey: "period",
+                  value: { kind: "literal", value: "2026-05-01" }
+                },
+                {
+                  type: "set_field",
+                  targetKey: "period",
+                  value: { kind: "expression", source: "'2026-05'" }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const untouched = tf("T2", "other");
+      const layer = layerOf(dateField, sibling, untouched);
+
+      const next = scrubDateLiterals(layer, [], "D1", {
+        key: "period",
+        fieldType: "date",
+        nextGranularity: "month"
+      });
+
+      const ownRule = linkageOf(findNode(next, "D1"))?.rules?.[0];
+      expect(ownRule?.actions[0]).toEqual({ type: "assign", value: { kind: "literal", value: "" } });
+      expect(ownRule?.trigger).toMatchObject({
+        condition: {
+          children: [{ sourceKey: "period", value: "" }]
+        }
+      });
+
+      const siblingRule = linkageOf(findNode(next, "T1"))?.rules?.[0];
+      expect(siblingRule?.trigger).toMatchObject({
+        condition: {
+          children: [
+            { sourceKey: "$form.period", value: "" },
+            { sourceKey: "period", operator: "notEmpty" }
+          ]
+        }
+      });
+      // Sibling's own assign targets `note`, not `period`, so it stays intact.
+      expect(siblingRule?.actions[0]).toEqual({
+        type: "assign",
+        value: { kind: "literal", value: "keep-sibling-assign" }
+      });
+      expect(siblingRule?.actions[1]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "literal", value: "" }
+      });
+      expect(siblingRule?.actions[2]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "expression", source: "'2026-05'" }
+      });
+      expect(findNode(next, "T2")).toBe(untouched);
+    });
+
+    it("leaves context sourceKeys and already-compatible literals untouched and preserves identity", () => {
+      const dateField = dateFieldOf("D1", "period", {
+        linkage: {
+          rules: [
+            {
+              id: "r1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: [
+                    {
+                      kind: "leaf",
+                      sourceKey: "$applicant.period",
+                      operator: "eq",
+                      value: "2026-04-15"
+                    },
+                    {
+                      kind: "leaf",
+                      sourceKey: "period",
+                      operator: "eq",
+                      value: "2026-04"
+                    }
+                  ]
+                }
+              },
+              actions: [
+                {
+                  type: "assign",
+                  value: { kind: "literal", value: "2026-05" }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const layer = layerOf(dateField);
+
+      expect(scrubDateLiterals(layer, [], "D1", {
+        key: "period",
+        fieldType: "date",
+        nextGranularity: "month"
+      })).toBe(layer);
+    });
+
+    it("isolates scrubbing to the target scope without touching same-named keys in other scopes", () => {
+      const outer = tf("T-out", "out", {
+        linkage: {
+          rules: [
+            {
+              id: "r-out",
+              trigger: { kind: "change" },
+              actions: [
+                {
+                  type: "set_field",
+                  targetKey: "period",
+                  value: { kind: "literal", value: "2026-04-15" }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const innerDate = dateFieldOf("D-in", "period");
+      const innerWatcher = tf("T-in", "note", {
+        linkage: {
+          rules: [
+            {
+              id: "r-in",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "period",
+                  operator: "eq",
+                  value: "2026-04-15"
+                }
+              },
+              actions: [{ type: "show" }]
+            }
+          ]
+        }
+      });
+      const layer = layerOf(
+        dateFieldOf("D-out", "period"),
+        outer,
+        subformOf("sf1", "lines", [innerDate, innerWatcher])
+      );
+
+      const next = scrubDateLiterals(layer, ["lines"], "D-in", {
+        key: "period",
+        fieldType: "date",
+        nextGranularity: "year"
+      });
+
+      expect(findNode(next, "T-out")).toBe(outer);
+      expect(linkageOf(findNode(next, "T-in"))?.rules?.[0]?.trigger).toMatchObject({
+        condition: { sourceKey: "period", value: "" }
+      });
+    });
+
+    it("scrubs incompatible daterange literals and checks contains operands against the target granularity", () => {
+      const rangeField = dateRangeFieldOf("R1", "span", {
+        linkage: {
+          rules: [
+            {
+              id: "r1",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "group",
+                  logic: "all",
+                  children: [
+                    {
+                      kind: "leaf",
+                      sourceKey: "span",
+                      operator: "contains",
+                      value: "2026-04-15"
+                    },
+                    {
+                      kind: "leaf",
+                      sourceKey: "span",
+                      operator: "contains",
+                      value: "2026-Q2"
+                    }
+                  ]
+                }
+              },
+              actions: [
+                {
+                  type: "assign",
+                  value: { kind: "literal", value: ["2026-01-01", "2026-03-31"] }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const layer = layerOf(rangeField);
+
+      const next = scrubDateLiterals(layer, [], "R1", {
+        key: "span",
+        fieldType: "daterange",
+        nextGranularity: "quarter"
+      });
+
+      const rule = linkageOf(findNode(next, "R1"))?.rules?.[0];
+      expect(rule?.trigger).toMatchObject({
+        condition: {
+          children: [
+            {
+              sourceKey: "span",
+              operator: "contains",
+              value: ""
+            },
+            {
+              sourceKey: "span",
+              operator: "contains",
+              value: "2026-Q2"
+            }
+          ]
+        }
+      });
+      expect(rule?.actions[0]).toEqual({ type: "assign", value: { kind: "literal", value: "" } });
+    });
+
+    it("scrubs a bare form-level linkage payload and preserves identity when already compatible", () => {
+      const linkage: FieldLinkage = {
+        rules: [
+          {
+            id: "form-r1",
+            trigger: { kind: "load" },
+            actions: [
+              {
+                type: "set_field",
+                targetKey: "period",
+                value: { kind: "literal", value: "2026-04-15" }
+              }
+            ]
+          }
+        ]
+      };
+
+      expect(scrubLinkageDateLiterals(linkage, {
+        key: "period",
+        fieldType: "date",
+        nextGranularity: "day"
+      })).toBe(linkage);
+
+      const next = scrubLinkageDateLiterals(linkage, {
+        key: "period",
+        fieldType: "date",
+        nextGranularity: "month"
+      });
+      expect(next.rules?.[0]?.actions[0]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "literal", value: "" }
+      });
+    });
+
+    it("detects authored literals in scope while ignoring empty values, non-value operators, and expressions", () => {
+      const nonLiteralLayer = layerOf(
+        dateFieldOf("D1", "period", {
+          linkage: {
+            rules: [
+              {
+                id: "r1",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "period",
+                    operator: "notEmpty"
+                  }
+                },
+                actions: [
+                  {
+                    type: "assign",
+                    value: { kind: "expression", source: "'2026-04'" }
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      );
+      expect(hasScopedDateLiterals(nonLiteralLayer, [], "D1", "period")).toBe(false);
+
+      const literalLinkage: FieldLinkage = {
+        rules: [
+          {
+            id: "r2",
+            trigger: { kind: "load" },
+            actions: [
+              {
+                type: "set_field",
+                targetKey: "period",
+                value: { kind: "literal", value: "2026-04-15" }
+              }
+            ]
+          }
+        ]
+      };
+      expect(hasLinkageDateLiterals(literalLinkage, "period")).toBe(true);
+      expect(hasLinkageDateLiterals(literalLinkage, "other")).toBe(false);
     });
   });
 });

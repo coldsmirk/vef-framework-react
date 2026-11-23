@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { Block, FieldLinkageRule, FormSchema, SectionNode, SubformNode, TabsNode, TextfieldField } from "../types";
+import type { Block, DateField, FieldLinkageRule, FormSchema, SectionNode, SubformNode, TabsNode, TextfieldField } from "../types";
 import type { FormEditorStoreApi } from "./form-store";
 
 import { act, renderHook } from "@testing-library/react";
@@ -12,7 +12,7 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile";
 import { validateSchema } from "../engine/schema/validate";
 import { findField, findNode, findScope, walkFields } from "../engine/schema/walk";
-import { FormEditorStoreProvider, isSidebarVisible, selectFieldCount, useFormEditorStoreApi } from "./form-store";
+import { FormEditorStoreProvider, hasDateGranularityLiterals, isSidebarVisible, selectFieldCount, useFormEditorStoreApi } from "./form-store";
 
 function wrapper({ children }: { children: ReactNode }): ReactNode {
   return <FormEditorStoreProvider initialState={{}}>{children}</FormEditorStoreProvider>;
@@ -172,6 +172,134 @@ function dataSourceSchema(): FormSchema {
               ]
             }
           })
+        ]
+      }
+    }
+  };
+}
+
+function dateSchemaWithLiterals(): FormSchema {
+  return {
+    id: "Form_1",
+    version: 2,
+    linkage: {
+      rules: [
+        {
+          id: "form-r1",
+          trigger: { kind: "load" },
+          actions: [
+            {
+              type: "set_field",
+              targetKey: "period",
+              value: { kind: "literal", value: "2026-04-15" }
+            }
+          ]
+        }
+      ]
+    },
+    presentations: {
+      pc: {
+        children: [
+          {
+            id: "D1",
+            type: "date",
+            key: "period",
+            label: "期间",
+            linkage: {
+              rules: [
+                {
+                  id: "r-own",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "group",
+                      logic: "all",
+                      children: [
+                        {
+                          kind: "leaf",
+                          sourceKey: "period",
+                          operator: "eq",
+                          value: "2026-04-15"
+                        }
+                      ]
+                    }
+                  },
+                  actions: [
+                    {
+                      type: "assign",
+                      value: { kind: "literal", value: "2026-04-01" }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          tf("T1", "note", {
+            linkage: {
+              rules: [
+                {
+                  id: "r-sibling",
+                  trigger: {
+                    kind: "condition",
+                    condition: {
+                      kind: "group",
+                      logic: "all",
+                      children: [
+                        {
+                          kind: "leaf",
+                          sourceKey: "period",
+                          operator: "gte",
+                          value: "2026-01-01"
+                        },
+                        {
+                          kind: "leaf",
+                          sourceKey: "period",
+                          operator: "notEmpty"
+                        }
+                      ]
+                    }
+                  },
+                  actions: [
+                    { type: "show" },
+                    {
+                      type: "set_field",
+                      targetKey: "period",
+                      value: { kind: "literal", value: "2026-05-01" }
+                    },
+                    {
+                      type: "set_field",
+                      targetKey: "period",
+                      value: { kind: "expression", source: "'2026-05'" }
+                    }
+                  ]
+                }
+              ]
+            }
+          })
+        ]
+      },
+      mobile: {
+        children: [
+          {
+            id: "MD1",
+            type: "date",
+            key: "period",
+            label: "期间",
+            linkage: {
+              rules: [
+                {
+                  id: "m-own",
+                  trigger: { kind: "load" },
+                  actions: [
+                    {
+                      type: "assign",
+                      value: { kind: "literal", value: "2026-04-20" }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
         ]
       }
     }
@@ -1150,6 +1278,274 @@ describe("form store", () => {
 
       expect(mobileKeyOf(api.getState().schema, "m1")).toBe("amount_2");
       expect(keyOf(api.getState().schema, "fa")).toBe("amount");
+    });
+  });
+
+  describe("setDateGranularity", () => {
+    it("switches granularity, syncs the cross-device twin, scrubs incompatible literals, and restores everything in one undo step", () => {
+      const api = setup();
+      const initial = dateSchemaWithLiterals();
+      act(() => api.getState().setSchema(initial));
+
+      act(() => api.getState().setDateGranularity({ fieldId: "D1", granularity: "month" }));
+
+      expect(api.getState().past).toHaveLength(1);
+
+      const { schema } = api.getState();
+      const pcDate = findField(schema.presentations.pc, "D1") as DateField;
+      const pcNote = findField(schema.presentations.pc, "T1");
+      const mobileDate = findField(schema.presentations.mobile ?? { children: [] }, "MD1") as DateField;
+
+      expect(pcDate.granularity).toBe("month");
+      expect(mobileDate.granularity).toBe("month");
+      expect(pcDate.linkage?.rules?.[0]?.actions[0]).toEqual({
+        type: "assign",
+        value: { kind: "literal", value: "" }
+      });
+      expect(pcDate.linkage?.rules?.[0]?.trigger).toMatchObject({
+        condition: { children: [{ sourceKey: "period", value: "" }] }
+      });
+      expect(pcNote?.linkage?.rules?.[0]?.trigger).toMatchObject({
+        condition: {
+          children: [
+            { sourceKey: "period", value: "" },
+            { sourceKey: "period", operator: "notEmpty" }
+          ]
+        }
+      });
+      expect(pcNote?.linkage?.rules?.[0]?.actions[1]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "literal", value: "" }
+      });
+      expect(pcNote?.linkage?.rules?.[0]?.actions[2]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "expression", source: "'2026-05'" }
+      });
+      expect(mobileDate.linkage?.rules?.[0]?.actions[0]).toEqual({
+        type: "assign",
+        value: { kind: "literal", value: "" }
+      });
+      expect(schema.linkage?.rules?.[0]?.actions[0]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "literal", value: "" }
+      });
+
+      // One undo restores field granularity, twin granularity, both layers'
+      // literals, and the root form linkage atomically.
+      act(() => api.getState().undo());
+      expect(api.getState().schema).toBe(initial);
+
+      act(() => api.getState().redo());
+      expect(api.getState().schema).toBe(schema);
+    });
+
+    it("syncs the PC twin and root form linkage when invoked from mobile", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(dateSchemaWithLiterals()));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().setDateGranularity({ fieldId: "MD1", granularity: "quarter" }));
+
+      const { schema } = api.getState();
+      const pcDate = findField(schema.presentations.pc, "D1") as DateField;
+      const mobileDate = findField(schema.presentations.mobile ?? { children: [] }, "MD1") as DateField;
+
+      expect(mobileDate.granularity).toBe("quarter");
+      expect(pcDate.granularity).toBe("quarter");
+      expect(schema.linkage?.rules?.[0]?.actions[0]).toEqual({
+        type: "set_field",
+        targetKey: "period",
+        value: { kind: "literal", value: "" }
+      });
+    });
+
+    it("leaves root form linkage and mismatched-type counterparts untouched", () => {
+      const api = setup();
+      const formLinkage = {
+        rules: [
+          {
+            id: "form-r1",
+            trigger: { kind: "load" as const },
+            actions: [
+              {
+                type: "set_field" as const,
+                targetKey: "period",
+                value: { kind: "literal" as const, value: "2026-04-15" }
+              }
+            ]
+          }
+        ]
+      };
+      act(() => api.getState().setSchema({
+        id: "Form_1",
+        version: 2,
+        linkage: formLinkage,
+        presentations: {
+          pc: { children: [tf("T1", "period")] },
+          mobile: {
+            children: [
+              {
+                id: "MD1",
+                type: "date",
+                key: "period"
+              }
+            ]
+          }
+        }
+      }));
+      act(() => api.getState().setDevice("mobile"));
+
+      act(() => api.getState().setDateGranularity({ fieldId: "MD1", granularity: "year" }));
+
+      const { schema } = api.getState();
+      expect((findField(schema.presentations.mobile ?? { children: [] }, "MD1") as DateField).granularity).toBe("year");
+      expect(findField(schema.presentations.pc, "T1")?.type).toBe("textfield");
+      expect(schema.linkage).toBe(formLinkage);
+    });
+
+    it("drops the granularity key when switching back to default day", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(schemaOf([
+        {
+          id: "D1",
+          type: "date",
+          key: "period",
+          granularity: "quarter"
+        }
+      ])));
+
+      act(() => api.getState().setDateGranularity({ fieldId: "D1", granularity: "day" }));
+
+      const updated = findField(api.getState().schema.presentations.pc, "D1") as DateField;
+      expect("granularity" in updated).toBe(false);
+    });
+
+    it("pushes no history entry when the granularity is unchanged, the id is stale, or the field is not a date", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(schemaOf([
+        {
+          id: "D1",
+          type: "date",
+          key: "period",
+          granularity: "month"
+        },
+        tf("T1", "note")
+      ])));
+      const before = api.getState();
+
+      act(() => api.getState().setDateGranularity({ fieldId: "D1", granularity: "month" }));
+      act(() => api.getState().setDateGranularity({ fieldId: "ghost", granularity: "year" }));
+      act(() => api.getState().setDateGranularity({ fieldId: "T1", granularity: "year" }));
+
+      expect(api.getState().schema).toBe(before.schema);
+      expect(api.getState().past).toBe(before.past);
+    });
+
+    it("keeps a subform date field isolated from a same-named root field and form linkage", () => {
+      const api = setup();
+      const formLinkage = {
+        rules: [
+          {
+            id: "form-r1",
+            trigger: { kind: "load" as const },
+            actions: [
+              {
+                type: "set_field" as const,
+                targetKey: "period",
+                value: { kind: "literal" as const, value: "2026-04-15" }
+              }
+            ]
+          }
+        ]
+      };
+      const pcRootDate: DateField = {
+        id: "D-root",
+        type: "date",
+        key: "period"
+      };
+      const pcSubform: SubformNode = {
+        id: "sf",
+        type: "subform",
+        variant: "stack",
+        key: "lines",
+        template: [
+          {
+            id: "D-sub",
+            type: "date",
+            key: "period",
+            linkage: {
+              rules: [
+                {
+                  id: "r-sub",
+                  trigger: { kind: "load" },
+                  actions: [
+                    {
+                      type: "assign",
+                      value: { kind: "literal", value: "2026-04-15" }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      };
+      const mobileSubform: SubformNode = {
+        id: "m-sf",
+        type: "subform",
+        variant: "stack",
+        key: "lines",
+        template: [
+          {
+            id: "MD-sub",
+            type: "date",
+            key: "period"
+          }
+        ]
+      };
+
+      act(() => api.getState().setSchema({
+        id: "Form_1",
+        version: 2,
+        linkage: formLinkage,
+        presentations: {
+          pc: { children: [pcRootDate, pcSubform] },
+          mobile: { children: [mobileSubform] }
+        }
+      }));
+
+      act(() => api.getState().setDateGranularity({ fieldId: "D-sub", granularity: "month" }));
+
+      const { schema } = api.getState();
+      const subDate = findField(schema.presentations.pc, "D-sub") as DateField;
+      const mobileSubDate = findField(schema.presentations.mobile ?? { children: [] }, "MD-sub") as DateField;
+      expect(subDate.granularity).toBe("month");
+      expect(mobileSubDate.granularity).toBe("month");
+      expect(subDate.linkage?.rules?.[0]?.actions[0]).toEqual({
+        type: "assign",
+        value: { kind: "literal", value: "" }
+      });
+      // Root field and form-level linkage are a different scope and keep identity.
+      expect(findField(schema.presentations.pc, "D-root")).toBe(pcRootDate);
+      expect(schema.linkage).toBe(formLinkage);
+    });
+
+    it("detects authored date literals across active layer, twin layer, and PC root linkage", () => {
+      const schema = dateSchemaWithLiterals();
+      expect(hasDateGranularityLiterals(schema, "pc", "D1")).toBe(true);
+      expect(hasDateGranularityLiterals(schema, "mobile", "MD1")).toBe(true);
+
+      const clean = schemaOf([
+        {
+          id: "D1",
+          type: "date",
+          key: "period"
+        }
+      ]);
+      expect(hasDateGranularityLiterals(clean, "pc", "D1")).toBe(false);
     });
   });
 

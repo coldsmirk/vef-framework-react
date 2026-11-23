@@ -1,6 +1,6 @@
 import type { ColumnDataType, DateField, DateGranularity, DateRangeField, FormField, PropertyEntry, PropertyEntryOption, Validatable } from "../types";
 
-import { applyDateGranularityToField, DATE_GRANULARITY_OPTIONS } from "../engine/schema/date-granularity";
+import { DATE_GRANULARITY_OPTIONS, withFieldGranularity } from "../engine/schema/date-granularity";
 import { definePropertyEntry } from "../types";
 
 /**
@@ -241,9 +241,10 @@ export function columnTypeEntry<F extends ColumnTypedField>(options: PropertyEnt
 
 /**
  * The "精度" entry for `date` and `daterange` fields (`year` / `quarter` /
- * `month` / `day`; omitted = `day`). Rendered by `DateGranularityEntry`, which
- * confirms before discarding incompatible linkage literals; `write` also scrubs
- * the field's own linkage literals directly so pure lens writes stay safe.
+ * `month` / `day`; omitted = `day`). Live edits route through the store's
+ * `setDateGranularity` (behind `DateGranularityEntry`'s confirm gate), which
+ * syncs the cross-device twin and scrubs incompatible linkage literals across
+ * the schema; this lens keeps the declarative write self-consistent.
  */
 export function dateGranularityEntry<F extends DateField | DateRangeField>(): PropertyEntry {
   return definePropertyEntry<F, DateGranularity>({
@@ -252,6 +253,6 @@ export function dateGranularityEntry<F extends DateField | DateRangeField>(): Pr
     type: "date-granularity",
     options: DATE_GRANULARITY_OPTIONS,
     read: field => field.granularity ?? "day",
-    write: (field, granularity) => applyDateGranularityToField(field, granularity)
+    write: (field, granularity) => withFieldGranularity(field, granularity)
   });
 }
