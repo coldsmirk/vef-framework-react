@@ -38,20 +38,27 @@ interface DataSourceContextValue {
   versions: Record<string, number>;
   /**
    * Resolved remote option lists, keyed by request signature + refresh nonce.
-   * Provider-scoped so remounted fields reuse the prior response instead of
-   * re-fetching, while a `refresh_data_source` bump changes the key.
+   * Provider-scoped: a field that unmounts and remounts (the editor's
+   * edit ⇄ preview Activity round-trip hides effects) reuses the prior
+   * response instead of re-fetching every remote source, while a
+   * `refresh_data_source` bump changes the key and still forces a fetch.
    */
   cache: Map<string, FieldOption[]>;
   /**
-   * In-flight remote fetches keyed by `cacheKey`, with subscriber ref-counting
-   * so concurrent consumers share one request and abort only when the last
-   * active consumer unmounts or switches key.
+   * In-flight remote fetches keyed by the same `cacheKey` as {@link cache}, so
+   * concurrent consumers (e.g. multiple rows of a subform sharing one remote
+   * option column) share a single request instead of fanning out N times, and
+   * abort only when the last active consumer unmounts or switches key.
    */
   inflight: Map<string, InflightEntry>;
 }
 
 const EMPTY_VERSIONS: Record<string, number> = {};
+// Stable empty fallback: a version bump recomputes the provider's memo, and a
+// fresh `[]` each time would churn the context `dataSources` reference,
+// spuriously re-resolving every field's options. A constant keeps it stable.
 const EMPTY_DATA_SOURCES: FormDataSource[] = [];
+// Cache backing the provider-less default context (no request service wired).
 const DEFAULT_CACHE = new Map<string, FieldOption[]>();
 const DEFAULT_INFLIGHT = new Map<string, InflightEntry>();
 
@@ -86,6 +93,7 @@ export function DataSourceProvider({
    */
   versions?: Record<string, number>;
 }): ReactElement {
+  // One cache + in-flight map per provider lifetime — survives consumer remounts by design.
   const [cache] = useState(() => new Map<string, FieldOption[]>());
   const [inflight] = useState(() => new Map<string, InflightEntry>());
   const value = useMemo<DataSourceContextValue>(
@@ -112,7 +120,11 @@ type ResolvedSource
 /**
  * Collapse a field's option source to a static list, a concrete remote request,
  * or a code set, dereferencing a `ref` against form-global data sources with
- * the option mapping normalized.
+ * the option mapping normalized so blank keys never reach mapping lookup. An
+ * unknown reference resolves to an empty static list. A `ref` to a remote
+ * source carries the source id as `refreshId`, so a `refresh_data_source`
+ * action on that id forces a re-fetch; an inline `remote` source has no id and
+ * cannot be a refresh target.
  */
 function resolveSource(source: FieldOptionSource | undefined, dataSources: FormDataSource[]): ResolvedSource {
   if (!source || source.kind === "static") {
@@ -216,9 +228,14 @@ export interface FieldOptionsResult {
 
 /**
  * Resolve a selection field's options. Static (and `ref`-to-static) sources
- * return synchronously from the schema; `codeSet` reads the form's batched
- * dictionary load; `remote` (and `ref`-to-remote) fetch through the host's
- * `FormServices.request` and map the response via {@link RemoteOptionMapping}.
+ * return synchronously from the schema; a `codeSet` source reads the form's
+ * batched dictionary load (`CodeSetProvider`); `remote` (and `ref`-to-remote)
+ * fetch through the host's `FormServices.request` and map the response via
+ * {@link RemoteOptionMapping}, exposing a `loading` flag while the request is
+ * in flight. The previously resolved options are kept while a refresh is in
+ * flight (and after a failure), so a `refresh_data_source` action does not
+ * blank every consuming select until the new response lands. A stale request
+ * is ignored if the source changes first.
  */
 export function useFieldOptions(source: FieldOptionSource | undefined): FieldOptionsResult {
   const {
@@ -230,6 +247,10 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
   } = use(DataSourceContext);
   const resolved = useMemo(() => resolveSource(source, dataSources), [source, dataSources]);
   const codeSets = useCodeSetState();
+  // Bound parameters are evaluated here, before the request reaches the host
+  // service: `services.request` stays transport-only, and because the cache key
+  // below is the *resolved* request, a bound value changing re-fetches while an
+  // unrelated edit does not.
   const paramScope = useDataSourceParamScope();
   const request = useMemo(
     () => resolved.kind === "remote"
@@ -237,9 +258,15 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
       : null,
     [resolved, paramScope]
   );
+  // Refresh nonce for a `ref`-to-remote source: a `refresh_data_source` action
+  // bumps it, re-running the fetch below against the same request. Inline
+  // remote and static sources have no `refreshId`, so they pin to 0 and never
+  // re-fetch.
   const refreshId = resolved.kind === "remote" ? resolved.refreshId : undefined;
   const mapping = resolved.kind === "remote" ? resolved.mapping : undefined;
   const refreshVersion = refreshId === undefined ? 0 : versions[refreshId] ?? 0;
+  // Cache key: the concrete request (+ mapping) plus the refresh nonce, so a
+  // refresh bump is a guaranteed miss while a plain remount is a hit.
   const cacheKey = useMemo(
     () => resolved.kind === "remote" && request !== null
       ? buildOptionCacheKey(refreshVersion, request, resolved.mapping)
@@ -247,6 +274,8 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     [resolved, request, refreshVersion]
   );
   const [remote, setRemote] = useState<FieldOptionsResult>(() => {
+    // Seed from the provider cache so a remounted field paints its options on
+    // the first frame instead of flashing empty until the effect runs.
     const cached = cacheKey === null ? undefined : cache.get(cacheKey);
 
     return {
@@ -256,6 +285,10 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     };
   });
 
+  // The effect below keys on `cacheKey` (a string) rather than on `request` (a
+  // fresh object per render), so it re-runs exactly when the resolved request
+  // actually changes. The request itself travels through a ref, which the
+  // effect reads at fire time.
   const requestRef = useRef(request);
   requestRef.current = request;
 
@@ -280,6 +313,9 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
     const cached = cache.get(cacheKey);
 
     if (cached) {
+      // This exact request already resolved during the provider's lifetime
+      // (e.g. an edit ⇄ preview round-trip remounted the field) — reuse it
+      // without another network round trip.
       setRemote({
         options: cached,
         loading: false,
@@ -303,7 +339,29 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
       entry.subscribers += 1;
     } else {
       const controller = new AbortController();
-      const promise = requestFn(currentRequest, { signal: controller.signal })
+
+      // Guard against synchronous throws and non-Promise returns from a host
+      // `request` service so they converge into this source's `error` state
+      // instead of crashing the enclosing React tree inside `useEffect`.
+      const invokeRequest = (): Promise<unknown> => {
+        try {
+          const result: unknown = requestFn(currentRequest, { signal: controller.signal });
+
+          if (
+            result === null
+            || (typeof result !== "object" && typeof result !== "function")
+            || typeof (result as PromiseLike<unknown>).then !== "function"
+          ) {
+            return Promise.reject(new TypeError("FormServices.request must return a Promise"));
+          }
+
+          return Promise.resolve(result);
+        } catch (error: unknown) {
+          return Promise.reject(error);
+        }
+      };
+
+      const promise = invokeRequest()
         .then(raw => {
           const options = mapRemoteResponseToOptions(raw, mapping);
 
@@ -314,6 +372,9 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
           return options;
         })
         .catch((error: unknown) => {
+          // Dev-visible signal logged once per failed request (not once per
+          // waiting cell): a silently empty select after a request failure is
+          // otherwise indistinguishable from a legitimately empty source.
           if (!controller.signal.aborted) {
             console.warn(
               `[form-editor] data source "${refreshId ?? "(inline remote)"}" failed to resolve:`,
@@ -372,6 +433,9 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
         subscribedEntry.controller.abort();
       }
     };
+    // `resolved` is deliberately absent: its mapping and refresh id are both
+    // folded into `cacheKey`, and including the object would reintroduce the
+    // per-render identity churn this fix removes.
   }, [cache, cacheKey, inflight, mapping, refreshId, requestFn]);
 
   switch (resolved.kind) {

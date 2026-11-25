@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DataSourceProvider, mapRemoteResponseToOptions, useFieldOptions } from "./data-source-context";
 
+// Function.prototype is a no-op function — useful for silencing console without
+// running into `@typescript-eslint/no-empty-function`.
 const silence = Function.prototype as () => void;
 
 function wrap(dataSources: FormDataSource[], request?: FormServices["request"]) {
@@ -82,6 +84,8 @@ describe("useFieldOptions", () => {
   });
 
   it("normalizes blank mapping keys and maps paginated responses", async () => {
+    // A blank key persisted by an older designer means "the default", but
+    // reading `mapping.labelKey ?? "label"` directly would take "" literally.
     const request = vi.fn().mockResolvedValue({ items: [{ label: "北京", code: "bj" }], total: 1 });
 
     const { result } = optionsFor({
@@ -154,6 +158,9 @@ describe("useFieldOptions", () => {
 
       await screen.findByText("c");
 
+      // The provider instance persists across rerenders; only the consumer
+      // unmounts and remounts — the editor's edit ⇄ preview Activity
+      // round-trip in miniature.
       view.rerender(
         <DataSourceProvider dataSources={dataSources} request={request}>
           <span>empty</span>
@@ -212,6 +219,7 @@ describe("useFieldOptions", () => {
 
       await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
+      // Bumping the source's nonce re-runs the fetch against the same request.
       rerender(
         <DataSourceProvider dataSources={dataSources} request={request} versions={{ ds: 1 }}>
           <Probe source={source} />
@@ -224,6 +232,8 @@ describe("useFieldOptions", () => {
     it("keeps the previous options while a refresh is in flight", async () => {
       const versionsRef = { current: {} as Record<string, number> };
       const refreshGate = Promise.withResolvers<Array<{ label: string; value: string }>>();
+      // First resolve returns immediately; the refresh hangs until released, so
+      // the in-flight window is observable.
       const request = vi.fn()
         .mockResolvedValueOnce([{ label: "A", value: "a" }])
         .mockReturnValueOnce(refreshGate.promise);
@@ -249,6 +259,8 @@ describe("useFieldOptions", () => {
 
       await waitFor(() => expect(result.current.options).toEqual([{ label: "A", value: "a" }]));
 
+      // Bump the nonce: the refresh starts, and the stale-looking options must
+      // survive the in-flight window instead of blanking the consuming select.
       versionsRef.current = { ds: 1 };
       rerender();
 
@@ -316,6 +328,9 @@ describe("useFieldOptions", () => {
 
       await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
+      // An inline remote source has no `refreshId`, so an unrelated version
+      // bump must not churn it into a re-fetch. `rerender` flushes effects in
+      // `act`, so a spurious re-fetch would already have called `request` twice.
       rerender(
         <DataSourceProvider request={request} versions={{ other: 1 }}>
           <Probe source={source} />
@@ -323,6 +338,40 @@ describe("useFieldOptions", () => {
       );
 
       expect(request).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("host request fault tolerance", () => {
+    it("converges to error state when services.request throws synchronously", async () => {
+      const boom = new Error("sync failure");
+      const consoleWarn = vi.spyOn(console, "warn").mockImplementation(silence);
+      const request = vi.fn(() => {
+        throw boom;
+      });
+
+      const { result } = optionsFor({ kind: "remote", request: { resource: "geo", action: "cities" } }, [], request);
+
+      await waitFor(() => expect(result.current.error).toBe(true));
+      expect(result.current.loading).toBe(false);
+      expect(result.current.options).toEqual([]);
+      expect(consoleWarn).toHaveBeenCalledWith(
+        "[form-editor] data source \"(inline remote)\" failed to resolve:",
+        boom
+      );
+      consoleWarn.mockRestore();
+    });
+
+    it("converges to error state when services.request returns a non-Promise value", async () => {
+      const consoleWarn = vi.spyOn(console, "warn").mockImplementation(silence);
+      const request = vi.fn(() => undefined as unknown as Promise<unknown>);
+
+      const { result } = optionsFor({ kind: "remote", request: { resource: "geo", action: "cities" } }, [], request);
+
+      await waitFor(() => expect(result.current.error).toBe(true));
+      expect(result.current.loading).toBe(false);
+      expect(result.current.options).toEqual([]);
+      expect(consoleWarn).toHaveBeenCalledTimes(1);
+      consoleWarn.mockRestore();
     });
   });
 });

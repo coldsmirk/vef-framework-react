@@ -3,21 +3,19 @@ import type { ReactElement, ReactNode } from "react";
 import type {
   EvaluationContext,
   FieldPermission,
-  FormServices,
   KeyedFormField,
   LinkageEvaluators,
   RuntimeSchema
 } from "../types";
-import type { EffectSinks, KnownOptionsLookup } from "./effects";
-import type { SequenceController } from "./sequence-controller";
-import type { RuntimeForm, RuntimeFormValues, RuntimeStateMap } from "./types";
+import type { SequenceEnv } from "./effects";
+import type { RuntimeFormValues, RuntimeStateMap } from "./types";
 
 import { useFormStore } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { useEffect, useId, useRef } from "react";
 
 import { isKeyedField } from "../engine/keys";
-import { evaluateRuntimeStates, resolveLinkageEvaluators } from "../engine/linkage";
+import { evaluateRuntimeStates } from "../engine/linkage";
 import { isRootScope, walkFields } from "../engine/schema/walk";
 import { DataSourceParamScopeProvider } from "../render/data-source-param-scope";
 import { EffectDispatchProvider, ScopeIdProvider, useScopeEffects } from "./effects";
@@ -28,14 +26,19 @@ import { stabilizeStateMap } from "./stabilize-state-map";
 
 interface LinkageScopeProps {
   /**
+   * Whether the root permission map applies to this scope's keys (`true` at
+   * root; `false` inside subform rows).
+   */
+  applyPermissions: boolean;
+  /**
    * Whether the schema binds any data-source parameter to the form. False
    * publishes no parameter scope at all, keeping every option-backed field out
    * of the keystroke render path on a form that has nothing to re-resolve.
    */
   boundParams: boolean;
   children: ReactNode;
-  controller: SequenceController;
   disabled: boolean;
+  env: SequenceEnv;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
   /**
@@ -45,12 +48,8 @@ interface LinkageScopeProps {
    * clamp for its whole subtree).
    */
   fieldPermissions: Record<string, FieldPermission> | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
   prefix: string;
   schema: RuntimeSchema;
-  services: FormServices | undefined;
-  sinks: EffectSinks;
   values: RuntimeFormValues;
 }
 
@@ -63,19 +62,16 @@ interface LinkageScopeProps {
  * root and per-row controllers.
  */
 function LinkageScope({
+  applyPermissions,
   boundParams,
   children,
-  controller,
   disabled,
+  env,
   evaluators,
   evaluationContext,
   fieldPermissions,
-  form,
-  getKnownOptions,
   prefix,
   schema,
-  services,
-  sinks,
   values
 }: LinkageScopeProps): ReactElement {
   // Stable per-mount scope identity: stays pinned to a subform row even when
@@ -83,6 +79,17 @@ function LinkageScope({
   // `lines[0].`), so single-flight slots and busy indicators follow the row.
   const scopeId = useId();
   const prevRef = useRef<RuntimeStateMap>(undefined);
+  // Computed during render (not in an effect) so the first paint already has
+  // default-driven hide/disable/require applied — the selector-context Provider
+  // seeds its store synchronously from this value on mount, avoiding a flash.
+  //
+  // Mutating `prevRef` in render is only safe because `stabilizeStateMap` is
+  // idempotent under self-composition: re-running it with its own output as
+  // `prev` and a deeply-equal `next` returns that output unchanged. So a
+  // StrictMode double-render (or a discarded concurrent render) leaves `prevRef`
+  // self-consistent. KEEP the render path side-effect-free — the only write
+  // (`form.setFieldValue`) lives in the effect below; never add logging,
+  // counters, or external writes here, or that safety breaks.
   const next = evaluateRuntimeStates(schema, values, {
     evaluators,
     evaluationContext,
@@ -91,6 +98,11 @@ function LinkageScope({
   const stateMap = stabilizeStateMap(prevRef.current, next);
   prevRef.current = stateMap;
 
+  // Last APPLIED `assign` value per field id, backing the "computed but
+  // editable" semantic (see `applyScopedAssignments`). Re-seeded when the
+  // scope's schema (and so its rule set) swaps — mirroring the effect lane's
+  // edge-tracker reset — so the new schema's assignments apply afresh. Written
+  // in render (idempotent) so it lands before the assignment effect reads it.
   const appliedAssignsRef = useRef<{ schema: RuntimeSchema; applied: Map<string, unknown> } | null>(null);
 
   if (appliedAssignsRef.current === null || appliedAssignsRef.current.schema !== schema) {
@@ -99,49 +111,36 @@ function LinkageScope({
 
   const appliedAssignedValues = appliedAssignsRef.current.applied;
 
+  // Side-effect lane: condition rising-edge detection + the sequence dispatcher
+  // published to descendant fields. Same scope (root / row), same `values`,
+  // same permission clamp (`set_fields` writes gate on it).
   const runSequences = useScopeEffects({
-    controller,
+    applyPermissions,
     disabled,
-    evaluators,
+    env,
     evaluationContext,
-    fieldPermissions,
-    form,
-    getKnownOptions,
+    evaluators,
     prefix,
     schema,
     scopeId,
-    services,
-    sinks,
     values
   });
 
-  const getKnownOptionsRef = useRef(getKnownOptions);
-  getKnownOptionsRef.current = getKnownOptions;
-  const evaluationContextRef = useRef(evaluationContext);
-  evaluationContextRef.current = evaluationContext;
-  const evaluatorsRef = useRef(evaluators);
-  evaluatorsRef.current = evaluators;
-
   useEffect(() => {
-    if (disabled) {
+    if (disabled || env.getDisabled()) {
       return;
     }
-
-    const resolvedEvaluators = resolveLinkageEvaluators(evaluatorsRef.current);
 
     applyScopedAssignments({
       appliedAssignedValues,
       disabled,
-      evaluationContext: evaluationContextRef.current,
-      evaluators: resolvedEvaluators,
+      env,
       fieldPermissions,
-      form,
-      getKnownOptions: getKnownOptionsRef.current,
       prefix,
       schema,
       stateMap
     });
-  }, [appliedAssignedValues, disabled, fieldPermissions, form, prefix, schema, stateMap]);
+  }, [appliedAssignedValues, disabled, env, fieldPermissions, prefix, schema, stateMap]);
 
   return (
     <ScopeIdProvider scopeId={scopeId}>
@@ -168,46 +167,35 @@ function LinkageScope({
 export function RuntimeStateController({
   boundParams,
   children,
-  controller,
   disabled,
+  env,
   evaluators,
   evaluationContext,
   fieldPermissions,
-  form,
-  getKnownOptions,
-  schema,
-  services,
-  sinks
+  schema
 }: {
   boundParams: boolean;
   children: ReactNode;
-  controller: SequenceController;
   disabled: boolean;
+  env: SequenceEnv;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
   fieldPermissions: Record<string, FieldPermission> | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
   schema: RuntimeSchema;
-  services: FormServices | undefined;
-  sinks: EffectSinks;
 }): ReactElement {
-  const values = useFormStore(form.store, state => state.values);
+  const values = useFormStore(env.form.store, state => state.values);
 
   return (
     <LinkageScope
+      applyPermissions
       boundParams={boundParams}
-      controller={controller}
       disabled={disabled}
+      env={env}
       evaluationContext={evaluationContext}
       evaluators={evaluators}
       fieldPermissions={fieldPermissions}
-      form={form}
-      getKnownOptions={getKnownOptions}
       prefix=""
       schema={schema}
-      services={services}
-      sinks={sinks}
       values={values}
     >
       {children}
@@ -225,52 +213,41 @@ export function RuntimeStateController({
 export function SubformRowController({
   boundParams,
   children,
-  controller,
   disabled,
+  env,
   evaluators,
   evaluationContext,
-  form,
-  getKnownOptions,
   prefix,
-  services,
-  sinks,
   templateSchema
 }: {
   boundParams: boolean;
   children: ReactNode;
-  controller: SequenceController;
   disabled: boolean;
+  env: SequenceEnv;
   evaluators: LinkageEvaluators | undefined;
   evaluationContext: EvaluationContext | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
   prefix: string;
-  services: FormServices | undefined;
-  sinks: EffectSinks;
   templateSchema: RuntimeSchema;
 }): ReactElement {
   const rowValues = useFormStore(
-    form.store,
+    env.form.store,
     state => resolveScopeValues(state.values, prefix),
     isDeepEqual
   );
 
   return (
     <LinkageScope
+      applyPermissions={false}
       boundParams={boundParams}
-      controller={controller}
       disabled={disabled}
+      env={env}
       evaluationContext={evaluationContext}
       evaluators={evaluators}
       // Top-level permissions clamp the subform node itself, never a template
       // field individually — a row scope always evaluates unclamped.
       fieldPermissions={undefined}
-      form={form}
-      getKnownOptions={getKnownOptions}
       prefix={prefix}
       schema={templateSchema}
-      services={services}
-      sinks={sinks}
       values={rowValues}
     >
       {children}
@@ -278,18 +255,42 @@ export function SubformRowController({
   );
 }
 
+/**
+ * Write pending `assign` values into the form for the root-scope fields of
+ * `schema`, addressing each field as `${prefix}${key}`. {@link LinkageScope}
+ * calls this with `prefix: ""` for the root form and with the row prefix
+ * (e.g. `"lines[0]."`) for each subform row, so assignments work the same at
+ * every value scope.
+ *
+ * An assigned field is **computed but editable**: the assignment is applied
+ * once per change of the *computed* value, not re-asserted on every effect run.
+ * `appliedAssignedValues` records the last applied value per field id, and a
+ * field is written only when its rule's computed value differs from that record
+ * — so a user's manual override sticks while unrelated runtime states flip, and
+ * is replaced exactly when the computed value itself changes. The record is
+ * dropped as soon as the rule stops asserting, so the override semantic lasts
+ * only as long as the assertion that produced it: a reset (or any out-of-band
+ * write) is followed by a fresh application on the next rising edge. The
+ * `Object.is` compare is sound for recomputed-but-equal objects because
+ * `stabilizeStateMap` preserves the previous state entry (and so the previous
+ * `assignedValue` reference) whenever an evaluation is deeply equal.
+ *
+ * Writes go through the shared {@link writeFieldValue} gate. Its permission
+ * guard is defense-in-depth here: the clamp already suppresses `assigned` on a
+ * non-writable field at evaluation time (which also drives the UI semantics),
+ * so the gate is the LAST line — no `assign` can reach a non-writable field
+ * even if a future state producer forgets the clamp.
+ */
 function applyScopedAssignments(args: {
   appliedAssignedValues: Map<string, unknown>;
   disabled: boolean;
-  evaluationContext: EvaluationContext | undefined;
-  evaluators: Required<LinkageEvaluators>;
+  env: SequenceEnv;
   fieldPermissions: Record<string, FieldPermission> | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
   prefix: string;
   schema: RuntimeSchema;
   stateMap: RuntimeStateMap;
 }): void {
+  const { env } = args;
   const assignments: Array<{ field: KeyedFormField; value: unknown }> = [];
 
   walkFields(args.schema, (field, scope) => {
@@ -300,11 +301,18 @@ function applyScopedAssignments(args: {
     const runtimeState = args.stateMap[field.id];
 
     if (!runtimeState?.assigned) {
+      // The rule is no longer asserting a value, so nothing is "already
+      // applied" any more: forget the record, and let the next rising edge
+      // compute afresh. Keeping it would make a reset permanent — the field
+      // clears, the rule fires again with the same computed value, and the
+      // stale record skips the write.
       args.appliedAssignedValues.delete(field.id);
 
       return;
     }
 
+    // Already applied this computed value once — the user may have edited the
+    // field since, and that edit must stick.
     if (args.appliedAssignedValues.has(field.id)
       && Object.is(args.appliedAssignedValues.get(field.id), runtimeState.assignedValue)) {
       return;
@@ -312,7 +320,9 @@ function applyScopedAssignments(args: {
 
     args.appliedAssignedValues.set(field.id, runtimeState.assignedValue);
 
-    if (isDeepEqual(args.form.getFieldValue(`${args.prefix}${field.key}`), runtimeState.assignedValue)) {
+    // The field may already hold the computed value (e.g. a matching default):
+    // record it as applied above, but skip the redundant write.
+    if (isDeepEqual(env.form.getFieldValue(`${args.prefix}${field.key}`), runtimeState.assignedValue)) {
       return;
     }
 
@@ -323,15 +333,17 @@ function applyScopedAssignments(args: {
     return;
   }
 
-  const scopeValues = resolveScopeValues(args.form.store.state.values, args.prefix);
+  const scopeValues = resolveScopeValues(env.form.store.state.values, args.prefix);
+  const evaluationContext = env.getEvaluationContext();
+  const evaluators = env.getEvaluators();
 
   for (const assignment of assignments) {
     writeFieldValue({
-      disabled: args.disabled,
+      disabled: args.disabled || env.getDisabled(),
       fieldPermissions: args.fieldPermissions,
-      form: args.form,
+      form: env.form,
       key: assignment.field.key,
-      knownOptions: args.getKnownOptions(assignment.field, scopeValues, args.evaluationContext, args.evaluators),
+      knownOptions: env.getKnownOptions(assignment.field, scopeValues, evaluationContext, evaluators),
       prefix: args.prefix,
       targetField: assignment.field,
       value: assignment.value

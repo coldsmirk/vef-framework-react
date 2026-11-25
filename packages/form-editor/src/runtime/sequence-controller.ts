@@ -1,17 +1,23 @@
 /**
  * Per-form coordinator for effect action sequences:
  *
- * - **Single-flight** per `(scopeId, ruleId)`: re-triggering the same rule in
- * the same value scope aborts the prior run's `AbortController`, while
- * different rules or different subform rows run independently.
+ * - **Single-flight** per `(scopeId, ownerKey, ruleId)`: re-triggering the
+ * same rule on the same node in the same value scope aborts the prior run's
+ * `AbortController`, while different owners (two fields sharing a rule id or
+ * missing-id fallback), different rules, or different subform rows run
+ * independently.
  * - **Abort boundaries**: `abortScope(scopeId)` on subform row unmount,
- * `abortAll()` on form reset or form unmount.
+ * `abortAll()` on external form reset or form unmount, and
+ * `abortOthers(keepRunId)` when a sequence's own `reset` step runs so its
+ * subsequent actions continue.
  * - **Busy state**: reference-counted per `(scopeId, fieldId)` so only the
  * field whose sequence has an in-flight request renders a loading mark (zero
  * unrelated field re-renders via `useSyncExternalStore`).
- * - **Submit gate**: tracks runs that have an in-flight request so submission
- * waits for them to finish writing before validation runs, while a sequence's
- * own `submit` step passes `excludeRunId` to avoid deadlocking on itself.
+ * - **Submit gate**: tracks runs holding an active request (and any subsequent
+ * synchronous writes before settlement) so submission waits for them before
+ * validating. A run calls `leaveSubmitGate()` as soon as it reaches its own
+ * `submit` step (its prior requests have already completed), eliminating
+ * deadlocks when multiple `api_call → submit` sequences run concurrently.
  */
 
 export interface SequenceRunHandle {
@@ -20,10 +26,18 @@ export interface SequenceRunHandle {
   /**
    * Mark this run as holding an active remote request. Increments the owning
    * field's busy counter (when `busyKey` is set) and registers the run with
-   * the submit gate until `finish()` or abort. Returns an idempotent disposer
-   * to decrement the busy counter once the request settles.
+   * the submit gate until `leaveSubmitGate()`, `finish()`, or abort. Returns
+   * an idempotent disposer to decrement the busy counter once the request
+   * settles.
    */
   beginRequest: (busyKey: string | undefined) => () => void;
+  /**
+   * Remove this run from the submit gate without settling its single-flight
+   * slot or aborting it. Called right before a sequence executes its own
+   * `submit` step so concurrent `api_call → submit` runs never wait on each
+   * other.
+   */
+  leaveSubmitGate: () => void;
   /**
    * Release single-flight slot, pending-request gate, and any remaining busy
    * counts for this run. Idempotent.
@@ -36,7 +50,7 @@ interface ActiveRun {
   readonly scopeId: string;
   readonly slotKey: string;
   readonly abortController: AbortController;
-  readonly gate: PromiseWithResolvers<void>;
+  requestGate: PromiseWithResolvers<void> | null;
   readonly heldBusyKeys: Map<string, number>;
   settled: boolean;
 }
@@ -56,6 +70,17 @@ export class SequenceController {
       this.busyListeners.delete(listener);
     };
   };
+
+  private releaseRequestGate(run: ActiveRun): void {
+    this.pendingRequestRuns.delete(run.runId);
+
+    const gate = run.requestGate;
+
+    if (gate !== null) {
+      run.requestGate = null;
+      gate.resolve();
+    }
+  }
 
   private abortRun(run: ActiveRun): void {
     this.settleRun(run);
@@ -86,8 +111,6 @@ export class SequenceController {
       }
     }
 
-    this.pendingRequestRuns.delete(run.runId);
-
     if (run.heldBusyKeys.size > 0) {
       for (const [key, count] of run.heldBusyKeys) {
         this.adjustBusyCount(key, -count);
@@ -96,7 +119,7 @@ export class SequenceController {
       run.heldBusyKeys.clear();
     }
 
-    run.gate.resolve();
+    this.releaseRequestGate(run);
   }
 
   private adjustBusyCount(key: string, delta: number): void {
@@ -118,8 +141,8 @@ export class SequenceController {
     }
   }
 
-  startRun(scopeId: string, ruleId: string): SequenceRunHandle {
-    const slotKey = `${scopeId}\0${ruleId}`;
+  startRun(scopeId: string, ownerKey: string, ruleId: string): SequenceRunHandle {
+    const slotKey = `${scopeId}\0${ownerKey}\0${ruleId}`;
     const existing = this.activeRuns.get(slotKey);
 
     if (existing !== undefined) {
@@ -131,7 +154,7 @@ export class SequenceController {
       scopeId,
       slotKey,
       abortController: new AbortController(),
-      gate: Promise.withResolvers<void>(),
+      requestGate: null,
       heldBusyKeys: new Map(),
       settled: false
     };
@@ -157,8 +180,11 @@ export class SequenceController {
           };
         }
 
-        if (!this.pendingRequestRuns.has(run.runId)) {
-          this.pendingRequestRuns.set(run.runId, run.gate.promise);
+        if (run.requestGate === null) {
+          const gate = Promise.withResolvers<void>();
+
+          run.requestGate = gate;
+          this.pendingRequestRuns.set(run.runId, gate.promise);
         }
 
         let released = false;
@@ -190,6 +216,9 @@ export class SequenceController {
           }
         };
       },
+      leaveSubmitGate: () => {
+        this.releaseRequestGate(run);
+      },
       finish: () => {
         this.settleRun(run);
       }
@@ -209,13 +238,27 @@ export class SequenceController {
       return;
     }
 
-    for (const run of scopeRuns) {
+    const snapshot = [...scopeRuns];
+
+    for (const run of snapshot) {
       this.abortRun(run);
     }
   }
 
+  abortOthers(keepRunId: number): void {
+    const snapshot = this.activeRuns.values().toArray();
+
+    for (const run of snapshot) {
+      if (run.runId !== keepRunId) {
+        this.abortRun(run);
+      }
+    }
+  }
+
   abortAll(): void {
-    for (const run of this.activeRuns.values()) {
+    const snapshot = this.activeRuns.values().toArray();
+
+    for (const run of snapshot) {
       this.abortRun(run);
     }
   }
@@ -224,35 +267,13 @@ export class SequenceController {
     return this.busyCounts.get(busyKeyFor(scopeId, fieldId)) ?? 0;
   }
 
-  hasPendingRequests(excludeRunId?: number): boolean {
-    if (excludeRunId === undefined) {
-      return this.pendingRequestRuns.size > 0;
-    }
-
-    for (const runId of this.pendingRequestRuns.keys()) {
-      if (runId !== excludeRunId) {
-        return true;
-      }
-    }
-
-    return false;
+  hasPendingRequests(): boolean {
+    return this.pendingRequestRuns.size > 0;
   }
 
-  async waitForPendingRequests(excludeRunId?: number): Promise<void> {
-    while (true) {
-      const pending: Array<Promise<void>> = [];
-
-      for (const [runId, promise] of this.pendingRequestRuns) {
-        if (runId !== excludeRunId) {
-          pending.push(promise);
-        }
-      }
-
-      if (pending.length === 0) {
-        return;
-      }
-
-      await Promise.allSettled(pending);
+  async waitForPendingRequests(): Promise<void> {
+    while (this.pendingRequestRuns.size > 0) {
+      await Promise.allSettled(this.pendingRequestRuns.values());
     }
   }
 }

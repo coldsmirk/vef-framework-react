@@ -36,7 +36,7 @@ function formStub(current: unknown): { form: any; written: unknown[] } {
 }
 
 function write(
-  field: KeyedFormField | undefined,
+  field: KeyedFormField,
   value: unknown,
   options: {
     current?: unknown;
@@ -342,7 +342,6 @@ describe("writeFieldValue guards and no-op bail", () => {
     expect(write(numberField, "", { current: 1 })).toEqual([undefined]);
     expect(write(switchField, "false", { current: true })).toEqual([false]);
     expect(write(textField, 42)).toEqual(["42"]);
-    expect(write(undefined, "200")).toEqual(["200"]);
   });
 
   it("bails when the normalized value deeply equals what the field holds", () => {

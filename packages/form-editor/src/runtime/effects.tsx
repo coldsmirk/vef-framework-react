@@ -1,10 +1,10 @@
 import type { ReactElement, ReactNode } from "react";
 
 import type { ConditionEffectRule, TriggerEffectSequence } from "../engine/linkage";
-import type { EvaluationContext, FieldPermission, FormServices, LinkageEvaluators, RuntimeSchema } from "../types";
-import type { EffectSinks, KnownOptionsLookup } from "./action-executor";
+import type { EvaluationContext, LinkageEvaluators, RuntimeSchema } from "../types";
+import type { SequenceEnv, SequenceOutcome } from "./action-executor";
 import type { SequenceController } from "./sequence-controller";
-import type { RuntimeForm, RuntimeFormValues } from "./types";
+import type { RuntimeFormValues } from "./types";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
@@ -16,7 +16,16 @@ import {
 } from "../engine/linkage";
 import { executeActionSequence } from "./action-executor";
 
-export type { EffectSinks, KnownOptionsLookup, RefreshDataSource, ResetForm, SetVariable, SubmitForm } from "./action-executor";
+export type {
+  EffectSinks,
+  KnownOptionsLookup,
+  RefreshDataSource,
+  ResetForm,
+  SequenceEnv,
+  SequenceOutcome,
+  SetVariable,
+  SubmitForm
+} from "./action-executor";
 
 /**
  * Dispatch one or more trigger-matched rule sequences within a value scope.
@@ -99,70 +108,93 @@ export function useFieldBusy(fieldId?: string): boolean {
 }
 
 /**
- * Read the nearest value scope's sequence dispatcher (root form or subform row).
+ * Read the nearest value scope's sequence dispatcher. A field reads this to
+ * fire its own event-triggered sequences (`change` / `commit` / `focus` /
+ * `blur` / `click`); the nearest provider is the field's value scope (root form
+ * or subform row), so a subform field's sequences run against that row's
+ * record.
  */
 export function useEffectDispatch(): RunSequences {
   return use(RunSequencesContext);
 }
 
+/**
+ * Publishes a scope's {@link RunSequences} to its descendant fields. Installed
+ * by `LinkageScope` alongside the runtime-state context.
+ */
 export function EffectDispatchProvider({ children, run }: { children: ReactNode; run: RunSequences }): ReactElement {
   return <RunSequencesContext value={run}>{children}</RunSequencesContext>;
 }
 
 /**
  * Run form-scope effect sequences (`load` / `beforeSubmit` / `afterSubmit`) in
- * declaration order against the root value scope. Returns a Promise that
- * resolves once every sequence finishes (or rejects when `propagateErrors` is
- * set and a sequence fails).
+ * declaration order against the root value scope.
+ *
+ * Returns a {@link SequenceOutcome}: `"completed"` when every sequence
+ * completes normally (including false `when` guards and `onError: "continue"`),
+ * or the first non-completed outcome (`"stopped"`, `"aborted"`, `"failed"`)
+ * when `stopOnIncomplete` is set (`beforeSubmit`). Unexpected host throws are
+ * contained into `"failed"` (and logged outside `beforeSubmit`) so a broken
+ * evaluator never leaks unhandled rejections.
  */
 export async function dispatchFormSequences(args: {
-  controller: SequenceController;
-  disabled: boolean;
-  evaluators: LinkageEvaluators | undefined;
-  evaluationContext: EvaluationContext | undefined;
-  fieldPermissions: Record<string, FieldPermission> | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
-  propagateErrors?: boolean;
+  env: SequenceEnv;
   schema: RuntimeSchema;
   scopeId: string;
   sequences: readonly TriggerEffectSequence[];
-  services: FormServices | undefined;
-  sinks: EffectSinks;
-}): Promise<void> {
+  stopOnIncomplete?: boolean;
+}): Promise<SequenceOutcome> {
   if (args.sequences.length === 0) {
-    return;
+    return "completed";
   }
-
-  const resolved = resolveLinkageEvaluators(args.evaluators);
 
   for (const sequence of args.sequences) {
-    const result = executeActionSequence({
-      actions: sequence.actions,
-      controller: args.controller,
-      disabled: args.disabled,
-      evaluators: resolved,
-      form: args.form,
-      getEvaluationContext: () => args.evaluationContext,
-      getFieldPermissions: () => args.fieldPermissions,
-      getKnownOptions: args.getKnownOptions,
-      getPrefix: () => "",
-      propagateErrors: args.propagateErrors,
-      ruleId: sequence.ruleId,
-      schema: args.schema,
-      scopeId: args.scopeId,
-      services: args.services,
-      sinks: args.sinks,
-      when: sequence.when
-    });
+    let outcome: SequenceOutcome;
 
-    if (result !== undefined) {
-      await result;
+    try {
+      outcome = await executeActionSequence({
+        actions: sequence.actions,
+        env: args.env,
+        getPrefix: () => "",
+        ruleId: sequence.ruleId,
+        schema: args.schema,
+        scopeId: args.scopeId,
+        when: sequence.when
+      });
+    } catch (error) {
+      if (!args.stopOnIncomplete) {
+        console.error("[form-editor] form effect sequence threw unexpectedly:", error);
+      }
+
+      outcome = "failed";
+    }
+
+    if (args.stopOnIncomplete && outcome !== "completed") {
+      return outcome;
     }
   }
+
+  return "completed";
 }
 
+/**
+ * The source values a rule's `always`-retrigger sequence depends on, captured
+ * as a positional tuple so the tracker can tell a real source-field change from
+ * an unrelated one (the effect re-runs on every value change, but `always`
+ * rules must only repeat when *their* input moved). Compared with
+ * {@link isDeepEqual}, so it captures the raw values directly — a
+ * `JSON.stringify` fingerprint conflated `undefined` with `null`/absence and
+ * threw on `BigInt` or cyclic values. `null` means "no tracked keys" — an
+ * opaque `expression` condition, which re-fires on any actual *value* change
+ * while it holds (the detector diffs the `values` reference for those — see
+ * {@link useScopeEffects}). Reads keys the same way `matchLeaf` does (flat
+ * `values[key]`), so the tuple tracks exactly what the condition evaluates.
+ */
 function inputSignature(rule: ConditionEffectRule, values: RuntimeFormValues): unknown[] | null {
+  // Only an opaque condition gets the "diff the whole values object" fallback.
+  // An enumerable condition with no form-value keys — one reading a `$`-rooted
+  // context path — has a STABLE empty signature, so its `always` rule repeats
+  // when the context changes the rule's truth, not on every keystroke.
   if (rule.opaque) {
     return null;
   }
@@ -172,48 +204,61 @@ function inputSignature(rule: ConditionEffectRule, values: RuntimeFormValues): u
 
 /**
  * Per-scope side-effect runtime: builds the stable {@link RunSequences}
- * dispatcher for this value scope, runs condition-triggered effect rules on
- * rising edge (or on every tracked input change when `retrigger === "always"`),
- * and aborts all in-flight runs owned by this scope when it unmounts (e.g. a
- * subform row is deleted).
+ * dispatcher for this value scope (used by both event-triggered fields and the
+ * condition-edge detector), fires each condition-effect rule's sequence on the
+ * false→true rising edge (repeating on tracked source changes when
+ * `retrigger === "always"`), and aborts all in-flight runs owned by this scope
+ * when it unmounts (e.g. a subform row is deleted).
+ *
+ * Mirrors `LinkageScope`'s scoping — root or one subform row — so each row
+ * tracks its own edges and dispatches against its own record. Edge detection
+ * runs in an effect (never in render) so the render path stays pure, matching
+ * `LinkageScope`'s assignment effect.
  */
 export function useScopeEffects(args: {
-  controller: SequenceController;
+  applyPermissions: boolean;
   disabled: boolean;
-  evaluators: LinkageEvaluators | undefined;
+  env: SequenceEnv;
   evaluationContext: EvaluationContext | undefined;
-  fieldPermissions: Record<string, FieldPermission> | undefined;
-  form: RuntimeForm;
-  getKnownOptions: KnownOptionsLookup;
+  evaluators: LinkageEvaluators | undefined;
   prefix: string;
   schema: RuntimeSchema;
   scopeId: string;
-  services: FormServices | undefined;
-  sinks: EffectSinks;
   values: RuntimeFormValues;
 }): RunSequences {
   const {
-    controller,
+    applyPermissions,
     disabled,
-    evaluators,
+    env,
     evaluationContext,
-    fieldPermissions,
-    form,
-    getKnownOptions,
+    evaluators,
     prefix,
     schema,
     scopeId,
-    services,
-    sinks,
     values
   } = args;
 
   const resolved = useMemo(() => resolveLinkageEvaluators(evaluators), [evaluators]);
   const conditionRules = useMemo(() => collectConditionEffectRules(schema), [schema]);
 
+  // Previous truth of each condition-effect rule, positionally aligned with
+  // `conditionRules`. `null` until the first evaluation seeds it.
   const truthsRef = useRef<boolean[] | null>(null);
+  // Previous source-value tuple of each rule, positionally aligned with
+  // `conditionRules` (a `null` entry for `edge` rules and opaque conditions).
+  // Lets the `always` lane tell a real source-field change from an unrelated
+  // one (compared with `isDeepEqual`). Seeded together with `truthsRef`.
   const signaturesRef = useRef<Array<unknown[] | null> | null>(null);
+  // The `values` reference seen by the previous detection run. The detection
+  // effect also re-runs when non-value deps move (`$vars` via the expression
+  // context, a new dispatcher identity); the opaque-condition `always` lane
+  // diffs this ref so it re-fires only on an actual form-value change — which
+  // also keeps a StrictMode double-invoked mount (same `values`) silent.
   const previousValuesRef = useRef<RuntimeFormValues | null>(null);
+  // When the rule set changes (a schema swap), the old vectors no longer align;
+  // clearing them re-seeds, so a condition already true under the new schema
+  // does not fire spuriously. Written in render (idempotent) so it lands before
+  // the detection effect reads it.
   const rulesRef = useRef(conditionRules);
 
   if (rulesRef.current !== conditionRules) {
@@ -222,33 +267,37 @@ export function useScopeEffects(args: {
     signaturesRef.current = null;
   }
 
-  // Keep volatile inputs in refs so `runSequences` keeps a stable identity
-  // across `$vars` writes, permission map churn, and subform index shifts —
-  // preserving every memoized FieldSlot while still reading live values at
-  // step execution time.
-  const disabledRef = useRef(disabled);
-  disabledRef.current = disabled;
-
-  const evaluationContextRef = useRef(evaluationContext);
-  evaluationContextRef.current = evaluationContext;
-
-  const fieldPermissionsRef = useRef(fieldPermissions);
-  fieldPermissionsRef.current = fieldPermissions;
-
-  const getKnownOptionsRef = useRef(getKnownOptions);
-  getKnownOptionsRef.current = getKnownOptions;
+  // Keep scope-local volatile inputs in refs so `scopeEnv` and `runSequences`
+  // keep stable identities across container disabled flips and subform index
+  // shifts while still reading live values on every step.
+  const scopeDisabledRef = useRef(disabled);
+  scopeDisabledRef.current = disabled;
 
   const prefixRef = useRef(prefix);
   prefixRef.current = prefix;
 
-  const servicesRef = useRef(services);
-  servicesRef.current = services;
+  const scopeEnv = useMemo<SequenceEnv>(
+    () => {
+      return {
+        controller: env.controller,
+        form: env.form,
+        sinks: env.sinks,
+        getDisabled: () => env.getDisabled() || scopeDisabledRef.current,
+        getEvaluationContext: () => env.getEvaluationContext(),
+        getEvaluators: () => env.getEvaluators(),
+        getFieldPermissions: () => applyPermissions ? env.getFieldPermissions() : undefined,
+        getKnownOptions: (...lookupArgs) => env.getKnownOptions(...lookupArgs),
+        getServices: () => env.getServices()
+      };
+    },
+    [applyPermissions, env]
+  );
 
   // Abort every in-flight sequence owned by this scope when it unmounts (e.g.
   // a subform row is removed) without affecting surviving sibling rows.
   useEffect(() => () => {
-    controller.abortScope(scopeId);
-  }, [controller, scopeId]);
+    env.controller.abortScope(scopeId);
+  }, [env.controller, scopeId]);
 
   const runSequences = useCallback<RunSequences>(
     (sequences, ownerFieldId) => {
@@ -259,33 +308,25 @@ export function useScopeEffects(args: {
 
         const result = executeActionSequence({
           actions: sequence.actions,
-          controller,
-          disabled: disabledRef.current,
-          evaluators: resolved,
-          form,
-          getEvaluationContext: () => evaluationContextRef.current,
-          getFieldPermissions: () => fieldPermissionsRef.current,
-          getKnownOptions: (...lookupArgs) => getKnownOptionsRef.current(...lookupArgs),
+          env: scopeEnv,
           getPrefix: () => prefixRef.current,
           ownerFieldId,
           ruleId: sequence.ruleId,
           schema,
           scopeId,
-          services: servicesRef.current,
-          sinks,
           when: sequence.when
         });
 
         // Fire-and-forget for event / condition triggers: contain unexpected
         // rejections so they never surface as unhandled promise rejections.
-        if (result !== undefined) {
+        if (result instanceof Promise) {
           result.catch((error: unknown) => {
             console.error("[form-editor] effect sequence failed:", error);
           });
         }
       }
     },
-    [controller, form, resolved, schema, scopeId, sinks]
+    [schema, scopeEnv, scopeId]
   );
 
   useEffect(() => {
@@ -305,7 +346,8 @@ export function useScopeEffects(args: {
     signaturesRef.current = signatures;
     previousValuesRef.current = values;
 
-    // Seed on first run so a condition already true on mount does not fire.
+    // Seed on the first run so a condition already true on mount does not fire;
+    // only a later change triggers the sequence thereafter.
     if (!previousTruths) {
       return;
     }
@@ -320,8 +362,15 @@ export function useScopeEffects(args: {
       const previousTruth = previousTruths[index];
 
       if (!previousTruth) {
+        // Rising edge (false→true): run the rule's sequence once.
         runSequences([{ ruleId: rule.ruleId, actions: rule.actions }], rule.ownerId);
       } else if (rule.retrigger === "always") {
+        // Still holding past the rising edge: repeat the sequence when a
+        // tracked source field changed since the last evaluation. A `null`
+        // signature (opaque expression condition) has no tracked keys, so it
+        // re-fires on any actual value change — the `values` reference moving —
+        // but NOT on a re-run driven by other deps (a `set_variable` updating
+        // the evaluation context must not re-fire the very rule that wrote it).
         const changed = signatures[index] === null
           ? values !== previousValues
           : !isDeepEqual(signatures[index], previousSignatures?.[index]);

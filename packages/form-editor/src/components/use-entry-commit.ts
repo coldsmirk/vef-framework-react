@@ -27,6 +27,9 @@ export function parseNumberDraft(
     return clamped;
   }
 
+  // `toFixed` throws a RangeError outside 0..100; the property entry clamps
+  // new writes, but a hand-authored schema can still carry an out-of-range
+  // precision — clamp here so a bad value degrades instead of crashing render.
   const digits = Math.min(100, Math.max(0, Math.floor(precision)));
 
   return Number(clamped.toFixed(digits));
@@ -101,7 +104,10 @@ export function useEntryCommit<TValue>(options: {
 
   const isComposing = (event: KeyboardEvent<HTMLElement>): boolean => composingRef.current
     || event.nativeEvent.isComposing
-    || event.key === "Process";
+    || event.key === "Process"
+    // Safari fires `compositionend` BEFORE the confirming `keydown` with
+    // `isComposing === false`, `key === "Enter"`, and legacy `keyCode === 229`.
+    || event.nativeEvent.keyCode === 229;
 
   const commitNow = (current: TValue): void => {
     lastCommittedRef.current = current;

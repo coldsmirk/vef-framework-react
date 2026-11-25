@@ -1,5 +1,6 @@
 import type { DateGranularity } from "@vef-framework-react/shared";
 
+import type { WritableTargetField } from "../engine/linkage";
 import type { FieldOption, FieldPermission, KeyedFormField } from "../types";
 import type { RuntimeForm } from "./types";
 
@@ -13,8 +14,8 @@ import {
   tryParseDateByGranularity
 } from "@vef-framework-react/shared";
 
+import { exhaustive } from "../engine/assert-never";
 import {
-  getFieldDefaultValue,
   getFieldPermission,
   isWritableFieldPermission,
   isWritableTargetField
@@ -70,10 +71,10 @@ export function writeFieldValue(args: {
    */
   prefix: string;
   /**
-   * The field being written, when declared in the scope's schema. Omitted for
-   * an undeclared target key, whose value passes through un-coerced.
+   * The declared field being written. Non-writable fields (per
+   * {@link isWritableTargetField}) are rejected before normalization.
    */
-  targetField?: KeyedFormField;
+  targetField: KeyedFormField;
   value: unknown;
 }): void {
   if (args.disabled) {
@@ -84,7 +85,7 @@ export function writeFieldValue(args: {
     return;
   }
 
-  if (args.targetField !== undefined && !isWritableTargetField(args.targetField)) {
+  if (!isWritableTargetField(args.targetField)) {
     return;
   }
 
@@ -105,18 +106,14 @@ export function writeFieldValue(args: {
  * Normalize an arbitrary runtime value (literal, reference, expression, or API
  * response field) into the canonical value shape accepted by the target widget
  * and Go's `validateFormField`. Un-normalizable values and broken references
- * (`undefined` / `null`) resolve to the field's empty value
- * ({@link getFieldDefaultValue}), clearing the target cleanly.
+ * (`undefined` / `null`) resolve to the field's empty value, clearing the target
+ * cleanly.
  */
 export function normalizeFieldValue(
-  field: KeyedFormField | undefined,
+  field: WritableTargetField,
   value: unknown,
   knownOptions?: readonly FieldOption[]
 ): unknown {
-  if (field === undefined) {
-    return value;
-  }
-
   switch (field.type) {
     case "textfield": {
       return normalizeTextValue(value);
@@ -166,11 +163,9 @@ export function normalizeFieldValue(
       return normalizeMultiOptionValue(value, knownOptions);
     }
 
-    case "upload": {
-      return getFieldDefaultValue(field);
-    }
-
     default: {
+      exhaustive(field);
+
       return value;
     }
   }

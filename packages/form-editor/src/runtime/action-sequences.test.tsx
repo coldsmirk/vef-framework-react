@@ -17,7 +17,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { ConfigProvider } from "@vef-framework-react/components";
 import { createRef } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../engine/registry/defaults";
 import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile";
@@ -204,6 +204,32 @@ function staffLookupSchema(options: {
 }
 
 describe("form action sequences runtime", () => {
+  // jsdom has no CSS animation engine and never fires `animationend`, so antd's
+  // `CSSMotion`-backed `<Modal open={isOpen} destroyOnHidden>` would remain in
+  // its leaving class forever after close. Reporting `prefers-reduced-motion`
+  // lets `ConfigProvider` disable CSS-only motion waits while testing the real
+  // Modal open/close lifecycle.
+  let matchMediaSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+  beforeEach(() => {
+    matchMediaSpy = vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => {
+      return {
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      };
+    });
+  });
+
+  afterEach(() => {
+    matchMediaSpy?.mockRestore();
+  });
+
   describe("commit trigger semantics", () => {
     it("commits PC textfield on Enter (without submitting form) and dirty blur, ignoring IME Enter and clean blur", async () => {
       const user = userEvent.setup();
@@ -972,10 +998,10 @@ describe("form action sequences runtime", () => {
       await waitFor(() => {
         expect(screen.getByRole("status", { name: "加载中" })).toBeInTheDocument();
       });
-      // Busy indicator renders inside the triggering field's control box only, never on staffName.
+      // Busy indicator renders in the triggering field's label slot only, never on staffName.
       const staffNameInput = screen.getByRole("textbox", { name: "姓名" });
-      expect(codeInput.parentElement?.querySelector("[data-field-busy='true']")).not.toBeNull();
-      expect(staffNameInput.parentElement?.querySelector("[data-field-busy='true']")).toBeNull();
+      expect(codeInput.closest("[data-field-shell]")?.querySelector("[data-field-busy='true']")).not.toBeNull();
+      expect(staffNameInput.closest("[data-field-shell]")?.querySelector("[data-field-busy='true']")).toBeNull();
 
       rootDeferred.resolve({ name: "Ada", dept: "Eng" });
       await waitFor(() => {
@@ -1734,6 +1760,887 @@ describe("form action sequences runtime", () => {
       renderForm(<FormRenderer schema={defaultNotifySchema} />);
       await user.type(screen.getByRole("textbox", { name: "编码" }), "ok{Enter}");
       expect(screen.getByRole("textbox", { name: "编码" })).toHaveValue("ok");
+    });
+  });
+
+  describe("review regressions (settlement, submit gate, live env, IME, picker, write guard)", () => {
+    it("settles a run cleanly when a host evaluator throws during post-response staleness re-evaluation so later submits complete", async () => {
+      const user = userEvent.setup();
+      const deferred = Promise.withResolvers<unknown>();
+      const request = vi.fn(() => deferred.promise);
+      const onSubmit = vi.fn();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(Function.prototype as () => void);
+      let evalCalls = 0;
+
+      const schema = schemaOf([
+        textField("empCode", {
+          label: "工号",
+          linkage: {
+            rules: [
+              {
+                id: "R_throw_stale",
+                trigger: { kind: "commit" },
+                actions: [
+                  {
+                    type: "api_call",
+                    request: {
+                      resource: "hr/staff",
+                      action: "find",
+                      params: { code: { kind: "expression", source: "field.empCode" } }
+                    },
+                    output: "res"
+                  },
+                  {
+                    type: "set_fields",
+                    assignments: [{ targetKey: "staffName", value: { kind: "reference", path: "$steps.res.name" } }]
+                  }
+                ]
+              }
+            ]
+          }
+        }),
+        textField("staffName", { label: "姓名" }),
+        submitButton()
+      ]);
+
+      renderForm(
+        <FormRenderer
+          schema={schema}
+          services={{ request }}
+          evaluators={{
+            evaluateAssignExpression: (_source, values) => {
+              evalCalls += 1;
+
+              if (evalCalls === 2) {
+                throw new Error("evaluator blew up on re-check");
+              }
+
+              return values.empCode;
+            }
+          }}
+          onSubmit={onSubmit}
+        />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1{Enter}");
+      await waitFor(() => {
+        expect(screen.getByRole("status", { name: "加载中" })).toBeInTheDocument();
+      });
+
+      deferred.resolve({ name: "Ada" });
+
+      // Single finally settlement clears busy state and releases the submit gate.
+      await waitFor(() => {
+        expect(screen.queryByRole("status", { name: "加载中" })).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: "提交" }));
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith({ empCode: "E1", staffName: "" });
+      });
+
+      consoleError.mockRestore();
+    });
+
+    it("blocks submit quietly when beforeSubmit is aborted, stopped by select_record, or discarded as stale, while allowing false when guards", async () => {
+      const user = userEvent.setup();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(Function.prototype as () => void);
+
+      // (1a) Aborted mid-beforeSubmit by form reset (after request started).
+      const apiRef = createRef<FormRendererApi>();
+      const preDeferred = Promise.withResolvers<unknown>();
+      const preRequest = vi.fn(() => preDeferred.promise);
+      const onSubmitAborted = vi.fn();
+      const abortSchema = schemaOf([textField("empCode", { label: "工号" }), submitButton()], {
+        linkage: {
+          rules: [
+            {
+              id: "R_pre_abort",
+              trigger: { kind: "beforeSubmit" },
+              actions: [{ type: "api_call", request: { resource: "hr/staff", action: "verify" } }]
+            }
+          ]
+        }
+      });
+
+      const view1 = renderForm(
+        <FormRenderer
+          apiRef={apiRef}
+          schema={abortSchema}
+          services={{ request: preRequest }}
+          onSubmit={onSubmitAborted}
+        />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1");
+      const submitPromise = apiRef.current!.submit();
+
+      await waitFor(() => {
+        expect(preRequest).toHaveBeenCalledTimes(1);
+      });
+      act(() => {
+        apiRef.current?.reset();
+      });
+      preDeferred.resolve({});
+      await submitPromise;
+      expect(onSubmitAborted).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+
+      // (1b) Reset fired synchronously during validation before beforeSubmit starts.
+      preRequest.mockClear();
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E2");
+      const racingSubmit = apiRef.current!.submit();
+
+      act(() => {
+        apiRef.current?.reset();
+      });
+      await racingSubmit;
+      expect(preRequest).not.toHaveBeenCalled();
+      expect(onSubmitAborted).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+      view1.unmount();
+
+      // (2) select_record returning 0 records with whenNone: "stop" blocks submit quietly.
+      const onSubmitNone = vi.fn();
+      const notifyNone = vi.fn();
+      const selectNoneSchema = schemaOf([textField("empCode", { label: "工号" }), submitButton()], {
+        linkage: {
+          rules: [
+            {
+              id: "R_pre_none",
+              trigger: { kind: "beforeSubmit" },
+              actions: [
+                {
+                  type: "api_call",
+                  request: { resource: "hr/staff", action: "find" },
+                  output: "rows"
+                },
+                {
+                  type: "select_record",
+                  source: { kind: "reference", path: "$steps.rows" },
+                  output: "picked",
+                  whenNone: "stop",
+                  emptyMessage: "未查到匹配职员"
+                }
+              ]
+            }
+          ]
+        }
+      });
+
+      const view2 = renderForm(
+        <FormRenderer
+          schema={selectNoneSchema}
+          services={{ request: () => Promise.resolve([]), notify: notifyNone }}
+          onSubmit={onSubmitNone}
+        />
+      );
+      await user.click(screen.getByRole("button", { name: "提交" }));
+      await waitFor(() => {
+        expect(notifyNone).toHaveBeenCalledTimes(1);
+      });
+      await Promise.resolve();
+      expect(onSubmitNone).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+      view2.unmount();
+
+      // (3) select_record dismissed with Escape blocks submit quietly.
+      const onSubmitDismiss = vi.fn();
+      const view3 = renderForm(
+        <FormRenderer
+          schema={selectNoneSchema}
+          services={{ request: () => Promise.resolve([{ name: "A" }, { name: "B" }]) }}
+          onSubmit={onSubmitDismiss}
+        />
+      );
+      await user.click(screen.getByRole("button", { name: "提交" }));
+      await screen.findByRole("dialog");
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+      expect(onSubmitDismiss).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+      view3.unmount();
+
+      // (4) Staleness discard mid-beforeSubmit blocks submit quietly.
+      const staleDeferred = Promise.withResolvers<unknown>();
+      const onSubmitStale = vi.fn();
+      const staleSchema = schemaOf([textField("empCode", { label: "工号" }), submitButton()], {
+        linkage: {
+          rules: [
+            {
+              id: "R_pre_stale",
+              trigger: { kind: "beforeSubmit" },
+              actions: [
+                {
+                  type: "api_call",
+                  request: {
+                    resource: "hr/staff",
+                    action: "verify",
+                    params: { code: { kind: "reference", path: "$form.empCode" } }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      });
+
+      const view4 = renderForm(
+        <FormRenderer
+          schema={staleSchema}
+          services={{ request: () => staleDeferred.promise }}
+          onSubmit={onSubmitStale}
+        />
+      );
+      const codeInput = screen.getByRole("textbox", { name: "工号" });
+      await user.type(codeInput, "E1");
+      await user.click(screen.getByRole("button", { name: "提交" }));
+      await user.type(codeInput, "2");
+      staleDeferred.resolve({ ok: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(onSubmitStale).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+      view4.unmount();
+
+      // (5) A false `when` guard on beforeSubmit still allows submission.
+      const onSubmitGuarded = vi.fn();
+      const guardedSchema = schemaOf([textField("empCode", { label: "工号" }), submitButton()], {
+        linkage: {
+          rules: [
+            {
+              id: "R_pre_when",
+              trigger: {
+                kind: "beforeSubmit",
+                when: {
+                  kind: "leaf",
+                  sourceKey: "empCode",
+                  operator: "eq",
+                  value: "TRIGGER"
+                }
+              },
+              actions: [{ type: "api_call", request: { resource: "hr/staff", action: "fail" } }]
+            }
+          ]
+        }
+      });
+
+      renderForm(
+        <FormRenderer
+          schema={guardedSchema}
+          services={{ request: () => Promise.reject(new Error("must not run")) }}
+          onSubmit={onSubmitGuarded}
+        />
+      );
+      await user.click(screen.getByRole("button", { name: "提交" }));
+      await waitFor(() => {
+        expect(onSubmitGuarded).toHaveBeenCalledTimes(1);
+      });
+      expect(consoleError).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it("coalesces concurrent external submits onto one Promise and cancels a waiting submit on reset", async () => {
+      const user = userEvent.setup();
+      const apiRef = createRef<FormRendererApi>();
+      const deferred = Promise.withResolvers<unknown>();
+      const request = vi.fn(() => deferred.promise);
+      const onSubmit = vi.fn();
+
+      renderForm(
+        <FormRenderer
+          apiRef={apiRef}
+          schema={staffLookupSchema({ includeSelectRecord: false, extraFields: [submitButton()] })}
+          services={{ request }}
+          onSubmit={onSubmit}
+        />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1{Enter}");
+
+      // Two concurrent calls coalesce onto the exact same in-flight Promise and submit once.
+      const p1 = apiRef.current!.submit();
+      const p2 = apiRef.current!.submit();
+      expect(p1).toBe(p2);
+
+      deferred.resolve({ name: "Ada", dept: "Eng" });
+      await p1;
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({
+        empCode: "E1",
+        staffName: "Ada",
+        deptName: "Eng"
+      });
+
+      // External reset while a submit is waiting cancels the waiting submit.
+      const deferred2 = Promise.withResolvers<unknown>();
+      request.mockReturnValueOnce(deferred2.promise);
+      await user.clear(screen.getByRole("textbox", { name: "工号" }));
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E2{Enter}");
+
+      const waitingSubmit = apiRef.current!.submit();
+      act(() => {
+        apiRef.current?.reset();
+      });
+      deferred2.resolve({ name: "Canceled", dept: "None" });
+      await waitingSubmit;
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it("completes two concurrent api_call → set_fields → submit rules without deadlock and ignores recursive submit inside lifecycle hooks", async () => {
+      const user = userEvent.setup();
+      const d1 = Promise.withResolvers<unknown>();
+      const d2 = Promise.withResolvers<unknown>();
+      const request = vi.fn((req: { resource: string }) => (req.resource === "svc/one" ? d1 : d2).promise);
+      const onSubmit = vi.fn();
+      const notify = vi.fn();
+
+      const triggerBtn: ButtonField = {
+        id: "Btn_dual",
+        type: "button",
+        label: "双路提交",
+        action: "button",
+        linkage: {
+          rules: [
+            {
+              id: "R_one",
+              trigger: { kind: "click" },
+              actions: [
+                {
+                  type: "api_call",
+                  request: { resource: "svc/one", action: "run" },
+                  output: "r1"
+                },
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "fieldA", value: { kind: "reference", path: "$steps.r1.val" } }]
+                },
+                { type: "submit" }
+              ]
+            },
+            {
+              id: "R_two",
+              trigger: { kind: "click" },
+              actions: [
+                {
+                  type: "api_call",
+                  request: { resource: "svc/two", action: "run" },
+                  output: "r2"
+                },
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "fieldB", value: { kind: "reference", path: "$steps.r2.val" } }]
+                },
+                { type: "submit" }
+              ]
+            }
+          ]
+        }
+      };
+
+      const schema = schemaOf(
+        [textField("fieldA", { label: "甲" }), textField("fieldB", { label: "乙" }), triggerBtn],
+        {
+          linkage: {
+            rules: [
+              {
+                id: "R_pre_recurse",
+                trigger: { kind: "beforeSubmit" },
+                actions: [
+                  { type: "submit" },
+                  { type: "alert", message: { kind: "literal", value: "before-ok" } }
+                ]
+              },
+              {
+                id: "R_post_recurse",
+                trigger: { kind: "afterSubmit" },
+                actions: [
+                  { type: "submit" },
+                  { type: "alert", message: { kind: "literal", value: "after-ok" } }
+                ]
+              }
+            ]
+          }
+        }
+      );
+
+      renderForm(<FormRenderer schema={schema} services={{ request, notify }} onSubmit={onSubmit} />);
+
+      await user.click(screen.getByRole("button", { name: "双路提交" }));
+      d1.resolve({ val: "V1" });
+      d2.resolve({ val: "V2" });
+
+      await waitFor(() => {
+        expect(notify).toHaveBeenCalledWith("info", "after-ok");
+      });
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ fieldA: "V1", fieldB: "V2" });
+      expect(notify).toHaveBeenCalledWith("info", "before-ok");
+    });
+
+    it("reads live disabled state, live $vars updates, and live swapped services across async steps and subform rows", async () => {
+      const user = userEvent.setup();
+
+      // (1) Form flips to disabled while api_call is in flight → response must not write.
+      const disabledDeferred = Promise.withResolvers<unknown>();
+      const schema1 = staffLookupSchema({ includeSelectRecord: false });
+      const view1 = renderForm(
+        <FormRenderer disabled={false} schema={schema1} services={{ request: () => disabledDeferred.promise }} />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1{Enter}");
+
+      view1.rerender(
+        <ConfigProvider>
+          <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultMobileRegistry() }}>
+            <FormRenderer disabled schema={schema1} services={{ request: () => disabledDeferred.promise }} />
+          </RegistryProvider>
+        </ConfigProvider>
+      );
+
+      disabledDeferred.resolve({ name: "Must Not Write", dept: "Ops" });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("");
+      view1.unmount();
+
+      // (2) Another rule mutates $vars while load awaits api_call → later step sees live $vars.
+      const loadDeferred = Promise.withResolvers<unknown>();
+      const setVarBtn: ButtonField = {
+        id: "Btn_var",
+        type: "button",
+        label: "改变量",
+        action: "button",
+        linkage: {
+          rules: [
+            {
+              id: "R_var",
+              trigger: { kind: "click" },
+              actions: [
+                {
+                  type: "set_variable",
+                  variable: "tag",
+                  value: { kind: "literal", value: "LIVE" }
+                }
+              ]
+            }
+          ]
+        }
+      };
+      const schema2 = schemaOf([textField("out", { label: "结果" }), setVarBtn], {
+        variables: [
+          {
+            id: "v1",
+            name: "tag",
+            type: "string",
+            defaultValue: "INIT"
+          }
+        ],
+        linkage: {
+          rules: [
+            {
+              id: "R_load_vars",
+              trigger: { kind: "load" },
+              actions: [
+                { type: "api_call", request: { resource: "sys/ping", action: "go" } },
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "out", value: { kind: "reference", path: "$vars.tag" } }]
+                }
+              ]
+            }
+          ]
+        }
+      });
+
+      const view2 = renderForm(<FormRenderer schema={schema2} services={{ request: () => loadDeferred.promise }} />);
+      await user.click(screen.getByRole("button", { name: "改变量" }));
+      loadDeferred.resolve({});
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "结果" })).toHaveValue("LIVE");
+      });
+      view2.unmount();
+
+      // (3) Swapping services prop reaches subform row sequences on the next trigger.
+      const firstReq = vi.fn().mockResolvedValue({ title: "Old" });
+      const secondReq = vi.fn().mockResolvedValue({ title: "Fresh" });
+      const subform: SubformNode = {
+        id: "Sub_live",
+        type: "subform",
+        variant: "stack",
+        key: "lines",
+        label: "明细",
+        template: [
+          textField("sku", {
+            label: "编码",
+            linkage: {
+              rules: [
+                {
+                  id: "R_row",
+                  trigger: { kind: "commit" },
+                  actions: [
+                    {
+                      type: "api_call",
+                      request: { resource: "inv/item", action: "find" },
+                      output: "res"
+                    },
+                    {
+                      type: "set_fields",
+                      assignments: [{ targetKey: "title", value: { kind: "reference", path: "$steps.res.title" } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          }),
+          textField("title", { label: "名称" })
+        ]
+      };
+      const schema3 = schemaOf([subform]);
+      const pc = createDefaultRegistry();
+      const mobile = createDefaultMobileRegistry();
+
+      const view3 = render(
+        <ConfigProvider>
+          <RegistryProvider registries={{ pc, mobile }}>
+            <FormRenderer defaultValues={{ lines: [{ sku: "", title: "" }] }} schema={schema3} services={{ request: firstReq }} />
+          </RegistryProvider>
+        </ConfigProvider>
+      );
+
+      view3.rerender(
+        <ConfigProvider>
+          <RegistryProvider registries={{ pc, mobile }}>
+            <FormRenderer defaultValues={{ lines: [{ sku: "", title: "" }] }} schema={schema3} services={{ request: secondReq }} />
+          </RegistryProvider>
+        </ConfigProvider>
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "编码" }), "S1{Enter}");
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "名称" })).toHaveValue("Fresh");
+      });
+      expect(firstReq).not.toHaveBeenCalled();
+      expect(secondReq).toHaveBeenCalledTimes(1);
+    });
+
+    it("isolates single-flight slots per (scope, ownerField, ruleId) when two fields share a rule id or omit rule id", async () => {
+      const user = userEvent.setup();
+      const d1 = Promise.withResolvers<unknown>();
+      const d2 = Promise.withResolvers<unknown>();
+      const signals: AbortSignal[] = [];
+
+      const request = vi.fn((req: { resource: string }, opts?: { signal: AbortSignal }) => {
+        if (opts?.signal) {
+          signals.push(opts.signal);
+        }
+
+        return (req.resource === "svc/a" ? d1 : d2).promise;
+      });
+
+      const schema = schemaOf([
+        textField("codeA", {
+          label: "编码A",
+          linkage: {
+            rules: [
+              {
+                // Intentionally omit id on both fields so fallback ruleId "commit#0" collides.
+                id: "",
+                trigger: { kind: "commit" },
+                actions: [
+                  {
+                    type: "api_call",
+                    request: { resource: "svc/a", action: "find" },
+                    output: "res"
+                  },
+                  {
+                    type: "set_fields",
+                    assignments: [{ targetKey: "outA", value: { kind: "reference", path: "$steps.res.val" } }]
+                  }
+                ]
+              }
+            ]
+          }
+        }),
+        textField("codeB", {
+          label: "编码B",
+          linkage: {
+            rules: [
+              {
+                id: "",
+                trigger: { kind: "commit" },
+                actions: [
+                  {
+                    type: "api_call",
+                    request: { resource: "svc/b", action: "find" },
+                    output: "res"
+                  },
+                  {
+                    type: "set_fields",
+                    assignments: [{ targetKey: "outB", value: { kind: "reference", path: "$steps.res.val" } }]
+                  }
+                ]
+              }
+            ]
+          }
+        }),
+        textField("outA", { label: "结果A" }),
+        textField("outB", { label: "结果B" })
+      ]);
+
+      renderForm(<FormRenderer schema={schema} services={{ request }} />);
+
+      await user.type(screen.getByRole("textbox", { name: "编码A" }), "A1{Enter}");
+      await user.type(screen.getByRole("textbox", { name: "编码B" }), "B1{Enter}");
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]?.aborted).toBe(false);
+      expect(signals[1]?.aborted).toBe(false);
+
+      d1.resolve({ val: "RES-A" });
+      d2.resolve({ val: "RES-B" });
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "结果A" })).toHaveValue("RES-A");
+        expect(screen.getByRole("textbox", { name: "结果B" })).toHaveValue("RES-B");
+      });
+    });
+
+    it("ignores Safari post-compositionend IME Enter (isComposing:false, keyCode:229) and commits on the next real Enter", async () => {
+      const user = userEvent.setup();
+      const notify = vi.fn();
+      const schema = schemaOf([
+        textField("empCode", {
+          label: "工号",
+          linkage: {
+            rules: [
+              {
+                id: "R_safari",
+                trigger: { kind: "commit" },
+                actions: [{ type: "alert", message: { kind: "reference", path: "$form.empCode" } }]
+              }
+            ]
+          }
+        })
+      ]);
+
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
+
+      const input = screen.getByRole("textbox", { name: "工号" });
+      await user.type(input, "中文");
+
+      // fireEvent is used because userEvent cannot synthesize Safari's
+      // compositionend-before-keydown(keyCode: 229) IME sequence.
+      fireEvent.compositionStart(input);
+      fireEvent.compositionEnd(input);
+      fireEvent.keyDown(input, {
+        key: "Enter",
+        isComposing: false,
+        keyCode: 229
+      });
+      expect(notify).not.toHaveBeenCalled();
+
+      await user.keyboard("{Enter}");
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenLastCalledWith("info", "中文");
+    });
+
+    it("executes steps after reset inside the same sequence while aborting other in-flight runs", async () => {
+      const user = userEvent.setup();
+      const otherDeferred = Promise.withResolvers<unknown>();
+      let otherSignal: AbortSignal | undefined;
+
+      const request = vi.fn((_req, opts?: { signal: AbortSignal }) => {
+        otherSignal = opts?.signal;
+        return otherDeferred.promise;
+      });
+
+      const resetAndSeedBtn: ButtonField = {
+        id: "Btn_reset_seed",
+        type: "button",
+        label: "重置并填充",
+        action: "button",
+        linkage: {
+          rules: [
+            {
+              id: "R_reset_seed",
+              trigger: { kind: "click" },
+              actions: [
+                { type: "reset" },
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "staffName", value: { kind: "literal", value: "PostReset" } }]
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      renderForm(
+        <FormRenderer
+          schema={staffLookupSchema({ includeSelectRecord: false, extraFields: [resetAndSeedBtn] })}
+          services={{ request }}
+          defaultValues={{
+            empCode: "",
+            staffName: "Initial",
+            deptName: ""
+          }}
+        />
+      );
+
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1{Enter}");
+      expect(otherSignal?.aborted).toBe(false);
+
+      await user.click(screen.getByRole("button", { name: "重置并填充" }));
+
+      expect(otherSignal?.aborted).toBe(true);
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "工号" })).toHaveValue("");
+        expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("PostReset");
+      });
+
+      // Resolving the aborted run afterwards must not overwrite PostReset.
+      otherDeferred.resolve({ name: "Stale", dept: "Old" });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("PostReset");
+    });
+
+    it("keeps PC select_record keyboard handling scoped, scrolls active rows into view, restores trigger focus, and uses semantic table markup", async () => {
+      const user = userEvent.setup();
+      const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(Function.prototype as () => void);
+
+      try {
+        const request = vi.fn().mockResolvedValue([
+          { name: "Alice", dept: "Design" },
+          { name: "Bob", dept: "Platform" },
+          { name: "Carol", dept: "Security" }
+        ]);
+
+        renderForm(
+          <FormRenderer
+            defaultValues={{ staffName: "KeepMe" }}
+            schema={staffLookupSchema({ selectRecordOverrides: { title: "选择职员" } })}
+            services={{ request }}
+          />
+        );
+
+        const codeInput = screen.getByRole("textbox", { name: "工号" });
+        await user.type(codeInput, "E{Enter}");
+
+        const dialog = await screen.findByRole("dialog");
+
+        // Semantic table without invalid role="listbox" / role="option" on table/tr.
+        expect(within(dialog).getByRole("table")).toBeInTheDocument();
+        expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
+        expect(within(dialog).queryByRole("option")).not.toBeInTheDocument();
+        expect(dialog.querySelector("[data-record-index='0']")).toHaveAttribute("aria-current", "true");
+
+        // ArrowDown updates active row and calls scrollIntoView({ block: "nearest" }).
+        scrollSpy.mockClear();
+        await user.keyboard("{ArrowDown}");
+        expect(dialog.querySelector("[data-record-index='1']")).toHaveAttribute("aria-current", "true");
+        expect(scrollSpy).toHaveBeenCalledWith({ block: "nearest" });
+
+        // Pressing Enter on the modal's Close button must dismiss without selecting a row.
+        const closeButton = within(dialog).getByRole("button", { name: /close/i });
+        closeButton.focus();
+        await user.keyboard("{Enter}");
+
+        await waitFor(() => {
+          expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        });
+        expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("KeepMe");
+        expect(codeInput).toHaveFocus();
+
+        // Open again, select Bob via ArrowDown + Enter, and verify focus returns to trigger input.
+        await user.clear(codeInput);
+        await user.type(codeInput, "E2{Enter}");
+        await screen.findByRole("dialog");
+        await user.keyboard("{ArrowDown}{Enter}");
+
+        await waitFor(() => {
+          expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+          expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("Bob");
+        });
+        expect(codeInput).toHaveFocus();
+      } finally {
+        scrollSpy.mockRestore();
+      }
+    });
+
+    it("dismisses mobile select_record Popup when pressing Enter on its cancel button without selecting a record", async () => {
+      const user = userEvent.setup();
+      const request = vi.fn().mockResolvedValue([
+        { name: "Alice", dept: "Design" },
+        { name: "Bob", dept: "Platform" }
+      ]);
+
+      renderForm(
+        <FormRenderer
+          containOverlays
+          defaultValues={{ staffName: "KeepMobile" }}
+          device="mobile"
+          schema={staffLookupSchema({ mobile: true, selectRecordOverrides: { title: "选择人员" } })}
+          services={{ request }}
+        />
+      );
+
+      const codeInput = screen.getByRole("textbox", { name: "工号" });
+      await user.type(codeInput, "M{Enter}");
+
+      await screen.findByText("选择人员");
+      const closeBtn = screen.getByRole("button", { name: "关闭" });
+      closeBtn.focus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => {
+        expect(screen.queryByText("选择人员")).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("KeepMobile");
+      expect(codeInput).toHaveFocus();
+    });
+
+    it("skips set_fields assignments targeting keys not declared in the scope schema", async () => {
+      const user = userEvent.setup();
+      const apiRef = createRef<FormRendererApi>();
+      const schema = schemaOf([
+        textField("empCode", {
+          label: "工号",
+          linkage: {
+            rules: [
+              {
+                id: "R_undeclared",
+                trigger: { kind: "commit" },
+                actions: [
+                  {
+                    type: "set_fields",
+                    assignments: [
+                      { targetKey: "ghostKey", value: { kind: "literal", value: "polluted" } },
+                      { targetKey: "staffName", value: { kind: "literal", value: "Valid" } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }),
+        textField("staffName", { label: "姓名" })
+      ]);
+
+      renderForm(<FormRenderer apiRef={apiRef} schema={schema} />);
+      await user.type(screen.getByRole("textbox", { name: "工号" }), "E1{Enter}");
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("Valid");
+      });
+      expect(apiRef.current?.getValues()).not.toHaveProperty("ghostKey");
     });
   });
 });
