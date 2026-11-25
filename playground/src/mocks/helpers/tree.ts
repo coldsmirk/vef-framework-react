@@ -18,6 +18,14 @@ export interface TreeOptions<T extends TreeRow> {
   seed?: number;
   labelField?: keyof T;
   /**
+   * Optional field copied onto `DataOption.description` for `find_tree_options`.
+   */
+  descriptionField?: keyof T;
+  /**
+   * Optional predicate marking a row `disabled: true` on `find_tree_options`.
+   */
+  disabledWhen?: (row: T) => boolean;
+  /**
    * Optional resource-level filter (e.g. by appId).
    */
   where?: (items: T[], params: Record<string, unknown>) => T[];
@@ -84,13 +92,28 @@ function flatten<T extends TreeRow>(rows: T[]): T[] {
   return out;
 }
 
-function toOptions<T extends TreeRow>(rows: T[], labelField: keyof T | undefined): DataOption[] {
+function toOptions<T extends TreeRow>(
+  rows: T[],
+  config: Pick<TreeOptions<T>, "descriptionField" | "disabledWhen" | "labelField">
+): DataOption[] {
   return rows.map(row => {
-    const label = String(row[labelField ?? "name" as keyof T] ?? row.id);
+    const label = String(row[config.labelField ?? "name" as keyof T] ?? row.id);
     const node: DataOption = { label, value: row.id };
 
+    if (config.descriptionField !== undefined) {
+      const rawDescription = row[config.descriptionField];
+
+      if (typeof rawDescription === "string" && rawDescription.length > 0) {
+        node.description = rawDescription;
+      }
+    }
+
+    if (config.disabledWhen?.(row) === true) {
+      node.disabled = true;
+    }
+
     if (row.children && row.children.length > 0) {
-      node.children = toOptions(row.children as T[], labelField);
+      node.children = toOptions(row.children as T[], config);
     }
 
     return node;
@@ -140,7 +163,7 @@ export function createTreeMock<T extends TreeRow>(options: TreeOptions<T>): Tree
 
   defineMock<Record<string, unknown>, T[]>(options.resource, "find_tree", ({ params }) => nest(applyFilters(params ?? {})));
 
-  defineMock<Record<string, unknown>, DataOption[]>(options.resource, "find_tree_options", ({ params }) => toOptions(nest(applyFilters(params ?? {})), options.labelField));
+  defineMock<Record<string, unknown>, DataOption[]>(options.resource, "find_tree_options", ({ params }) => toOptions(nest(applyFilters(params ?? {})), options));
 
   defineMock<T, T>(options.resource, "create", ({ params }) => {
     const id = params.id ?? faker.string.uuid();

@@ -15,6 +15,11 @@ const DICTIONARY_TYPES = [
     name: "通用性别"
   },
   {
+    id: "dict-common-region",
+    key: "common.region",
+    name: "行政区域"
+  },
+  {
     id: "dict-md-staff-status",
     key: "md.staff.status",
     name: "员工状态"
@@ -103,6 +108,59 @@ export const DICTIONARY_ITEMS: Record<string, DataOption[]> = {
     { label: "男", value: "male" },
     { label: "女", value: "female" },
     { label: "未知", value: "unknown" }
+  ],
+  "common.region": [
+    {
+      label: "华东大区",
+      value: "east",
+      description: "华东片区",
+      children: [
+        {
+          label: "浙江省",
+          value: "zj",
+          children: [
+            {
+              label: "杭州市",
+              value: "hz",
+              description: "省会城市"
+            },
+            {
+              label: "宁波市",
+              value: "nb",
+              description: "计划单列市"
+            }
+          ]
+        },
+        {
+          label: "上海市",
+          value: "sh",
+          description: "直辖市"
+        }
+      ]
+    },
+    {
+      label: "华北大区",
+      value: "north",
+      description: "华北片区",
+      children: [
+        {
+          label: "北京市",
+          value: "bj",
+          description: "直辖市"
+        },
+        {
+          label: "天津市",
+          value: "tj",
+          description: "直辖市"
+        }
+      ]
+    },
+    {
+      label: "归档区域",
+      value: "legacy",
+      disabled: true,
+      description: "已停用区域，不可新选"
+    }
   ],
   "md.staff.gender": [
     { label: "男", value: "M" },

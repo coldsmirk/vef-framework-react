@@ -1,7 +1,34 @@
-import type { DataSourceApi, FormServices } from "@vef-framework-react/form-editor";
+import type { CodeSetDescriptor, DataSourceApi, FormServices } from "@vef-framework-react/form-editor";
 
 import { HTTP_CLIENT } from "@vef-framework-react/core";
 import { API_PATH, apiClient, createApiRequest } from "~api";
+
+/**
+ * Data dictionaries offered in the playground form designer's `codeSet`
+ * picker, including a multi-level hierarchical dictionary (`common.region`).
+ */
+export const FORM_CODE_SETS: CodeSetDescriptor[] = [
+  {
+    codeSet: "common.gender",
+    name: "通用性别",
+    group: "通用"
+  },
+  {
+    codeSet: "common.region",
+    name: "行政区域（树形）",
+    group: "通用"
+  },
+  {
+    codeSet: "md.staff.status",
+    name: "员工状态",
+    group: "主数据"
+  },
+  {
+    codeSet: "md.department.level",
+    name: "部门级别",
+    group: "主数据"
+  }
+];
 
 /**
  * The option / lookup APIs the playground offers its form designers — every one
@@ -21,6 +48,27 @@ export const FORM_DATA_SOURCE_APIS: DataSourceApi[] = [
     group: "系统",
     resource: "sys/role",
     action: "find_options"
+  },
+  {
+    label: "部门树（嵌套）",
+    description: "按嵌套 children 返回部门树，含描述与停用项",
+    group: "主数据",
+    resource: "md/department",
+    action: "find_tree_options"
+  },
+  {
+    label: "部门列表（平铺建树）",
+    description: "返回平铺部门列表，按 parentId 建树",
+    group: "主数据",
+    resource: "md/department",
+    action: "find_flat_options",
+    mapping: {
+      labelKey: "name",
+      valueKey: "id",
+      parentKey: "parentId",
+      disabledKey: "inactive",
+      descriptionKey: "remark"
+    }
   },
   {
     label: "职员列表",

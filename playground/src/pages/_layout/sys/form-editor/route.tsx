@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Page, showSuccessMessage } from "@vef-framework-react/components";
 import { FormEditor } from "@vef-framework-react/form-editor";
-import { FORM_DATA_SOURCE_APIS, formServices } from "~apis";
+import { FORM_CODE_SETS, FORM_DATA_SOURCE_APIS, formServices } from "~apis";
 
 import { DEMO_SCHEMA } from "./demo-schema";
 
@@ -47,6 +47,7 @@ function RouteComponent(): ReactNode {
       }}
       >
         <FormEditor
+          codeSets={FORM_CODE_SETS}
           contextSources={CONTEXT_SOURCES}
           dataSourceApis={FORM_DATA_SOURCE_APIS}
           evaluationContext={EVALUATION_CONTEXT}
