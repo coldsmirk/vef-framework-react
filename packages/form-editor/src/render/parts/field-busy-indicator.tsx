@@ -1,42 +1,17 @@
 import type { ReactElement } from "react";
 
-import { css, keyframes } from "@emotion/react";
-import { globalCssVars } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Spin } from "@vef-framework-react/components";
 
 import { useFieldBusy } from "../../runtime/effects";
 
-const spin = keyframes({
-  from: { transform: "rotate(0deg)" },
-  to: { transform: "rotate(360deg)" }
-});
-
-const overlayWrapCss = css({
-  position: "absolute",
-  right: 10,
-  top: "50%",
-  transform: "translateY(-50%)",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  pointerEvents: "none",
-  zIndex: 2
-});
-
-const inlineWrapCss = css({
+const busyWrapCss = css({
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0,
+  lineHeight: 0,
   pointerEvents: "none"
-});
-
-const spinnerCss = css({
-  width: 14,
-  height: 14,
-  borderRadius: "50%",
-  border: `2px solid ${globalCssVars.colorBorderSecondary}`,
-  borderTopColor: globalCssVars.colorPrimary,
-  animation: `${spin} 0.7s linear infinite`
 });
 
 /**
@@ -45,11 +20,13 @@ const spinnerCss = css({
  * sequence controller via {@link useFieldBusy} so toggling busy state never
  * re-renders the field's control or shell.
  *
- * Defaults to an absolute-positioned right-inset overlay (0px geometry
- * footprint — zero layout shift across PC inputs, mobile inputs, and table
- * cells). Pass `inline` for non-box inline controls such as `Switch`.
+ * Uses the framework's `<Spin size="small" />` and sits in a dedicated inline
+ * slot (next to the field label in `FieldShell` / `Switch`, or in the reserved
+ * bottom status strip of `CellFieldFrame`) so it never collides with control
+ * suffixes such as select chevrons, date icons, number steppers, `allowClear`,
+ * password eye toggles, or unit suffixes on PC, mobile, or table cells.
  */
-export function FieldBusyIndicator({ inline = false }: { inline?: boolean }): ReactElement | null {
+export function FieldBusyIndicator(): ReactElement | null {
   const busy = useFieldBusy();
 
   if (!busy) {
@@ -59,11 +36,11 @@ export function FieldBusyIndicator({ inline = false }: { inline?: boolean }): Re
   return (
     <span
       aria-label="加载中"
-      css={inline ? inlineWrapCss : overlayWrapCss}
+      css={busyWrapCss}
       data-field-busy="true"
       role="status"
     >
-      <span aria-hidden="true" css={spinnerCss} />
+      <Spin size="small" />
     </span>
   );
 }

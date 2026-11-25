@@ -64,7 +64,7 @@ export const MobileSwitch: FC<FieldComponentProps<SwitchField, boolean>> = ({
         {switchLabel(field)}
       </Label>
 
-      <FieldBusyIndicator inline />
+      <FieldBusyIndicator />
     </div>
 
     <FieldFooter errors={errors} helperText={field.helperText} />

@@ -64,17 +64,38 @@ const rowCss = css({
   width: "100%"
 });
 
+const topLabelRowCss = css({
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  marginBottom: 6,
+
+  // The row owns the 6px bottom gap so the inline busy spinner stays vertically
+  // centered on the label baseline with zero height shift.
+  "& > label": {
+    marginBottom: 0
+  }
+});
+
 const sideLabelCss = css({
   flexShrink: 0,
   width: 96,
   paddingTop: 6,
-  overflow: "hidden",
+  overflow: "hidden"
+});
+
+const sideLabelInnerCss = css({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  maxWidth: "100%",
   // A label longer than the fixed column truncates with an ellipsis instead of
   // wrapping to a second line (which breaks the row's baseline alignment); the
   // full text stays available through the `title` tooltip the shell sets for
   // plain-string labels.
   "& > label": {
     display: "block",
+    minWidth: 0,
     overflow: "hidden",
     whiteSpace: "nowrap",
     textOverflow: "ellipsis"
@@ -84,14 +105,8 @@ const sideLabelCss = css({
 const sideLabelRightCss = css({ textAlign: "right" });
 
 const controlCss = css({
-  position: "relative",
   flex: 1,
   minWidth: 0
-});
-
-const controlWrapCss = css({
-  position: "relative",
-  width: "100%"
 });
 
 /**
@@ -141,18 +156,27 @@ const cellOutlinedErrorCss = css({
   backgroundColor: globalCssVars.colorErrorBg
 });
 
-const cellErrorCss = css({
+const cellStatusCss = css({
   position: "absolute",
   left: 0,
   right: 0,
   bottom: 0,
+  height: 16,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  pointerEvents: "none"
+});
+
+const cellErrorCss = css({
+  minWidth: 0,
+  flex: 1,
   fontSize: 11,
   lineHeight: "16px",
   color: globalCssVars.colorErrorText,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
-  pointerEvents: "none"
+  textOverflow: "ellipsis"
 });
 
 export interface CellFieldFrameProps {
@@ -191,29 +215,29 @@ export function CellFieldFrame({
 
   return (
     <div css={cellFieldCss}>
-      <div css={controlWrapCss}>
-        {outlined || groupProps
-          ? (
-              <div
-                {...groupProps}
-                css={[cellOutlinedCss, hasError && cellOutlinedErrorCss]}
-                role={groupProps ? "group" : undefined}
-              >
-                {children}
-              </div>
-            )
-          : children}
-
-        <FieldBusyIndicator />
-      </div>
-
-      {errorMessage
+      {outlined || groupProps
         ? (
-            <div css={cellErrorCss} role="alert" title={errorMessage}>
-              {errorMessage}
+            <div
+              {...groupProps}
+              css={[cellOutlinedCss, hasError && cellOutlinedErrorCss]}
+              role={groupProps ? "group" : undefined}
+            >
+              {children}
             </div>
           )
-        : null}
+        : children}
+
+      <div css={cellStatusCss}>
+        <FieldBusyIndicator />
+
+        {errorMessage
+          ? (
+              <span css={cellErrorCss} role="alert" title={errorMessage}>
+                {errorMessage}
+              </span>
+            )
+          : null}
+      </div>
     </div>
   );
 }
@@ -331,16 +355,16 @@ export function FieldShell({
 
   if (labelPosition === "left" || labelPosition === "right") {
     return (
-      <div css={stackCss}>
+      <div css={stackCss} data-field-shell="">
         <div css={rowCss}>
           <div css={[sideLabelCss, labelPosition === "right" ? sideLabelRightCss : undefined]}>
-            {labelNode}
+            <span css={sideLabelInnerCss}>
+              {labelNode}
+              <FieldBusyIndicator />
+            </span>
           </div>
 
-          <div css={controlCss}>
-            {body}
-            <FieldBusyIndicator />
-          </div>
+          <div css={controlCss}>{body}</div>
         </div>
 
         <FieldFooter errors={errors} helperText={helperText} />
@@ -349,14 +373,13 @@ export function FieldShell({
   }
 
   return (
-    <div css={stackCss}>
-      {labelNode}
-
-      <div css={controlWrapCss}>
-        {body}
+    <div css={stackCss} data-field-shell="">
+      <div css={topLabelRowCss}>
+        {labelNode}
         <FieldBusyIndicator />
       </div>
 
+      {body}
       <FieldFooter errors={errors} helperText={helperText} />
     </div>
   );

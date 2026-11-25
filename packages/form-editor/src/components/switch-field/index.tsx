@@ -70,7 +70,7 @@ const SwitchInput: FC<FieldComponentProps<SwitchField, boolean>> = ({
           {field.label ?? "开关"}
         </Label>
 
-        <FieldBusyIndicator inline />
+        <FieldBusyIndicator />
       </div>
 
       {/* Helper text and `require`-linkage validation errors render through the

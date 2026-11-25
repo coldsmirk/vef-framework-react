@@ -1,11 +1,12 @@
-import type { ReactElement } from "react";
+import type { TableColumn } from "@vef-framework-react/components";
+import type { HTMLAttributes, ReactElement, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import type { EffectAction, KeyedFormField, SelectRecordColumn } from "../types";
 
 import { css } from "@emotion/react";
-import { globalCssVars, Modal } from "@vef-framework-react/components";
+import { globalCssVars, Modal, ScrollArea, Table } from "@vef-framework-react/components";
 import Popup from "antd-mobile/es/components/popup";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useMobileScopeContainer } from "../components/mobile/scope";
 import { walkOwnPath } from "../engine/linkage/scope";
@@ -22,6 +23,12 @@ export interface RecordPickerRequest {
 export type PickRecord = (request: RecordPickerRequest) => Promise<Record<string, unknown> | undefined>;
 
 interface QueuedPickerRequest extends RecordPickerRequest {
+  /**
+   * Element that held focus when the picker opened, captured synchronously
+   * before Modal / Popup mounts so focus can return to the triggering input
+   * when the picker closes.
+   */
+  triggerElement: HTMLElement | null;
   resolve: (record: Record<string, unknown> | undefined) => void;
   cleanup: () => void;
 }
@@ -40,9 +47,14 @@ export class RecordSelectorController {
       return Promise.resolve(undefined);
     }
 
+    const triggerElement = typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
     return new Promise<Record<string, unknown> | undefined>(resolve => {
       const entry: QueuedPickerRequest = {
         ...request,
+        triggerElement,
         resolve,
         cleanup: () => {
           // Assigned below once `handleAbort` binds to `entry`.
@@ -291,52 +303,44 @@ function formatCellValue(value: unknown): string {
   }
 }
 
-const tableScrollCss = css({
-  maxHeight: "60vh",
-  overflowY: "auto",
-  overflowX: "auto"
+const ACTIVE_ROW_CLASS = "vef-record-selector-row-active";
+
+const pcBodyCss = css({
+  outline: "none"
 });
 
-const tableCss = css({
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: globalCssVars.fontSize
-});
-
-const thCss = css({
-  position: "sticky",
-  top: 0,
-  zIndex: 1,
-  padding: "8px 12px",
-  textAlign: "left",
-  fontWeight: 500,
-  color: globalCssVars.colorTextSecondary,
-  background: globalCssVars.colorFillQuaternary,
-  borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`,
-  whiteSpace: "nowrap"
-});
-
-const rowCss = css({
-  cursor: "pointer",
-  transition: `background-color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
-
-  "&:hover": {
-    background: globalCssVars.colorFillTertiary
+const pcScrollAreaCss = css({
+  // Disable antd Table's own `.vef-table-content` overflow so `ScrollArea` is
+  // the single scroll region for long/wide lists, and pin the header against
+  // the ScrollArea viewport.
+  "& .vef-table-content": {
+    overflow: "visible !important"
+  },
+  "& .vef-table-thead > tr > th": {
+    position: "sticky",
+    top: 0,
+    zIndex: 2
+  },
+  "& .vef-table-tbody > tr": {
+    cursor: "pointer"
+  },
+  [`& .vef-table-tbody > tr.${ACTIVE_ROW_CLASS} > td`]: {
+    backgroundColor: `${globalCssVars.colorPrimaryBg} !important`
+  },
+  [`& .vef-table-tbody > tr.${ACTIVE_ROW_CLASS}:hover > td`]: {
+    backgroundColor: `${globalCssVars.colorPrimaryBgHover} !important`
   }
 });
 
-const activeRowCss = css({
-  background: globalCssVars.colorPrimaryBg,
+const PC_VIEWPORT_STYLE = {
+  maxHeight: "60vh"
+} as const;
 
-  "&:hover": {
-    background: globalCssVars.colorPrimaryBgHover
-  }
-});
-
-const tdCss = css({
-  padding: "9px 12px",
-  borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`,
-  color: globalCssVars.colorText
+const mobileContainerCss = css({
+  display: "flex",
+  flexDirection: "column",
+  maxHeight: "70vh",
+  outline: "none"
 });
 
 const mobileHeaderCss = css({
@@ -368,11 +372,16 @@ const mobileCloseCss = css({
   cursor: "pointer"
 });
 
-const mobileListCss = css({
+const mobileScrollAreaCss = css({
   flex: 1,
-  minHeight: 0,
-  maxHeight: "60vh",
-  overflowY: "auto",
+  minHeight: 0
+});
+
+const MOBILE_VIEWPORT_STYLE = {
+  maxHeight: "55vh"
+} as const;
+
+const mobileListCss = css({
   padding: "8px 12px 12px",
   display: "flex",
   flexDirection: "column",
@@ -417,6 +426,10 @@ const mobileMetaLabelCss = css({
   marginRight: 4
 });
 
+const MODAL_FOCUSABLE = {
+  focusTriggerAfterClose: false
+} as const;
+
 const MOBILE_POPUP_BODY_STYLE = {
   display: "flex",
   flexDirection: "column" as const,
@@ -426,162 +439,300 @@ const MOBILE_POPUP_BODY_STYLE = {
   overflow: "hidden" as const
 };
 
+interface RecordRow {
+  rowKey: number;
+  record: Record<string, unknown>;
+}
+
+/**
+ * Whether `target` sits inside a non-option interactive button (such as a
+ * modal/popup Close button) whose native Enter activation must not be hijacked
+ * into selecting a record.
+ */
+function isNonOptionButton(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const button = target.closest("button");
+
+  return button !== null && button.dataset.recordOption === undefined;
+}
+
 /**
  * Renders the active `select_record` dialog for the enclosing `FormRenderer`:
- * an antd `Modal` table on PC, or an antd-mobile `Popup` card list contained
- * inside the phone preview via `useMobileScopeContainer` on mobile. Supports
- * ArrowUp / ArrowDown / Enter / Escape keyboard navigation on both devices.
+ * an antd `Modal` hosting the framework `Table` inside a single `ScrollArea`
+ * on PC, or an antd-mobile `Popup` card list contained inside the phone
+ * preview via `useMobileScopeContainer` on mobile.
+ *
+ * - Keeps the Modal / Popup mounted while closing (`open` / `visible` driven
+ * by `active !== null`) so native close transitions play before `afterClose`
+ * clears cached content.
+ * - Scopes ArrowUp / ArrowDown / Enter / Escape keyboard navigation inside the
+ * picker's own focus container (never hijacking Enter on the Close button),
+ * scrolls the active row into view, and restores focus to the triggering
+ * element on close.
  */
 export function RecordSelectorHost({ controller }: { controller: RecordSelectorController }): ReactElement | null {
   const device = useDevice();
   const getMobileContainer = useMobileScopeContainer();
   const active = useSyncExternalStore(controller.subscribe, controller.getActive, () => null);
+  const [rendered, setRendered] = useState<QueuedPickerRequest | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const pcContainerRef = useRef<HTMLDivElement | null>(null);
+  const mobileContainerRef = useRef<HTMLDivElement | null>(null);
+  const isOpenRef = useRef(false);
+  const wasOpenRef = useRef(false);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  // Reset highlighted row whenever a new picker request becomes active.
+  isOpenRef.current = active !== null;
+
+  // Focus the picker container as soon as the Portal mounts it — Portal
+  // children mount asynchronously after `RecordSelectorHost`'s initial effect,
+  // and `afterOpenChange` waits for CSS enter animations to complete.
+  const setPcContainer = useCallback((node: HTMLDivElement | null) => {
+    pcContainerRef.current = node;
+
+    if (node !== null && isOpenRef.current) {
+      node.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const setMobileContainer = useCallback((node: HTMLDivElement | null) => {
+    mobileContainerRef.current = node;
+
+    if (node !== null && isOpenRef.current) {
+      node.focus({ preventScroll: true });
+    }
+  }, []);
+
+  if (active !== null && active !== rendered) {
+    setRendered(active);
+  }
+
+  // Reset highlighted row whenever a new picker request becomes active, and
+  // manage focus entry / restoration cleanly across open ↔ close transitions.
   useEffect(() => {
-    setActiveIndex(0);
-  }, [active]);
+    if (active !== null) {
+      if (!wasOpenRef.current) {
+        wasOpenRef.current = true;
+        restoreFocusRef.current = active.triggerElement;
+      }
+
+      setActiveIndex(0);
+
+      const container = (device === "mobile" ? mobileContainerRef : pcContainerRef).current;
+
+      container?.focus({ preventScroll: true });
+
+      return;
+    }
+
+    if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      const target = restoreFocusRef.current;
+
+      restoreFocusRef.current = null;
+
+      if (target?.isConnected && !target.hasAttribute("disabled")) {
+        target.focus({ preventScroll: true });
+      }
+    }
+  }, [active, device]);
+
+  // Keep the highlighted row visible as ArrowUp / ArrowDown moves through a
+  // long scrollable list.
+  useEffect(() => {
+    if (active === null) {
+      return;
+    }
+
+    const container = (device === "mobile" ? mobileContainerRef : pcContainerRef).current;
+    const targetIndex = String(activeIndex);
+
+    if (container !== null) {
+      for (const rowEl of container.querySelectorAll<HTMLElement>("[data-record-index]")) {
+        if (rowEl.dataset.recordIndex === targetIndex) {
+          rowEl.scrollIntoView?.({ block: "nearest" });
+
+          break;
+        }
+      }
+    }
+  }, [active, activeIndex, device]);
 
   // Dismiss any remaining pending pickers if the form unmounts.
   useEffect(() => () => {
     controller.dismissAll();
   }, [controller]);
 
-  // Capture-phase window keyboard navigation while the picker is open so
-  // ArrowUp / ArrowDown / Enter / Escape belong exclusively to the modal/popup
-  // and never leak down into an underlying focused input or button.
-  useEffect(() => {
-    if (active === null || active.records.length === 0) {
-      return;
-    }
+  const tableColumns = useMemo<Array<TableColumn<RecordRow>>>(
+    () => (rendered?.columns ?? []).map(column => {
+      return {
+        key: column.path,
+        title: column.label,
+        render: (_value: unknown, row: RecordRow) => formatCellValue(readRecordCellValue(row.record, column.path))
+      };
+    }),
+    [rendered]
+  );
 
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.isComposing) {
-        return;
-      }
+  const tableData = useMemo<RecordRow[]>(
+    () => (rendered?.records ?? []).map((record, index) => {
+      return {
+        rowKey: index,
+        record
+      };
+    }),
+    [rendered]
+  );
 
-      switch (event.key) {
-        case "ArrowDown": {
-          event.preventDefault();
-          event.stopPropagation();
-          setActiveIndex(current => (current + 1) % active.records.length);
-
-          break;
-        }
-
-        case "ArrowUp": {
-          event.preventDefault();
-          event.stopPropagation();
-          setActiveIndex(current => (current - 1 + active.records.length) % active.records.length);
-
-          break;
-        }
-
-        case "Enter": {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const selected = active.records[activeIndex];
-
-          if (selected !== undefined) {
-            controller.select(selected);
-          }
-
-          break;
-        }
-
-        case "Escape": {
-          event.preventDefault();
-          event.stopPropagation();
-          controller.dismiss();
-
-          break;
-        }
-      // No default
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
-    };
-  }, [active, activeIndex, controller]);
-
-  if (active === null) {
+  if (rendered === null) {
     return null;
   }
 
-  const title = active.title && active.title.length > 0 ? active.title : "请选择记录";
+  const isOpen = active !== null;
+  const title = rendered.title && rendered.title.length > 0 ? rendered.title : "请选择记录";
+
+  const handleAfterClose = (): void => {
+    if (controller.getActive() === null) {
+      setRendered(null);
+    }
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (!isOpen || rendered.records.length === 0 || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    switch (event.key) {
+      case "ArrowDown": {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveIndex(current => (current + 1) % rendered.records.length);
+
+        break;
+      }
+
+      case "ArrowUp": {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveIndex(current => (current - 1 + rendered.records.length) % rendered.records.length);
+
+        break;
+      }
+
+      case "Enter": {
+        // Leave Enter on Close / non-option buttons alone so activating them
+        // dismisses the picker rather than selecting a record.
+        if (isNonOptionButton(event.target)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const selected = rendered.records[activeIndex];
+
+        if (selected !== undefined) {
+          controller.select(selected);
+        }
+
+        break;
+      }
+
+      case "Escape": {
+        event.preventDefault();
+        event.stopPropagation();
+        controller.dismiss();
+
+        break;
+      }
+    // No default
+    }
+  };
 
   if (device === "mobile") {
-    const [primaryColumn, ...secondaryColumns] = active.columns;
+    const [primaryColumn, ...secondaryColumns] = rendered.columns;
 
     return (
       <Popup
         closeOnMaskClick
         destroyOnClose
-        visible
+        afterClose={handleAfterClose}
+        afterShow={() => mobileContainerRef.current?.focus({ preventScroll: true })}
         bodyStyle={MOBILE_POPUP_BODY_STYLE}
         getContainer={getMobileContainer}
         position="bottom"
+        visible={isOpen}
         onClose={() => controller.dismiss()}
       >
-        <div css={mobileHeaderCss}>
-          <span css={mobileTitleCss}>{title}</span>
+        <div
+          ref={setMobileContainer}
+          css={mobileContainerCss}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+        >
+          <div css={mobileHeaderCss}>
+            <span css={mobileTitleCss}>{title}</span>
 
-          <button
-            aria-label="关闭"
-            css={mobileCloseCss}
-            type="button"
-            onClick={() => controller.dismiss()}
-          >
-            关闭
-          </button>
-        </div>
+            <button
+              aria-label="关闭"
+              css={mobileCloseCss}
+              type="button"
+              onClick={() => controller.dismiss()}
+            >
+              关闭
+            </button>
+          </div>
 
-        <div aria-label={title} css={mobileListCss} role="listbox">
-          {active.records.map((record, index) => {
-            const isSelected = index === activeIndex;
+          <ScrollArea css={mobileScrollAreaCss} scrollbars="vertical" viewportStyle={MOBILE_VIEWPORT_STYLE}>
+            <div aria-label={title} css={mobileListCss} role="listbox">
+              {rendered.records.map((record, index) => {
+                const isSelected = index === activeIndex;
 
-            return (
-              <button
-                key={index}
-                aria-selected={isSelected}
-                css={[mobileCardCss, isSelected && mobileCardActiveCss]}
-                role="option"
-                type="button"
-                onClick={() => controller.select(record)}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                {primaryColumn === undefined
-                  ? null
-                  : (
-                      <div css={mobilePrimaryCss}>
-                        {formatCellValue(readRecordCellValue(record, primaryColumn.path))}
-                      </div>
-                    )}
+                return (
+                  <button
+                    key={index}
+                    aria-selected={isSelected}
+                    css={[mobileCardCss, isSelected && mobileCardActiveCss]}
+                    data-active={isSelected ? "true" : undefined}
+                    data-record-index={index}
+                    data-record-option="true"
+                    role="option"
+                    type="button"
+                    onClick={() => controller.select(record)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    {primaryColumn === undefined
+                      ? null
+                      : (
+                          <div css={mobilePrimaryCss}>
+                            {formatCellValue(readRecordCellValue(record, primaryColumn.path))}
+                          </div>
+                        )}
 
-                {secondaryColumns.length > 0
-                  ? (
-                      <div css={mobileMetaCss}>
-                        {secondaryColumns.map(column => (
-                          <span key={column.path}>
-                            <span css={mobileMetaLabelCss}>
-                              {column.label}
-                              :
-                            </span>
+                    {secondaryColumns.length > 0
+                      ? (
+                          <div css={mobileMetaCss}>
+                            {secondaryColumns.map(column => (
+                              <span key={column.path}>
+                                <span css={mobileMetaLabelCss}>
+                                  {column.label}
+                                  :
+                                </span>
 
-                            {formatCellValue(readRecordCellValue(record, column.path))}
-                          </span>
-                        ))}
-                      </div>
-                    )
-                  : null}
-              </button>
-            );
-          })}
+                                {formatCellValue(readRecordCellValue(record, column.path))}
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      : null}
+                  </button>
+                );
+              })}
+            </div>
+          </ScrollArea>
         </div>
       </Popup>
     );
@@ -590,48 +741,51 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
   return (
     <Modal
       destroyOnHidden
-      open
+      keyboard
+      afterClose={handleAfterClose}
+      focusable={MODAL_FOCUSABLE}
       footer={null}
-      keyboard={false}
+      open={isOpen}
       title={title}
       width={640}
+      afterOpenChange={open => {
+        const container = pcContainerRef.current;
+
+        if (open && container !== null && !container.closest("[role='dialog']")?.contains(document.activeElement)) {
+          container.focus({ preventScroll: true });
+        }
+      }}
       onCancel={() => controller.dismiss()}
     >
-      <div css={tableScrollCss}>
-        <table aria-label={title} css={tableCss} role="listbox">
-          <thead>
-            <tr>
-              {active.columns.map(column => (
-                <th key={column.path} css={thCss} scope="col">
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div
+        ref={setPcContainer}
+        aria-label={title}
+        css={pcBodyCss}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+      >
+        <ScrollArea css={pcScrollAreaCss} scrollbars="both" viewportStyle={PC_VIEWPORT_STYLE}>
+          <Table<RecordRow>
+            columns={tableColumns}
+            dataSource={tableData}
+            flexHeight={false}
+            pagination={false}
+            rowClassName={(_record, index) => index === activeIndex ? ACTIVE_ROW_CLASS : ""}
+            rowKey="rowKey"
+            size="small"
+            onRow={(row, rowIndex = 0) => {
+              const isSelected = rowIndex === activeIndex;
 
-          <tbody>
-            {active.records.map((record, index) => {
-              const isSelected = index === activeIndex;
-
-              return (
-                <tr
-                  key={index}
-                  aria-selected={isSelected}
-                  css={[rowCss, isSelected && activeRowCss]}
-                  role="option"
-                  onClick={() => controller.select(record)}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  {active.columns.map(column => (
-                    <td key={column.path} css={tdCss}>
-                      {formatCellValue(readRecordCellValue(record, column.path))}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              return {
+                "aria-current": isSelected ? "true" : undefined,
+                "data-active": isSelected ? "true" : undefined,
+                "data-record-index": rowIndex,
+                onClick: () => controller.select(row.record),
+                onMouseEnter: () => setActiveIndex(rowIndex)
+              } as HTMLAttributes<HTMLTableRowElement>;
+            }}
+          />
+        </ScrollArea>
       </div>
     </Modal>
   );
