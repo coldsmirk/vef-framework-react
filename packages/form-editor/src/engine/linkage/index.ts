@@ -6,7 +6,6 @@ export {
 } from "../validation";
 export {
   ACTION_DESCRIPTORS,
-  getActionConditions,
   getActionDataSourceId,
   getActionDescriptor,
   getActionDynamicValues,
@@ -14,13 +13,11 @@ export {
   getActionRequests,
   getActionTargetKeys,
   getActionVariable,
-  mapActionConditions,
   mapActionDynamicValues,
   mapActionTargetKeys,
   mapRemoteRequestDynamicValues,
   rewriteActionVariable,
   type ActionDescriptor,
-  type ConditionSlot,
   type DataSourceIdSlot,
   type DynamicValueSlot,
   type OutputSlot,
@@ -81,5 +78,6 @@ export {
   validateDynamicValue,
   validateLinkageSchema,
   validateScopePath,
-  type LinkageValidationResult
+  type LinkageValidationResult,
+  type WritableTargetField
 } from "./validator";

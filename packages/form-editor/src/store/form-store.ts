@@ -24,12 +24,10 @@ import {
   hasLinkageDateLiterals,
   hasScopedDateLiterals,
   pruneDataSourceReferences,
-  pruneDataSourcesKeyReferences,
-  pruneFormLinkageForRootBucket,
+  pruneFormRootKeyReferences,
   pruneScopedReferences,
-  renameDataSourcesKeyReferences,
+  renameFormRootKeyReferences,
   renameKeyReferences,
-  renameLinkageKeyReferences,
   renameVariableReferences,
   scrubDateLiterals,
   scrubLinkageDateLiterals
@@ -664,24 +662,10 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           nextLayer = pruneScopedReferences(nextLayer, departedKeyBuckets);
           nextSchema = withPresentation(schema, device, nextLayer);
 
-          // The form-level linkage resolves against the PC root scope: prune
-          // it when root-scope pc keys moved away (mirrors removeNode).
+          // Form-level linkage and remote dataSources resolve against the PC
+          // root scope: prune them when root-scope PC keys moved away.
           if (device === "pc") {
-            if (nextSchema.linkage !== undefined) {
-              const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, departedKeyBuckets);
-
-              if (linkage !== nextSchema.linkage) {
-                nextSchema = { ...nextSchema, linkage };
-              }
-            }
-
-            if (nextSchema.dataSources !== undefined) {
-              const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, departedKeyBuckets);
-
-              if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
-                nextSchema = { ...nextSchema, dataSources };
-              }
-            }
+            nextSchema = pruneFormRootKeyReferences(nextSchema, departedKeyBuckets);
           }
         }
 
@@ -717,24 +701,11 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
         let nextSchema = withPresentation(schema, device, nextLayer);
 
-        // The form-level linkage resolves against the PC root scope: prune it
-        // when root-scope pc keys died. Mobile keys never touch it.
+        // Form-level linkage and remote dataSources resolve against the PC root
+        // scope: prune them when root-scope PC keys died. Mobile keys never
+        // touch them.
         if (device === "pc") {
-          if (nextSchema.linkage !== undefined) {
-            const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removedKeyBuckets);
-
-            if (linkage !== nextSchema.linkage) {
-              nextSchema = { ...nextSchema, linkage };
-            }
-          }
-
-          if (nextSchema.dataSources !== undefined) {
-            const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, removedKeyBuckets);
-
-            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
-              nextSchema = { ...nextSchema, dataSources };
-            }
-          }
+          nextSchema = pruneFormRootKeyReferences(nextSchema, removedKeyBuckets);
         }
 
         // The removed node may have contained the selection — clear it whenever
@@ -766,21 +737,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         let nextSchema = withPresentation(schema, device, nextLayer);
 
         if (device === "pc") {
-          if (nextSchema.linkage !== undefined) {
-            const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removal.buckets);
-
-            if (linkage !== nextSchema.linkage) {
-              nextSchema = { ...nextSchema, linkage };
-            }
-          }
-
-          if (nextSchema.dataSources !== undefined) {
-            const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, removal.buckets);
-
-            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
-              nextSchema = { ...nextSchema, dataSources };
-            }
-          }
+          nextSchema = pruneFormRootKeyReferences(nextSchema, removal.buckets);
         }
 
         const selectionSurvives = selectedId !== null && findNode(nextLayer, selectedId) !== undefined;
@@ -987,21 +944,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         const pcKeyChanged = device === "pc" || (twin !== undefined && otherDevice === "pc");
 
         if (pcKeyChanged && scope.length === 0) {
-          if (nextSchema.linkage !== undefined) {
-            const linkage = renameLinkageKeyReferences(nextSchema.linkage, previousKey, unique);
-
-            if (linkage !== nextSchema.linkage) {
-              nextSchema = { ...nextSchema, linkage };
-            }
-          }
-
-          if (nextSchema.dataSources !== undefined) {
-            const dataSources = renameDataSourcesKeyReferences(nextSchema.dataSources, previousKey, unique);
-
-            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
-              nextSchema = { ...nextSchema, dataSources };
-            }
-          }
+          nextSchema = renameFormRootKeyReferences(nextSchema, previousKey, unique);
         }
 
         checkpointCoalescing(`field-key:${fieldId}`);

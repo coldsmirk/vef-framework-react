@@ -10,7 +10,8 @@ import type {
   LinkageTriggerKind,
   PresentationLayer,
   StateAction,
-  StateActionType
+  StateActionType,
+  UploadField
 } from "../../types";
 import type { ScopePath } from "../schema/walk";
 import type { ValidationIssue } from "../validation";
@@ -20,7 +21,6 @@ import { isKeyedNode } from "../keys";
 import { isLeafField, walkNodes } from "../schema/walk";
 import { createIssue, isRecord, isValidIdentifier, validateRemoteRequest } from "../validation";
 import {
-  getActionConditions,
   getActionDataSourceId,
   getActionDescriptor,
   getActionDynamicValues,
@@ -75,7 +75,15 @@ const ALERT_LEVEL_SET: ReadonlySet<string> = new Set(ALERT_LEVELS);
 /**
  * The state actions that WRITE form-data values (`assign` directly, `script`
  * via its returned `value` patch). Only these create real feedback edges for
- * the cycle detector.
+ * the cycle detector: the level-stable actions (`show` / `hide` / `enable` /
+ * `disable` / `require` / `optional`) derive state from values without ever
+ * writing one back (hiding does not clear values in this runtime), so a rule
+ * carrying only those may freely reference any field — including the block
+ * itself ("require self when self is empty").
+ *
+ * Declared as a compile-checked table (the taxonomy.ts pattern): a future
+ * state action type forces an explicit true/false entry here, so the cycle
+ * detector can never silently miss a new value-writing action.
  */
 const VALUE_WRITING_STATE_ACTION_TABLE: Record<StateActionType, boolean> = {
   show: false,
@@ -94,16 +102,27 @@ const VALUE_WRITING_STATE_ACTIONS: ReadonlySet<StateActionType> = new Set(
 );
 
 /**
- * Whether a node is a legal write target for `set_fields` — a keyed leaf field
- * other than `upload` (and never a container such as `subform`). Shared by the
- * validator, runtime write gate, and designer pickers.
+ * Any keyed leaf field that programmatic value writes (`assign` / `set_fields`)
+ * may target — every keyed leaf field except `upload`.
  */
-export function isWritableTargetField(node: Block): node is KeyedFormField {
+export type WritableTargetField = Exclude<KeyedFormField, UploadField>;
+
+/**
+ * Single source of truth for whether a node is a legal write target for
+ * programmatic field writes — a keyed leaf field other than `upload` (and never
+ * a container such as `subform`). Shared by the validator, runtime write gate,
+ * executor target index, and designer pickers.
+ */
+export function isWritableTargetField(node: Block): node is WritableTargetField {
   return isLeafField(node) && isKeyedNode(node) && node.type !== "upload";
 }
 
 /**
  * Per-scope view of the keyed nodes available as linkage sources and targets.
+ * A subform template opens its own scope, so a rule's `sourceKey` and
+ * `set_fields` targets are resolved against the keys in **its own** scope — a
+ * row field references its row siblings, not the outer form, matching the
+ * runtime's per-row evaluation.
  */
 type KeyedNodesByScope = Map<string, Map<string, KeyedNodeUnion>>;
 
@@ -113,7 +132,21 @@ function scopeId(scope: ScopePath): string {
 
 /**
  * Validates linkage data for one device presentation (import dialog / API
- * payload). All action-slot traversals run through {@link "./action-descriptors"!ACTION_DESCRIPTORS}.
+ * payload). The editor's own mutators always produce well-formed trees, so this
+ * is the boundary guard. The **tree** must already be structurally valid (run
+ * `validateSchema` first); the linkage payloads hanging off it are treated as
+ * untrusted JSON and plain-object-guarded before any member access.
+ * `formLinkage` is the shared form-scope linkage; pass it alongside the tree it
+ * should resolve against (the pc presentation).
+ *
+ * Walks the presentation's node tree — leaf fields AND containers carry
+ * linkage — to (a) flag malformed nodes, (b) confirm referenced source / target
+ * keys exist within the rule's value scope (dangling references are warnings:
+ * the editor legitimately produces them mid-authoring), (c) reject state
+ * actions on edge triggers and keyed-only actions on non-keyed blocks, and
+ * (d) accumulate scope-namespaced edges (condition → value-writing state action
+ * or `retrigger: "always"` `set_fields`) for the cycle detector. All
+ * action-slot traversals run through {@link "./action-descriptors"!ACTION_DESCRIPTORS}.
  */
 export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: FieldLinkage): LinkageValidationResult {
   const issues: ValidationIssue[] = [];
@@ -173,8 +206,12 @@ export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: Fi
     });
   });
 
+  // Form-scope linkage (the global "events" panel): lifecycle / condition
+  // triggers and effect actions only, resolved against the root value scope.
   if (formLinkage !== undefined) {
     if (isRecord(formLinkage)) {
+      // The form has no self field, so default-state overrides are meaningless
+      // at this scope — reject them rather than carry dead configuration.
       if (formLinkage.defaults !== undefined) {
         issues.push(createIssue("schema.linkage.defaults", "defaults_on_form_scope"));
       }
@@ -201,6 +238,15 @@ export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: Fi
   return { issues };
 }
 
+/**
+ * The value-bearing actions (`require` / `optional` / `assign`) and
+ * `defaults.required` drive a single keyed leaf field's runtime state
+ * (required / value). A subform is keyed but a container — the runtime applies
+ * none of these to it — so they are rejected on it, the same as on a non-keyed
+ * block, rather than passing validation and silently no-op-ing at runtime.
+ * (`show` / `hide` / `enable` / `disable` are NOT gated here: they apply to
+ * containers too, a container's `disable` propagating to its descendants.)
+ */
 function isKeyedLeaf(block: Block): boolean {
   return isLeafField(block) && isKeyedNode(block);
 }
@@ -232,6 +278,13 @@ function validateDefaults(args: {
   }
 }
 
+/**
+ * A block that starts hidden can only ever become visible through one of its
+ * OWN rules carrying a `show` action — state actions are self-targeted, and
+ * the form scope cannot show fields. Default-hidden with no such rule means
+ * the block is invisible for the form's whole lifetime; warn, because this is
+ * almost always the leftover of deleting the field its show rule depended on.
+ */
 function flagUnreachableHidden(args: {
   defaults: unknown;
   issues: ValidationIssue[];
@@ -354,8 +407,27 @@ function validateRule(args: {
     where: `${where}.actions`
   });
 
+  // Only a condition trigger paired with a value-WRITING state action
+  // (`assign` / `script`) makes this block's value depend on its source fields
+  // — the feedback loop the cycle detector guards. Level-stable state actions
+  // and rising-edge effect rules create no write-back, so they are free to
+  // reference any field, including the block itself.
   const writesValue = validActions.some(action => isStateAction(action) && VALUE_WRITING_STATE_ACTIONS.has(action.type));
 
+  // Both write-back cases register on the same edge map for the same reason —
+  // a condition trigger whose actions write a statically-known key make that
+  // key depend on the trigger's source fields, the feedback loop the cycle
+  // detector guards. Collect the write targets in registration order, then
+  // register each:
+  //  - the block's OWN key, when a value-WRITING state action (`assign` /
+  //    `script`) pairs with the condition (level-stable state actions and
+  //    effect-only rules create no write-back);
+  //  - every `set_fields` target when the trigger sets `retrigger: "always"`,
+  //    which re-fires whenever a tracked source changes while the condition
+  //    holds (rising-edge `set_fields` fires once per false→true transition
+  //    and settles, so it stays edge-free).
+  // A plain list (not a set) preserves the per-target issue output when a key
+  // is targeted twice.
   if (trigger?.kind === "condition") {
     const targetKeys: string[] = [];
 
@@ -387,6 +459,12 @@ function validateRule(args: {
   }
 }
 
+/**
+ * Validate a rule's trigger against the scope policy. Returns the trigger only
+ * when it is structurally valid end to end — for a `condition` kind that
+ * includes its condition tree, so callers (action / edge rules) can safely walk
+ * `trigger.condition`. Returns `undefined` otherwise.
+ */
 function validateTrigger(args: {
   block: Block | null;
   issues: ValidationIssue[];
@@ -418,6 +496,10 @@ function validateTrigger(args: {
     return undefined;
   }
 
+  // The `change` and `commit` edges fire off a keyed leaf field's value edits;
+  // a container or non-keyed presentation block has no such hook, so the
+  // trigger would never run. Reject it rather than pass validation and silently
+  // no-op at runtime.
   if ((trigger.kind === "change" || trigger.kind === "commit") && block !== null && !isKeyedLeaf(block)) {
     issues.push(createIssue(`${where}.kind`, "trigger_requires_keyed_leaf", { kind: trigger.kind }, ruleId));
     return undefined;
@@ -447,6 +529,9 @@ function validateTrigger(args: {
     return trigger as unknown as LinkageTrigger;
   }
 
+  // `retrigger` tunes how a condition-triggered rule re-fires; an unknown
+  // value is structural breakage, while a value on an edge trigger is dead
+  // configuration the runtime ignores.
   if (trigger.retrigger !== undefined) {
     if (trigger.retrigger !== "edge" && trigger.retrigger !== "always") {
       issues.push(createIssue(`${where}.retrigger`, "retrigger_invalid", undefined, ruleId));
@@ -465,9 +550,15 @@ function validateTrigger(args: {
     });
   }
 
+  // Runtime-verified: `kind` is one of this scope's trigger kinds.
   return trigger as unknown as LinkageTrigger;
 }
 
+/**
+ * Validate a rule's action list. Returns the actions that passed the
+ * plain-object guard and the known-type check, so the caller's value-writing
+ * scan never touches malformed entries.
+ */
 function validateActions(args: {
   actions: unknown;
   block: Block | null;
@@ -557,6 +648,8 @@ function validateAction(args: {
     return undefined;
   }
 
+  // Runtime-verified discriminant; each member's payload is still
+  // runtime-checked field by field below before being trusted.
   const typed = action as FieldLinkageAction;
 
   if (isStateAction(typed)) {
@@ -770,6 +863,8 @@ function validateActionDescriptorSlots(args: {
     const targetNode = keyedNodes.get(slot.targetKey);
 
     if (targetNode === undefined) {
+      // Dangling targets are warnings: deleting a field after a rule
+      // referenced it is a legitimate mid-authoring state.
       issues.push(createIssue(slotPath, "target_key_unresolved", { key: slot.targetKey }, ruleId));
       continue;
     }
@@ -791,16 +886,6 @@ function validateActionDescriptorSlots(args: {
     });
   }
 
-  for (const slot of getActionConditions(action)) {
-    validateCondition({
-      condition: slot.condition,
-      issues,
-      keyedNodes,
-      ruleId,
-      where: `${where}.${slot.path}`
-    });
-  }
-
   const variableSlot = getActionVariable(action);
 
   if (variableSlot !== undefined) {
@@ -813,6 +898,9 @@ function validateActionDescriptorSlots(args: {
     }
   }
 
+  // Like `set_variable`, the target is a form-global name, not a same-scope
+  // keyed node, so only non-emptiness is checked here; the editor's picker
+  // constrains it to an existing data source.
   const dataSourceSlot = getActionDataSourceId(action);
 
   if (dataSourceSlot !== undefined) {
@@ -844,6 +932,13 @@ function validateActionDescriptorSlots(args: {
   }
 }
 
+/**
+ * Validate a condition tree. Returns `true` only when the tree is structurally
+ * sound — every node a plain object of a known kind, group children arrays,
+ * `sourceKey` / `source` strings — i.e. safe for `collectConditionSourceKeys`
+ * and the runtime matcher to walk. Empty groups and empty / dangling source
+ * keys are warnings and do NOT invalidate the tree.
+ */
 function validateCondition(args: {
   condition: unknown;
   issues: ValidationIssue[];
@@ -907,8 +1002,13 @@ function validateCondition(args: {
 
 /**
  * Check that a scope path (`sourceKey` in a leaf condition or `path` in a
- * `reference` dynamic value) names a resolvable slot. Shared by linkage
- * conditions, action dynamic values, and remote option-source params.
+ * `reference` dynamic value) names something that can hold a value: a form key
+ * present in the rule's value scope (spelled plain or `$form.key`), a path
+ * under a context root, or (when `allowSteps` is set) a prior step's output
+ * under `$steps`. A context path's members are host data this static pass
+ * cannot see into, so any member is accepted; a `$` root no scope slot answers
+ * to is not — it could never resolve, and silently never matching is exactly
+ * what a typo like `$applcant` would otherwise do.
  *
  * When `keyedNodes` is omitted (form-global remote data sources whose scope
  * depends on where they are referenced), form-key existence is skipped while
@@ -1043,6 +1143,9 @@ function validateGroupCondition(args: {
   const { children } = condition;
 
   if (children.length === 0) {
+    // Legal, but almost always a mistake: `all` over no children holds, so
+    // the rule always applies, while `any` never does. The editor never
+    // authors one, so it arrives only from imported or hand-written JSON.
     issues.push(createIssue(`${where}.children`, "condition_group_empty", undefined, ruleId));
   }
 
@@ -1126,6 +1229,14 @@ export function validateDynamicValue(args: {
   issues.push(createIssue(`${where}.kind`, "value_malformed", undefined, ruleId));
 }
 
+/**
+ * Register the dependency edges of one value-writing condition rule onto
+ * `targetKey` — the block's own key for `assign` / `script`, the written
+ * field's key for a `retrigger: "always"` `set_fields` target. Reached only
+ * with a structurally validated condition (see `validateTrigger`), so the
+ * source-key walk cannot crash. A self-reference here is an error: the rule
+ * writes the very value it reads, the textbook feedback loop.
+ */
 function registerRuleEdges(args: {
   condition: LinkageCondition;
   edges: Map<string, Set<string>>;
@@ -1154,6 +1265,8 @@ function registerRuleEdges(args: {
       continue;
     }
 
+    // Namespace edges by scope so identical keys reused across scopes never
+    // form a false cross-scope cycle.
     const from = `${scopeKey}::${sourceKey}`;
     const to = `${scopeKey}::${targetKey}`;
     const targets = edges.get(from) ?? new Set<string>();

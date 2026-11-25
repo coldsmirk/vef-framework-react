@@ -2,6 +2,7 @@ import type { ScopePath } from "../../../../engine/schema/walk";
 import type {
   EffectActionType,
   FormDataSource,
+  FormField,
   LinkageActionType,
   LinkageOperator,
   LinkageTriggerKind,
@@ -14,6 +15,7 @@ import {
   EFFECT_ACTION_TYPES,
   FIELD_TRIGGER_KINDS,
   FORM_TRIGGER_KINDS,
+  isWritableTargetField,
   KEYED_ONLY_ACTIONS,
   LINKAGE_ACTION_TYPES,
   LINKAGE_OPERATORS,
@@ -82,6 +84,10 @@ export function actionLabelFor(type: LinkageActionType): string {
   return ALL_ACTION_LABELS[type];
 }
 
+/**
+ * Trigger dropdown options for a scope's allowed trigger kinds (field rules use
+ * {@link FIELD_TRIGGER_KINDS}, the form-level panel {@link FORM_TRIGGER_KINDS}).
+ */
 export function triggerOptionsFor(kinds: readonly LinkageTriggerKind[]): Array<OptionItem<LinkageTriggerKind>> {
   return kinds.map(value => {
     return { value, label: TRIGGER_LABELS[value] };
@@ -130,6 +136,12 @@ export function operatorNeedsValue(operator: LinkageOperator): boolean {
   return operator !== "empty" && operator !== "notEmpty";
 }
 
+/**
+ * The state actions a container target supports: visibility / interactivity
+ * propagate to its descendants, while the value-touching actions (`require` /
+ * `optional` / `assign`) and the per-field `script` patch are keyed-leaf-only
+ * (mirroring the validator's `action_requires_keyed_leaf` policy).
+ */
 const CONTAINER_STATE_ACTIONS: ReadonlySet<LinkageActionType> = new Set<LinkageActionType>([
   "show",
   "hide",
@@ -139,10 +151,13 @@ const CONTAINER_STATE_ACTIONS: ReadonlySet<LinkageActionType> = new Set<LinkageA
 
 /**
  * The action-type palette for a rule. State actions are offered only when the
- * scope allows them AND the trigger is a `condition`. `api_call` and `navigate`
- * are gated by the host's wired `FormServices` capabilities (defaulting to
- * offered outside a `FormEditorProvider` so standalone unit fixtures stay
- * self-contained).
+ * scope allows them (field / container scope, not form scope) AND the trigger
+ * is a `condition` (state must be derived, not pulsed by an event); keyed-only
+ * state actions are further dropped on a non-keyed target, and a container
+ * target is narrowed to {@link CONTAINER_STATE_ACTIONS}. `api_call` and
+ * `navigate` are gated by the host's wired `FormServices` capabilities
+ * (defaulting to offered outside a `FormEditorProvider` so standalone unit
+ * fixtures stay self-contained).
  */
 export function actionOptionsFor(args: {
   triggerKind: LinkageTriggerKind;
@@ -178,36 +193,44 @@ export interface SourceFieldOption {
   label: string;
 }
 
-interface SourceCandidate {
-  key?: string;
-  label?: string;
-  type: string;
-}
-
+/**
+ * Collect the field candidates a linkage rule may reference, limited to the
+ * scopes the predicate accepts — a field rule's own value scope, or the root
+ * scope for form-level rules. Shared by the field and form linkage entries,
+ * which then narrow the candidates into source / target option lists via
+ * {@link getSourceFieldOptions} and {@link getTargetFieldOptions} (so one walk
+ * feeds both lists).
+ */
 export function collectSourceCandidates(
   layer: PresentationLayer,
   inScope: (scope: ScopePath) => boolean
-): SourceCandidate[] {
-  const candidates: SourceCandidate[] = [];
+): FormField[] {
+  const candidates: FormField[] = [];
 
   walkFields(layer, (candidate, scope) => {
     if (inScope(scope)) {
-      candidates.push({
-        key: isKeyedField(candidate) ? candidate.key : undefined,
-        label: candidate.label,
-        type: candidate.type
-      });
+      candidates.push(candidate);
     }
   });
 
   return candidates;
 }
 
+/**
+ * Builds the keyed-field dropdown options for a linkage rule's IF source.
+ * Only keyed candidates appear. The field itself IS included: keying a rule off
+ * its own value (e.g. "when my value == X → alert / refresh another field") is a
+ * common need, and the runtime evaluates it like any other source. A genuine
+ * cycle — a self-referential *state* dependency, or a cross-field loop — is
+ * caught by the validator, not pruned here (the dropdown never tried to prevent
+ * cross-field cycles either). Callers pass only same-scope candidates, since a
+ * rule's source must live in the field's own value scope.
+ */
 export function getSourceFieldOptions(args: {
-  components: SourceCandidate[];
+  components: readonly FormField[];
 }): SourceFieldOption[] {
   return args.components
-    .filter((candidate): candidate is SourceCandidate & { key: string } => typeof candidate.key === "string" && candidate.key.length > 0)
+    .filter(isKeyedField)
     .map(candidate => {
       return {
         value: candidate.key,
@@ -217,18 +240,15 @@ export function getSourceFieldOptions(args: {
 }
 
 /**
- * Writable `set_fields` target options in scope — keyed leaf fields excluding
- * non-writable types (`upload`).
+ * Writable `set_fields` target options in scope, derived from the single
+ * {@link isWritableTargetField} predicate shared with validation and runtime
+ * execution.
  */
 export function getTargetFieldOptions(args: {
-  components: SourceCandidate[];
+  components: readonly FormField[];
 }): SourceFieldOption[] {
   return args.components
-    .filter(
-      (candidate): candidate is SourceCandidate & { key: string } => typeof candidate.key === "string"
-        && candidate.key.length > 0
-        && candidate.type !== "upload"
-    )
+    .filter(isWritableTargetField)
     .map(candidate => {
       return {
         value: candidate.key,
@@ -237,12 +257,29 @@ export function getTargetFieldOptions(args: {
     });
 }
 
+/**
+ * Data-source dropdown options for a `refresh_data_source` action — the form's
+ * named data sources by id. An unnamed source falls back to its id as the label.
+ */
 export function getDataSourceOptions(dataSources: FormDataSource[] | undefined): SourceFieldOption[] {
   return (dataSources ?? []).map(source => {
     return { value: source.id, label: source.name.length > 0 ? source.name : source.id };
   });
 }
 
+/**
+ * The source key a newly seeded condition should prefer: any option OTHER than
+ * the rule's own field, or `undefined` when self is all there is. A
+ * self-referencing condition ("show me when my own value is …") is almost
+ * always a mistake, so the three places that seed one — creating a rule,
+ * switching an expression back to visual mode, and switching a trigger back to
+ * 满足条件 — must agree on that much.
+ *
+ * They deliberately differ on the no-sibling case, so the fallback stays with
+ * the caller: creating a rule yields an edge rule instead of a pre-filled
+ * self-condition, while the two switches fall back to self rather than refusing
+ * an action the user explicitly asked for.
+ */
 export function seedSourceKey(
   options: ReadonlyArray<{ value: string }>,
   selfKey: string | undefined

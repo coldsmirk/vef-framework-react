@@ -17,9 +17,11 @@ import {
   hasScopedDateLiterals,
   pruneDataSourceReferences,
   pruneDataSourcesKeyReferences,
+  pruneFormRootKeyReferences,
   pruneKeyReferences,
   pruneLinkageKeyReferences,
   renameDataSourcesKeyReferences,
+  renameFormRootKeyReferences,
   renameKeyReferences,
   renameLinkageKeyReferences,
   renameVariableReferences,
@@ -581,6 +583,55 @@ describe("reconcile", () => {
       const pruned = pruneDataSourcesKeyReferences(renamed, [{ scope: [], keys: new Set(["departmentId"]) }]);
       expect(pruned?.[0]).toMatchObject({
         request: { params: { dept: { kind: "reference", path: "" }, keep: { kind: "literal", value: "active" } } }
+      });
+    });
+
+    it("renames and prunes form-level linkage and remote dataSources together via pruneFormRootKeyReferences / renameFormRootKeyReferences", () => {
+      const schema = schemaOf(layerOf(tf("f1", "deptId"), tf("f2", "name")), {
+        linkage: {
+          rules: [
+            {
+              id: "r1",
+              trigger: { kind: "load" },
+              actions: [
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "deptId", value: { kind: "literal", value: "D1" } }]
+                }
+              ]
+            }
+          ]
+        },
+        dataSources: [
+          {
+            id: "DS_1",
+            name: "Teams",
+            kind: "remote",
+            request: {
+              resource: "org/team",
+              action: "find",
+              params: { dept: { kind: "reference", path: "$form.deptId" } }
+            }
+          }
+        ]
+      });
+
+      expect(renameFormRootKeyReferences(schema, "missing", "x")).toBe(schema);
+      expect(pruneFormRootKeyReferences(schema, [{ scope: ["lines"], keys: new Set(["deptId"]) }])).toBe(schema);
+
+      const renamed = renameFormRootKeyReferences(schema, "deptId", "orgId");
+      expect(renamed.linkage?.rules?.[0]?.actions[0]).toMatchObject({
+        type: "set_fields",
+        assignments: [{ targetKey: "orgId" }]
+      });
+      expect(renamed.dataSources?.[0]).toMatchObject({
+        request: { params: { dept: { kind: "reference", path: "$form.orgId" } } }
+      });
+
+      const pruned = pruneFormRootKeyReferences(renamed, [{ scope: [], keys: new Set(["orgId"]) }]);
+      expect(pruned.linkage?.rules).toEqual([]);
+      expect(pruned.dataSources?.[0]).toMatchObject({
+        request: { params: { dept: { kind: "reference", path: "" } } }
       });
     });
 

@@ -4,9 +4,7 @@ import type {
   DynamicValue,
   FieldLinkage,
   FieldLinkageAction,
-  FieldOptionSource,
   FlexSlot,
-  FormField,
   LinkageCondition,
   LinkageTrigger,
   PresentationLayer,
@@ -22,15 +20,14 @@ import { assertNever } from "../assert-never";
 import { createId, idPrefixForType } from "../ids";
 import { collectScopeKeys, isKeyedNode, nextUniqueKey } from "../keys";
 import {
-  mapActionConditions,
   mapActionDynamicValues,
-  mapActionTargetKeys,
-  mapRemoteRequestDynamicValues
+  mapActionTargetKeys
 } from "../linkage/action-descriptors";
 import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
 import { mapTriggerCondition } from "../linkage/shape";
 import { removeBlock, updateNode } from "./mutate";
 import { containerBodies, mapPreservingIdentity, withContainerBodies } from "./nodes";
+import { mapNodeOptionSourceDynamicValues } from "./reconcile";
 import { rewriteContainerBodies } from "./rewrite";
 import { containsNode, findNode, findScope, isContainerNode, scopeEquals } from "./walk";
 
@@ -575,32 +572,6 @@ function remapDynamicValueKeys(value: DynamicValue, keyMap: Map<string, string>)
   return mapped === undefined ? value : { ...value, path: withLeafSourceFormKey(value.path, mapped) };
 }
 
-function remapNodeOptionSourceKeys(block: Block, keyMap: Map<string, string>): Block {
-  if (!isContainerNode(block)) {
-    const field = block as FormField & { dataSource?: FieldOptionSource };
-
-    if (field.dataSource?.kind !== "remote") {
-      return block;
-    }
-
-    const nextRequest = mapRemoteRequestDynamicValues(field.dataSource.request, value => remapDynamicValueKeys(value, keyMap));
-
-    return nextRequest === field.dataSource.request
-      ? block
-      : ({ ...block, dataSource: { ...field.dataSource, request: nextRequest } } as Block);
-  }
-
-  if (block.type === "subform" && block.rows?.mode === "fixed" && block.rows.source.kind === "remote") {
-    const nextRequest = mapRemoteRequestDynamicValues(block.rows.source.request, value => remapDynamicValueKeys(value, keyMap));
-
-    return nextRequest === block.rows.source.request
-      ? block
-      : { ...block, rows: { ...block.rows, source: { ...block.rows.source, request: nextRequest } } };
-  }
-
-  return block;
-}
-
 /**
  * Phase 2 of {@link rekeyTree}: rewrite linkage and remote option-source key
  * references in the block's own value scope via `keyMap` (old→new). Scope-aware
@@ -609,7 +580,7 @@ function remapNodeOptionSourceKeys(block: Block, keyMap: Map<string, string>): B
  * are left untouched.
  */
 function remapScopeLinkage(block: Block, keyMap: Map<string, string>): Block {
-  const withSource = remapNodeOptionSourceKeys(block, keyMap);
+  const withSource = mapNodeOptionSourceDynamicValues(block, value => remapDynamicValueKeys(value, keyMap));
   const linkage = remapLinkage(withSource.linkage, keyMap);
 
   if (!isContainerNode(withSource)) {
@@ -690,16 +661,13 @@ function remapTriggerKeys(trigger: LinkageTrigger, keyMap: Map<string, string>):
 }
 
 /**
- * Remap every form-key slot (target keys, reference dynamic values, conditions)
- * carried by an action through the central action descriptors.
+ * Remap every form-key slot (target keys and reference dynamic values) carried
+ * by an action through the central action descriptors.
  */
 function remapActionKeys(action: FieldLinkageAction, keyMap: Map<string, string>): FieldLinkageAction {
-  let next = mapActionTargetKeys(action, targetKey => keyMap.get(targetKey) ?? targetKey) ?? action;
+  const next = mapActionTargetKeys(action, targetKey => keyMap.get(targetKey) ?? targetKey) ?? action;
 
-  next = mapActionDynamicValues(next, value => remapDynamicValueKeys(value, keyMap));
-  next = mapActionConditions(next, condition => remapConditionKeys(condition, keyMap)) ?? next;
-
-  return next;
+  return mapActionDynamicValues(next, value => remapDynamicValueKeys(value, keyMap));
 }
 
 function remapConditionKeys(condition: LinkageCondition, keyMap: Map<string, string>): LinkageCondition {

@@ -3,7 +3,6 @@ import type {
   FieldAssignment,
   FieldLinkageAction,
   LinkageActionType,
-  LinkageCondition,
   RemoteDataSourceRequest
 } from "../../types";
 
@@ -67,11 +66,6 @@ export interface OutputSlot {
   value: unknown;
 }
 
-export interface ConditionSlot {
-  path: string;
-  condition: unknown;
-}
-
 export interface VariableSlot<TAction extends FieldLinkageAction = FieldLinkageAction> {
   path: string;
   read: (action: TAction) => unknown;
@@ -96,11 +90,6 @@ export interface ActionDescriptor<TAction extends FieldLinkageAction = FieldLink
     mapper: (targetKey: string) => string | undefined
   ) => TAction | undefined;
   output?: (action: TAction) => OutputSlot;
-  conditions?: (action: TAction) => ConditionSlot[];
-  mapConditions?: (
-    action: TAction,
-    mapper: (condition: LinkageCondition) => LinkageCondition | undefined
-  ) => TAction | undefined;
   requests?: (action: TAction) => RequestSlot[];
   variable?: VariableSlot<TAction>;
   dataSourceId?: DataSourceIdSlot<TAction>;
@@ -421,19 +410,6 @@ export function mapActionTargetKeys(
 
 export function getActionOutput(action: FieldLinkageAction): OutputSlot | undefined {
   return getActionDescriptor(action)?.output?.(action);
-}
-
-export function getActionConditions(action: FieldLinkageAction): ConditionSlot[] {
-  return getActionDescriptor(action)?.conditions?.(action) ?? [];
-}
-
-export function mapActionConditions(
-  action: FieldLinkageAction,
-  mapper: (condition: LinkageCondition) => LinkageCondition | undefined
-): FieldLinkageAction | undefined {
-  const descriptor = getActionDescriptor(action);
-
-  return descriptor?.mapConditions ? descriptor.mapConditions(action, mapper) : action;
 }
 
 export function getActionRequests(action: FieldLinkageAction): RequestSlot[] {

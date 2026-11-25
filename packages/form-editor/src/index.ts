@@ -55,7 +55,6 @@ export {
   sanitizeKey
 } from "./engine/keys";
 export {
-  ACTION_DESCRIPTORS,
   ALERT_LEVELS,
   defaultEvaluateAssignExpression,
   defaultEvaluateExpression,
@@ -65,21 +64,17 @@ export {
   FIELD_TRIGGER_KINDS,
   FORM_TRIGGER_KINDS,
   getFieldPermission,
-  getTriggerEffectSequences,
   isEffectAction,
   isFieldEventTriggerKind,
   isStateAction,
   isWritableFieldPermission,
-  isWritableTargetField,
   KEYED_ONLY_ACTIONS,
   LINKAGE_ACTION_TYPES,
   LINKAGE_OPERATORS,
   resolveLinkageEvaluators,
   STATE_ACTION_TYPES,
   validateLinkageSchema,
-  type ActionDescriptor,
-  type LinkageValidationResult,
-  type TriggerEffectSequence
+  type LinkageValidationResult
 } from "./engine/linkage";
 export { normalizeOptionMapping } from "./engine/option-mapping";
 export { findDuplicateOptionValues } from "./engine/options";
@@ -154,12 +149,11 @@ export {
   type ValidationIssueCode,
   type ValidationSeverity
 } from "./engine/validation";
-export { DataSourceProvider, mapRemoteResponseToOptions, useFieldOptions } from "./render/data-source-context";
+export { DataSourceProvider, useFieldOptions } from "./render/data-source-context";
 export { FormRenderer, type FormRendererApi, type FormRendererProps } from "./render/form-renderer";
 export { FieldShell, type FieldShellProps } from "./render/parts/field-shell";
 export { Label, type LabelProps } from "./render/parts/label";
 export { useFieldBusy } from "./runtime/effects";
-export { normalizeFieldValue } from "./runtime/field-write";
 export { DeviceProvider, RegistryProvider, useDeviceRegistries, useFieldRegistry } from "./store/engine-provider";
 export {
   FormEditorStoreProvider,
