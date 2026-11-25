@@ -12,7 +12,7 @@ import type {
 import { isDeepEqual } from "@vef-framework-react/shared";
 
 import { isKeyedNode } from "../keys";
-import { isTreeSelectFieldType } from "../options";
+import { isTreeSelectField } from "../options";
 import { getDynamicSubformRows, isFixedSubform } from "./subform";
 import { isLeafField } from "./walk";
 
@@ -123,7 +123,7 @@ function readUploadMaxCount(field: FormField): number | undefined {
 }
 
 function readLeafOnly(field: FormField): boolean | undefined {
-  return (field.type === "tree-select" || field.type === "tree-multi-select") && field.leafOnly === true
+  return isTreeSelectField(field) && field.leafOnly === true
     ? true
     : undefined;
 }
@@ -179,7 +179,7 @@ function leafContractChanged(before: FormField, after: FormField): boolean {
     return true;
   }
 
-  if (isTreeSelectFieldType(before.type) && readLeafOnly(before) !== readLeafOnly(after)) {
+  if (isTreeSelectField(before) && readLeafOnly(before) !== readLeafOnly(after)) {
     return true;
   }
 
@@ -347,7 +347,7 @@ function syncLeafContractToTwin(before: FormField, after: FormField, twin: FormF
     }
   }
 
-  if (isTreeSelectFieldType(before.type) && isTreeSelectFieldType(after.type) && isTreeSelectFieldType(next.type)) {
+  if (isTreeSelectField(before) && isTreeSelectField(after) && isTreeSelectField(next)) {
     const beforeLeafOnly = readLeafOnly(before);
     const afterLeafOnly = readLeafOnly(after);
 

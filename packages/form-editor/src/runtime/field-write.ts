@@ -20,7 +20,7 @@ import {
   isWritableFieldPermission,
   isWritableTargetField
 } from "../engine/linkage";
-import { flattenSelectableOptions, toTopLevelOptions } from "../engine/options";
+import { selectableOptionsForField } from "../engine/options";
 
 const DATETIME_INPUT_PATTERN
   = /^(?<year>\d{4})[-/.](?<month>\d{2})[-/.](?<day>\d{2})[ T](?<hour>\d{2}):(?<minute>\d{2})(?::(?<second>\d{2}))?(?:\.\d+)?(?<tz>Z|[+-]\d{2}:?\d{2})?$/;
@@ -149,32 +149,44 @@ export function normalizeFieldValue(
     }
 
     case "select": {
-      return normalizeSingleOptionValue(value, knownOptions === undefined ? undefined : toTopLevelOptions(knownOptions));
+      return normalizeSingleOptionValue(
+        value,
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
+      );
     }
 
     case "radio": {
-      return normalizeSingleOptionValue(value, knownOptions === undefined ? undefined : toTopLevelOptions(knownOptions));
-    }
-
-    case "multi-select": {
-      return normalizeMultiOptionValue(value, knownOptions === undefined ? undefined : toTopLevelOptions(knownOptions));
-    }
-
-    case "checkbox-group": {
-      return normalizeMultiOptionValue(value, knownOptions === undefined ? undefined : toTopLevelOptions(knownOptions));
+      return normalizeSingleOptionValue(
+        value,
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
+      );
     }
 
     case "tree-select": {
       return normalizeSingleOptionValue(
         value,
-        knownOptions === undefined ? undefined : flattenSelectableOptions(knownOptions, { leafOnly: field.leafOnly === true })
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
+      );
+    }
+
+    case "multi-select": {
+      return normalizeMultiOptionValue(
+        value,
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
+      );
+    }
+
+    case "checkbox-group": {
+      return normalizeMultiOptionValue(
+        value,
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
       );
     }
 
     case "tree-multi-select": {
       return normalizeMultiOptionValue(
         value,
-        knownOptions === undefined ? undefined : flattenSelectableOptions(knownOptions, { leafOnly: field.leafOnly === true })
+        knownOptions === undefined ? undefined : selectableOptionsForField(field, knownOptions)
       );
     }
 

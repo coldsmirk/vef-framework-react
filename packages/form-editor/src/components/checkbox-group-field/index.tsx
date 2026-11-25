@@ -9,10 +9,8 @@ import type {
 } from "../../types";
 
 import { Checkbox, Spin } from "@vef-framework-react/components";
-import { useMemo } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
-import { useFieldOptions } from "../../render/data-source-context";
+import { useTopLevelFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { orderByOptions } from "../../render/parts/option-order";
 import { OptionsStatus } from "../../render/parts/options-status";
@@ -43,9 +41,8 @@ const CheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField, Array<strin
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
   const direction = field.direction ?? (cell ? "horizontal" : "vertical");
 
   return (

@@ -29,14 +29,13 @@ import {
   dateGranularityMaxLength,
   findDuplicateOptionValues,
   findParentContainer,
-  flattenSelectableOptions,
   getDynamicSubformRows,
   inferColumnType,
   isFixedSubform,
   isKeyedNode,
-  isTreeSelectFieldType,
   isValidFixedItemValue,
   normalizeOptionMapping,
+  selectableOptionsForField,
   walkNodes
 } from "@vef-framework-react/form-editor";
 
@@ -587,9 +586,7 @@ function resolveOptionSource(
     return {};
   }
 
-  const flattenTree = isTreeSelectFieldType(field.type);
-  const leafOnly = (field.type === "tree-select" || field.type === "tree-multi-select") && field.leafOnly === true;
-  const result = resolveOptionSourceValue(source, dataSources, { flattenTree, leafOnly });
+  const result = resolveOptionSourceValue(source, dataSources, field);
 
   if (result.options === undefined && result.optionSource?.kind !== "codeSet") {
     issues.push(issueOptionsNotStatic(path));
@@ -611,7 +608,7 @@ function resolveOptionSource(
 function resolveOptionSourceValue(
   source: FieldOptionSource | undefined,
   dataSources: Map<string, FormDataSource>,
-  config: { flattenTree?: boolean; leafOnly?: boolean } = {}
+  field?: { type: string; leafOnly?: boolean }
 ): { options?: ApprovalFieldOption[]; optionSource?: ApprovalFieldOptionSource } {
   if (source === undefined) {
     return {};
@@ -620,12 +617,8 @@ function resolveOptionSourceValue(
   const resolved = source.kind === "ref" ? dataSources.get(source.dataSourceId) : source;
 
   if (resolved?.kind === "static") {
-    const projected = config.flattenTree === true
-      ? flattenSelectableOptions(resolved.options, { leafOnly: config.leafOnly === true })
-      : resolved.options;
-
     return {
-      options: projected.map(option => {
+      options: selectableOptionsForField(field, resolved.options).map(option => {
         return { label: option.label, value: option.value };
       })
     };

@@ -3,10 +3,8 @@ import type { FC } from "react";
 import type { CheckboxGroupField, FieldComponentProps } from "../../types";
 
 import Checkbox from "antd-mobile/es/components/checkbox";
-import { useMemo } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
-import { useFieldOptions } from "../../render/data-source-context";
+import { useTopLevelFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
 import { orderByOptions } from "../../render/parts/option-order";
 import { MobileOptionGroup } from "./option-group";
@@ -36,9 +34,8 @@ export const MobileCheckboxGroupInput: FC<FieldComponentProps<CheckboxGroupField
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
 
   return (
     <FieldShell

@@ -3,10 +3,8 @@ import type { FC } from "react";
 import type { FieldComponentProps, FieldDefinition, FieldOptionSource, PropertiesDescriptor, SelectField } from "../../types";
 
 import { Select } from "@vef-framework-react/components";
-import { useMemo } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
-import { useFieldOptions } from "../../render/data-source-context";
+import { useTopLevelFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { filterOptionByLabelOrDescription, renderSelectOption } from "../../render/parts/option-content";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
@@ -29,11 +27,8 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  // Flat controls read top-level options only even when bound to a hierarchical
-  // data source or code set.
-  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
 
   return (
     <FieldShell

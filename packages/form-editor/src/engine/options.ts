@@ -1,4 +1,6 @@
-import type { Block, FieldOption, FieldOptionSource } from "../types";
+import type { Block, FieldOption, FieldOptionSource, TreeMultiSelectField, TreeSelectField } from "../types";
+
+import { omit } from "@vef-framework-react/shared";
 
 import { isFixedSubform } from "./schema/subform";
 
@@ -7,14 +9,52 @@ interface OptionValueNode {
   children?: readonly OptionValueNode[];
 }
 
+export interface OptionWalkContext<T> {
+  depth: number;
+  hasChildren: boolean;
+  ancestors: readonly T[];
+}
+
 /**
- * Whether a widget type is a hierarchical tree selection control (`tree-select`
- * or `tree-multi-select`). Tree controls consume the full option hierarchy;
- * flat selection controls (`select`, `multi-select`, `radio`, `checkbox-group`)
- * and fixed-row subforms consume top-level options only.
+ * Depth-first pre-order walk over any hierarchical option tree, reporting each
+ * node's nesting `depth`, whether it has non-empty `children`, and its active
+ * `ancestors` stack (root-to-parent).
  */
-export function isTreeSelectFieldType(type: string): type is "tree-select" | "tree-multi-select" {
-  return type === "tree-select" || type === "tree-multi-select";
+export function walkOptionTree<T extends { readonly children?: readonly T[] }>(
+  options: readonly T[],
+  visit: (option: T, context: OptionWalkContext<T>) => void
+): void {
+  const ancestors: T[] = [];
+
+  const walk = (nodes: readonly T[]): void => {
+    for (const option of nodes) {
+      const hasChildren = Array.isArray(option.children) && option.children.length > 0;
+
+      visit(option, {
+        depth: ancestors.length,
+        hasChildren,
+        ancestors
+      });
+
+      if (hasChildren) {
+        ancestors.push(option);
+        walk(option.children!);
+        ancestors.pop();
+      }
+    }
+  };
+
+  walk(options);
+}
+
+/**
+ * Type guard identifying hierarchical tree selection fields (`tree-select` or
+ * `tree-multi-select`). Tree fields consume the full option hierarchy and carry
+ * `leafOnly`; flat selection controls and fixed-row subforms consume top-level
+ * options only.
+ */
+export function isTreeSelectField(field: { type: string }): field is TreeSelectField | TreeMultiSelectField {
+  return field.type === "tree-select" || field.type === "tree-multi-select";
 }
 
 /**
@@ -33,23 +73,15 @@ export function findDuplicateOptionValues(options: readonly OptionValueNode[]): 
   const seen = new Set<string>();
   const duplicated = new Set<string>();
 
-  const walk = (nodes: readonly OptionValueNode[]): void => {
-    for (const option of nodes) {
-      const value = String(option.value);
+  walkOptionTree(options, option => {
+    const value = String(option.value);
 
-      if (seen.has(value)) {
-        duplicated.add(value);
-      }
-
-      seen.add(value);
-
-      if (Array.isArray(option.children) && option.children.length > 0) {
-        walk(option.children);
-      }
+    if (seen.has(value)) {
+      duplicated.add(value);
     }
-  };
 
-  walk(options);
+    seen.add(value);
+  });
 
   return [...duplicated];
 }
@@ -60,17 +92,9 @@ export function findDuplicateOptionValues(options: readonly OptionValueNode[]): 
 export function collectOptionValues(options: readonly OptionValueNode[]): Set<string> {
   const values = new Set<string>();
 
-  const walk = (nodes: readonly OptionValueNode[]): void => {
-    for (const option of nodes) {
-      values.add(String(option.value));
-
-      if (Array.isArray(option.children) && option.children.length > 0) {
-        walk(option.children);
-      }
-    }
-  };
-
-  walk(options);
+  walkOptionTree(options, option => {
+    values.add(String(option.value));
+  });
 
   return values;
 }
@@ -81,17 +105,9 @@ export function collectOptionValues(options: readonly OptionValueNode[]): Set<st
 export function countOptionNodes(options: readonly FieldOption[]): number {
   let count = 0;
 
-  const walk = (nodes: readonly FieldOption[]): void => {
-    for (const option of nodes) {
-      count += 1;
-
-      if (hasOptionChildren(option)) {
-        walk(option.children!);
-      }
-    }
-  };
-
-  walk(options);
+  walkOptionTree(options, () => {
+    count += 1;
+  });
 
   return count;
 }
@@ -103,28 +119,12 @@ export function countOptionNodes(options: readonly FieldOption[]): number {
  * fixed-row subforms so nested children never leak into flat option lists.
  */
 export function toTopLevelOptions(options: readonly FieldOption[]): FieldOption[] {
-  return options.map(option => {
-    const flat: FieldOption = {
-      label: option.label,
-      value: option.value
-    };
-
-    if (option.disabled === true) {
-      flat.disabled = true;
-    }
-
-    if (option.description !== undefined && option.description.length > 0) {
-      flat.description = option.description;
-    }
-
-    return flat;
-  });
+  return options.map(option => omit(option, ["children"]));
 }
 
 /**
  * Flatten an option tree in depth-first pre-order, optionally keeping only leaf
- * nodes (`leafOnly: true`) and stripping `children`. Shared by value
- * normalization, approval/permission projection, and typed literal inputs.
+ * nodes (`leafOnly: true`) and stripping `children`.
  */
 export function flattenSelectableOptions(
   options: readonly FieldOption[],
@@ -133,36 +133,30 @@ export function flattenSelectableOptions(
   const { leafOnly = false } = config;
   const result: FieldOption[] = [];
 
-  const walk = (nodes: readonly FieldOption[]): void => {
-    for (const option of nodes) {
-      const hasChildren = hasOptionChildren(option);
-
-      if (!leafOnly || !hasChildren) {
-        const flat: FieldOption = {
-          label: option.label,
-          value: option.value
-        };
-
-        if (option.disabled === true) {
-          flat.disabled = true;
-        }
-
-        if (option.description !== undefined && option.description.length > 0) {
-          flat.description = option.description;
-        }
-
-        result.push(flat);
-      }
-
-      if (hasChildren) {
-        walk(option.children!);
-      }
+  walkOptionTree(options, (option, { hasChildren }) => {
+    if (!leafOnly || !hasChildren) {
+      result.push(omit(option, ["children"]));
     }
-  };
-
-  walk(options);
+  });
 
   return result;
+}
+
+/**
+ * Derive the flat list of options selectable by `field`: tree controls flatten
+ * the hierarchy in pre-order (honoring `leafOnly`), while flat selection
+ * controls and fixed-row subforms take top-level items only. Shared by runtime
+ * value normalization, permission projection, and approval projection.
+ */
+export function selectableOptionsForField(
+  field: { type: string; leafOnly?: boolean } | undefined,
+  options: readonly FieldOption[]
+): FieldOption[] {
+  if (field !== undefined && isTreeSelectField(field)) {
+    return flattenSelectableOptions(options, { leafOnly: field.leafOnly === true });
+  }
+
+  return toTopLevelOptions(options);
 }
 
 /**
@@ -173,19 +167,11 @@ export function flattenSelectableOptions(
 export function indexOptionsByValue(options: readonly FieldOption[]): Map<string | number, FieldOption> {
   const map = new Map<string | number, FieldOption>();
 
-  const walk = (nodes: readonly FieldOption[]): void => {
-    for (const option of nodes) {
-      if (!map.has(option.value)) {
-        map.set(option.value, option);
-      }
-
-      if (hasOptionChildren(option)) {
-        walk(option.children!);
-      }
+  walkOptionTree(options, option => {
+    if (!map.has(option.value)) {
+      map.set(option.value, option);
     }
-  };
-
-  walk(options);
+  });
 
   return map;
 }
@@ -205,23 +191,13 @@ export function collectOptionAncestorValues(
 
   const ancestors = new Set<string | number>();
 
-  const walk = (nodes: readonly FieldOption[], path: Array<string | number>): void => {
-    for (const option of nodes) {
-      if (targetValues.has(option.value)) {
-        for (const ancestor of path) {
-          ancestors.add(ancestor);
-        }
-      }
-
-      if (hasOptionChildren(option)) {
-        path.push(option.value);
-        walk(option.children!, path);
-        path.pop();
+  walkOptionTree(options, (option, { ancestors: path }) => {
+    if (targetValues.has(option.value)) {
+      for (const ancestor of path) {
+        ancestors.add(ancestor.value);
       }
     }
-  };
-
-  walk(options, []);
+  });
 
   return [...ancestors];
 }
@@ -252,9 +228,13 @@ export function matchesOptionQuery(
 }
 
 /**
- * Filter an option tree by a search query (matching `label` or `description`),
- * retaining every ancestor of a matching descendant and reporting the ancestor
- * values that must be expanded to reveal all matches.
+ * Filter an option tree by a search query (matching `label` or `description`):
+ * - any matching node retains its entire subtree so descendants beneath a
+ * matched category stay reachable;
+ * - any non-matching ancestor of a matching descendant retains only matching
+ * branches;
+ * - `expandedKeys` lists every ancestor of a matching descendant so deep hits
+ * surface immediately while matched leaves/parents stay expandable on demand.
  */
 export function filterOptionTree(
   options: readonly FieldOption[],
@@ -268,28 +248,34 @@ export function filterOptionTree(
 
   const expanded = new Set<string | number>();
 
-  const filterNodes = (nodes: readonly FieldOption[]): FieldOption[] => {
-    const out: FieldOption[] = [];
+  const filterNodes = (nodes: readonly FieldOption[]): { filtered: FieldOption[]; hasMatch: boolean } => {
+    const filtered: FieldOption[] = [];
+    let anyMatch = false;
 
     for (const option of nodes) {
       const selfMatches = matchesOptionQuery(normalized, option);
-      const filteredChildren = hasOptionChildren(option) ? filterNodes(option.children!) : [];
+      const childResult = hasOptionChildren(option)
+        ? filterNodes(option.children!)
+        : { filtered: [], hasMatch: false };
 
-      if (filteredChildren.length > 0) {
+      if (childResult.hasMatch) {
         expanded.add(option.value);
-        out.push({ ...option, children: filteredChildren });
-      } else if (selfMatches) {
-        // When a branch matches directly, keep its subtree intact so the user
-        // can still inspect or pick children beneath the matched category.
-        out.push(option);
+      }
+
+      if (selfMatches) {
+        filtered.push(option);
+        anyMatch = true;
+      } else if (childResult.hasMatch) {
+        filtered.push({ ...option, children: childResult.filtered });
+        anyMatch = true;
       }
     }
 
-    return out;
+    return { filtered, hasMatch: anyMatch };
   };
 
   return {
-    options: filterNodes(options),
+    options: filterNodes(options).filtered,
     expandedKeys: [...expanded]
   };
 }

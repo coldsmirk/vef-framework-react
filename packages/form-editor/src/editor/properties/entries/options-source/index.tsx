@@ -6,7 +6,7 @@ import type { OptionSourceKind } from "./source-mutators";
 import { css } from "@emotion/react";
 import { globalCssVars, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
 
-import { isTreeSelectFieldType } from "../../../../engine/options";
+import { isTreeSelectField } from "../../../../engine/options";
 import { OptionListEditor } from "../../option-editors";
 import { NodeReferenceScopeProvider } from "../../reference-scope";
 import { RemoteOptionSourceEditor } from "../../remote-option-source-editor";
@@ -150,7 +150,7 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
 }) => (
   <NodeReferenceScopeProvider nodeId={field.id}>
     <OptionSourceEditor
-      allowHierarchy={isTreeSelectFieldType(field.type)}
+      allowHierarchy={isTreeSelectField(field)}
       dataSources={schema.dataSources ?? []}
       description={entry.description}
       label={entry.label}

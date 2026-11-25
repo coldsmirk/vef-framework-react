@@ -17,6 +17,7 @@ import { resolveRequestParams } from "../engine/data-source-params";
 import { resolveActionValue } from "../engine/linkage";
 import { walkOwnPath } from "../engine/linkage/scope";
 import { normalizeOptionMapping } from "../engine/option-mapping";
+import { toTopLevelOptions } from "../engine/options";
 import { isRecord } from "../engine/validation";
 import { useCodeSetState } from "./code-set-context";
 import { paramEvaluatorFor, useDataSourceParamScope } from "./data-source-param-scope";
@@ -268,39 +269,33 @@ interface FlatOptionEntry {
   parentKey: string | null;
 }
 
-function traceFlatParentCycle(
-  start: FlatOptionEntry,
-  byKey: ReadonlyMap<string, FlatOptionEntry>,
-  resolved: Set<FlatOptionEntry>,
-  inCycle: Set<FlatOptionEntry>
-): void {
-  const path: FlatOptionEntry[] = [];
-  const pathIndex = new Map<FlatOptionEntry, number>();
-  let current: FlatOptionEntry | undefined = start;
+/**
+ * Whether `entry` lies on a cycle in the `parentKey` graph (walking ancestors
+ * returns to `entry`). Cycle members become roots; non-cycle descendants that
+ * merely point into a cycle hit a repeated cycle node without returning to
+ * `entry`, so they stay attached beneath their parent.
+ */
+function isInFlatParentCycle(
+  entry: FlatOptionEntry,
+  byKey: ReadonlyMap<string, FlatOptionEntry>
+): boolean {
+  const seen = new Set<FlatOptionEntry>();
+  let current = entry.parentKey === null ? undefined : byKey.get(entry.parentKey);
 
-  while (current !== undefined && !resolved.has(current)) {
-    const cycleStart = pathIndex.get(current);
-
-    if (cycleStart !== undefined) {
-      for (let index = cycleStart; index < path.length; index++) {
-        const cycleEntry = path[index];
-
-        if (cycleEntry !== undefined) {
-          inCycle.add(cycleEntry);
-        }
-      }
-
-      break;
+  while (current !== undefined) {
+    if (current === entry) {
+      return true;
     }
 
-    pathIndex.set(current, path.length);
-    path.push(current);
+    if (seen.has(current)) {
+      return false;
+    }
+
+    seen.add(current);
     current = current.parentKey === null ? undefined : byKey.get(current.parentKey);
   }
 
-  for (const visitedEntry of path) {
-    resolved.add(visitedEntry);
-  }
+  return false;
 }
 
 /**
@@ -345,19 +340,10 @@ function buildFlatOptionTree(
     }
   }
 
-  const resolved = new Set<FlatOptionEntry>();
-  const inCycle = new Set<FlatOptionEntry>();
-
-  for (const entry of entries) {
-    if (!resolved.has(entry)) {
-      traceFlatParentCycle(entry, byKey, resolved, inCycle);
-    }
-  }
-
   const roots: FieldOption[] = [];
 
   for (const entry of entries) {
-    const parent = !inCycle.has(entry) && entry.parentKey !== null
+    const parent = entry.parentKey !== null && !isInFlatParentCycle(entry, byKey)
       ? byKey.get(entry.parentKey)
       : undefined;
 
@@ -644,6 +630,31 @@ export function useFieldOptions(source: FieldOptionSource | undefined): FieldOpt
       return remote;
     }
   }
+}
+
+/**
+ * Resolve a flat selection control's top-level options (stripping nested
+ * `children` while preserving `disabled` and `description`), memoized against
+ * {@link useFieldOptions}.
+ */
+export function useTopLevelFieldOptions(source: FieldOptionSource | undefined): FieldOptionsResult {
+  const {
+    error,
+    loading,
+    options: rawOptions
+  } = useFieldOptions(source);
+  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+
+  return useMemo(
+    () => {
+      return {
+        options,
+        loading,
+        error
+      };
+    },
+    [error, loading, options]
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { DateGranularity, FieldOption, FormDataSource, FormField, FormSchema } from "../../types";
 
 import { walkUniqueRootKeyedFields } from "../keys";
-import { flattenSelectableOptions } from "../options";
+import { selectableOptionsForField } from "../options";
 
 /**
  * Coarse field kind understood by the approval flow editor and the Go backend
@@ -89,13 +89,7 @@ function staticOptions(field: FormField, dataSources: Map<string, FormDataSource
     return undefined;
   }
 
-  if (field.type === "tree-select" || field.type === "tree-multi-select") {
-    return flattenSelectableOptions(rawOptions, { leafOnly: field.leafOnly === true }).map(option => {
-      return { label: option.label, value: option.value };
-    });
-  }
-
-  return rawOptions.map(option => {
+  return selectableOptionsForField(field, rawOptions).map(option => {
     return { label: option.label, value: option.value };
   });
 }

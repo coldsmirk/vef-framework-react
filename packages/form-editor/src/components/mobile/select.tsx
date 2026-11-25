@@ -6,9 +6,8 @@ import type { FieldComponentProps, SelectField } from "../../types";
 import Picker from "antd-mobile/es/components/picker";
 import { useMemo, useState } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
 import { EditorIcon } from "../../icons";
-import { useFieldOptions } from "../../render/data-source-context";
+import { useTopLevelFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
 import { OptionItemContent } from "../../render/parts/option-content";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
@@ -37,9 +36,8 @@ export const MobileSelectInput: FC<FieldComponentProps<SelectField, string | num
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
   const getContainer = useMobileScopeContainer();
   const [visible, setVisible] = useState(false);
 

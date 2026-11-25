@@ -3,10 +3,8 @@ import type { FC } from "react";
 import type { FieldComponentProps, FieldDefinition, FieldOptionSource, PropertiesDescriptor, RadioField } from "../../types";
 
 import { Radio, Spin } from "@vef-framework-react/components";
-import { useMemo } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
-import { useFieldOptions } from "../../render/data-source-context";
+import { useTopLevelFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
@@ -26,9 +24,8 @@ const RadioInput: FC<FieldComponentProps<RadioField, string | number | undefined
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
 
   return (
     <FieldShell

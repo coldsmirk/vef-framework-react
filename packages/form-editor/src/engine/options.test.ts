@@ -11,9 +11,11 @@ import {
   flattenSelectableOptions,
   hasOptionChildren,
   indexOptionsByValue,
-  isTreeSelectFieldType,
+  isTreeSelectField,
   matchesOptionQuery,
-  toTopLevelOptions
+  selectableOptionsForField,
+  toTopLevelOptions,
+  walkOptionTree
 } from "./options";
 
 const REGION_TREE: FieldOption[] = [
@@ -53,11 +55,82 @@ const REGION_TREE: FieldOption[] = [
 ];
 
 describe("option tree utilities", () => {
-  it("identifies tree select field types", () => {
-    expect(isTreeSelectFieldType("tree-select")).toBe(true);
-    expect(isTreeSelectFieldType("tree-multi-select")).toBe(true);
-    expect(isTreeSelectFieldType("select")).toBe(false);
-    expect(isTreeSelectFieldType("multi-select")).toBe(false);
+  it("identifies tree select fields with a field type guard", () => {
+    expect(isTreeSelectField({ type: "tree-select" })).toBe(true);
+    expect(isTreeSelectField({ type: "tree-multi-select" })).toBe(true);
+    expect(isTreeSelectField({ type: "select" })).toBe(false);
+    expect(isTreeSelectField({ type: "multi-select" })).toBe(false);
+  });
+
+  it("walks option trees in depth-first pre-order with depth, hasChildren, and ancestors", () => {
+    const visited: Array<{ value: string | number; depth: number; hasChildren: boolean; ancestors: Array<string | number> }> = [];
+
+    walkOptionTree(REGION_TREE, (option, ctx) => {
+      visited.push({
+        value: option.value,
+        depth: ctx.depth,
+        hasChildren: ctx.hasChildren,
+        ancestors: ctx.ancestors.map(item => item.value)
+      });
+    });
+
+    expect(visited).toEqual([
+      {
+        value: "east",
+        depth: 0,
+        hasChildren: true,
+        ancestors: []
+      },
+      {
+        value: "zj",
+        depth: 1,
+        hasChildren: true,
+        ancestors: ["east"]
+      },
+      {
+        value: "hz",
+        depth: 2,
+        hasChildren: false,
+        ancestors: ["east", "zj"]
+      },
+      {
+        value: "nb",
+        depth: 2,
+        hasChildren: false,
+        ancestors: ["east", "zj"]
+      },
+      {
+        value: "sh",
+        depth: 1,
+        hasChildren: false,
+        ancestors: ["east"]
+      },
+      {
+        value: "north",
+        depth: 0,
+        hasChildren: false,
+        ancestors: []
+      }
+    ]);
+  });
+
+  it("derives selectable options per field (tree with leafOnly vs flat top-level)", () => {
+    expect(selectableOptionsForField({ type: "select" }, REGION_TREE).map(o => o.value)).toEqual(["east", "north"]);
+    expect(selectableOptionsForField(undefined, REGION_TREE).map(o => o.value)).toEqual(["east", "north"]);
+    expect(selectableOptionsForField({ type: "tree-select" }, REGION_TREE).map(o => o.value)).toEqual([
+      "east",
+      "zj",
+      "hz",
+      "nb",
+      "sh",
+      "north"
+    ]);
+    expect(selectableOptionsForField({ type: "tree-multi-select", leafOnly: true }, REGION_TREE).map(o => o.value)).toEqual([
+      "hz",
+      "nb",
+      "sh",
+      "north"
+    ]);
   });
 
   it("checks whether a node has non-empty children", () => {
@@ -197,5 +270,24 @@ describe("option tree utilities", () => {
     expect(byBranch.options).toHaveLength(1);
     expect(byBranch.options[0]?.children?.[0]?.children).toHaveLength(2);
     expect(byBranch.expandedKeys).toEqual(["east"]);
+
+    // When both a parent and a subset of its children match, keep the entire
+    // parent subtree intact (not just the matching children) and expand the
+    // parent so the matching descendant is immediately visible.
+    const mixedTree: FieldOption[] = [
+      {
+        label: "华东大区",
+        value: "east",
+        children: [
+          { label: "华东一区", value: "east-1" },
+          { label: "上海市", value: "sh" }
+        ]
+      },
+      { label: "华北大区", value: "north" }
+    ];
+    const byParentAndChild = filterOptionTree(mixedTree, "华东");
+
+    expect(byParentAndChild.options).toEqual([mixedTree[0]]);
+    expect(byParentAndChild.expandedKeys).toEqual(["east"]);
   });
 });

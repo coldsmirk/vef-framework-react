@@ -5,7 +5,7 @@ import type { FieldOptionSource, FormDataSource, FormServices } from "../types";
 import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DataSourceProvider, mapRemoteResponseToOptions, useFieldOptions } from "./data-source-context";
+import { DataSourceProvider, mapRemoteResponseToOptions, useFieldOptions, useTopLevelFieldOptions } from "./data-source-context";
 
 // Function.prototype is a no-op function — useful for silencing console without
 // running into `@typescript-eslint/no-empty-function`.
@@ -578,6 +578,41 @@ describe("useFieldOptions", () => {
       expect(result.current.options).toEqual([]);
       expect(consoleWarn).toHaveBeenCalledTimes(1);
       consoleWarn.mockRestore();
+    });
+  });
+
+  describe("useTopLevelFieldOptions", () => {
+    it("strips nested children while preserving top-level disabled and description", () => {
+      const source: FieldOptionSource = {
+        kind: "static",
+        options: [
+          {
+            label: "华东大区",
+            value: "east",
+            description: "片区",
+            disabled: true,
+            children: [{ label: "上海市", value: "sh" }]
+          },
+          { label: "华北大区", value: "north" }
+        ]
+      };
+      const { result } = renderHook(() => useTopLevelFieldOptions(source), {
+        wrapper: wrap([])
+      });
+
+      expect(result.current).toEqual({
+        loading: false,
+        error: false,
+        options: [
+          {
+            label: "华东大区",
+            value: "east",
+            description: "片区",
+            disabled: true
+          },
+          { label: "华北大区", value: "north" }
+        ]
+      });
     });
   });
 });

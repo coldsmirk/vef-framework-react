@@ -81,9 +81,7 @@ export {
 export { normalizeOptionMapping } from "./engine/option-mapping";
 export {
   findDuplicateOptionValues,
-  flattenSelectableOptions,
-  isTreeSelectFieldType,
-  toTopLevelOptions
+  selectableOptionsForField
 } from "./engine/options";
 export {
   createDefaultRegistry,
