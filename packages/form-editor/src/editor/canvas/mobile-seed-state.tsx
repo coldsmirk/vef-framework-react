@@ -21,10 +21,11 @@ const seedStateCss = css({
   flex: 1,
   flexDirection: "column",
   alignItems: "center",
-  justifyContent: "center",
   gap: globalCssVars.spacingMd,
-  minHeight: 220,
-  padding: globalCssVars.spacingXl,
+  // Placed in the upper part rather than centered: the phone keeps its natural
+  // height, so its middle can sit below the fold of a short canvas and take the
+  // actions with it.
+  padding: `120px ${globalCssVars.spacingXl} ${globalCssVars.spacingXl}`,
   border: `1px dashed ${globalCssVars.colorBorderSecondary}`,
   borderRadius: globalCssVars.borderRadius,
   textAlign: "center",

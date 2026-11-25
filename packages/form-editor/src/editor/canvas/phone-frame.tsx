@@ -19,19 +19,15 @@ import { OverlayContainerProvider } from "../../components/mobile/scope";
 // (414 : 896 ≈ 19.5:9, the iPhone 11 / XR screen), plus the bezel thickness.
 // Screen content keeps the same 414 width the runtime assumes, so nothing about
 // the form's own layout shifts — the editor stays a true-width WYSIWYG at 1:1,
-// in both edit and preview. The frame keeps that real width and FILLS the canvas
-// height (capped at its natural size — see `phoneFrameCss`): a fixed height
-// overflowed a short canvas, while sizing the frame by height alone would either
-// distort the aspect or squeeze the 414px form into a narrow screen. Scaling the
-// whole device would fix the aspect but re-base the drag ghost's fixed-position
-// coordinates (the ghost lives inside the frame), so true width + fill height is
-// the drag-safe, fidelity-preserving choice — squatter than a real phone only
-// when the canvas is shorter than the device.
+// in both edit and preview. The device always shows at this natural size: a
+// canvas shorter than it scrolls (the canvas is the scroller around the frame)
+// rather than squashing the phone out of proportion. Scaling the device to fit
+// is not an option either — a scaled ancestor would re-base the drag ghost's
+// fixed-position coordinates (the ghost lives inside the frame).
 const PHONE_SCREEN_WIDTH = 414;
 const PHONE_SCREEN_HEIGHT = 896;
 const PHONE_BEZEL = 12;
-// The outer device size — screen plus a bezel on every edge. The frame holds
-// this WIDTH and caps its fill-height at this HEIGHT (its natural size).
+// The outer device size — screen plus a bezel on every edge.
 const PHONE_FRAME_WIDTH = PHONE_SCREEN_WIDTH + PHONE_BEZEL * 2;
 const PHONE_FRAME_HEIGHT = PHONE_SCREEN_HEIGHT + PHONE_BEZEL * 2;
 // Status-bar room under the Dynamic Island, and home-indicator room at the
@@ -39,33 +35,15 @@ const PHONE_FRAME_HEIGHT = PHONE_SCREEN_HEIGHT + PHONE_BEZEL * 2;
 const PHONE_SAFE_TOP = 52;
 const PHONE_SAFE_BOTTOM = 26;
 
-// Fills the canvas and centers the device inside it. A flex child that grows to
-// the canvas's full height (`flex: 1`) with `min-height: 0` so it tracks the
-// canvas rather than its own content — the frame then takes its height from this
-// box, so the device fills the canvas (up to its natural height): no overflow,
-// no scrolling to reveal a clipped phone.
-const phoneStageCss = css({
-  display: "flex",
-  flex: 1,
-  minHeight: 0,
-  alignItems: "center",
-  justifyContent: "center",
-  width: "100%"
-});
-
 const phoneFrameCss = css({
   position: "relative",
   flexShrink: 0,
   boxSizing: "border-box",
-  // True device width, fill the canvas height, cap at the natural size. Filling
-  // the height (instead of a fixed height) is what keeps the device inside a
-  // short canvas — no overflow. The cap stops a tall canvas from stretching the
-  // frame skinny past a real phone; below it the frame just gets squatter than a
-  // real device. No transform/zoom: a scaled ancestor would re-base the in-frame
-  // drag ghost's fixed coordinates (see the constants note above).
+  // Auto margins center the device in the canvas (a flex column) and, unlike
+  // centered alignment, never push an oversized one past the scrollable start.
+  margin: "auto",
   width: PHONE_FRAME_WIDTH,
-  height: "100%",
-  maxHeight: PHONE_FRAME_HEIGHT,
+  height: PHONE_FRAME_HEIGHT,
   padding: PHONE_BEZEL,
   borderRadius: 54,
   // Brushed-titanium bezel: a soft diagonal metal gradient, lifted off the
@@ -83,12 +61,14 @@ const phoneFrameCss = css({
 // The "glass" of the screen: the physical display area. It clips its content to
 // the screen's rounded corners and is the box a picker overlay is penned to (see
 // `containedOverlayCss`); `position: relative` makes it the offset parent the
-// absolute-rebased overlay anchors against.
+// absolute-rebased overlay anchors against. `clip` rather than `hidden`: hidden
+// would make the screen a scroll container, which the sticky sheet below would
+// then stick to instead of the canvas.
 const phoneScreenCss = css({
   position: "relative",
   width: "100%",
   height: "100%",
-  overflow: "hidden",
+  overflow: "clip",
   borderRadius: 42,
   background: globalCssVars.colorBgContainer,
   // A thin inner glass edge between the screen and the metal bezel.
@@ -103,6 +83,9 @@ const phoneScreenCss = css({
 // the simulated phone instead of flooding the browser. It contains them WITHOUT a
 // transform; a transform would establish the same containing block but ALSO
 // re-base the drag ghost's fixed coordinates and break reordering in edit mode.
+// A sheet sits at the screen's bottom edge but sticks to the canvas's, so on a
+// canvas too short for the whole device it opens in view rather than below the
+// fold — flush with the edge, hence the offset past the canvas's own padding.
 // Scoped to the screen, so real mobile runtime (no shell) keeps its native
 // viewport-anchored overlays. Higher specificity than antd-mobile's single-class
 // rules, so no `!important` is needed.
@@ -111,8 +94,17 @@ const containedOverlayCss = css({
     position: "absolute",
     inset: 0
   },
-  "& .adm-mask, & .adm-popup-body, & .adm-center-popup-wrap": {
+  "& .adm-popup": {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end"
+  },
+  "& .adm-mask, & .adm-center-popup-wrap": {
     position: "absolute"
+  },
+  "& .adm-popup-body": {
+    position: "sticky",
+    bottom: `calc(-1 * ${globalCssVars.spacingXl})`
   }
 });
 
@@ -177,19 +169,17 @@ export function PhoneFrame({ children }: { children: ReactNode }): ReactElement 
   const [screenNode, setScreenNode] = useState<HTMLElement | null>(null);
 
   return (
-    <div css={phoneStageCss}>
-      <div css={phoneFrameCss}>
-        <span css={dynamicIslandCss} />
+    <div css={phoneFrameCss}>
+      <span css={dynamicIslandCss} />
 
-        <div ref={setScreenNode} css={[phoneScreenCss, containedOverlayCss]}>
-          {/* Pen mobile pickers to the screen in BOTH edit and preview: the
-              overlay portals here and `containedOverlayCss` re-bases it to this
-              box — no transform, so edit-mode dragging stays intact. */}
-          <OverlayContainerProvider container={screenNode}>{children}</OverlayContainerProvider>
-        </div>
-
-        <span css={homeIndicatorCss} />
+      <div ref={setScreenNode} css={[phoneScreenCss, containedOverlayCss]}>
+        {/* Pen mobile pickers to the screen in BOTH edit and preview: the
+            overlay portals here and `containedOverlayCss` re-bases it to this
+            box — no transform, so edit-mode dragging stays intact. */}
+        <OverlayContainerProvider container={screenNode}>{children}</OverlayContainerProvider>
       </div>
+
+      <span css={homeIndicatorCss} />
     </div>
   );
 }
