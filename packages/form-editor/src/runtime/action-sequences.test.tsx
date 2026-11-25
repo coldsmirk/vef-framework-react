@@ -2642,5 +2642,56 @@ describe("form action sequences runtime", () => {
       });
       expect(apiRef.current?.getValues()).not.toHaveProperty("ghostKey");
     });
+
+    it("keeps the form mounted when a host service throws synchronously inside a condition-triggered sequence", async () => {
+      const user = userEvent.setup();
+      const consoleError = vi.spyOn(console, "error").mockImplementation(Function.prototype as () => void);
+      const notify = vi.fn(() => {
+        throw new Error("notify blew up");
+      });
+      const schema = schemaOf([
+        textField("empCode", {
+          label: "工号",
+          linkage: {
+            rules: [
+              {
+                id: "R_throwing_notify",
+                trigger: {
+                  kind: "condition",
+                  condition: {
+                    kind: "leaf",
+                    sourceKey: "empCode",
+                    operator: "eq",
+                    value: "E1"
+                  }
+                },
+                actions: [
+                  {
+                    type: "select_record",
+                    source: { kind: "literal", value: null },
+                    output: "row",
+                    emptyMessage: "未找到记录"
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      ]);
+
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
+      const codeInput = screen.getByRole("textbox", { name: "工号" });
+
+      await user.type(codeInput, "E1");
+
+      expect(notify).toHaveBeenCalledWith("info", "未找到记录");
+      expect(codeInput).toHaveValue("E1");
+      expect(consoleError).toHaveBeenCalledWith(
+        "[form-editor] effect sequence threw unexpectedly:",
+        expect.objectContaining({ message: "notify blew up" })
+      );
+
+      consoleError.mockRestore();
+    });
   });
 });

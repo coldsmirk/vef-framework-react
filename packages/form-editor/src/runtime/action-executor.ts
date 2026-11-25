@@ -201,12 +201,34 @@ function collectWritableFields(schema: RuntimeSchema): Map<string, WritableTarge
  * without allocating a Promise. Only genuinely asynchronous steps (`api_call`,
  * multi-record `select_record`, `submit`) transition to a Promise chain.
  *
+ * Never throws and never rejects. A host function (evaluator, `notify`, sink)
+ * that throws outside a step's own `onError` handling is logged and settles the
+ * sequence as `"failed"`, so no trigger site — an event handler, an edge
+ * detection effect, a form lifecycle hook — has to contain it.
+ */
+export function executeActionSequence(args: ExecuteActionSequenceArgs): SequenceOutcome | Promise<SequenceOutcome> {
+  try {
+    const result = runActionSequence(args);
+
+    return result instanceof Promise ? result.catch(failUnexpectedly) : result;
+  } catch (error) {
+    return failUnexpectedly(error);
+  }
+}
+
+function failUnexpectedly(error: unknown): SequenceOutcome {
+  console.error("[form-editor] effect sequence threw unexpectedly:", error);
+
+  return "failed";
+}
+
+/**
  * Settlement is exception-safe: every exit path (completion, early stop,
  * abort, step failure, or unexpected host throw) passes through the single
  * `run.finish()` settlement point so slots, busy counters, and the submit gate
  * can never leak.
  */
-export function executeActionSequence(args: ExecuteActionSequenceArgs): SequenceOutcome | Promise<SequenceOutcome> {
+function runActionSequence(args: ExecuteActionSequenceArgs): SequenceOutcome | Promise<SequenceOutcome> {
   const {
     actions,
     env,

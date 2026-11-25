@@ -312,7 +312,8 @@ const pcBodyCss = css({
 const pcScrollAreaCss = css({
   // Disable antd Table's own `.vef-table-content` overflow so `ScrollArea` is
   // the single scroll region for long/wide lists, and pin the header against
-  // the ScrollArea viewport.
+  // the ScrollArea viewport. The table sets that overflow inline, which only
+  // `!important` can override.
   "& .vef-table-content": {
     overflow: "visible !important"
   },
@@ -325,10 +326,10 @@ const pcScrollAreaCss = css({
     cursor: "pointer"
   },
   [`& .vef-table-tbody > tr.${ACTIVE_ROW_CLASS} > td`]: {
-    backgroundColor: `${globalCssVars.colorPrimaryBg} !important`
+    backgroundColor: globalCssVars.colorPrimaryBg
   },
   [`& .vef-table-tbody > tr.${ACTIVE_ROW_CLASS}:hover > td`]: {
-    backgroundColor: `${globalCssVars.colorPrimaryBgHover} !important`
+    backgroundColor: globalCssVars.colorPrimaryBgHover
   }
 });
 

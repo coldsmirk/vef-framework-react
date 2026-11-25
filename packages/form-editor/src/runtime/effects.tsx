@@ -133,9 +133,7 @@ export function EffectDispatchProvider({ children, run }: { children: ReactNode;
  * Returns a {@link SequenceOutcome}: `"completed"` when every sequence
  * completes normally (including false `when` guards and `onError: "continue"`),
  * or the first non-completed outcome (`"stopped"`, `"aborted"`, `"failed"`)
- * when `stopOnIncomplete` is set (`beforeSubmit`). Unexpected host throws are
- * contained into `"failed"` (and logged outside `beforeSubmit`) so a broken
- * evaluator never leaks unhandled rejections.
+ * when `stopOnIncomplete` is set (`beforeSubmit`).
  */
 export async function dispatchFormSequences(args: {
   env: SequenceEnv;
@@ -149,25 +147,15 @@ export async function dispatchFormSequences(args: {
   }
 
   for (const sequence of args.sequences) {
-    let outcome: SequenceOutcome;
-
-    try {
-      outcome = await executeActionSequence({
-        actions: sequence.actions,
-        env: args.env,
-        getPrefix: () => "",
-        ruleId: sequence.ruleId,
-        schema: args.schema,
-        scopeId: args.scopeId,
-        when: sequence.when
-      });
-    } catch (error) {
-      if (!args.stopOnIncomplete) {
-        console.error("[form-editor] form effect sequence threw unexpectedly:", error);
-      }
-
-      outcome = "failed";
-    }
+    const outcome = await executeActionSequence({
+      actions: sequence.actions,
+      env: args.env,
+      getPrefix: () => "",
+      ruleId: sequence.ruleId,
+      schema: args.schema,
+      scopeId: args.scopeId,
+      when: sequence.when
+    });
 
     if (args.stopOnIncomplete && outcome !== "completed") {
       return outcome;
@@ -306,7 +294,9 @@ export function useScopeEffects(args: {
           continue;
         }
 
-        const result = executeActionSequence({
+        // Fire-and-forget: an event or condition trigger has no use for the
+        // outcome, and the executor never throws or rejects.
+        void executeActionSequence({
           actions: sequence.actions,
           env: scopeEnv,
           getPrefix: () => prefixRef.current,
@@ -316,14 +306,6 @@ export function useScopeEffects(args: {
           scopeId,
           when: sequence.when
         });
-
-        // Fire-and-forget for event / condition triggers: contain unexpected
-        // rejections so they never surface as unhandled promise rejections.
-        if (result instanceof Promise) {
-          result.catch((error: unknown) => {
-            console.error("[form-editor] effect sequence failed:", error);
-          });
-        }
       }
     },
     [schema, scopeEnv, scopeId]
