@@ -104,10 +104,28 @@ describe("confirmDialog", () => {
       expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({
         title: "确认清空？",
         content: "该操作可撤销。",
+        okText: "确认",
+        cancelText: "取消",
         okType: "danger",
         onOk
       }));
       expect(onOk).not.toHaveBeenCalled();
+    });
+
+    it("forwards custom okText and cancelText when supplied", () => {
+      const vef = installVefGlobal();
+      const onOk = vi.fn();
+
+      confirmDialog("放弃未保存的修改？", "修改将不会保存。", {
+        okText: "放弃修改",
+        cancelText: "继续编辑",
+        onOk
+      });
+
+      expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({
+        okText: "放弃修改",
+        cancelText: "继续编辑"
+      }));
     });
   });
 

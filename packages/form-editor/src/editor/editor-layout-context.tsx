@@ -10,12 +10,12 @@ import { PROPERTIES_PANEL_WIDTH, SIDEBAR_DOCK_WIDTH } from "./styles";
  * that already eats horizontal space).
  *
  * - `docked`: both side panels sit beside the canvas at their full width
- * (sidebar 296 — widening to 400 on the `数据` tab — and properties 400),
+ * (uniform 296px sidebar across `组件` / `大纲` / `数据`, and 400px properties),
  * the toolbar shows every action
  * - `drawer`: on a narrow host the sidebar collapses to an icon rail (with
- * `大纲` / `数据` opening as a left-edge overlay) and the properties panel
- * detaches into a right-edge overlay, so the canvas keeps its width instead
- * of being squeezed
+ * `大纲` / `数据` opening as a 296px left-edge overlay) and the properties
+ * panel detaches into a right-edge overlay, so the canvas keeps its width
+ * instead of being squeezed
  */
 export type EditorLayoutMode = "docked" | "drawer";
 
@@ -26,16 +26,10 @@ const MIN_CANVAS_WIDTH = 520;
 
 /**
  * Width threshold (in CSS pixels of the editor *root*, not the viewport) at or
- * above which the docked layout is used: the resting 296px sidebar plus the
+ * above which the docked layout is used: the uniform 296px sidebar plus the
  * 400px properties panel leave the canvas a usable (≥520px) surface, i.e.
  * `296 + 400 + 520 = 1216`. Below it the editor rails the sidebar and detaches
  * both overlays.
- *
- * Sized by the resting sidebar, not the wider `数据` tab: that tab is a
- * temporary editing surface whose extra width comes out of the canvas while
- * it is open. Sizing by it would push a 1440px screen with the host's
- * navigation expanded (a ~1220px editor) into the rail layout for good, to
- * protect a canvas nobody is laying out while editing data sources.
  */
 export const DRAWER_MIN = SIDEBAR_DOCK_WIDTH + PROPERTIES_PANEL_WIDTH + MIN_CANVAS_WIDTH;
 

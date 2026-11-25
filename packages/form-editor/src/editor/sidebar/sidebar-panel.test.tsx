@@ -8,6 +8,7 @@ import type { EditorLayoutMode } from "../editor-layout-context";
 
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
@@ -66,16 +67,18 @@ function setupSidebar(layout: EditorLayoutMode = "docked", schema: FormSchema = 
   let storeApi: FormEditorStoreApi | null = null;
 
   render(
-    <FormEditorStoreProvider initialState={{ schema }}>
-      <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
-        <EditorLayoutProvider value={layout}>
-          <SidebarHarness onReady={nextApi => {
-            storeApi = nextApi;
-          }}
-          />
-        </EditorLayoutProvider>
-      </RegistryProvider>
-    </FormEditorStoreProvider>
+    <ConfigProvider>
+      <FormEditorStoreProvider initialState={{ schema }}>
+        <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+          <EditorLayoutProvider value={layout}>
+            <SidebarHarness onReady={nextApi => {
+              storeApi = nextApi;
+            }}
+            />
+          </EditorLayoutProvider>
+        </RegistryProvider>
+      </FormEditorStoreProvider>
+    </ConfigProvider>
   );
 
   if (!storeApi) {
@@ -84,6 +87,23 @@ function setupSidebar(layout: EditorLayoutMode = "docked", schema: FormSchema = 
 
   return storeApi;
 }
+
+beforeEach(() => {
+  vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  } as unknown as MediaQueryList));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("SidebarPanel", () => {
   it("renders the palette tab by default with a vertical-only scroll area", () => {
@@ -116,7 +136,7 @@ describe("SidebarPanel", () => {
     expect(screen.queryByText("姓名")).not.toBeInTheDocument();
   });
 
-  it("renders data sources before variables on the 数据 tab and patches the schema", async () => {
+  it("renders data sources before variables on the 数据 tab and commits modal creations to the schema", async () => {
     const user = userEvent.setup();
     const storeApi = setupSidebar();
 
@@ -128,10 +148,47 @@ describe("SidebarPanel", () => {
     expect(dataSourcesHeading.compareDocumentPosition(variablesHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /新增数据源/ }));
+    const dsDialog = await screen.findByRole("dialog", { name: "新增数据源" });
+
+    await user.type(within(dsDialog).getByLabelText(/名称/), "城市");
+    await user.click(within(dsDialog).getByRole("button", { name: "确定" }));
+
     await user.click(screen.getByRole("button", { name: /新增变量/ }));
+    const varDialog = await screen.findByRole("dialog", { name: "新增变量" });
+
+    await user.type(within(varDialog).getByLabelText(/变量名/), "total");
+    await user.click(within(varDialog).getByRole("button", { name: "确定" }));
 
     expect(storeApi.getState().schema.dataSources).toHaveLength(1);
     expect(storeApi.getState().schema.variables).toHaveLength(1);
+  });
+
+  it("opens the target data source edit modal when navigated via requestDataItemEdit", async () => {
+    const schema: FormSchema = {
+      ...makeSchema(),
+      dataSources: [
+        {
+          id: "DataSource_1",
+          name: "部门",
+          kind: "remote",
+          request: { resource: "", action: "" }
+        }
+      ]
+    };
+    const storeApi = setupSidebar("docked", schema);
+
+    expect(storeApi.getState().sidebarTab).toBe("palette");
+
+    act(() => {
+      storeApi.getState().requestDataItemEdit({ kind: "dataSource", id: "DataSource_1" });
+    });
+
+    expect(storeApi.getState().sidebarTab).toBe("data");
+
+    const dialog = await screen.findByRole("dialog", { name: "编辑数据源" });
+
+    expect(within(dialog).getByLabelText(/名称/)).toHaveValue("部门");
+    expect(storeApi.getState().pendingDataEdit).toBeNull();
   });
 
   it("selects a node from the 大纲 tab", async () => {
@@ -263,6 +320,31 @@ describe("SidebarPanel", () => {
 
       expect(screen.queryByRole("complementary", { name: "侧边栏" })).not.toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "数据" })).not.toBeInTheDocument();
+    });
+
+    it("opens the data overlay and edit modal when navigated to a data source in drawer layout", async () => {
+      const schema: FormSchema = {
+        ...makeSchema(),
+        dataSources: [
+          {
+            id: "DataSource_1",
+            name: "部门",
+            kind: "static",
+            options: [{ label: "研发部", value: "rd" }]
+          }
+        ]
+      };
+      const storeApi = setupSidebar("drawer", schema);
+
+      act(() => {
+        storeApi.getState().requestDataItemEdit({ kind: "dataSource", id: "DataSource_1" });
+      });
+
+      expect(screen.getByRole("region", { name: "数据" })).toBeInTheDocument();
+
+      const dialog = await screen.findByRole("dialog", { name: "编辑数据源" });
+
+      expect(within(dialog).getByLabelText(/名称/)).toHaveValue("部门");
     });
   });
 });

@@ -17,12 +17,12 @@ const wrapperCss = css({
 
 const hintCss = css({
   fontSize: globalCssVars.fontSizeSm,
-  lineHeight: 1.6,
+  lineHeight: 1.5,
   color: globalCssVars.colorTextTertiary
 });
 
-// One bordered list, ruled between rows: read-only entries the designer looks
-// up, unlike the form variables below it, which are edited in place.
+// One bordered list, ruled between rows: read-only entries whose preview
+// samples stay directly editable inline inside the uniform 296px sidebar.
 const listCss = css({
   display: "flex",
   flexDirection: "column",
@@ -32,39 +32,43 @@ const listCss = css({
 
 const rowCss = css({
   display: "flex",
-  alignItems: "center",
-  gap: 12,
-  padding: "6px 12px",
+  flexDirection: "column",
+  gap: 4,
+  padding: "8px 10px",
 
   "& + &": {
     borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`
   }
 });
 
-const nameCss = css({
+const topRowCss = css({
   display: "flex",
-  flexDirection: "column",
-  flex: 1,
+  alignItems: "center",
+  gap: 8,
   minWidth: 0
 });
 
 const labelCss = css({
+  flex: 1,
+  minWidth: 0,
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  fontSize: globalCssVars.fontSizeSm,
+  fontWeight: 500,
   color: globalCssVars.colorText
 });
 
 const pathCss = css({
   fontFamily: globalCssVars.fontFamilyCode,
-  fontSize: globalCssVars.fontSizeSm,
-  lineHeight: 1.5,
+  fontSize: 11,
+  lineHeight: 1.4,
   color: globalCssVars.colorTextTertiary,
   wordBreak: "break-all"
 });
 
 const sampleCss = css({
-  width: 136,
+  width: 112,
   flexShrink: 0
 });
 
@@ -85,7 +89,7 @@ export function SystemVariablesPanel(): ReactElement | null {
   return (
     <div css={wrapperCss}>
       <span css={hintCss}>
-        宿主运行时注入的只读值：条件中直接选择，表达式中按路径引用。预览值仅用于设计器预览，不会保存。
+        宿主运行时注入的只读值，预览值仅用于设计器预览，不会保存。
       </span>
 
       <div css={listCss}>
@@ -115,12 +119,12 @@ function SystemVariableRow({
 }: SystemVariableRowProps): ReactElement {
   return (
     <div css={rowCss}>
-      <div css={nameCss}>
+      <div css={topRowCss}>
         <span css={labelCss} title={source.label}>{source.label}</span>
-        <Text copyable={{ tooltips: ["复制路径", "已复制"] }} css={pathCss}>{source.key}</Text>
+        <SampleInput label={source.label} value={sample} onCommit={onSampleCommit} />
       </div>
 
-      <SampleInput label={source.label} value={sample} onCommit={onSampleCommit} />
+      <Text copyable={{ tooltips: ["复制路径", "已复制"] }} css={pathCss}>{source.key}</Text>
     </div>
   );
 }
@@ -157,6 +161,7 @@ function SampleInput({
       aria-label={`${label}的预览值`}
       css={sampleCss}
       placeholder="预览值"
+      size="small"
       value={draft ?? value}
       onBlur={commit}
       onChange={event => setDraft(event.target.value)}

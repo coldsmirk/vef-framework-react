@@ -3,8 +3,9 @@ import type { ReactElement } from "react";
 import type { FormEditorStoreApi } from "../../store/form-store";
 import type { FieldLinkage, FormSchema, FormVariable } from "../../types";
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
@@ -24,11 +25,6 @@ interface HarnessProps {
   onReady: (api: FormEditorStoreApi) => void;
 }
 
-/**
- * Mirrors the sidebar `数据` tab wiring: variables come from the store schema
- * and updates patch them back, so the panel's store-backed rename/remove and
- * its onChange path stay in sync.
- */
 function Harness({ onReady }: HarnessProps): ReactElement {
   const api = useFormEditorStoreApi();
   const variables = useFormEditorStore(state => state.schema.variables);
@@ -39,8 +35,12 @@ function Harness({ onReady }: HarnessProps): ReactElement {
 
   return (
     <FormVariablesPanel
+      title="表单变量"
       variables={variables ?? []}
-      onChange={next => api.getState().patchSchema({ variables: next.length > 0 ? next : undefined })}
+      onChange={next => api.getState().patchSchema(
+        { variables: next.length > 0 ? next : undefined },
+        { coalesce: false }
+      )}
     />
   );
 }
@@ -49,13 +49,15 @@ function setup(variables: FormVariable[] = [], linkage?: FieldLinkage): FormEdit
   let captured: FormEditorStoreApi | null = null;
 
   render(
-    <FormEditorStoreProvider initialState={{ schema: makeSchema(variables, linkage) }}>
-      <Harness
-        onReady={api => {
-          captured = api;
-        }}
-      />
-    </FormEditorStoreProvider>
+    <ConfigProvider>
+      <FormEditorStoreProvider initialState={{ schema: makeSchema(variables, linkage) }}>
+        <Harness
+          onReady={api => {
+            captured = api;
+          }}
+        />
+      </FormEditorStoreProvider>
+    </ConfigProvider>
   );
 
   if (!captured) {
@@ -69,44 +71,116 @@ function storeVariables(api: FormEditorStoreApi): FormVariable[] {
   return api.getState().schema.variables ?? [];
 }
 
+beforeEach(() => {
+  vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  } as unknown as MediaQueryList));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe("form variables panel", () => {
-  it("adds a string variable", async () => {
-    const user = userEvent.setup();
-    const api = setup();
+  it("renders compact rows showing name, type badge, and default value", () => {
+    setup([
+      {
+        id: "v1",
+        name: "rate",
+        type: "number",
+        defaultValue: 3.15
+      },
+      {
+        id: "v2",
+        name: "flag",
+        type: "boolean",
+        defaultValue: false
+      },
+      {
+        id: "v3",
+        name: "memo",
+        type: "string"
+      }
+    ]);
 
-    await user.click(screen.getByRole("button", { name: /新增变量/ }));
+    expect(screen.getByText("rate")).toBeInTheDocument();
+    expect(screen.getByText("数字")).toBeInTheDocument();
+    expect(screen.getByText("默认：3.15")).toBeInTheDocument();
 
-    const variables = storeVariables(api);
-    expect(variables).toHaveLength(1);
-    expect(variables[0]).toMatchObject({ name: "", type: "string" });
+    expect(screen.getByText("flag")).toBeInTheDocument();
+    expect(screen.getByText("布尔")).toBeInTheDocument();
+    expect(screen.getByText("默认：否")).toBeInTheDocument();
+
+    expect(screen.getByText("memo")).toBeInTheDocument();
+    expect(screen.getByText("无默认值")).toBeInTheDocument();
   });
 
-  describe("default value editing", () => {
-    it("commits a decimal number entered digit by digit", async () => {
+  describe("creating and validating in modal", () => {
+    it("opens a blank modal and validates name grammar, uniqueness, and number/JSON defaults without losing input", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
           id: "v1",
-          name: "rate",
-          type: "number"
+          name: "existing",
+          type: "string"
         }
       ]);
 
-      const input = screen.getByPlaceholderText("默认值");
-      await user.click(input);
-      await user.keyboard("3.15");
+      await user.click(screen.getByRole("button", { name: "新增变量" }));
 
-      // The draft keeps the literal text while typing — `3.` is never
-      // round-tripped through Number() mid-edit (which swallowed the dot and
-      // turned 3.15 into 315).
-      expect(input).toHaveValue("3.15");
+      const dialog = await screen.findByRole("dialog", { name: "新增变量" });
 
-      await user.tab();
+      // Empty name blocked.
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("请输入变量名");
 
-      expect(storeVariables(api)[0]?.defaultValue).toBe(3.15);
+      // Digit-leading name rejected with inline guidance.
+      const nameInput = within(dialog).getByLabelText(/变量名/);
+
+      await user.type(nameInput, "1total");
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("不能以数字开头");
+
+      // Duplicate name rejected.
+      await user.clear(nameInput);
+      await user.type(nameInput, "existing");
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("已存在同名变量");
+
+      // Valid name + invalid number default keeps the modal open with input preserved.
+      await user.clear(nameInput);
+      await user.type(nameInput, "total1");
+      await user.click(within(dialog).getByText("数字"));
+
+      const defaultInput = within(dialog).getByLabelText("默认值");
+
+      await user.type(defaultInput, "abc");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("请输入有效的数字");
+      expect(defaultInput).toHaveValue("abc");
+      expect(storeVariables(api)).toHaveLength(1);
+
+      // Fix number to decimal 3.15 and save.
+      await user.clear(defaultInput);
+      await user.type(defaultInput, "3.15");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(storeVariables(api)).toHaveLength(2);
+      expect(storeVariables(api)[1]).toMatchObject({
+        name: "total1",
+        type: "number",
+        defaultValue: 3.15
+      });
     });
 
-    it("commits valid JSON on blur without re-stringifying under the cursor", async () => {
+    it("parses valid JSON defaults and rejects invalid JSON", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
@@ -116,97 +190,55 @@ describe("form variables panel", () => {
         }
       ]);
 
-      const input = screen.getByPlaceholderText("默认值");
-      await user.click(input);
-      await user.keyboard("{{\"a\": 1}");
+      await user.click(screen.getByRole("button", { name: "编辑变量 config" }));
 
-      expect(input).toHaveValue("{\"a\": 1}");
+      const dialog = await screen.findByRole("dialog", { name: "编辑变量" });
+      const textarea = within(dialog).getByLabelText("默认值");
 
-      await user.tab();
+      await user.type(textarea, "{{bad");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("请输入合法的 JSON");
+
+      await user.clear(textarea);
+      await user.type(textarea, "{{\"a\": 1}");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
       expect(storeVariables(api)[0]?.defaultValue).toEqual({ a: 1 });
     });
 
-    it("edits a boolean default through the segmented control", async () => {
+    it("seeds concrete false when switching to boolean and lets the user toggle it", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
           id: "v1",
           name: "flag",
-          type: "boolean",
-          defaultValue: false
+          type: "string"
         }
       ]);
 
-      await user.click(screen.getByText("是"));
+      await user.click(screen.getByRole("button", { name: "编辑变量 flag" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "编辑变量" });
+
+      await user.click(within(dialog).getByText("布尔"));
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(storeVariables(api)[0]).toMatchObject({ type: "boolean", defaultValue: false });
+
+      await user.click(screen.getByRole("button", { name: "编辑变量 flag" }));
+
+      const reopened = await screen.findByRole("dialog", { name: "编辑变量" });
+
+      await user.click(within(reopened).getByText("是"));
+      await user.click(within(reopened).getByRole("button", { name: "确定" }));
 
       expect(storeVariables(api)[0]?.defaultValue).toBe(true);
     });
-
-    it("seeds a concrete false when switching a variable to boolean", async () => {
-      const user = userEvent.setup();
-      const api = setup([
-        {
-          id: "v1",
-          name: "flag",
-          type: "string"
-        }
-      ]);
-
-      await user.click(screen.getByRole("combobox"));
-      await user.click(await screen.findByText("布尔"));
-
-      // The Segmented shows "否" for false; the stored value must be `false`,
-      // not `undefined`, so `$vars.flag === false` / `empty` agree with the UI.
-      expect(storeVariables(api)[0]).toMatchObject({ type: "boolean", defaultValue: false });
-    });
   });
 
-  describe("naming", () => {
-    it("sanitizes the committed name", async () => {
-      const user = userEvent.setup();
-      const api = setup([
-        {
-          id: "v1",
-          name: "tax",
-          type: "string"
-        }
-      ]);
-
-      const input = screen.getByDisplayValue("tax");
-      await user.click(input);
-      await user.keyboard(" rate");
-      await user.tab();
-
-      // Spaces are stripped on commit (names must be `$vars.<identifier>`-safe).
-      expect(storeVariables(api)[0]?.name).toBe("taxrate");
-    });
-
-    it("uniquifies a committed duplicate name instead of shadowing its twin", async () => {
-      const user = userEvent.setup();
-      const api = setup([
-        {
-          id: "v1",
-          name: "tax",
-          type: "string"
-        },
-        {
-          id: "v2",
-          name: "rate",
-          type: "string"
-        }
-      ]);
-
-      const input = screen.getByDisplayValue("rate");
-      await user.click(input);
-      await user.clear(input);
-      await user.keyboard("tax");
-      await user.tab();
-
-      expect(storeVariables(api).map(variable => variable.name)).toEqual(["tax", "tax_2"]);
-    });
-
-    it("dispatches renameVariable so set_variable references follow", async () => {
+  describe("renaming, dirty close, duplicating, and deleting", () => {
+    it("atomically renames linkage references and updates default value in one undo step", async () => {
       const user = userEvent.setup();
       const linkage: FieldLinkage = {
         rules: [
@@ -228,59 +260,43 @@ describe("form variables panel", () => {
         {
           id: "v1",
           name: "total",
-          type: "number"
+          type: "number",
+          defaultValue: 0
         }
       ], linkage);
-      const renameSpy = vi.spyOn(api.getState(), "renameVariable");
 
-      const input = screen.getByDisplayValue("total");
-      await user.click(input);
-      await user.clear(input);
-      await user.keyboard("sum");
-      await user.tab();
+      await user.click(screen.getByRole("button", { name: "编辑变量 total" }));
 
-      expect(renameSpy).toHaveBeenCalledWith("total", "sum");
-      expect(storeVariables(api)[0]?.name).toBe("sum");
-      // The reference rewrite is the store's job — asserting it here pins the
-      // panel to the reference-following action, not a bare list patch.
-      const action = api.getState().schema.linkage?.rules?.[0]?.actions?.[0];
-      expect(action).toMatchObject({ type: "set_variable", variable: "sum" });
+      const dialog = await screen.findByRole("dialog", { name: "编辑变量" });
+      const nameInput = within(dialog).getByLabelText(/变量名/);
+      const defaultInput = within(dialog).getByLabelText("默认值");
+
+      await user.clear(nameInput);
+      await user.type(nameInput, "sum");
+      await user.clear(defaultInput);
+      await user.type(defaultInput, "42");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(storeVariables(api)[0]).toMatchObject({ name: "sum", defaultValue: 42 });
+      expect(api.getState().schema.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
+        type: "set_variable",
+        variable: "sum"
+      });
+      expect(api.getState().past).toHaveLength(1);
+
+      // Single undo restores both the variable and the linkage action reference.
+      act(() => {
+        api.getState().undo();
+      });
+
+      expect(storeVariables(api)[0]).toMatchObject({ name: "total", defaultValue: 0 });
+      expect(api.getState().schema.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
+        type: "set_variable",
+        variable: "total"
+      });
     });
 
-    it("refuses a digit-leading name on first naming, like a rename", async () => {
-      // First naming used to bypass renameVariable's isValidVariableName guard
-      // and reach the schema through a plain field update. `sanitizeKey` only
-      // strips non-word characters, so "1total" survived it — a name
-      // validateSchema rejects as an error, and one `$vars.1total` cannot even
-      // compile into, leaving every condition that reads it silently false.
-      const user = userEvent.setup();
-      const api = setup();
-
-      await user.click(screen.getByRole("button", { name: /新增变量/ }));
-
-      const input = screen.getByPlaceholderText("变量名");
-      await user.click(input);
-      await user.type(input, "1total");
-      await user.tab();
-
-      expect(storeVariables(api)[0]?.name).toBe("");
-    });
-
-    it("accepts a valid first name", async () => {
-      const user = userEvent.setup();
-      const api = setup();
-
-      await user.click(screen.getByRole("button", { name: /新增变量/ }));
-
-      const input = screen.getByPlaceholderText("变量名");
-      await user.click(input);
-      await user.type(input, "total1");
-      await user.tab();
-
-      expect(storeVariables(api)[0]?.name).toBe("total1");
-    });
-
-    it("keeps the current name when the committed input sanitizes to empty", async () => {
+    it("asks confirmation before discarding dirty edits on cancel", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
@@ -290,45 +306,72 @@ describe("form variables panel", () => {
         }
       ]);
 
-      const input = screen.getByDisplayValue("tax");
-      await user.click(input);
-      await user.clear(input);
-      await user.tab();
+      await user.click(screen.getByRole("button", { name: "编辑变量 tax" }));
 
-      expect(storeVariables(api)[0]?.name).toBe("tax");
+      const dialog = await screen.findByRole("dialog", { name: "编辑变量" });
+
+      await user.type(within(dialog).getByLabelText("默认值"), "0.1");
+      await user.click(within(dialog).getByRole("button", { name: "取消" }));
+
+      expect(await screen.findByText("关闭后当前变量的修改将不会保存。")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "继续编辑" }));
+      await waitFor(() => {
+        expect(screen.queryByText("关闭后当前变量的修改将不会保存。")).not.toBeInTheDocument();
+      });
+
+      expect(within(dialog).getByLabelText("默认值")).toHaveValue("0.1");
+
+      await user.click(within(dialog).getByRole("button", { name: "取消" }));
+      expect(await screen.findByText("关闭后当前变量的修改将不会保存。")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "放弃修改" }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "编辑变量" })).not.toBeInTheDocument();
+      });
+      expect(storeVariables(api)[0]?.defaultValue).toBeUndefined();
     });
-  });
 
-  describe("removal", () => {
-    it("dispatches removeVariable for a named variable", async () => {
+    it("duplicates a variable with a unique identifier name", async () => {
+      const user = userEvent.setup();
+      const api = setup([
+        {
+          id: "v1",
+          name: "tax",
+          type: "number",
+          defaultValue: 5
+        }
+      ]);
+
+      await user.click(screen.getByRole("button", { name: "复制变量 tax" }));
+
+      expect(storeVariables(api)).toHaveLength(2);
+      expect(storeVariables(api)[1]).toMatchObject({
+        name: "tax_2",
+        type: "number",
+        defaultValue: 5
+      });
+    });
+
+    it("dispatches removeVariable for a named variable and plain list patch for an unnamed one", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
           id: "v1",
           name: "total",
           type: "string"
-        }
-      ]);
-      const removeSpy = vi.spyOn(api.getState(), "removeVariable");
-
-      await user.click(screen.getByRole("button", { name: "删除变量" }));
-
-      expect(removeSpy).toHaveBeenCalledWith("total");
-      expect(storeVariables(api)).toEqual([]);
-    });
-
-    it("removes an unnamed variable through the plain list patch", async () => {
-      const user = userEvent.setup();
-      const api = setup([
+        },
         {
-          id: "v1",
+          id: "v2",
           name: "",
           type: "string"
         }
       ]);
+      const removeSpy = vi.spyOn(api.getState(), "removeVariable");
 
-      await user.click(screen.getByRole("button", { name: "删除变量" }));
+      await user.click(screen.getByRole("button", { name: "删除变量 total" }));
+      expect(removeSpy).toHaveBeenCalledWith("total");
 
+      await user.click(screen.getByRole("button", { name: "删除变量 未命名变量" }));
       expect(storeVariables(api)).toEqual([]);
     });
   });

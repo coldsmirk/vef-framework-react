@@ -1809,6 +1809,108 @@ describe("form store", () => {
       expect(api.getState().schema).toBe(before.schema);
       expect(api.getState().past).toBe(before.past);
     });
+
+    it("keeps consecutive patches as separate undo steps when coalesce is false", () => {
+      const api = setup();
+
+      act(() => api.getState().patchSchema(
+        {
+          dataSources: [
+            {
+              id: "ds1",
+              name: "一",
+              kind: "static",
+              options: []
+            }
+          ]
+        },
+        { coalesce: false }
+      ));
+      act(() => api.getState().patchSchema(
+        {
+          dataSources: [
+            {
+              id: "ds1",
+              name: "二",
+              kind: "static",
+              options: []
+            }
+          ]
+        },
+        { coalesce: false }
+      ));
+
+      expect(api.getState().past).toHaveLength(2);
+
+      act(() => api.getState().undo());
+      expect(api.getState().schema.dataSources?.[0]?.name).toBe("一");
+
+      act(() => api.getState().undo());
+      expect(api.getState().schema.dataSources).toBeUndefined();
+    });
+  });
+
+  describe("saveVariable", () => {
+    it("atomically renames references and updates variable fields in one undo step", () => {
+      const api = setup();
+
+      act(() => api.getState().setSchema(variablesSchema()));
+      act(() => api.getState().saveVariable({
+        id: "Var_1",
+        name: "total",
+        type: "number",
+        defaultValue: 9
+      }));
+
+      expect(api.getState().past).toHaveLength(1);
+      expect(api.getState().schema.variables?.[0]).toEqual({
+        id: "Var_1",
+        name: "total",
+        type: "number",
+        defaultValue: 9
+      });
+      const field = findNode(api.getState().schema.presentations.pc, "fa");
+
+      expect(field?.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
+        type: "set_variable",
+        variable: "total"
+      });
+
+      act(() => api.getState().undo());
+      expect(api.getState().schema.variables?.[0]).toEqual({
+        id: "Var_1",
+        name: "count",
+        type: "number"
+      });
+      const restored = findNode(api.getState().schema.presentations.pc, "fa");
+
+      expect(restored?.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
+        type: "set_variable",
+        variable: "count"
+      });
+    });
+  });
+
+  describe("requestDataItemEdit", () => {
+    it("switches to the data tab, bumps seq on repeated calls, and clears on consume", () => {
+      const api = setup();
+
+      act(() => api.getState().requestDataItemEdit({ kind: "dataSource", id: "ds1" }));
+      expect(api.getState().sidebarTab).toBe("data");
+      const firstSeq = api.getState().pendingDataEdit?.seq;
+
+      expect(api.getState().pendingDataEdit).toEqual({
+        kind: "dataSource",
+        id: "ds1",
+        seq: firstSeq
+      });
+
+      act(() => api.getState().clearPendingDataEdit());
+      expect(api.getState().pendingDataEdit).toBeNull();
+
+      act(() => api.getState().requestDataItemEdit({ kind: "dataSource", id: "ds1" }));
+      expect(api.getState().pendingDataEdit?.seq).toBeGreaterThan(firstSeq ?? 0);
+    });
   });
 
   describe("selectFieldCount", () => {

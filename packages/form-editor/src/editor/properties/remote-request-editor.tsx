@@ -12,18 +12,26 @@ import { DynamicValueEditor } from "./dynamic-value-editor";
 
 export const requestGridCss = css({
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-  gap: 8
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 8,
+
+  "@container (min-width: 500px)": {
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))"
+  }
 });
 
 /**
  * The vertical rhythm of a whole request editor: its groups sit further apart
- * than the controls inside a group.
+ * than the controls inside a group. Declares an inline-size container so the
+ * field-mapping grid and parameter value rows widen into single-line layouts
+ * inside the data-source modal while staying compact inside the 400px
+ * properties panel.
  */
 export const requestEditorCss = css({
   display: "flex",
   flexDirection: "column",
-  gap: 14
+  gap: 14,
+  containerType: "inline-size"
 });
 
 // resource / action share the row; the version is a short token beside them.
@@ -40,7 +48,7 @@ const endpointRowCss = css({
   },
 
   "& > :last-child": {
-    flex: "0 0 72px"
+    flex: "0 0 84px"
   }
 });
 

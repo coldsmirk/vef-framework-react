@@ -18,8 +18,6 @@ import {
 import { useEditorLayout } from "../editor-layout-context";
 import {
   panelBodyCss,
-  sidebarDataDockCss,
-  sidebarDataOverlayCss,
   sidebarDockCss,
   sidebarOverlayCss
 } from "../styles";
@@ -229,10 +227,10 @@ function selectDataItemCount(state: { schema: { dataSources?: unknown[]; variabl
  * round trips.
  *
  * Layout adaptivity:
- * - `docked`: 296px on `组件` / `大纲`, smoothly widening to 400px on `数据` so
- * remote request editors and variable rows fit without horizontal clipping.
+ * - `docked`: uniform 296px across `组件` / `大纲` / `数据` so switching tabs
+ * never shifts the canvas (data-source and variable details edit in modals).
  * - `drawer`: collapses to a 64px icon rail carrying the tab switcher above the
- * component icons; `大纲` and `数据` open as a left-edge overlay beside it.
+ * component icons; `大纲` and `数据` open as a 296px left-edge overlay beside it.
  */
 export function SidebarPanel(): ReactElement {
   const visible = useFormEditorStore(isSidebarVisible);
@@ -301,7 +299,7 @@ export function SidebarPanel(): ReactElement {
     <>
       <aside
         aria-label="侧边栏"
-        css={[sidebarDockCss, !rail && activeTab === "data" && sidebarDataDockCss]}
+        css={sidebarDockCss}
         data-layout={layout}
         data-tab={activeTab}
         hidden={!visible}
@@ -366,7 +364,7 @@ export function SidebarPanel(): ReactElement {
         ? (
             <section
               aria-label={overlayMeta.label}
-              css={[sidebarOverlayCss, activeTab === "data" && sidebarDataOverlayCss]}
+              css={sidebarOverlayCss}
               data-tab={activeTab}
             >
               <div css={overlayHeaderCss}>

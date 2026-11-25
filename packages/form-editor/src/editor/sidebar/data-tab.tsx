@@ -12,11 +12,11 @@ import { SystemVariablesPanel } from "../properties/system-variables-panel";
 const bodyCss = css({
   display: "flex",
   flexDirection: "column",
-  gap: 22,
-  padding: "16px 16px 24px",
+  gap: 20,
+  padding: "14px 12px 24px",
   // Size from the panel, not the content — mirrors the right properties panel
-  // so CodeMirror expressions inside remote request params never widen the
-  // vertical scroll track past the sidebar.
+  // so long names or copyable paths never widen the vertical scroll track past
+  // the uniform 296px sidebar.
   contain: "inline-size"
 });
 
@@ -42,14 +42,14 @@ const subSectionTitleCss = css({
 });
 
 const followingSubSectionCss = css({
-  marginTop: 14
+  marginTop: 12
 });
 
 /**
- * The left sidebar's `数据` tab: form-global data sources first, then
- * variables (the form's own writable variables followed by read-only host
- * system variables when declared). Subscribes only to `dataSources` and
- * `variables` so ordinary field edits never re-render this tab.
+ * The left sidebar's `数据` tab: compact list of form-global data sources
+ * first, then variables (the form's own writable variables followed by
+ * read-only host system variables when declared). Both data sources and form
+ * variables commit discrete edits through modals (non-coalescing undo steps).
  */
 export function DataTab(): ReactElement {
   const dataSources = useFormEditorStore(s => s.schema.dataSources);
@@ -57,34 +57,42 @@ export function DataTab(): ReactElement {
   const storeApi = useFormEditorStoreApi();
   const hasSystemVariables = useContextSources().length > 0;
 
-  const formVariables = (
-    <FormVariablesPanel
-      variables={variables ?? []}
-      onChange={next => storeApi.getState().patchSchema({ variables: next.length > 0 ? next : undefined })}
-    />
-  );
+  const handleDataSourcesChange = (next: NonNullable<typeof dataSources>): void => {
+    storeApi.getState().patchSchema(
+      { dataSources: next.length > 0 ? next : undefined },
+      { coalesce: false }
+    );
+  };
+
+  const handleVariablesChange = (next: NonNullable<typeof variables>): void => {
+    storeApi.getState().patchSchema(
+      { variables: next.length > 0 ? next : undefined },
+      { coalesce: false }
+    );
+  };
 
   return (
     <div css={bodyCss}>
       <section css={sectionCss}>
-        <div css={sectionTitleCss}>数据源</div>
-
         <FormDataSourcesPanel
           dataSources={dataSources ?? []}
-          onChange={next => storeApi.getState().patchSchema({ dataSources: next.length > 0 ? next : undefined })}
+          title="数据源"
+          onChange={handleDataSourcesChange}
         />
       </section>
 
       <section css={sectionCss}>
-        <div css={sectionTitleCss}>变量</div>
-
         {hasSystemVariables
           ? (
               <>
-                <div>
-                  <div css={subSectionTitleCss}>表单变量</div>
-                  {formVariables}
-                </div>
+                <div css={sectionTitleCss}>变量</div>
+
+                <FormVariablesPanel
+                  title="表单变量"
+                  titleLevel="sub"
+                  variables={variables ?? []}
+                  onChange={handleVariablesChange}
+                />
 
                 <div css={followingSubSectionCss}>
                   <div css={subSectionTitleCss}>系统变量</div>
@@ -92,7 +100,13 @@ export function DataTab(): ReactElement {
                 </div>
               </>
             )
-          : formVariables}
+          : (
+              <FormVariablesPanel
+                title="变量"
+                variables={variables ?? []}
+                onChange={handleVariablesChange}
+              />
+            )}
       </section>
     </div>
   );

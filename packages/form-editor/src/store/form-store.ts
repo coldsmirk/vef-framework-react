@@ -4,9 +4,10 @@ import type { DateGranularityField } from "../engine/schema/date-granularity";
 import type { DropTarget } from "../engine/schema/edit-ops";
 import type { DateGranularityScrubTarget } from "../engine/schema/reconcile";
 import type { ScopePath } from "../engine/schema/walk";
-import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
+import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, FormVariable, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
 
 import { createComponentStore } from "@vef-framework-react/core";
+import { isDeepEqual } from "@vef-framework-react/shared";
 
 import { createId, idPrefixForType } from "../engine/ids";
 import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedNode, nextUniqueKey, sanitizeKey } from "../engine/keys";
@@ -83,6 +84,28 @@ export type FormSchemaPatch = Partial<Pick<FormSchema, "dataSources" | "id" | "l
   gap?: GapScale;
 };
 
+export interface PatchSchemaOptions {
+  /**
+   * Whether consecutive patches touching the same keys fold into one undo step.
+   * Defaults to `true` (so keystrokes on inline form metadata such as `id`
+   * collapse); pass `false` for discrete commits (e.g. closing a modal with
+   * "确定" or duplicating an entry) so each committed edit gets its own undo
+   * step.
+   */
+  coalesce?: boolean;
+}
+
+/**
+ * One-shot navigation request from diagnostics to open a specific data-source
+ * or variable edit modal once the left sidebar's `数据` tab is mounted.
+ * Monotonic `seq` lets repeating a jump to the same entry re-trigger cleanly.
+ */
+export interface PendingDataEdit {
+  kind: "dataSource" | "variable";
+  id: string;
+  seq: number;
+}
+
 /**
  * One step of the global undo timeline: the **whole schema** as it was before
  * the edit, plus the device the edit happened on. Snapshotting the whole
@@ -137,6 +160,11 @@ export interface FormEditorStoreState {
    * Ignored in docked mode, where the right panel stays permanently visible.
    */
   propertiesDrawerOpen: boolean;
+  /**
+   * One-shot request to open the edit modal for a specific data source or
+   * variable on the left `数据` tab (consumed and cleared once handled).
+   */
+  pendingDataEdit: PendingDataEdit | null;
   viewMode: EditorViewMode;
   device: EditorDeviceMode;
 
@@ -160,12 +188,21 @@ export interface FormEditorStoreState {
    * that).
    */
   clearSchema: () => void;
-  patchSchema: (patch: FormSchemaPatch) => void;
+  patchSchema: (patch: FormSchemaPatch, options?: PatchSchemaOptions) => void;
   selectNode: (id: string | null) => void;
   /**
    * Switch the left sidebar tab (no-op outside edit mode).
    */
   setSidebarTab: (tab: SidebarTabId) => void;
+  /**
+   * Switch the left sidebar to `数据` and queue opening the target data source
+   * or variable's edit modal (no-op outside edit mode).
+   */
+  requestDataItemEdit: (target: { kind: "dataSource" | "variable"; id: string }) => void;
+  /**
+   * Clear a consumed {@link pendingDataEdit} request.
+   */
+  clearPendingDataEdit: () => void;
   /**
    * Switch the right properties panel's top-level tab and open the narrow
    * right overlay (no-op outside edit mode, or when `"control"` is requested
@@ -285,6 +322,13 @@ export interface FormEditorStoreState {
    */
   renameVariable: (name: string, nextName: string) => void;
   /**
+   * Create or update a form variable declaration atomically in one undo step:
+   * when an existing named variable's `name` changes alongside its type or
+   * default value, every `$vars` / `set_variable` reference is rewritten in
+   * the same checkpoint as the declaration update.
+   */
+  saveVariable: (variable: FormVariable) => void;
+  /**
    * Remove a form variable declaration. The declaration only: a `set_variable`
    * action to an undeclared name remains semantically valid at runtime (the
    * `$vars` store accepts any name), so actions are deliberately left intact.
@@ -369,6 +413,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
      * switch, or undo/redo resets it so the next edit starts a fresh entry.
      */
     let coalesceKey: string | null = null;
+    let pendingDataEditSeq = 0;
 
     function pushHistory(): void {
       const {
@@ -420,6 +465,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
       sidebarTab: "palette",
       propertiesTab: "form",
       propertiesDrawerOpen: false,
+      pendingDataEdit: null,
       viewMode: "edit",
       device: "pc",
       past: [],
@@ -432,6 +478,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({
           schema,
           ...CLEARED_SELECTION,
+          pendingDataEdit: null,
           past: [],
           future: []
         });
@@ -441,11 +488,12 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         checkpoint();
         set({
           schema: createEmptySchema(),
-          ...CLEARED_SELECTION
+          ...CLEARED_SELECTION,
+          pendingDataEdit: null
         });
       },
 
-      patchSchema: patch => {
+      patchSchema: (patch, options) => {
         const { device, schema } = get();
         const {
           gap,
@@ -471,7 +519,11 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
+        if (options?.coalesce === false) {
+          checkpoint();
+        } else {
+          checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
+        }
 
         const next: FormSchema = { ...schema, ...shared };
 
@@ -540,6 +592,24 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({ sidebarTab: tab });
       },
 
+      requestDataItemEdit: target => {
+        if (get().viewMode !== "edit") {
+          return;
+        }
+
+        pendingDataEditSeq += 1;
+        set({
+          sidebarTab: "data",
+          pendingDataEdit: { ...target, seq: pendingDataEditSeq }
+        });
+      },
+
+      clearPendingDataEdit: () => {
+        if (get().pendingDataEdit !== null) {
+          set({ pendingDataEdit: null });
+        }
+      },
+
       setPropertiesTab: tab => {
         const { selectedId, viewMode } = get();
 
@@ -570,7 +640,8 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           // right overlay is edit-only chrome, so it closes on exit.
           set({
             viewMode: mode,
-            propertiesDrawerOpen: false
+            propertiesDrawerOpen: false,
+            pendingDataEdit: null
           });
           return;
         }
@@ -1060,6 +1131,40 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           schema: {
             ...renameVariableReferences(schema, name, nextName),
             variables: variables.map(variable => variable.name === name ? { ...variable, name: nextName } : variable)
+          }
+        });
+      },
+
+      saveVariable: variable => {
+        const { schema } = get();
+        const variables = schema.variables ?? [];
+
+        if (
+          variable.id.length === 0
+          || !isValidVariableName(variable.name)
+          || variables.some(candidate => candidate.id !== variable.id && candidate.name === variable.name)
+        ) {
+          return;
+        }
+
+        const existing = variables.find(candidate => candidate.id === variable.id);
+
+        if (existing !== undefined && isDeepEqual(existing, variable)) {
+          return;
+        }
+
+        const baseSchema = existing !== undefined && existing.name.length > 0 && existing.name !== variable.name
+          ? renameVariableReferences(schema, existing.name, variable.name)
+          : schema;
+        const nextVariables = existing === undefined
+          ? [...variables, variable]
+          : variables.map(candidate => candidate.id === variable.id ? variable : candidate);
+
+        checkpoint();
+        set({
+          schema: {
+            ...baseSchema,
+            variables: nextVariables
           }
         });
       },

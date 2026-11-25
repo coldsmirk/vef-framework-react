@@ -10,11 +10,14 @@ import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/wa
 import { useFormEditorStoreApi } from "../store/form-store";
 
 /**
- * Where a diagnostic can be shown: a node of one device's tree, a left-sidebar
- * tab (`data`), or a right-properties tab (`form`).
+ * Where a diagnostic can be shown: a node of one device's tree, a specific
+ * form-global data source or variable (switching to `数据` and opening its
+ * edit modal), a left-sidebar tab (`data`), or a right-properties tab (`form`).
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
+    | { kind: "dataSource"; dataSourceId: string }
+    | { kind: "variable"; variableId: string }
     | { kind: "sidebar"; tab: SidebarTabId }
     | { kind: "properties"; tab: PropertiesTabId };
 
@@ -176,8 +179,22 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
     return { kind: "properties", tab: "form" };
   }
 
-  if (DATA_SOURCES_HEAD.test(head) || VARIABLES_HEAD.test(head)) {
-    return { kind: "sidebar", tab: "data" };
+  if (DATA_SOURCES_HEAD.test(head)) {
+    const index = headIndex(head);
+    const id = index === undefined ? undefined : schema.dataSources?.[index]?.id;
+
+    return id !== undefined && id.length > 0
+      ? { kind: "dataSource", dataSourceId: id }
+      : { kind: "sidebar", tab: "data" };
+  }
+
+  if (VARIABLES_HEAD.test(head)) {
+    const index = headIndex(head);
+    const id = index === undefined ? undefined : schema.variables?.[index]?.id;
+
+    return id !== undefined && id.length > 0
+      ? { kind: "variable", variableId: id }
+      : { kind: "sidebar", tab: "data" };
   }
 
   if (ENVELOPE_PATHS.has(path)) {
@@ -234,6 +251,22 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
       return target.device === "mobile" ? `移动端 · ${name}` : name;
     }
 
+    case "dataSource": {
+      const dataSources = schema.dataSources ?? [];
+      const fallback = dataSources.findIndex(source => source.id === target.dataSourceId);
+      const index = headIndex(path) ?? (fallback === -1 ? undefined : fallback);
+
+      return describeListEntry("数据源", dataSources.map(source => source.name), index);
+    }
+
+    case "variable": {
+      const variables = schema.variables ?? [];
+      const fallback = variables.findIndex(variable => variable.id === target.variableId);
+      const index = headIndex(path) ?? (fallback === -1 ? undefined : fallback);
+
+      return describeListEntry("变量", variables.map(variable => variable.name), index);
+    }
+
     case "sidebar": {
       if (target.tab !== "data") {
         return undefined;
@@ -266,6 +299,16 @@ function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): voi
   const state = storeApi.getState();
 
   switch (target.kind) {
+    case "dataSource": {
+      state.requestDataItemEdit({ kind: "dataSource", id: target.dataSourceId });
+      return;
+    }
+
+    case "variable": {
+      state.requestDataItemEdit({ kind: "variable", id: target.variableId });
+      return;
+    }
+
     case "sidebar": {
       state.setSidebarTab(target.tab);
       return;

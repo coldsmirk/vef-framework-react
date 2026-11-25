@@ -168,6 +168,8 @@ export {
   type FormEditorStoreState,
   type FormSchemaPatch,
   type HistoryEntry,
+  type PatchSchemaOptions,
+  type PendingDataEdit,
   type PropertiesTabId,
   type SidebarTabId
 } from "./store/form-store";

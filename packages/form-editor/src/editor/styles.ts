@@ -9,16 +9,15 @@ import { globalCssVars } from "@vef-framework-react/components";
  * root shrinks.
  *
  * Two layouts are supported (see `editor-layout-context.tsx`):
- * - docked: sidebar 296 (400 while the `数据` tab is active so remote
- * data-source requests and variables fit without horizontal clipping),
- * properties 400
+ * - docked: sidebar 296 across all three tabs (`组件` / `大纲` / `数据`, since
+ * data sources and variables edit in modals rather than inline cards so the
+ * canvas never jumps when switching tabs), properties 400
  * - drawer: the sidebar collapses to a 64px icon rail (with `大纲` / `数据`
- * opening as a left-edge overlay beside it) and the properties panel floats
- * over the canvas's right edge (360px), so the canvas keeps real width
+ * opening as a 296px left-edge overlay beside it) and the properties panel
+ * floats over the canvas's right edge (360px), so the canvas keeps real width
  * inside narrow hosts (wizard steps, split panes).
  */
 export const SIDEBAR_DOCK_WIDTH = 296;
-export const SIDEBAR_DATA_WIDTH = 400;
 export const SIDEBAR_RAIL_WIDTH = 64;
 
 export const PROPERTIES_PANEL_WIDTH = 400;
@@ -53,13 +52,10 @@ export const sidebarDockCss = css({
   }
 });
 
-export const sidebarDataDockCss = css({
-  width: SIDEBAR_DATA_WIDTH
-});
-
 /**
  * Narrow-layout left overlay anchored right beside the 64px rail, carrying the
- * `大纲` or `数据` tab over the canvas's left edge without squeezing the canvas.
+ * `大纲` or `数据` tab at the uniform dock width over the canvas's left edge
+ * without squeezing the canvas.
  */
 export const sidebarOverlayCss = css({
   position: "absolute",
@@ -75,10 +71,6 @@ export const sidebarOverlayCss = css({
   borderRight: `1px solid ${globalCssVars.colorBorderSecondary}`,
   boxShadow: globalCssVars.shadowLg,
   overflow: "hidden"
-});
-
-export const sidebarDataOverlayCss = css({
-  width: SIDEBAR_DATA_WIDTH
 });
 
 /**

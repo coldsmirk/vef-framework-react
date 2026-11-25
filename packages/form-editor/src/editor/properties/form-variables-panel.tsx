@@ -1,16 +1,37 @@
-import type { ReactElement } from "react";
+import type { ChangeEvent, ReactElement } from "react";
 
 import type { FormVariable } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, Segmented, Select } from "@vef-framework-react/components";
-import { useState } from "react";
+import { Button, globalCssVars, Input, Modal, ScrollArea, Segmented } from "@vef-framework-react/components";
+import { isDeepEqual } from "@vef-framework-react/shared";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { createId } from "../../engine/ids";
-import { nextUniqueKey, sanitizeKey } from "../../engine/keys";
+import { nextUniqueKey } from "../../engine/keys";
 import { isValidVariableName } from "../../engine/schema/validate";
 import { EditorIcon } from "../../icons";
-import { useFormEditorStoreApi } from "../../store/form-store";
+import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { confirmDialog } from "../toolbar/notify";
+import {
+  DataListEmpty,
+  dataListItemsCss,
+  dataListNameCss,
+  dataListPrimaryLineCss,
+  DataListRow,
+  dataListSecondaryLineCss,
+  DataListSectionHeader,
+  dataListSummaryCss,
+  dataListUnnamedCss,
+  dataListWrapperCss,
+  MODAL_BODY_VIEWPORT_STYLE,
+  modalErrorCss,
+  modalFieldCss,
+  modalFormCss,
+  modalHintCss,
+  modalLabelCss,
+  modalRequiredMarkCss
+} from "./data-list";
 
 type VariableType = FormVariable["type"];
 
@@ -21,60 +42,55 @@ const VARIABLE_TYPE_OPTIONS: Array<{ value: VariableType; label: string }> = [
   { value: "json", label: "JSON" }
 ];
 
+const VARIABLE_TYPE_LABELS: Record<VariableType, string> = {
+  string: "文本",
+  number: "数字",
+  boolean: "布尔",
+  json: "JSON"
+};
+
 const BOOLEAN_OPTIONS = [
   { value: "true", label: "是" },
   { value: "false", label: "否" }
 ] as const;
 
-const wrapperCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 8
+const MODAL_WIDTH = 480;
+
+const MODAL_BODY_STYLE = {
+  body: {
+    padding: 0
+  }
+} as const;
+
+const codeTextAreaStyle = {
+  fontFamily: globalCssVars.fontFamilyCode,
+  fontSize: globalCssVars.fontSizeSm
+} as const;
+
+const variableNameCss = css({
+  fontFamily: globalCssVars.fontFamilyCode,
+  fontSize: 13
 });
 
-const rowCss = css({
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1.2fr) 84px minmax(0, 1.4fr) auto",
-  gap: 6,
-  alignItems: "center"
+const typeBadgeCss = css({
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  height: 18,
+  padding: "0 5px",
+  borderRadius: 4,
+  background: globalCssVars.colorFillSecondary,
+  color: globalCssVars.colorTextSecondary,
+  fontSize: 11,
+  lineHeight: 1
 });
 
-const emptyCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary
+const unsetDefaultCss = css({
+  color: globalCssVars.colorTextQuaternary
 });
-
-const selectStyle = { width: "100%" } as const;
 
 function isVariableType(value: unknown): value is VariableType {
   return value === "string" || value === "number" || value === "boolean" || value === "json";
-}
-
-/**
- * Coerce a variable's raw text input to its declared type. An empty input is
- * `undefined`; an invalid number / JSON falls back to the raw string so the user
- * can keep typing rather than losing their entry.
- */
-function coerceDefault(type: VariableType, raw: string): unknown {
-  if (raw.length === 0) {
-    return undefined;
-  }
-
-  if (type === "number") {
-    const parsed = Number(raw);
-
-    return Number.isFinite(parsed) ? parsed : raw;
-  }
-
-  if (type === "json") {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return raw;
-    }
-  }
-
-  return raw;
 }
 
 function stringifyDefault(value: unknown): string {
@@ -89,29 +105,207 @@ function stringifyDefault(value: unknown): string {
   return String(value);
 }
 
+function formatDefaultSummary(variable: FormVariable): string | null {
+  if (variable.defaultValue === undefined) {
+    return null;
+  }
+
+  if (variable.type === "boolean") {
+    return variable.defaultValue === true ? "是" : "否";
+  }
+
+  const text = stringifyDefault(variable.defaultValue);
+
+  return text.length > 0 ? text : "\"\"";
+}
+
+function cloneDefaultValue(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  return structuredClone(value);
+}
+
+function getVariableNameError(
+  trimmedName: string,
+  isDuplicate: boolean,
+  showEmptyError: boolean
+): string | null {
+  if (trimmedName.length === 0) {
+    return showEmptyError ? "请输入变量名" : null;
+  }
+
+  if (!isValidVariableName(trimmedName)) {
+    return "仅支持字母、数字和下划线，且不能以数字开头";
+  }
+
+  if (isDuplicate) {
+    return "已存在同名变量，请更换名称";
+  }
+
+  return null;
+}
+
+function parseDefaultDraft(
+  type: VariableType,
+  rawText: string,
+  boolValue: boolean
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  if (type === "boolean") {
+    return { ok: true, value: boolValue };
+  }
+
+  if (rawText.length === 0) {
+    return { ok: true, value: undefined };
+  }
+
+  if (type === "number") {
+    const trimmed = rawText.trim();
+
+    if (trimmed.length === 0) {
+      return { ok: true, value: undefined };
+    }
+
+    const parsed = Number(trimmed);
+
+    return Number.isFinite(parsed)
+      ? { ok: true, value: parsed }
+      : { ok: false, error: "请输入有效的数字" };
+  }
+
+  if (type === "json") {
+    const trimmed = rawText.trim();
+
+    if (trimmed.length === 0) {
+      return { ok: true, value: undefined };
+    }
+
+    try {
+      return { ok: true, value: JSON.parse(trimmed) };
+    } catch {
+      return { ok: false, error: "请输入合法的 JSON" };
+    }
+  }
+
+  return { ok: true, value: rawText };
+}
+
+interface VariableModalSession {
+  mode: "create" | "edit";
+  key: number;
+  initial: FormVariable;
+}
+
 export interface FormVariablesPanelProps {
   variables: FormVariable[];
   onChange: (next: FormVariable[]) => void;
+  /**
+   * Optional section title rendered above the list with the count badge and
+   * top-right add trigger (used inside the sidebar's `数据` tab).
+   */
+  title?: string;
+  titleLevel?: "main" | "sub";
 }
 
 /**
- * Form-global variable manager. Each variable surfaces to expressions as
- * `$vars.<name>` with its `defaultValue`; the runtime seeds the evaluation scope
- * from this list.
- *
- * Add and type/default edits flow through `onChange` (the `数据` tab patches
- * `schema.variables`); rename and delete go through the store's
- * `renameVariable` / `removeVariable` so `set_variable` references follow the
- * variable instead of dangling.
+ * Form-global variable manager. Renders each variable as a compact two-line
+ * row (name + type badge, default value) matching the data-source list, and
+ * edits it in a draft-buffered modal. Renaming an existing named variable
+ * commits through the store's atomic `saveVariable` so `$vars` and
+ * `set_variable` references follow in the same undo step.
  */
-export function FormVariablesPanel({ onChange, variables }: FormVariablesPanelProps): ReactElement {
+export function FormVariablesPanel({
+  onChange,
+  title,
+  titleLevel = "main",
+  variables
+}: FormVariablesPanelProps): ReactElement {
+  const pendingEdit = useFormEditorStore(s => s.pendingDataEdit?.kind === "variable" ? s.pendingDataEdit : null);
   const storeApi = useFormEditorStoreApi();
 
-  const update = (id: string, patch: Partial<FormVariable>): void => {
-    onChange(variables.map(variable => variable.id === id ? { ...variable, ...patch } : variable));
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const sessionCounterRef = useRef(0);
+  const [session, setSession] = useState<VariableModalSession | null>(null);
+  const [renderedSession, setRenderedSession] = useState<VariableModalSession | null>(null);
+
+  if (session !== null && session !== renderedSession) {
+    setRenderedSession(session);
+  }
+
+  const openEditModal = useCallback((variable: FormVariable): void => {
+    sessionCounterRef.current += 1;
+    setSession({
+      mode: "edit",
+      key: sessionCounterRef.current,
+      initial: {
+        ...variable,
+        ...variable.defaultValue !== undefined && { defaultValue: cloneDefaultValue(variable.defaultValue) }
+      }
+    });
+  }, []);
+
+  const openCreateModal = (): void => {
+    sessionCounterRef.current += 1;
+    setSession({
+      mode: "create",
+      key: sessionCounterRef.current,
+      initial: {
+        id: createId("Var"),
+        name: "",
+        type: "string"
+      }
+    });
   };
 
-  const remove = (variable: FormVariable): void => {
+  useEffect(() => {
+    if (pendingEdit === null) {
+      return;
+    }
+
+    storeApi.getState().clearPendingDataEdit();
+
+    const target = variables.find(variable => variable.id === pendingEdit.id);
+
+    if (target === undefined) {
+      return;
+    }
+
+    rowRefs.current.get(target.id)?.scrollIntoView?.({ block: "nearest" });
+    openEditModal(target);
+  }, [pendingEdit, variables, storeApi, openEditModal]);
+
+  const handleSave = (next: FormVariable): void => {
+    if (session?.mode === "edit" && session.initial.name.length > 0 && session.initial.name !== next.name) {
+      // Atomic rename + declaration update: rewrites `$vars` / `set_variable`
+      // references and updates type/defaultValue in one undo step.
+      storeApi.getState().saveVariable(next);
+    } else if (session?.mode === "create") {
+      onChange([...variables, next]);
+    } else {
+      onChange(variables.map(variable => variable.id === next.id ? next : variable));
+    }
+
+    setSession(null);
+  };
+
+  const handleDuplicate = (variable: FormVariable): void => {
+    const usedNames = new Set(variables.map(item => item.name).filter(name => name.length > 0));
+    const base = isValidVariableName(variable.name) ? variable.name : "var";
+    const copy: FormVariable = {
+      id: createId("Var"),
+      name: nextUniqueKey(usedNames, base),
+      type: variable.type,
+      ...variable.defaultValue !== undefined && { defaultValue: cloneDefaultValue(variable.defaultValue) }
+    };
+    const index = variables.findIndex(item => item.id === variable.id);
+    const next = [...variables];
+
+    next.splice(index + 1, 0, copy);
+    onChange(next);
+  };
+
+  const handleDelete = (variable: FormVariable): void => {
     if (variable.name.length === 0) {
       // An unnamed variable cannot be referenced anywhere — a plain list
       // update suffices (and a name-keyed store action could not address it).
@@ -122,176 +316,299 @@ export function FormVariablesPanel({ onChange, variables }: FormVariablesPanelPr
     storeApi.getState().removeVariable(variable.name);
   };
 
-  const commitName = (variable: FormVariable, raw: string): void => {
-    const sanitized = sanitizeKey(raw);
-
-    // An all-invalid / empty input keeps the current name rather than dropping
-    // the binding (the draft-buffered field-key editor commits the same way).
-    if (sanitized.length === 0 || sanitized === variable.name) {
-      return;
+  const setRowRef = (id: string) => (node: HTMLDivElement | null): void => {
+    if (node === null) {
+      rowRefs.current.delete(id);
+    } else {
+      rowRefs.current.set(id, node);
     }
-
-    // Unique among the other variables: a colliding name is uniquified with a
-    // numeric suffix instead of silently shadowing its twin in `$vars`.
-    const used = new Set(variables.filter(candidate => candidate.id !== variable.id).map(candidate => candidate.name));
-    const unique = nextUniqueKey(used, sanitized);
-
-    if (unique === variable.name) {
-      return;
-    }
-
-    // Both naming paths answer to the same grammar. `sanitizeKey` only strips
-    // non-word characters, so it still admits a digit lead (`1total`) — which
-    // `validateSchema` rejects as an error and `$vars.1total` cannot even be
-    // compiled into, leaving every condition using it silently false.
-    if (!isValidVariableName(unique)) {
-      return;
-    }
-
-    if (variable.name.length === 0) {
-      // First naming — nothing can reference an unnamed variable, so this is a
-      // plain field update, not a reference-following rename.
-      update(variable.id, { name: unique });
-      return;
-    }
-
-    storeApi.getState().renameVariable(variable.name, unique);
   };
 
-  const add = (): void => {
-    onChange([
-      ...variables,
-      {
-        id: createId("Var"),
-        name: "",
-        type: "string"
-      }
-    ]);
-  };
+  const editingId = session?.mode === "edit" ? session.initial.id : null;
 
   return (
-    <div css={wrapperCss}>
-      {variables.length === 0 ? <span css={emptyCss}>暂无变量，可在联动 / 事件表达式中以 $vars.名称 引用</span> : null}
+    <div css={dataListWrapperCss}>
+      <DataListSectionHeader
+        addLabel="新增变量"
+        count={variables.length}
+        title={title}
+        titleLevel={titleLevel}
+        onAdd={openCreateModal}
+      />
 
-      {variables.map(variable => (
-        <div key={variable.id} css={rowCss}>
-          <VariableNameInput
-            name={variable.name}
-            onCommit={raw => commitName(variable, raw)}
-          />
+      {variables.length === 0
+        ? <DataListEmpty hint="可在联动或表达式中以 $vars.名称 引用" title="暂无变量" />
+        : (
+            <div aria-label="表单变量列表" css={dataListItemsCss} role="list">
+              {variables.map(variable => {
+                const unnamed = variable.name.length === 0;
+                const displayName = unnamed ? "未命名变量" : variable.name;
+                const defaultSummary = formatDefaultSummary(variable);
 
-          <Select
-            options={VARIABLE_TYPE_OPTIONS}
-            style={selectStyle}
-            value={variable.type}
-            onChange={value => {
-              if (isVariableType(value)) {
-                // Boolean is binary with no "unset" Segmented state, so seed a
-                // concrete `false` — otherwise the UI shows "否" while the stored
-                // value stays `undefined`, diverging from `=== false` / `empty`.
-                update(variable.id, { type: value, defaultValue: value === "boolean" ? false : undefined });
-              }
-            }}
-          />
+                return (
+                  <DataListRow
+                    key={variable.id}
+                    active={editingId === variable.id}
+                    deleteAriaLabel={`删除变量 ${displayName}`}
+                    duplicateAriaLabel={`复制变量 ${displayName}`}
+                    editAriaLabel={`编辑变量 ${displayName}`}
+                    rowRef={setRowRef(variable.id)}
+                    primary={(
+                      <span css={dataListPrimaryLineCss}>
+                        <span css={[dataListNameCss, !unnamed && variableNameCss, unnamed && dataListUnnamedCss]}>
+                          {displayName}
+                        </span>
 
-          {variable.type === "boolean"
-            ? (
-                <Segmented
-                  block
-                  options={[...BOOLEAN_OPTIONS]}
-                  value={variable.defaultValue === true ? "true" : "false"}
-                  onChange={value => update(variable.id, { defaultValue: value === "true" })}
-                />
-              )
-            : (
-                <VariableDefaultInput
-                  value={variable.defaultValue}
-                  onCommit={raw => update(variable.id, { defaultValue: coerceDefault(variable.type, raw) })}
-                />
-              )}
+                        <span css={typeBadgeCss}>{VARIABLE_TYPE_LABELS[variable.type]}</span>
+                      </span>
+                    )}
+                    secondary={(
+                      <span css={dataListSecondaryLineCss}>
+                        {defaultSummary === null
+                          ? <span css={[dataListSummaryCss, unsetDefaultCss]}>无默认值</span>
+                          : <span css={dataListSummaryCss}>{`默认：${defaultSummary}`}</span>}
+                      </span>
+                    )}
+                    onDelete={() => handleDelete(variable)}
+                    onDuplicate={() => handleDuplicate(variable)}
+                    onEdit={() => openEditModal(variable)}
+                  />
+                );
+              })}
+            </div>
+          )}
 
-          <Button
-            aria-label="删除变量"
-            icon={<EditorIcon name="trash-2" />}
-            type="text"
-            onClick={() => remove(variable)}
-          />
-        </div>
-      ))}
+      {title === undefined
+        ? <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={openCreateModal}>新增变量</Button>
+        : null}
 
-      <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={add}>新增变量</Button>
+      {renderedSession === null
+        ? null
+        : (
+            <VariableModal
+              key={renderedSession.key}
+              open={session !== null}
+              session={renderedSession}
+              variables={variables}
+              onAfterClose={() => {
+                if (session === null) {
+                  setRenderedSession(null);
+                }
+              }}
+              onClose={() => setSession(null)}
+              onSave={handleSave}
+            />
+          )}
     </div>
   );
 }
 
-interface VariableNameInputProps {
-  name: string;
-  onCommit: (raw: string) => void;
+interface VariableModalProps {
+  open: boolean;
+  session: VariableModalSession;
+  variables: readonly FormVariable[];
+  onSave: (next: FormVariable) => void;
+  onClose: () => void;
+  onAfterClose: () => void;
 }
 
-/**
- * Draft-buffered name editor. The draft is seeded from the stored name when
- * editing starts and committed on blur / Enter — never re-seeded from live
- * data mid-edit — so sanitize/uniquify run once per commit instead of
- * mangling the text under the cursor (the schema-io seed-on-transition
- * pattern).
- */
-function VariableNameInput({ name, onCommit }: VariableNameInputProps): ReactElement {
-  const [draft, setDraft] = useState<string | null>(null);
+function VariableModal({
+  onAfterClose,
+  onClose,
+  onSave,
+  open,
+  session,
+  variables
+}: VariableModalProps): ReactElement {
+  const nameInputId = useId();
+  const defaultInputId = useId();
+  const nameInputRef = useRef<{ focus: () => void } | null>(null);
 
-  const commit = (): void => {
-    if (draft === null) {
+  const initialDefaultText = session.initial.type === "boolean" ? "" : stringifyDefault(session.initial.defaultValue);
+  const initialBoolDefault = session.initial.defaultValue === true;
+
+  const [name, setName] = useState(session.initial.name);
+  const [type, setType] = useState<VariableType>(session.initial.type);
+  const [defaultText, setDefaultText] = useState(initialDefaultText);
+  const [boolDefault, setBoolDefault] = useState(initialBoolDefault);
+  const [nameEdited, setNameEdited] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const isDirty = name !== session.initial.name
+    || type !== session.initial.type
+    || (type === "boolean" ? boolDefault !== initialBoolDefault : defaultText !== initialDefaultText);
+
+  const trimmedName = name.trim();
+  const isDuplicate = trimmedName.length > 0
+    && variables.some(other => other.id !== session.initial.id && other.name === trimmedName);
+
+  const nameError = getVariableNameError(trimmedName, isDuplicate, submitAttempted || nameEdited);
+
+  const parsedDefault = parseDefaultDraft(type, defaultText, boolDefault);
+  const defaultError = !parsedDefault.ok && submitAttempted ? parsedDefault.error : null;
+
+  useEffect(() => {
+    if (open && session.mode === "create") {
+      nameInputRef.current?.focus();
+    }
+  }, [open, session.mode]);
+
+  const handleTypeChange = (nextType: VariableType): void => {
+    if (nextType === type) {
       return;
     }
 
-    onCommit(draft);
-    setDraft(null);
+    setType(nextType);
+
+    if (nextType === "boolean") {
+      // Boolean is binary with no "unset" Segmented state, so seed a concrete
+      // `false` — otherwise the UI shows "否" while the stored value stays
+      // `undefined`, diverging from `=== false` / `empty`.
+      setBoolDefault(false);
+    } else {
+      setDefaultText("");
+    }
   };
 
-  return (
-    <Input
-      placeholder="变量名"
-      value={draft ?? name}
-      onBlur={commit}
-      onChange={event => setDraft(event.target.value)}
-      onFocus={() => setDraft(name)}
-      onPressEnter={commit}
-    />
-  );
-}
-
-interface VariableDefaultInputProps {
-  value: unknown;
-  onCommit: (raw: string) => void;
-}
-
-/**
- * Draft-buffered default-value editor for string / number / JSON variables.
- * Coercion happens once on blur / Enter, so a transient state like `3.` is
- * never round-tripped through `Number()` mid-edit (which swallowed the dot and
- * made `3.14` impossible to type); JSON text likewise is not re-stringified
- * under the cursor.
- */
-function VariableDefaultInput({ value, onCommit }: VariableDefaultInputProps): ReactElement {
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const commit = (): void => {
-    if (draft === null) {
+  const requestClose = (): void => {
+    if (!isDirty) {
+      onClose();
       return;
     }
 
-    onCommit(draft);
-    setDraft(null);
+    confirmDialog("放弃未保存的修改？", "关闭后当前变量的修改将不会保存。", {
+      okType: "danger",
+      okText: "放弃修改",
+      cancelText: "继续编辑",
+      onOk: onClose
+    });
+  };
+
+  const handleConfirm = (): void => {
+    setSubmitAttempted(true);
+
+    if (trimmedName.length === 0 || !isValidVariableName(trimmedName) || isDuplicate) {
+      nameInputRef.current?.focus();
+      return;
+    }
+
+    if (!parsedDefault.ok) {
+      return;
+    }
+
+    const nextVariable: FormVariable = {
+      id: session.initial.id,
+      name: trimmedName,
+      type,
+      ...parsedDefault.value !== undefined && { defaultValue: parsedDefault.value }
+    };
+
+    if (session.mode === "edit" && isDeepEqual(nextVariable, session.initial)) {
+      onClose();
+      return;
+    }
+
+    onSave(nextVariable);
   };
 
   return (
-    <Input
-      placeholder="默认值"
-      value={draft ?? stringifyDefault(value)}
-      onBlur={commit}
-      onChange={event => setDraft(event.target.value)}
-      onFocus={() => setDraft(stringifyDefault(value))}
-      onPressEnter={commit}
-    />
+    <Modal
+      centered
+      destroyOnHidden
+      afterClose={onAfterClose}
+      open={open}
+      styles={MODAL_BODY_STYLE}
+      title={session.mode === "create" ? "新增变量" : "编辑变量"}
+      width={MODAL_WIDTH}
+      footer={(
+        <>
+          <Button autoInsertSpace={false} onClick={requestClose}>取消</Button>
+          <Button autoInsertSpace={false} type="primary" onClick={handleConfirm}>确定</Button>
+        </>
+      )}
+      onCancel={requestClose}
+    >
+      <ScrollArea scrollbars="vertical" viewportStyle={MODAL_BODY_VIEWPORT_STYLE}>
+        <div css={modalFormCss}>
+          <div css={modalFieldCss}>
+            <label css={modalLabelCss} htmlFor={nameInputId}>
+              <span>变量名</span>
+              <span aria-hidden css={modalRequiredMarkCss}>*</span>
+            </label>
+
+            <Input
+              ref={instance => {
+                nameInputRef.current = instance;
+              }}
+              id={nameInputId}
+              placeholder="例如：total、isVip"
+              status={nameError === null ? undefined : "error"}
+              value={name}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                setNameEdited(true);
+                setName(event.target.value);
+              }}
+            />
+
+            {nameError === null
+              ? <span css={modalHintCss}>{`在表达式中以 $vars.${trimmedName || "变量名"} 引用`}</span>
+              : <span css={modalErrorCss} role="alert">{nameError}</span>}
+          </div>
+
+          <div css={modalFieldCss}>
+            <span css={modalLabelCss}>类型</span>
+
+            <Segmented
+              block
+              options={VARIABLE_TYPE_OPTIONS}
+              value={type}
+              onChange={value => {
+                if (isVariableType(value)) {
+                  handleTypeChange(value);
+                }
+              }}
+            />
+          </div>
+
+          <div css={modalFieldCss}>
+            <label css={modalLabelCss} htmlFor={type === "boolean" ? undefined : defaultInputId}>默认值</label>
+
+            {type === "boolean"
+              ? (
+                  <Segmented
+                    block
+                    options={[...BOOLEAN_OPTIONS]}
+                    value={boolDefault ? "true" : "false"}
+                    onChange={value => setBoolDefault(value === "true")}
+                  />
+                )
+              : type === "json"
+                ? (
+                    <Input.TextArea
+                      autoSize={{ minRows: 3, maxRows: 8 }}
+                      id={defaultInputId}
+                      placeholder="可选，如 {&quot;a&quot;: 1}"
+                      spellCheck={false}
+                      status={defaultError === null ? undefined : "error"}
+                      style={codeTextAreaStyle}
+                      value={defaultText}
+                      onChange={event => setDefaultText(event.target.value)}
+                    />
+                  )
+                : (
+                    <Input
+                      id={defaultInputId}
+                      placeholder={type === "number" ? "可选，如 3.14" : "可选，留空表示未设置"}
+                      status={defaultError === null ? undefined : "error"}
+                      value={defaultText}
+                      onChange={event => setDefaultText(event.target.value)}
+                    />
+                  )}
+
+            {defaultError === null ? null : <span css={modalErrorCss} role="alert">{defaultError}</span>}
+          </div>
+        </div>
+      </ScrollArea>
+    </Modal>
   );
 }

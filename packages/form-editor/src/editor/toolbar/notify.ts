@@ -88,6 +88,18 @@ export interface ConfirmDialogOptions {
    */
   okType?: "danger" | "primary";
   /**
+   * Label for the confirm button.
+   *
+   * @default "确认"
+   */
+  okText?: string;
+  /**
+   * Label for the cancel button.
+   *
+   * @default "取消"
+   */
+  cancelText?: string;
+  /**
    * Plain-text rendering of a rich (React) `content` for the `$vef`-less
    * native fallback, where the React body cannot be shown and the title alone
    * would drop the substance of the question (mirrors `infoDialog`'s
@@ -98,7 +110,9 @@ export interface ConfirmDialogOptions {
 
 export function confirmDialog(title: string, content: ReactNode, options: ConfirmDialogOptions): void {
   const {
+    cancelText = "取消",
     detail,
+    okText = "确认",
     okType = "danger",
     onOk
   } = options;
@@ -108,9 +122,9 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
     modal.confirm({
       title,
       content,
-      okText: "确认",
+      okText,
       okType,
-      cancelText: "取消",
+      cancelText,
       onOk
     });
     return;

@@ -145,11 +145,49 @@ describe("locateIssue", () => {
   });
 
   describe("when the path names form-level configuration", () => {
-    it("targets the sidebar data tab for a data source", () => {
-      expect(locateIssue("dataSources[0].request", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
+    it("targets a specific data source when the index resolves to one", () => {
+      const schema: FormSchema = {
+        ...makeSchema(),
+        dataSources: [
+          {
+            id: "DataSource_1",
+            name: "部门",
+            kind: "remote",
+            request: { resource: "", action: "" }
+          }
+        ]
+      };
+
+      expect(locateIssue("dataSources[0].request", schema, "pc")).toEqual({
+        kind: "dataSource",
+        dataSourceId: "DataSource_1"
+      });
     });
 
-    it("targets the sidebar data tab for a variable", () => {
+    it("falls back to the sidebar data tab when a data-source path has no resolvable entry", () => {
+      expect(locateIssue("dataSources[0].request", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
+      expect(locateIssue("dataSources", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
+    });
+
+    it("targets a specific variable when the index resolves to one", () => {
+      const schema: FormSchema = {
+        ...makeSchema(),
+        variables: [
+          {
+            id: "Variable_1",
+            name: "quota",
+            type: "number"
+          }
+        ]
+      };
+
+      expect(locateIssue("variables[0].name", schema, "pc")).toEqual({
+        kind: "variable",
+        variableId: "Variable_1"
+      });
+    });
+
+    it("falls back to the sidebar data tab when a variable path has no resolvable entry", () => {
       expect(locateIssue("variables[1].name", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
     });
 

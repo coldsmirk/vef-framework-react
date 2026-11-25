@@ -6,13 +6,16 @@ import type { SchemaValidator } from "../host-validation";
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
+import { EditorLayoutProvider } from "../editor-layout-context";
 import { HostValidationProvider } from "../host-validation";
+import { SidebarPanel } from "../sidebar/sidebar-panel";
 import { EditorFooter } from "./footer";
 
 function makeSchema(): FormSchema {
@@ -159,6 +162,23 @@ const rejectName: SchemaValidator = () => [
   }
 ];
 
+beforeEach(() => {
+  vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  } as unknown as MediaQueryList));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("EditorFooter", () => {
   it("shows the field and variable counts", () => {
     setupFooter();
@@ -244,7 +264,7 @@ describe("EditorFooter", () => {
       expect(storeApi.getState().selectedId).toBe("Field_hidden");
     });
 
-    it("opens the sidebar data tab for a data-source issue", async () => {
+    it("opens the sidebar data tab and queues editing for a data-source issue", async () => {
       const user = userEvent.setup();
       const storeApi = setupFooter({
         ...makeSchema(),
@@ -262,6 +282,53 @@ describe("EditorFooter", () => {
       await user.click(await screen.findByRole("button", { name: /请求尚未配置完整/ }));
 
       expect(storeApi.getState().sidebarTab).toBe("data");
+      expect(storeApi.getState().pendingDataEdit).toMatchObject({
+        kind: "dataSource",
+        id: "DataSource_1"
+      });
+    });
+
+    it("locates the data source and opens its edit modal when SidebarPanel is mounted", async () => {
+      const user = userEvent.setup();
+      const schema: FormSchema = {
+        ...makeSchema(),
+        dataSources: [
+          {
+            id: "DataSource_1",
+            name: "部门",
+            kind: "remote",
+            request: { resource: "", action: "" }
+          }
+        ]
+      };
+
+      render(
+        <ConfigProvider>
+          <FormEditorStoreProvider initialState={{ schema }}>
+            <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+              <EditorLayoutProvider value="docked">
+                <HostValidationProvider validate={undefined}>
+                  <SidebarPanel />
+                  <EditorFooter />
+                </HostValidationProvider>
+              </EditorLayoutProvider>
+            </RegistryProvider>
+          </FormEditorStoreProvider>
+        </ConfigProvider>
+      );
+
+      await user.click(screen.getByTestId("footer-issues"));
+      await user.click(await screen.findByRole("button", { name: /请求尚未配置完整/ }));
+
+      // Wait for the edit modal opened by the diagnostic jump. Query via the
+      // modal title rather than `findByRole("dialog", { name })` because antd
+      // assigns a static `id="test-id"` in test env, which collides with the
+      // closed Popover's hidden title node.
+      const modalTitle = await screen.findByText("编辑数据源");
+      const dialog = modalTitle.closest<HTMLElement>("[role='dialog']");
+
+      expect(dialog).not.toBeNull();
+      expect(within(dialog!).getByLabelText(/名称/)).toHaveValue("部门");
     });
 
     it("opens the right form tab for a form-linkage issue", async () => {
