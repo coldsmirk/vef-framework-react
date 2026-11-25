@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Page, showSuccessMessage } from "@vef-framework-react/components";
 import { FormEditor } from "@vef-framework-react/form-editor";
-import { FORM_DATA_SOURCE_APIS, formDataSourceResolver } from "~apis";
+import { FORM_DATA_SOURCE_APIS, formServices } from "~apis";
 
 import { DEMO_SCHEMA } from "./demo-schema";
 
@@ -49,9 +49,9 @@ function RouteComponent(): ReactNode {
         <FormEditor
           contextSources={CONTEXT_SOURCES}
           dataSourceApis={FORM_DATA_SOURCE_APIS}
-          dataSourceResolver={formDataSourceResolver}
           evaluationContext={EVALUATION_CONTEXT}
           initialSchema={DEMO_SCHEMA}
+          services={formServices}
           onPublish={() => showSuccessMessage("Schema 已发布（演示）")}
         />
       </div>

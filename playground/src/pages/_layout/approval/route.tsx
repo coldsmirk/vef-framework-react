@@ -4,7 +4,7 @@ import type { FC, ReactNode } from "react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { ApprovalProvider } from "@vef-framework-react/approval";
 import { Select } from "@vef-framework-react/components";
-import { FORM_DATA_SOURCE_APIS, formDataSourceResolver } from "~apis";
+import { FORM_DATA_SOURCE_APIS, formServices } from "~apis";
 
 import { meetingRenderer } from "./meeting-renderer";
 
@@ -74,7 +74,7 @@ const APPROVAL_PLUGINS: ApprovalPlugins = {
     department: createMockPicker("department")
   },
   dataSourceApis: FORM_DATA_SOURCE_APIS,
-  dataSourceResolver: formDataSourceResolver
+  services: formServices
 };
 
 export const Route = createFileRoute("/_layout/approval")({

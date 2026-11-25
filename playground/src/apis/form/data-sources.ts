@@ -1,11 +1,12 @@
-import type { DataSourceApi, DataSourceResolver, ResolvedDataSourceRequest } from "@vef-framework-react/form-editor";
+import type { DataSourceApi, FormServices } from "@vef-framework-react/form-editor";
 
+import { HTTP_CLIENT } from "@vef-framework-react/core";
 import { API_PATH, apiClient, createApiRequest } from "~api";
 
 /**
- * The option APIs the playground offers its form designers — every one served
- * by {@link formDataSourceResolver}, which is what makes a pick resolve at
- * runtime as well as in the designer's preview.
+ * The option / lookup APIs the playground offers its form designers — every one
+ * served by {@link formServices}, which is what makes a pick resolve at runtime
+ * as well as in the designer's preview.
  */
 export const FORM_DATA_SOURCE_APIS: DataSourceApi[] = [
   {
@@ -37,36 +38,21 @@ export const FORM_DATA_SOURCE_APIS: DataSourceApi[] = [
   }
 ];
 
-const fetchFormOptionRows = apiClient.createQueryFn(
-  "fetch_form_option_rows",
-  ({ post }) => async (request: ResolvedDataSourceRequest) => {
-    const result = await post<Array<Record<string, unknown>>>(
+/**
+ * Unified runtime services for playground forms (remote option sources and
+ * `api_call` effect actions), forwarding the `AbortSignal` to cancel stale or
+ * superseded requests directly at the HTTP transport layer.
+ */
+export const formServices: FormServices = {
+  async request(request, { signal }) {
+    const result = await apiClient[HTTP_CLIENT].post<unknown>(
       API_PATH,
-      { data: createApiRequest(request.resource, request.action, request.version ?? "v1", request.params ?? {}) }
+      {
+        data: createApiRequest(request.resource, request.action, request.version ?? "v1", request.params ?? {}),
+        signal
+      }
     );
 
     return result.data;
-  }
-);
-
-/**
- * Resolves a form's remote option source through the playground's RPC client.
- * Bound parameters arrive already evaluated, so this only fetches and maps
- * each row by the source's mapping (blank keys never reach it — the form
- * runtime normalizes the mapping first).
- */
-export const formDataSourceResolver: DataSourceResolver = {
-  async resolve(request, mapping) {
-    const rows = await apiClient.fetchQuery({
-      queryKey: [fetchFormOptionRows.key, request] as const,
-      queryFn: fetchFormOptionRows
-    });
-
-    return rows.map(row => {
-      return {
-        label: String(row[mapping?.labelKey ?? "label"] ?? ""),
-        value: row[mapping?.valueKey ?? "value"] as string | number
-      };
-    });
   }
 };
