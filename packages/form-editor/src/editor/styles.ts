@@ -98,8 +98,7 @@ export const propertiesDockCss = css({
   },
 
   // Narrow hosts: the panel floats over the canvas's right edge instead of
-  // squeezing it, above the left overlay so selecting a node from `大纲`
-  // surfaces its properties cleanly.
+  // squeezing it. The left overlay steps aside while it is open.
   "&[data-layout='drawer']": {
     position: "absolute",
     top: 0,

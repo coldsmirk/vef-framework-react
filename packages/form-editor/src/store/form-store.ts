@@ -151,7 +151,8 @@ export interface FormEditorStoreState {
   selectedId: string | null;
   /**
    * Active tab of the left sidebar (`palette` / `outline` / `data`). In narrow
-   * (`drawer`) layout, any non-`palette` tab opens as a left-edge overlay.
+   * (`drawer`) layout, any non-`palette` tab opens as a left-edge overlay, which
+   * gives way to the right properties overlay while that is open.
    */
   sidebarTab: SidebarTabId;
   /**
@@ -417,6 +418,14 @@ const CLEARED_SELECTION = {
   propertiesDrawerOpen: false
 } as const;
 
+/**
+ * Opening a sidebar overlay closes the properties one: a narrow layout shows a
+ * single overlay over the canvas at a time.
+ */
+function sidebarPatch(tab: SidebarTabId): { sidebarTab: SidebarTabId; propertiesDrawerOpen?: false } {
+  return tab === "palette" ? { sidebarTab: tab } : { sidebarTab: tab, propertiesDrawerOpen: false };
+}
+
 function selectPatch(nodeId: string): {
   selectedId: string;
   propertiesTab: "control";
@@ -616,7 +625,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        set({ sidebarTab: tab });
+        set(sidebarPatch(tab));
       },
 
       requestDataEdit: entry => {
@@ -626,7 +635,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
         // A fresh object each time, so repeating a jump to the same entry is a
         // new request.
-        set({ sidebarTab: "data", pendingDataEdit: { ...entry } });
+        set({ ...sidebarPatch("data"), pendingDataEdit: { ...entry } });
       },
 
       clearPendingDataEdit: () => {

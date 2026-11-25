@@ -307,6 +307,42 @@ describe("SidebarPanel", () => {
       expect(screen.queryByRole("region", { name: "大纲" })).not.toBeInTheDocument();
     });
 
+    it("gives way to the properties overlay and returns once that closes", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupSidebar("drawer");
+
+      await user.click(screen.getByRole("tab", { name: "大纲" }));
+
+      act(() => {
+        storeApi.getState().selectNode("Field_1");
+      });
+
+      expect(screen.queryByRole("region", { name: "大纲" })).not.toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "组件" })).toHaveAttribute("aria-selected", "true");
+
+      act(() => {
+        storeApi.getState().setPropertiesDrawerOpen(false);
+      });
+
+      expect(screen.getByRole("region", { name: "大纲" })).toBeInTheDocument();
+    });
+
+    it("reopens the hidden overlay from its rail tab over the properties one", async () => {
+      const user = userEvent.setup();
+      const storeApi = setupSidebar("drawer");
+
+      await user.click(screen.getByRole("tab", { name: "大纲" }));
+
+      act(() => {
+        storeApi.getState().selectNode("Field_1");
+      });
+
+      await user.click(screen.getByRole("tab", { name: "大纲" }));
+
+      expect(screen.getByRole("region", { name: "大纲" })).toBeInTheDocument();
+      expect(storeApi.getState().propertiesDrawerOpen).toBe(false);
+    });
+
     it("hides both the rail and any open overlay in preview mode", async () => {
       const user = userEvent.setup();
       const storeApi = setupSidebar("drawer");

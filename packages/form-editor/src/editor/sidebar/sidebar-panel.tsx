@@ -235,6 +235,7 @@ function selectDataItemCount(state: { schema: { dataSources?: unknown[]; variabl
 export function SidebarPanel(): ReactElement {
   const visible = useFormEditorStore(isSidebarVisible);
   const activeTab = useFormEditorStore(s => s.sidebarTab);
+  const isPropertiesOpen = useFormEditorStore(s => s.propertiesDrawerOpen);
   // Primitive / WeakMap-memoized selectors so ordinary field edits never
   // re-render the sidebar chrome.
   const fieldsCount = useFormEditorStore(selectFieldCount);
@@ -244,7 +245,10 @@ export function SidebarPanel(): ReactElement {
   const [keyword, setKeyword] = useState("");
 
   const rail = layout === "drawer";
-  const showOverlay = visible && rail && activeTab !== "palette";
+  // What the rail shows as open: the properties overlay takes the sidebar's
+  // place over a narrow canvas, and closing it brings the sidebar's back.
+  const railTab: SidebarTabId = isPropertiesOpen ? "palette" : activeTab;
+  const showOverlay = visible && rail && railTab !== "palette";
 
   const counts: Record<SidebarTabId, number> = {
     palette: 0,
@@ -254,9 +258,7 @@ export function SidebarPanel(): ReactElement {
 
   const handleRailTabClick = (tab: SidebarTabId): void => {
     // Clicking the active overlay tab collapses it back to the component rail.
-    const next = tab !== "palette" && activeTab === tab ? "palette" : tab;
-
-    storeApi.getState().setSidebarTab(next);
+    storeApi.getState().setSidebarTab(railTab === tab ? "palette" : tab);
   };
 
   const renderActiveDockedBody = (): ReactElement | null => {
@@ -309,7 +311,7 @@ export function SidebarPanel(): ReactElement {
               <>
                 <div aria-label="侧边栏" aria-orientation="vertical" css={railTabsCss} role="tablist">
                   {SIDEBAR_TABS.map(item => {
-                    const active = activeTab === item.key;
+                    const active = railTab === item.key;
 
                     return (
                       <Tooltip key={item.key} placement="right" title={item.label}>

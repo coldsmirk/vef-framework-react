@@ -2025,6 +2025,21 @@ describe("form store", () => {
       expect(api.getState().propertiesDrawerOpen).toBe(false);
     });
 
+    it("closes the narrow right overlay when a left one opens, not when the palette shows", () => {
+      const api = setup();
+
+      act(() => api.getState().setPropertiesTab("form"));
+      act(() => api.getState().setSidebarTab("palette"));
+      expect(api.getState().propertiesDrawerOpen).toBe(true);
+
+      act(() => api.getState().setSidebarTab("outline"));
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
+
+      act(() => api.getState().setPropertiesTab("form"));
+      act(() => api.getState().requestDataEdit({ kind: "variable", id: "missing" }));
+      expect(api.getState().propertiesDrawerOpen).toBe(false);
+    });
+
     it("ignores panel tab switches outside edit mode", () => {
       const api = setup();
       act(() => api.getState().setViewMode("preview"));
