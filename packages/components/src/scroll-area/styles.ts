@@ -9,6 +9,8 @@ export const root = css({
 
 export const viewport = css({
   height: "100%",
+  // Layers the content raises (a sticky header) stay below the scrollbars.
+  isolation: "isolate",
   borderRadius: "inherit",
   overscrollBehavior: "var(--vef-overscroll-behavior, none)"
 });
