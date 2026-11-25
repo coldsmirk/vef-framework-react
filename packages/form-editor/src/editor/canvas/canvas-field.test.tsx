@@ -93,6 +93,15 @@ describe("CanvasField", () => {
     expect(storeApi.getState().selectedId).toBe(field.id);
   });
 
+  it("keeps the action bar inert until the block is hovered or selected", async () => {
+    const user = userEvent.setup();
+    const storeApi = setupField();
+
+    await expect(user.click(screen.getByRole("button", { name: "删除" }))).rejects.toThrow(/pointer-events/);
+
+    expect(findNode(storeApi.getState().schema.presentations.pc, field.id)).toBeDefined();
+  });
+
   it("duplicates the block from the toolbar button", async () => {
     const user = userEvent.setup();
     const storeApi = setupField();

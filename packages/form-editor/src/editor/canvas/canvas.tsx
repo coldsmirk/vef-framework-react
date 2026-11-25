@@ -37,7 +37,7 @@ import { useContainerChrome, useFieldRegistry } from "../../store/engine-provide
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { dropZoneId, fallbackDropZoneId, FIELD_DRAG_TYPE } from "../dnd";
 import { usePreviewRuntime } from "../preview-runtime-context";
-import { CanvasField, SubtreeDraggingContext } from "./canvas-field";
+import { ACTION_BAR_RISE, CanvasField, STACK_GAP_VAR, SubtreeDraggingContext } from "./canvas-field";
 import { DropIndicator } from "./drop-indicator";
 import { composeAccept, inlineSlots, stackGapDescriptor } from "./drop-zones";
 import { MobileSeedState } from "./mobile-seed-state";
@@ -538,7 +538,7 @@ function StackBody({
   const gapPx = resolveStackGap(gap, formGap);
 
   return (
-    <Stack ref={ref} css={[fill && bodyFillCss, isDropTarget && bodyAppendActiveCss]} gap={gapPx}>
+    <Stack ref={ref} css={[{ [STACK_GAP_VAR]: `${gapPx}px` }, fill && bodyFillCss, isDropTarget && bodyAppendActiveCss]} gap={gapPx}>
       {/* eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering */}
       {blocks.map(block => <StackSlot key={block.id} block={block} />)}
     </Stack>
@@ -547,8 +547,8 @@ function StackBody({
 
 // Deliberately NO `content-visibility` here: it implies paint containment,
 // which clips every descendant painting outside the slot's box — and the
-// block's floating action bar hangs above the wrapper (`bottom: 100%`), i.e.
-// exactly outside this box. The offscreen-skip optimization lives on the leaf
+// block's floating action bar rises above the wrapper (`ACTION_BAR_RISE`), i.e.
+// outside this box. The offscreen-skip optimization lives on the leaf
 // preview shield instead (see canvas-field.tsx), where the actual render
 // weight is and where nothing escapes the contained box.
 const stackSlotCss = css({
@@ -945,18 +945,18 @@ function SubformStackPreview({ subform }: { subform: SubformNode }): ReactElemen
   );
 }
 
-// Horizontally scroll wide tables inside the subform card while reserving
-// 28px of top headroom (pulled back via negative margin) so each column's
-// floating action bar (`bottom: 100%`) is never clipped by the scroll container.
+// Horizontally scroll wide tables inside the subform card while reserving the
+// action bar's rise as top headroom (pulled back via negative margin) so each
+// column's bar is never clipped by the scroll container.
 const subformTableScrollCss = css({
   overflowX: "auto",
-  paddingTop: 28,
-  marginTop: -28
+  paddingTop: ACTION_BAR_RISE,
+  marginTop: -ACTION_BAR_RISE
 });
 
 const subformTableCss = css({
-  // No `overflow: hidden`: each column's floating action bar hangs above its
-  // header (`bottom: 100%`), so clipping would swallow it. `fit-content` with
+  // No `overflow: hidden`: each column's floating action bar rises above its
+  // header, so clipping would swallow it. `fit-content` with
   // `minWidth: 100%` keeps the outer border wrapped around every column even
   // when wide tables scroll horizontally.
   width: "fit-content",

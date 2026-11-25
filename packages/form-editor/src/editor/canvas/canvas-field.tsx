@@ -93,39 +93,66 @@ const selectedCss = css({
   }
 });
 
-const actionsCss = css({
+/**
+ * How far the action bar rises above its block's top edge — enough to centre
+ * its 24px on the selection ring. A scroll container that would clip the bar
+ * reserves this much headroom.
+ */
+export const ACTION_BAR_RISE = 16;
+
+/**
+ * CSS variable naming the gap between stacked blocks, published by every stack
+ * body for its own children. The bar never rises past it, so it cannot reach
+ * the block above — covering that block would also catch the clicks aimed at
+ * it.
+ */
+export const STACK_GAP_VAR = "--vef-form-editor-stack-gap";
+
+/**
+ * CSS variable naming the width of the canvas's right edge that an overlay
+ * covers (the narrow-layout properties panel). Published by the stage; the
+ * action bars slide left by it so their buttons stay reachable.
+ */
+export const CANVAS_OCCLUDED_RIGHT_VAR = "--vef-form-editor-canvas-occluded-right";
+
+// A full-width, pointer-transparent rail along the block's top edge. It only
+// positions the bar: absolute, so it adds no layout, and transparent to the
+// pointer, so the block's own top strip stays clickable. Its inline padding
+// clears the corner radius, where the selection ring turns. A high z-index
+// keeps the bar above the neighbouring block.
+const actionsRailCss = css({
   position: "absolute",
-  // An accent tab standing on the selection ring's top edge (the name-tag of
-  // Webflow / Figma), outside the block's own box, so it never sits over the
-  // block's label or control — the block keeps all of its own space. Sized to
-  // the gap: the 16px tab rises exactly as far as the default (`medium`) stack
-  // gap, so at `medium` and `large` it never reaches the block above, and at
-  // `small` (8px) it overlaps that block by the 8px no usable tab can avoid. A
-  // tall floating pill covered most of that block's control instead — and
-  // caught the clicks aimed at it, which with a delete button on the bar is a
-  // hazard, not a cosmetic flaw.
-  // Left-anchored: the floating properties panel overlays the canvas's right
-  // edge, so a right-anchored bar on any full-width block — every root-level
-  // block — would sit underneath the panel exactly while that block is
-  // selected. `left` equals the corner radius, which is where the ring's top
-  // edge turns straight (the ring's radius grows by its 2px offset + 2px width,
-  // exactly as far as it sits outside the box), so the tab's square foot meets
-  // a straight line. A high z-index keeps it above the neighbour it touches.
-  bottom: "100%",
-  left: globalCssVars.borderRadius,
+  top: `calc(-1 * min(${ACTION_BAR_RISE}px, var(${STACK_GAP_VAR}, ${ACTION_BAR_RISE}px)))`,
+  left: 0,
+  right: 0,
   zIndex: 3,
-  // No gap between the tab and the block: the tab's foot sits on the block's
-  // own top edge, covering the ring line and its 2px offset beneath it, so tab
-  // and ring paint as one shape. That contact is also the hover bridge — any
-  // empty space between the two would be a hover dead zone (the pointer
-  // crossing it leaves the block's hover chain, the bar folds away, and its
-  // actions become unreachable); the bar is a descendant of the block wrapper,
-  // so as long as the pointer moves from one straight into the other, `:hover`
-  // holds.
   display: "flex",
+  justifyContent: "flex-end",
+  paddingInline: globalCssVars.borderRadius,
+  pointerEvents: "none"
+});
+
+// The action bar, straddling the selection ring at the block's top-right corner.
+// It reaches 8px into its own block — the empty end of a field's label row, and
+// clear of a button's text — which also keeps it in the block's hover chain: the
+// pointer never crosses empty space on the way to it.
+const actionsCss = css({
+  // Sticky against the canvas scroller: the bar rests at the block's right end
+  // and slides left only as far as an overlay covers that end.
+  position: "sticky",
+  right: `calc(var(${CANVAS_OCCLUDED_RIGHT_VAR}, 0px) + ${globalCssVars.borderRadius})`,
+  display: "flex",
+  alignItems: "center",
+  height: 24,
+  borderRadius: globalCssVars.borderRadiusSm,
+  // Clips the buttons' hover wash to the bar's rounded corners.
+  overflow: "hidden",
+  background: globalCssVars.colorPrimary,
+  color: globalCssVars.colorWhite,
+  boxShadow: globalCssVars.shadowSm,
   opacity: 0,
   transform: "scale(0.96)",
-  transformOrigin: "bottom left",
+  transformOrigin: "top right",
   transition: [
     `opacity ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
     `transform ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`
@@ -135,64 +162,62 @@ const actionsCss = css({
   // Reveal on the innermost hovered block only (`:hover` matches the whole
   // ancestor chain, which used to pop one bar per nesting level at once), and
   // on the selected block — its bar is the only path to grip-drag / duplicate
-  // / delete, independent of where the pointer rests.
-  "[data-canvas-field]:hover:not(:has([data-canvas-field]:hover)) > &, [data-canvas-field][data-selected='true'] > &": {
+  // / delete, independent of where the pointer rests. `> * >` steps through
+  // the rail, so a block reveals its own bar and never a nested block's.
+  "[data-canvas-field]:hover:not(:has([data-canvas-field]:hover)) > * > &, [data-canvas-field][data-selected='true'] > * > &": {
     opacity: 1,
     transform: "scale(1)",
     pointerEvents: "auto"
   },
 
   // …except while a descendant block is hovered: a child slot near the
-  // container's top-left corner would pop its bar right on top of the
+  // container's top-right corner would pop its bar right on top of the
   // selected container's (both anchor that corner), stacking two accent
-  // tabs. Yield to the hovered child's bar — the selected bar returns the
+  // bars. Yield to the hovered child's bar — the selected bar returns the
   // moment the pointer leaves the container's interior.
-  "[data-canvas-field][data-selected='true']:has([data-canvas-field]:hover) > &": {
+  "[data-canvas-field][data-selected='true']:has([data-canvas-field]:hover) > * > &": {
     opacity: 0,
     pointerEvents: "none"
   },
 
-  // Placement mode: fold every action toolbar away — it is unusable mid-drag,
-  // and as another accent surface it would clash with the drop indicator. The
+  // Placement mode: fold every action bar away — it is unusable mid-drag, and
+  // as another accent surface it would clash with the drop indicator. The
   // longer selectors re-assert the reveal rules above so hover / selection
   // cannot bring the bar back while dragging.
-  "[data-drag-active] &, [data-drag-active] [data-canvas-field]:hover:not(:has([data-canvas-field]:hover)) > &, [data-drag-active] [data-canvas-field][data-selected='true'] > &": {
+  "[data-drag-active] &, [data-drag-active] [data-canvas-field]:hover:not(:has([data-canvas-field]:hover)) > * > &, [data-drag-active] [data-canvas-field][data-selected='true'] > * > &": {
     opacity: 0,
     pointerEvents: "none"
   }
 });
 
-// The visible tab of the action bar — the accent fill matches the selection
-// ring, so the two read as one selection shape: rounded top corners, a square
-// foot standing on the ring. Flat, with no shadow, since it is attached rather
-// than floating. The positioned carrier above owns placement and the reveal
-// rules; this element only paints the tab.
-const actionsPillCss = css({
-  display: "flex",
-  alignItems: "center",
-  gap: 1,
-  height: 16,
-  padding: "0 3px",
-  borderRadius: `${globalCssVars.borderRadiusSm} ${globalCssVars.borderRadiusSm} 0 0`,
-  background: globalCssVars.colorPrimary,
-  color: globalCssVars.colorWhite
-});
-
 // A translucent-white hairline separating the "move" handle from the actions.
 const actionDividerCss = css({
   width: 1,
-  height: 10,
-  margin: "0 2px",
+  height: 14,
   flexShrink: 0,
   background: `color-mix(in srgb, ${globalCssVars.colorWhite} 28%, transparent)`
 });
 
-const actionButtonCss = css({
-  width: 20,
-  height: 16,
+// The keyboard focus ring sits inside the control: the bar clips its overflow.
+const actionFocusCss = css({
+  "&:focus-visible": {
+    outline: `2px solid ${globalCssVars.colorWhite}`,
+    outlineOffset: -2
+  }
+});
+
+// Icons are sized through `fontSize`, never by overriding the svg: the shared
+// `Icon` derives its size and its vertical alignment from the font size, so a
+// hard-coded svg size leaves the glyph off the button's centre.
+const ACTION_ICON_FONT_SIZE = 12;
+
+const actionButtonCss = css(actionFocusCss, {
+  width: 24,
+  height: 24,
   minWidth: 0,
-  borderRadius: globalCssVars.borderRadiusXs,
   padding: 0,
+  borderRadius: 0,
+  fontSize: ACTION_ICON_FONT_SIZE,
   // White glyphs on the accent bar, with a translucent-white press/hover wash.
   // VEF styles outrank the antd layer, so this sets the text-button colours
   // without `!important` / `&&`.
@@ -201,11 +226,6 @@ const actionButtonCss = css({
   "&:hover": {
     color: globalCssVars.colorWhite,
     background: `color-mix(in srgb, ${globalCssVars.colorWhite} 18%, transparent)`
-  },
-
-  "& svg": {
-    width: 12,
-    height: 12
   }
 });
 
@@ -219,13 +239,13 @@ const deleteButtonCss = css(actionButtonCss, {
   }
 });
 
-const gripCss = css({
+const gripCss = css(actionFocusCss, {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 16,
-  height: 16,
-  borderRadius: globalCssVars.borderRadiusXs,
+  width: 24,
+  height: 24,
+  fontSize: ACTION_ICON_FONT_SIZE,
   // The handle is the quietest glyph (dimmed white), brightening on hover.
   color: `color-mix(in srgb, ${globalCssVars.colorWhite} 72%, transparent)`,
   cursor: "grab",
@@ -235,9 +255,7 @@ const gripCss = css({
   ].join(", "),
 
   "&:hover": { color: globalCssVars.colorWhite, background: `color-mix(in srgb, ${globalCssVars.colorWhite} 18%, transparent)` },
-  "&:active": { cursor: "grabbing" },
-
-  "& svg": { width: 12, height: 12 }
+  "&:active": { cursor: "grabbing" }
 });
 
 // The offscreen-skip boundary for big forms, applied to every leaf preview.
@@ -246,7 +264,7 @@ const gripCss = css({
 // `contain-intrinsic-size` remembers each preview's real size once rendered so
 // scrollbar geometry stays honest. It must sit HERE and not on the stack slot:
 // content-visibility implies paint containment, and on any ancestor of the
-// floating action bar it would clip the bar away (the bar hangs above the
+// floating action bar it would clip the bar away (the bar rises above the
 // wrapper, outside every ancestor box up to the slot). The bar is a sibling of
 // this shield, so nothing escapes the contained box. Containers are never
 // shielded: their bodies hold nested fields and drop zones that stay interactive.
@@ -327,8 +345,8 @@ export function CanvasField({
       data-selected={isSelected ? "true" : undefined}
       onClick={select}
     >
-      <div css={actionsCss} onClick={stop} onMouseDown={stop}>
-        <div css={actionsPillCss}>
+      <div css={actionsRailCss}>
+        <div css={actionsCss} onClick={stop} onMouseDown={stop}>
           {/* Focusable so dnd-kit's KeyboardSensor can work: it binds keydown to
               this handle element, and a keydown only reaches an element that can
               hold focus — without tabIndex the documented Enter-to-pick-up /

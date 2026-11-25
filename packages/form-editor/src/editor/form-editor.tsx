@@ -26,18 +26,20 @@ import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile"
 import { DeviceProvider, RegistryProvider } from "../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../store/form-store";
 import { Canvas } from "./canvas/canvas";
+import { CANVAS_OCCLUDED_RIGHT_VAR } from "./canvas/canvas-field";
 import { ContainerDragChip } from "./canvas/container-drag-chip";
 import { CodeSetCatalogProvider } from "./code-set-catalog";
 import { ContextSourcesProvider } from "./context-sources";
 import { DataSourceApisProvider } from "./data-source-apis";
 import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
-import { EditorLayoutProvider, useEditorLayoutMeasure } from "./editor-layout-context";
+import { EditorLayoutProvider, useEditorLayout, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
 import { HostValidationProvider } from "./host-validation";
 import { previewDispatchEffect } from "./preview-effects";
 import { PreviewRuntimeProvider } from "./preview-runtime-context";
 import { PropertiesPanel } from "./properties/properties-panel";
 import { SidebarPanel } from "./sidebar/sidebar-panel";
+import { PROPERTIES_PANEL_WIDTH_DRAWER } from "./styles";
 import { Toolbar } from "./toolbar/toolbar";
 import { useEditorShortcuts } from "./use-editor-shortcuts";
 
@@ -74,6 +76,11 @@ const stageCss = css({
   minHeight: 0,
   minWidth: 0,
   overflow: "hidden"
+});
+
+// The narrow-layout properties panel floats over the canvas's right edge.
+const stageOccludedCss = css({
+  [CANVAS_OCCLUDED_RIGHT_VAR]: `${PROPERTIES_PANEL_WIDTH_DRAWER}px`
 });
 
 /**
@@ -392,9 +399,11 @@ export function FormEditorWorkspace({ children }: { children: ReactNode }): Reac
  */
 export function FormEditorStage(): ReactElement {
   const isEditing = useFormEditorStore(s => s.viewMode === "edit");
+  const isDrawerOpen = useFormEditorStore(s => s.propertiesDrawerOpen);
+  const isOccluded = useEditorLayout() === "drawer" && isDrawerOpen;
 
   return (
-    <div css={stageCss}>
+    <div css={[stageCss, isOccluded && stageOccludedCss]}>
       <Canvas />
       {isEditing ? <EditorFooter /> : null}
     </div>
