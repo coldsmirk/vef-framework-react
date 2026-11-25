@@ -61,6 +61,22 @@ export {
   getLinkageSourceKeys
 } from "./source-tracking";
 export {
+  collectInferredSelectRecordColumns,
+  collectStepOutputNames,
+  collectStepReferenceUsages,
+  findBrokenStepReferencesAfterReorder,
+  findDependentStepsAfter,
+  matchStepFieldsToTargets,
+  nextUniqueStepOutput,
+  renameStepOutputInRule,
+  resolvePriorStepSchemas,
+  resolveSelectRecordSourceFields,
+  type BrokenStepReference,
+  type FieldMatchResult,
+  type PriorStepSchema,
+  type StepReferenceUsage
+} from "./step-schema";
+export {
   ALERT_LEVELS,
   EFFECT_ACTION_TYPES,
   FIELD_EVENT_TRIGGER_KINDS,

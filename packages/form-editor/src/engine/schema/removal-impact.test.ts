@@ -160,4 +160,110 @@ describe("collectRemovalImpact", () => {
       expect(hasRemovalImpact(collectRemovalImpact(layer, "Field_missing"))).toBe(false);
     });
   });
+
+  describe("partial impacts on surviving rules and data sources", () => {
+    it("reports removed set_fields write items and cleared reference slots separately", () => {
+      const layer = layerOf([
+        field("empNo", "empNo"),
+        field("staffName", "staffName"),
+        field("phone", "phone"),
+        field("lookup", "lookup", {
+          rules: [
+            {
+              id: "R_lookup",
+              trigger: { kind: "commit" },
+              actions: [
+                {
+                  id: "A_api",
+                  type: "api_call",
+                  request: {
+                    resource: "md/staff",
+                    action: "lookup",
+                    params: { keyword: { kind: "reference", path: "empNo" } }
+                  },
+                  output: "result"
+                },
+                {
+                  id: "A_fill",
+                  type: "set_fields",
+                  assignments: [
+                    { targetKey: "staffName", value: { kind: "reference", path: "$steps.result.name" } },
+                    { targetKey: "phone", value: { kind: "reference", path: "empNo" } }
+                  ]
+                }
+              ]
+            }
+          ]
+        })
+      ]);
+
+      // Removing `staffName` removes 1 assignment from the surviving rule (not the whole rule).
+      const targetImpact = collectRemovalImpact(layer, "Field_staffName");
+
+      expect(hasRemovalImpact(targetImpact)).toBe(true);
+      expect(targetImpact.removedRules).toEqual([]);
+      expect(targetImpact.removedAssignments).toEqual([
+        {
+          ownerId: "Field_lookup",
+          ownerLabel: "字段lookup",
+          count: 1
+        }
+      ]);
+      expect(targetImpact.clearedReferences).toEqual([]);
+
+      // Removing `empNo` clears 2 references (api_call param + surviving set_fields value).
+      const refImpact = collectRemovalImpact(layer, "Field_empNo");
+
+      expect(hasRemovalImpact(refImpact)).toBe(true);
+      expect(refImpact.removedRules).toEqual([]);
+      expect(refImpact.removedAssignments).toEqual([]);
+      expect(refImpact.clearedReferences).toEqual([
+        {
+          ownerId: "Field_lookup",
+          ownerLabel: "字段lookup",
+          count: 2
+        }
+      ]);
+    });
+
+    it("reports cleared references on form-level rules and form-global remote data sources", () => {
+      const layer = layerOf([field("deptId", "deptId"), field("name", "name")]);
+      const formLinkage: FieldLinkage = {
+        rules: [
+          {
+            id: "R_form",
+            trigger: { kind: "load" },
+            actions: [
+              {
+                id: "A_set",
+                type: "set_fields",
+                assignments: [
+                  { targetKey: "deptId", value: { kind: "literal", value: "d1" } },
+                  { targetKey: "name", value: { kind: "reference", path: "deptId" } }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const impact = collectRemovalImpact(layer, "Field_deptId", formLinkage, [
+        {
+          id: "DS_team",
+          name: "小组列表",
+          kind: "remote",
+          request: {
+            resource: "org/team",
+            action: "find_options",
+            params: { deptId: { kind: "reference", path: "deptId" } }
+          }
+        }
+      ]);
+
+      expect(hasRemovalImpact(impact)).toBe(true);
+      expect(impact.formRulesRemoved).toBe(0);
+      expect(impact.formAssignmentsRemoved).toBe(1);
+      expect(impact.formReferencesCleared).toBe(1);
+      expect(impact.clearedDataSourceReferences).toEqual([{ id: "DS_team", label: "小组列表" }]);
+    });
+  });
 });

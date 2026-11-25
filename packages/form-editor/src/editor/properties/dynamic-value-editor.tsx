@@ -1,21 +1,26 @@
 import type { ReactElement } from "react";
 
-import type { DynamicValue } from "../../types";
+import type { DynamicValue, FormDataSource, FormField } from "../../types";
+import type { ReferenceScope } from "./reference-scope";
 
 import { css } from "@emotion/react";
 import { Input, Segmented } from "@vef-framework-react/components";
 
-import { coerceToString } from "./entries/coerce";
 import { ExpressionInput } from "./entries/linkage/expression-input";
 import { codeEditorWrapperCss, valueEditorCss } from "./entries/linkage/styles";
+import { ReferencePicker, useReferenceScope } from "./reference-scope";
+import { defaultLiteralValueForField, TypedLiteralInput } from "./typed-literal-input";
 
 const containerCss = css({
-  containerType: "inline-size"
+  containerType: "inline-size",
+  flex: 1,
+  minWidth: 0
 });
 
-// In wide surfaces (such as the data-source modal) a single-line literal or
-// reference sits beside its mode switcher so each request parameter fits on
-// one row; expressions stay stacked so CodeMirror keeps the full width.
+// In wide surfaces (such as the data-source modal or action modal) a single-line
+// literal or reference sits beside its mode switcher so each parameter or
+// assignment fits on one row; expressions stay stacked so CodeMirror keeps the
+// full width.
 const inlineValueEditorCss = css({
   "@container (min-width: 340px)": {
     flexDirection: "row",
@@ -50,9 +55,13 @@ function isDynamicValueMode(value: unknown): value is DynamicValueMode {
  * Switch a value between the three modes, keeping it when the mode is unchanged
  * so toggling the control back and forth does not discard what was typed.
  */
-export function setDynamicValueMode(current: DynamicValue, mode: DynamicValueMode): DynamicValue {
+export function setDynamicValueMode(
+  current: DynamicValue,
+  mode: DynamicValueMode,
+  targetField?: FormField
+): DynamicValue {
   if (mode === "literal") {
-    return current.kind === "literal" ? current : { kind: "literal", value: "" };
+    return current.kind === "literal" ? current : { kind: "literal", value: defaultLiteralValueForField(targetField) };
   }
 
   if (mode === "reference") {
@@ -67,23 +76,51 @@ export interface DynamicValueEditorProps {
   literalPlaceholder?: string;
   referencePlaceholder?: string;
   expressionPlaceholder?: string;
+  /**
+   * Optional explicit reference scope; when omitted, reads the nearest
+   * {@link ReferenceScopeProvider}. Falls back to a plain path input only when
+   * rendered detached from any editor scope.
+   */
+  referenceScope?: ReferenceScope | null;
+  /**
+   * Put earlier step outputs before form fields in the grouped reference picker
+   * (helpful for `select_record.source` and `set_fields` values).
+   */
+  preferSteps?: boolean;
+  /**
+   * Target field being written (`set_fields` / `assign`): drives the typed
+   * literal control (number, switch, date/datetime/daterange, static options).
+   */
+  targetField?: FormField;
+  /**
+   * Form-global data sources used to resolve `ref`-to-static option lists for
+   * selection target fields.
+   */
+  dataSources?: readonly FormDataSource[];
   onChange: (next: DynamicValue) => void;
 }
 
 /**
  * Literal / reference / expression switch plus the matching input — the one
  * control for every place the designer offers "a fixed value or a bound one":
- * linkage action values and remote data-source request parameters. Sharing it
- * is what keeps the two from drifting into different affordances for the same
- * schema shape.
+ * linkage action values and remote request parameters. Sharing it keeps every
+ * surface aligned on typed literals, grouped reference picking, and expression
+ * editing.
  */
 export function DynamicValueEditor({
+  dataSources,
   expressionPlaceholder,
   literalPlaceholder,
-  referencePlaceholder = "字段键或作用域路径，如 $steps.res.name",
-  value,
-  onChange
+  onChange,
+  preferSteps = false,
+  referencePlaceholder = "选择引用数据",
+  referenceScope,
+  targetField,
+  value
 }: DynamicValueEditorProps): ReactElement {
+  const inheritedScope = useReferenceScope();
+  const scope = referenceScope === undefined ? inheritedScope : referenceScope;
+
   return (
     <div css={containerCss}>
       <div css={[valueEditorCss, value.kind !== "expression" && inlineValueEditorCss]}>
@@ -93,28 +130,44 @@ export function DynamicValueEditor({
           value={value.kind}
           onChange={mode => {
             if (isDynamicValueMode(mode)) {
-              onChange(setDynamicValueMode(value, mode));
+              onChange(setDynamicValueMode(value, mode, targetField));
             }
           }}
         />
 
         {value.kind === "literal"
           ? (
-              <Input
-                css={inputGrowCss}
-                placeholder={literalPlaceholder}
-                value={coerceToString(value.value)}
-                onChange={event => onChange({ kind: "literal", value: event.target.value })}
-              />
+              <div css={inputGrowCss}>
+                <TypedLiteralInput
+                  dataSources={dataSources}
+                  field={targetField}
+                  placeholder={literalPlaceholder}
+                  value={value.value}
+                  onChange={next => onChange({ kind: "literal", value: next })}
+                />
+              </div>
             )
           : value.kind === "reference"
             ? (
-                <Input
-                  css={inputGrowCss}
-                  placeholder={referencePlaceholder}
-                  value={value.path}
-                  onChange={event => onChange({ kind: "reference", path: event.target.value })}
-                />
+                <div css={inputGrowCss}>
+                  {scope === null
+                    ? (
+                        <Input
+                          placeholder={referencePlaceholder}
+                          value={value.path}
+                          onChange={event => onChange({ kind: "reference", path: event.target.value })}
+                        />
+                      )
+                    : (
+                        <ReferencePicker
+                          placeholder={referencePlaceholder}
+                          preferSteps={preferSteps}
+                          scope={scope}
+                          value={value.path}
+                          onChange={path => onChange({ kind: "reference", path })}
+                        />
+                      )}
+                </div>
               )
             : (
                 <div css={codeEditorWrapperCss}>

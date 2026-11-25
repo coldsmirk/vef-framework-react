@@ -638,10 +638,14 @@ describe("linkage rules entry", () => {
         </PreviewRuntimeProvider>
       );
 
-      // The already-stored api_call stays rendered with its output intact.
+      // Multi-step sequences start collapsed: the stored api_call shows its
+      // summary and unsupported badge, and expands with its output intact.
+      expect(screen.getByText("当前宿主不支持")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /调用接口 · hr\/staff \/ find → res/ }));
       expect(screen.getByDisplayValue("res")).toBeInTheDocument();
 
-      // Opening the first action's type selector omits api_call and navigate.
+      // Expand step 1 and open its action type selector: api_call and navigate are omitted.
+      await user.click(screen.getByRole("button", { name: /提交表单/ }));
       const [, firstActionTypeSelect] = screen.getAllByRole("combobox");
       await user.click(firstActionTypeSelect as HTMLElement);
       expect(screen.queryByRole("option", { name: "调用接口" })).not.toBeInTheDocument();
@@ -696,7 +700,7 @@ describe("linkage rules entry", () => {
 
       renderEntry(target, vi.fn());
 
-      expect(screen.getByText("targetKey 尚未选择")).toBeInTheDocument();
+      expect(screen.getByText("步骤 1：尚未选择目标字段")).toBeInTheDocument();
     });
 
     it("maps issues onto the card of the rule that produced them", () => {
@@ -741,10 +745,10 @@ describe("linkage rules entry", () => {
       const cleanCard = screen.getByRole("group", { name: "规则 1" });
       const brokenCard = screen.getByRole("group", { name: "规则 2" });
 
-      expect(within(brokenCard).getByText("targetKey 尚未选择")).toBeInTheDocument();
-      expect(within(cleanCard).queryByText("targetKey 尚未选择")).not.toBeInTheDocument();
+      expect(within(brokenCard).getByText("步骤 1：尚未选择目标字段")).toBeInTheDocument();
+      expect(within(cleanCard).queryByText("步骤 1：尚未选择目标字段")).not.toBeInTheDocument();
       // Exactly one card carries the message.
-      expect(screen.getAllByText("targetKey 尚未选择")).toHaveLength(1);
+      expect(screen.getAllByText("步骤 1：尚未选择目标字段")).toHaveLength(1);
     });
   });
 });

@@ -130,8 +130,28 @@ describe("locateIssue", () => {
   });
 
   describe("when the path names a node by id", () => {
-    it("finds the node on the device that has it", () => {
+    it("targets the exact linkage rule (and optional action) on the device that has it", () => {
       expect(locateIssue("node[Field_remark].linkage.rules[0]", makeSchema(), "pc"))
+        .toEqual({
+          kind: "linkage",
+          scope: "node",
+          device: "mobile",
+          nodeId: "Field_remark",
+          ruleIndex: 0
+        });
+      expect(locateIssue("node[Field_remark].linkage.rules[0].actions[2].assignments[0].targetKey", makeSchema(), "pc"))
+        .toEqual({
+          kind: "linkage",
+          scope: "node",
+          device: "mobile",
+          nodeId: "Field_remark",
+          ruleIndex: 0,
+          actionIndex: 2
+        });
+    });
+
+    it("falls back to the node target for a non-rule linkage path", () => {
+      expect(locateIssue("node[Field_remark].linkage", makeSchema(), "pc"))
         .toEqual({
           kind: "node",
           device: "mobile",
@@ -191,8 +211,18 @@ describe("locateIssue", () => {
       expect(locateIssue("variables[1].name", makeSchema(), "pc")).toEqual({ kind: "sidebar", tab: "data" });
     });
 
-    it("targets the properties form tab for a form event", () => {
-      expect(locateIssue("schema.linkage.rules[0]", makeSchema(), "pc")).toEqual({ kind: "properties", tab: "form" });
+    it("targets the exact form event rule and action", () => {
+      expect(locateIssue("schema.linkage.rules[0]", makeSchema(), "pc")).toEqual({
+        kind: "linkage",
+        scope: "form",
+        ruleIndex: 0
+      });
+      expect(locateIssue("schema.linkage.rules[1].actions[0].output", makeSchema(), "pc")).toEqual({
+        kind: "linkage",
+        scope: "form",
+        ruleIndex: 1,
+        actionIndex: 0
+      });
     });
 
     it("targets the properties form tab for a dependency cycle", () => {
@@ -298,8 +328,59 @@ describe("describeIssueLocation", () => {
       expect(describeIssueLocation("variables[0].defaultValue", schema, "pc")).toBe("变量「quota」");
     });
 
-    it("names the form's own linkage", () => {
-      expect(describeIssueLocation("linkage.rules[0]", makeSchema(), "pc")).toBe("表单联动");
+    it("names the form's own linkage rule and action in designer words", () => {
+      const schema: FormSchema = {
+        ...makeSchema(),
+        linkage: {
+          rules: [
+            {
+              id: "R1",
+              trigger: { kind: "load" },
+              actions: [
+                {
+                  id: "A1",
+                  type: "select_record",
+                  source: { kind: "reference", path: "" },
+                  output: "selected"
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      expect(describeIssueLocation("linkage.rules[0]", schema, "pc")).toBe("表单事件 · 规则 1");
+      expect(describeIssueLocation("schema.linkage.rules[0].actions[0].source", schema, "pc"))
+        .toBe("表单事件 · 规则 1 · 步骤 1（选择记录）");
+      expect(describeIssueLocation("linkage", schema, "pc")).toBe("表单联动");
+    });
+
+    it("names a node linkage rule, guard, and action step in designer words", () => {
+      const schema = makeSchema();
+      const amount = schema.presentations.pc.children[0];
+
+      if (amount?.type === "section" && amount.children[0]?.type === "number") {
+        amount.children[0].linkage = {
+          rules: [
+            {
+              id: "R1",
+              trigger: { kind: "commit" },
+              actions: [
+                {
+                  id: "A1",
+                  type: "set_fields",
+                  assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
+                }
+              ]
+            }
+          ]
+        };
+      }
+
+      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].actions[0].assignments[0].targetKey", schema, "pc"))
+        .toBe("金额 · 规则 1 · 步骤 1（设置字段）");
+      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].trigger.when.children[0].sourceKey", schema, "pc"))
+        .toBe("金额 · 规则 1 · 执行条件");
     });
   });
 

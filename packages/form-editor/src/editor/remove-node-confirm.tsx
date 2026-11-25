@@ -26,6 +26,31 @@ function removalImpactLines(impact: RemovalImpact): string[] {
     lines.push(`将同时移除 ${ruleCount} 条引用它的联动规则（来自 ${sources.join("、")}）`);
   }
 
+  const assignmentCount = impact.removedAssignments.reduce((sum, owner) => sum + owner.count, 0) + impact.formAssignmentsRemoved;
+
+  if (assignmentCount > 0) {
+    const sources = [
+      ...impact.removedAssignments.map(owner => `「${owner.ownerLabel}」`),
+      ...impact.formAssignmentsRemoved > 0 ? ["表单级事件"] : []
+    ];
+
+    lines.push(`将移除 ${assignmentCount} 处向该字段写入的赋值项（来自 ${sources.join("、")}）`);
+  }
+
+  const referenceCount = impact.clearedReferences.reduce((sum, owner) => sum + owner.count, 0)
+    + impact.formReferencesCleared
+    + impact.clearedDataSourceReferences.length;
+
+  if (referenceCount > 0) {
+    const sources = [
+      ...impact.clearedReferences.map(owner => `「${owner.ownerLabel}」`),
+      ...impact.formReferencesCleared > 0 ? ["表单级事件"] : [],
+      ...impact.clearedDataSourceReferences.map(source => `数据源「${source.label}」`)
+    ];
+
+    lines.push(`将清空 ${referenceCount} 处对该字段的引用（来自 ${sources.join("、")}）`);
+  }
+
   for (const field of impact.unreachable) {
     lines.push(`「${field.label}」默认隐藏且将失去全部「显示」规则，运行时将不可见`);
   }
@@ -35,17 +60,24 @@ function removalImpactLines(impact: RemovalImpact): string[] {
 
 /**
  * Remove a node through an impact-aware confirmation: when the removal would
- * cascade-prune linkage rules on OTHER blocks (or strand a default-hidden
- * field with no way to show), the designer sees exactly what gets lost before
- * committing. A removal with no outside impact stays a single click.
+ * cascade-prune linkage rules, drop write targets, clear references on OTHER
+ * blocks / data sources, or strand a default-hidden field with no way to show,
+ * the designer sees exactly what gets lost before committing. A removal with no
+ * outside impact stays a single click.
  */
 export function removeNodeWithConfirm(storeApi: FormEditorStoreApi, nodeId: string): void {
   const { device, schema } = storeApi.getState();
   const layer = currentLayer(schema, device);
-  // The form-level linkage resolves against the PC root scope only.
-  const impact = collectRemovalImpact(layer, nodeId, device === "pc" ? schema.linkage : undefined);
+  // The form-level linkage and form-global remote data sources resolve against
+  // the PC root scope only.
+  const impact = collectRemovalImpact(
+    layer,
+    nodeId,
+    device === "pc" ? schema.linkage : undefined,
+    device === "pc" ? schema.dataSources : undefined
+  );
 
-  confirmRemoval(impact, "删除该控件将影响联动规则", () => storeApi.getState().removeNode(nodeId));
+  confirmRemoval(impact, "删除该控件将影响联动或引用配置", () => storeApi.getState().removeNode(nodeId));
 }
 
 /**
@@ -56,9 +88,15 @@ export function removeNodeWithConfirm(storeApi: FormEditorStoreApi, nodeId: stri
 export function removeTabWithConfirm(storeApi: FormEditorStoreApi, tabsId: string, tabId: string): void {
   const { device, schema } = storeApi.getState();
   const layer = currentLayer(schema, device);
-  const impact = collectTabRemovalImpact(layer, tabsId, tabId, device === "pc" ? schema.linkage : undefined);
+  const impact = collectTabRemovalImpact(
+    layer,
+    tabsId,
+    tabId,
+    device === "pc" ? schema.linkage : undefined,
+    device === "pc" ? schema.dataSources : undefined
+  );
 
-  confirmRemoval(impact, "删除该标签页将影响联动规则", () => storeApi.getState().removeTab(tabsId, tabId));
+  confirmRemoval(impact, "删除该标签页将影响联动或引用配置", () => storeApi.getState().removeTab(tabsId, tabId));
 }
 
 function confirmRemoval(impact: RemovalImpact, title: string, commit: () => void): void {

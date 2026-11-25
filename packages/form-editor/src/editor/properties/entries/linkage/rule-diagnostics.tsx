@@ -6,6 +6,8 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
 
+const ACTION_INDEX_RE = /\.actions\[(?<index>\d+)\](?:\.|$)/;
+
 const listCss = css({
   display: "flex",
   flexDirection: "column",
@@ -18,6 +20,21 @@ const lineCss = css({
   gap: 6,
   fontSize: globalCssVars.fontSizeSm,
   lineHeight: 1.5
+});
+
+const interactiveLineCss = css({
+  border: "none",
+  background: "transparent",
+  padding: "2px 4px",
+  margin: "0 -4px",
+  borderRadius: globalCssVars.borderRadiusSm,
+  textAlign: "left",
+  cursor: "pointer",
+  transition: `background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
+
+  "&:hover": {
+    background: globalCssVars.colorFillTertiary
+  }
 });
 
 const dotCss = css({
@@ -43,6 +60,17 @@ const errorLineCss = css({
 const errorDotCss = css({
   background: globalCssVars.colorError
 });
+
+/**
+ * Extract the 0-based action index referenced by a rule issue's path
+ * (`node[f1].linkage.rules[0].actions[2].assignments[0].targetKey` → `2`), or
+ * `undefined` for rule-level / trigger-level issues.
+ */
+export function parseIssueActionIndex(path: string): number | undefined {
+  const index = ACTION_INDEX_RE.exec(path)?.groups?.index;
+
+  return index === undefined ? undefined : Number(index);
+}
 
 /**
  * Index rule-scoped validation issues by their `ruleId` so the rule-list
@@ -102,6 +130,11 @@ export function stabilizeIssueBuckets(
 
 export interface RuleDiagnosticsProps {
   issues: readonly ValidationIssue[];
+  /**
+   * Invoked when the designer clicks an action-scoped issue to expand and jump
+   * directly to that step.
+   */
+  onFocusAction?: (actionIndex: number) => void;
 }
 
 /**
@@ -109,24 +142,51 @@ export interface RuleDiagnosticsProps {
  * surface of `validateLinkageSchema`, so half-configured or dangling rules are
  * visible while authoring instead of silently dead. Severity drives the
  * styling: warnings are legitimate mid-authoring states, errors mean the rule
- * cannot run.
+ * cannot run. Clicking an action-specific line expands and scrolls to that step.
  */
-export function RuleDiagnostics({ issues }: RuleDiagnosticsProps): ReactElement | null {
+export function RuleDiagnostics({ issues, onFocusAction }: RuleDiagnosticsProps): ReactElement | null {
   if (issues.length === 0) {
     return null;
   }
 
   return (
     <div css={listCss} role="status">
-      {issues.map((issue, index) => (
-        <div
-          key={`${issue.path}:${issue.code}:${index}`}
-          css={[lineCss, issue.severity === "error" ? errorLineCss : warningLineCss]}
-        >
-          <span css={[dotCss, issue.severity === "error" ? errorDotCss : warningDotCss]} />
-          <span>{issue.message}</span>
-        </div>
-      ))}
+      {issues.map((issue, index) => {
+        const actionIndex = parseIssueActionIndex(issue.path);
+        const severityLineCss = issue.severity === "error" ? errorLineCss : warningLineCss;
+        const severityDotCss = issue.severity === "error" ? errorDotCss : warningDotCss;
+        const content = (
+          <>
+            <span css={[dotCss, severityDotCss]} />
+
+            <span>
+              {actionIndex === undefined ? issue.message : `步骤 ${actionIndex + 1}：${issue.message}`}
+            </span>
+          </>
+        );
+
+        if (actionIndex !== undefined && onFocusAction !== undefined) {
+          return (
+            <button
+              key={`${issue.path}:${issue.code}:${index}`}
+              css={[lineCss, interactiveLineCss, severityLineCss]}
+              type="button"
+              onClick={() => onFocusAction(actionIndex)}
+            >
+              {content}
+            </button>
+          );
+        }
+
+        return (
+          <div
+            key={`${issue.path}:${issue.code}:${index}`}
+            css={[lineCss, severityLineCss]}
+          >
+            {content}
+          </div>
+        );
+      })}
     </div>
   );
 }

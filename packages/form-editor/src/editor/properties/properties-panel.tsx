@@ -6,7 +6,7 @@ import type { ContainerNode, FieldDefinition, FormField, FormSchema, PropertiesD
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, ScrollArea } from "@vef-framework-react/components";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { findNodeWithParentContainer, isContainerNode, isLeafField } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
@@ -190,11 +190,20 @@ export function PropertiesPanel(): ReactElement {
   const hasSelection = useFormEditorStore(s => s.selectedId !== null);
   const propertiesTab = useFormEditorStore(s => s.propertiesTab);
   const drawerOpen = useFormEditorStore(s => s.propertiesDrawerOpen);
+  const pendingLinkageFocus = useFormEditorStore(s => s.pendingLinkageFocus);
   const storeApi = useFormEditorStoreApi();
   const layout = useEditorLayout();
 
   // Retained here so switching `控件` → `表单` → `控件` keeps the field sub-tab.
   const [fieldTab, setFieldTab] = useState<PropertyTabId>("props");
+
+  // Jumping to a node's linkage diagnostic opens the field's "联动" tab so the
+  // lazy LinkageRulesEntry mounts and consumes `pendingLinkageFocus`.
+  useEffect(() => {
+    if (pendingLinkageFocus?.scope === "node") {
+      setFieldTab("linkage");
+    }
+  }, [pendingLinkageFocus]);
 
   const isDrawer = layout === "drawer";
   const panelVisible = isEditing && (!isDrawer || drawerOpen);

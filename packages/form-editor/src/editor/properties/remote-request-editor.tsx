@@ -1,13 +1,15 @@
+import type { SelectProps } from "@vef-framework-react/components";
 import type { ChangeEvent, ReactElement, ReactNode } from "react";
 
-import type { DataSourceApiParam, DynamicValue, RemoteDataSourceRequest } from "../../types";
+import type { DataSourceApi, DataSourceApiParam, DynamicValue, RemoteDataSourceRequest } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input } from "@vef-framework-react/components";
+import { Button, globalCssVars, Input, Select } from "@vef-framework-react/components";
 import { omit } from "@vef-framework-react/shared";
 import { useMemo, useState } from "react";
 
 import { EditorIcon } from "../../icons";
+import { endpointKey, findDataSourceApi, useDataSourceApis } from "../data-source-apis";
 import { DynamicValueEditor } from "./dynamic-value-editor";
 
 export const requestGridCss = css({
@@ -142,6 +144,40 @@ const valueCellCss = css({
 });
 
 const hintCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  lineHeight: 1.5,
+  color: globalCssVars.colorTextTertiary
+});
+
+const CUSTOM_API = "custom";
+
+const selectFullWidth = { width: "100%" } as const;
+
+const apiOptionCss = css({
+  display: "flex",
+  flexDirection: "column",
+  minWidth: 0,
+  lineHeight: 1.4
+});
+
+const apiEndpointCss = css({
+  fontFamily: globalCssVars.fontFamilyCode,
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+});
+
+const apiOptionHintCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary
+});
+
+const apiSummaryCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
   fontSize: globalCssVars.fontSizeSm,
   lineHeight: 1.5,
   color: globalCssVars.colorTextTertiary
@@ -289,7 +325,7 @@ export function RequestParamsEditor({
   };
 
   return (
-    <RequestSection hint="固定值，或引用表单字段 / 系统变量的表达式（可做级联）" title="请求参数">
+    <RequestSection hint="支持固定值、引用字段 / 变量或表达式" title="请求参数">
 
       {declared.map(param => (
         <DeclaredParamRow
@@ -476,9 +512,208 @@ export function RequestEndpointFields({ onChange, request }: RemoteRequestEditor
   );
 }
 
+export function describeEndpoint(endpoint: Pick<RemoteDataSourceRequest, "action" | "resource" | "version">): string {
+  return [endpoint.resource, endpoint.action, endpoint.version].filter(Boolean).join(" · ");
+}
+
+interface CatalogApiOption {
+  value: string;
+  label: string;
+  title: string;
+}
+
 /**
- * Hand-entered endpoint plus its parameters — the editor for an `api_call`
- * action's request.
+ * Picker options grouped by catalog `group` headings (ungrouped APIs first),
+ * followed by the hand-typed escape hatch. Shared by remote option sources and
+ * `api_call` actions so both surfaces present the exact same API catalog.
+ */
+function buildCatalogApiOptions(apis: readonly DataSourceApi[]): NonNullable<SelectProps["options"]> {
+  const ungrouped: CatalogApiOption[] = [];
+  const groups = new Map<string, CatalogApiOption[]>();
+
+  for (const api of apis) {
+    const option: CatalogApiOption = {
+      value: endpointKey(api),
+      label: api.label,
+      title: describeEndpoint(api)
+    };
+
+    if (api.group === undefined) {
+      ungrouped.push(option);
+    } else {
+      groups.set(api.group, [...groups.get(api.group) ?? [], option]);
+    }
+  }
+
+  return [
+    ...ungrouped,
+    ...[...groups].map(([group, options]) => {
+      return {
+        label: group,
+        title: group,
+        options
+      };
+    }),
+    {
+      value: CUSTOM_API,
+      label: "自定义接口",
+      title: "手动填写接口资源与动作"
+    }
+  ];
+}
+
+/**
+ * Build the request an API pick produces: copies the API's endpoint and keeps
+ * each declared parameter's existing bound value (falling back to its declared
+ * default), dropping parameters that belonged to the previous endpoint.
+ */
+export function buildRequestForApi(
+  api: DataSourceApi,
+  current: RemoteDataSourceRequest
+): RemoteDataSourceRequest {
+  const entries = (api.params ?? []).flatMap(param => {
+    const value = current.params?.[param.name] ?? param.defaultValue;
+
+    return value === undefined ? [] : [[param.name, value] as const];
+  });
+  const params: Record<string, DynamicValue> | undefined = entries.length > 0 ? Object.fromEntries(entries) : undefined;
+
+  return withRequestParams({
+    resource: api.resource,
+    action: api.action,
+    ...api.version !== undefined && { version: api.version }
+  }, params);
+}
+
+export interface CatalogRemoteRequestEditorProps {
+  request: RemoteDataSourceRequest;
+  /**
+   * Called when the designer selects a catalog entry. Defaults to committing
+   * `buildRequestForApi(api, request)` through `onChange`. Option-source
+   * editors override this so they commit the API's `mapping` atomically with
+   * the request.
+   */
+  onPickApi?: (api: DataSourceApi, nextRequest: RemoteDataSourceRequest) => void;
+  onChange: (request: RemoteDataSourceRequest) => void;
+  /**
+   * Extra summary lines rendered beneath the picked catalog API's endpoint
+   * (e.g. option mapping summary or declared return fields).
+   */
+  pickedSummaryExtra?: (api: DataSourceApi) => ReactNode;
+  /**
+   * Extra section rendered between endpoint fields and params in custom mode
+   * (e.g. option field mapping for remote option sources).
+   */
+  customExtra?: ReactNode;
+  /**
+   * Show declared return fields (`api.fields`) in the picked API summary.
+   */
+  showDeclaredFields?: boolean;
+}
+
+/**
+ * Shared catalog-backed remote request editor used by both remote option
+ * sources and `api_call` actions. Leads with a grouped searchable API picker
+ * when the host supplies `dataSourceApis`, keeping "自定义接口" (and hand-typed
+ * fallback when no catalog exists) for endpoints outside the catalog.
+ */
+export function CatalogRemoteRequestEditor({
+  customExtra,
+  onChange,
+  onPickApi,
+  pickedSummaryExtra,
+  request,
+  showDeclaredFields = false
+}: CatalogRemoteRequestEditorProps): ReactElement {
+  const apis = useDataSourceApis();
+  const picked = findDataSourceApi(apis, request);
+  // Set when the designer explicitly chooses to type a request by hand: a blank
+  // request or one still matching a catalog entry would otherwise read as
+  // catalog-picked.
+  const [customChosen, setCustomChosen] = useState(false);
+  const blank = request.resource.length === 0 && request.action.length === 0;
+  const custom = apis.length === 0 || customChosen || (picked === undefined && !blank);
+
+  const handlePick = (value: unknown): void => {
+    if (value === CUSTOM_API) {
+      setCustomChosen(true);
+      return;
+    }
+
+    const api = apis.find(candidate => endpointKey(candidate) === value);
+
+    if (api !== undefined) {
+      setCustomChosen(false);
+      const nextRequest = buildRequestForApi(api, request);
+
+      if (onPickApi === undefined) {
+        onChange(nextRequest);
+      } else {
+        onPickApi(api, nextRequest);
+      }
+    }
+  };
+
+  return (
+    <div css={requestEditorCss}>
+      {apis.length > 0
+        ? (
+            <Select
+              aria-label="接口"
+              options={buildCatalogApiOptions(apis)}
+              placeholder="选择接口"
+              showSearch={{ optionFilterProp: ["label", "title"] }}
+              style={selectFullWidth}
+              value={custom ? CUSTOM_API : picked === undefined ? undefined : endpointKey(picked)}
+              optionRender={option => (
+                <span css={apiOptionCss}>
+                  <span>{option.label}</span>
+                  <span css={option.value === CUSTOM_API ? apiOptionHintCss : apiEndpointCss}>{option.data.title}</span>
+                </span>
+              )}
+              onChange={handlePick}
+            />
+          )
+        : null}
+
+      {custom
+        ? (
+            <>
+              <RequestEndpointFields request={request} onChange={onChange} />
+              {customExtra}
+              <RequestParamsEditor params={request.params} onChange={params => onChange(withRequestParams(request, params))} />
+            </>
+          )
+        : null}
+
+      {!custom && picked !== undefined
+        ? (
+            <>
+              <span css={apiSummaryCss}>
+                {picked.description === undefined ? null : <span>{picked.description}</span>}
+                <span css={apiEndpointCss}>{describeEndpoint(picked)}</span>
+                {pickedSummaryExtra?.(picked)}
+
+                {showDeclaredFields && picked.fields !== undefined && picked.fields.length > 0
+                  ? <span>{`返回字段：${picked.fields.map(field => field.label).join("、")}`}</span>
+                  : null}
+              </span>
+
+              <RequestParamsEditor
+                declared={picked.params}
+                params={request.params}
+                onChange={params => onChange(withRequestParams(request, params))}
+              />
+            </>
+          )
+        : null}
+    </div>
+  );
+}
+
+/**
+ * Hand-entered endpoint plus its parameters (or catalog-backed when a host
+ * catalog is provided via `DataSourceApisProvider`).
  */
 export function RemoteRequestEditor({ onChange, request }: RemoteRequestEditorProps): ReactElement {
   return (

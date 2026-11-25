@@ -1,17 +1,29 @@
-import type { FieldLinkage, PresentationLayer } from "../../types";
+import type {
+  Block,
+  FieldLinkage,
+  FieldLinkageRule,
+  FieldOptionSource,
+  FormDataSource,
+  FormField,
+  PresentationLayer
+} from "../../types";
 import type { ScopeKeyBucket } from "../keys";
 
 import { collectBlocksKeysByScope, collectSubtreeKeysByScope } from "../keys";
+import { getActionDynamicValues } from "../linkage/action-descriptors";
+import { leafSourceFormKey } from "../linkage/scope";
 import { hasConditionTriggeredShow } from "../linkage/shape";
+import { isRecord } from "../validation";
 import { removeBlock, updateNode } from "./mutate";
-import { pruneFormLinkageForRootBucket, pruneScopedReferences } from "./reconcile";
-import { findNode, findScope, nodeLabel, walkNodes } from "./walk";
+import { pruneDataSourcesKeyReferences, pruneFormLinkageForRootBucket, pruneScopedReferences } from "./reconcile";
+import { findNode, findScope, isLeafField, isRootScope, nodeLabel, walkNodes } from "./walk";
 
 export interface RemovalImpactOwner {
   ownerId: string;
   ownerLabel: string;
   /**
-   * Rules this surviving owner loses to the reference prune.
+   * Number of affected items (removed rules, removed write assignments, or
+   * cleared references) owned by this surviving block.
    */
   count: number;
 }
@@ -27,6 +39,16 @@ export interface RemovalImpact {
    */
   removedRules: RemovalImpactOwner[];
   /**
+   * Surviving owners that lose `set_fields` write assignments while the
+   * enclosing rule survives.
+   */
+  removedAssignments: RemovalImpactOwner[];
+  /**
+   * Surviving owners whose dynamic-value references (in surviving rules or
+   * inline remote option sources) will be cleared to empty.
+   */
+  clearedReferences: RemovalImpactOwner[];
+  /**
    * Surviving fields the removal leaves default-hidden with no `show` rule —
    * permanently invisible at runtime.
    */
@@ -35,16 +57,41 @@ export interface RemovalImpact {
    * Form-level (pc root scope) rules the prune will drop.
    */
   formRulesRemoved: number;
+  /**
+   * Form-level (pc root scope) surviving rules' dropped `set_fields` write items.
+   */
+  formAssignmentsRemoved: number;
+  /**
+   * Form-level (pc root scope) surviving rules' cleared reference slots.
+   */
+  formReferencesCleared: number;
+  /**
+   * Form-global remote data sources whose bound reference parameters will be
+   * cleared when PC root-scope keys are removed.
+   */
+  clearedDataSourceReferences: RemovalImpactField[];
 }
 
 export function hasRemovalImpact(impact: RemovalImpact): boolean {
-  return impact.removedRules.length > 0 || impact.unreachable.length > 0 || impact.formRulesRemoved > 0;
+  return impact.removedRules.length > 0
+    || impact.removedAssignments.length > 0
+    || impact.clearedReferences.length > 0
+    || impact.unreachable.length > 0
+    || impact.formRulesRemoved > 0
+    || impact.formAssignmentsRemoved > 0
+    || impact.formReferencesCleared > 0
+    || impact.clearedDataSourceReferences.length > 0;
 }
 
 const EMPTY_IMPACT: RemovalImpact = {
   removedRules: [],
+  removedAssignments: [],
+  clearedReferences: [],
   unreachable: [],
-  formRulesRemoved: 0
+  formRulesRemoved: 0,
+  formAssignmentsRemoved: 0,
+  formReferencesCleared: 0,
+  clearedDataSourceReferences: []
 };
 
 /**
@@ -53,10 +100,15 @@ const EMPTY_IMPACT: RemovalImpact = {
  * store runs, then diffing the before/after trees. Pure, so the editor can
  * show a truthful confirmation before committing the destructive action.
  *
- * `formLinkage` is the form-level linkage to consider; pass it only when the
- * removal happens on the presentation it resolves against (the pc layer).
+ * `formLinkage` and `dataSources` resolve against the PC root scope only; pass
+ * them when the removal happens on the PC presentation.
  */
-export function collectRemovalImpact(layer: PresentationLayer, nodeId: string, formLinkage?: FieldLinkage): RemovalImpact {
+export function collectRemovalImpact(
+  layer: PresentationLayer,
+  nodeId: string,
+  formLinkage?: FieldLinkage,
+  dataSources?: readonly FormDataSource[]
+): RemovalImpact {
   const node = findNode(layer, nodeId);
 
   if (!node) {
@@ -68,7 +120,13 @@ export function collectRemovalImpact(layer: PresentationLayer, nodeId: string, f
 
   // The same composite removal-prune the store commits, so this preview can
   // never drift from the real delete: drop the subtree, then prune references.
-  return compareRemoval(layer, pruneScopedReferences(removeBlock(layer, nodeId), buckets), buckets, formLinkage);
+  return compareRemoval(
+    layer,
+    pruneScopedReferences(removeBlock(layer, nodeId), buckets),
+    buckets,
+    formLinkage,
+    dataSources
+  );
 }
 
 /**
@@ -86,7 +144,8 @@ export function collectTabRemovalImpact(
   layer: PresentationLayer,
   tabsId: string,
   tabId: string,
-  formLinkage?: FieldLinkage
+  formLinkage?: FieldLinkage,
+  dataSources?: readonly FormDataSource[]
 ): RemovalImpact {
   const removal = removeTabBody(layer, tabsId, tabId);
 
@@ -94,7 +153,13 @@ export function collectTabRemovalImpact(
     return EMPTY_IMPACT;
   }
 
-  return compareRemoval(layer, pruneScopedReferences(removal.layer, removal.buckets), removal.buckets, formLinkage);
+  return compareRemoval(
+    layer,
+    pruneScopedReferences(removal.layer, removal.buckets),
+    removal.buckets,
+    formLinkage,
+    dataSources
+  );
 }
 
 /**
@@ -128,6 +193,85 @@ export function removeTabBody(
   };
 }
 
+function isRemovedReference(value: unknown, removedKeys: ReadonlySet<string>): boolean {
+  if (!isRecord(value) || value.kind !== "reference" || typeof value.path !== "string") {
+    return false;
+  }
+
+  const key = leafSourceFormKey(value.path);
+
+  return key !== undefined && removedKeys.has(key);
+}
+
+function countClearedOptionSourceReferences(
+  source: FieldOptionSource | undefined,
+  removedKeys: ReadonlySet<string>
+): number {
+  if (source?.kind !== "remote" || source.request.params === undefined) {
+    return 0;
+  }
+
+  let cleared = 0;
+
+  for (const value of Object.values(source.request.params)) {
+    if (isRemovedReference(value, removedKeys)) {
+      cleared += 1;
+    }
+  }
+
+  return cleared;
+}
+
+function countClearedNodeOptionSourceReferences(node: Block, removedKeys: ReadonlySet<string>): number {
+  if (isLeafField(node)) {
+    const field = node as FormField & { dataSource?: FieldOptionSource };
+
+    return countClearedOptionSourceReferences(field.dataSource, removedKeys);
+  }
+
+  if (node.type === "subform" && node.rows?.mode === "fixed") {
+    return countClearedOptionSourceReferences(node.rows.source, removedKeys);
+  }
+
+  return 0;
+}
+
+/**
+ * Count the `set_fields` write items removed and the surviving dynamic-value
+ * reference slots cleared inside one SURVIVING rule. Rules dropped wholesale
+ * are already reported under `removedRules` / `formRulesRemoved` and are not
+ * double-counted here.
+ */
+function countSurvivingRuleImpacts(
+  rule: FieldLinkageRule,
+  removedKeys: ReadonlySet<string>
+): { assignmentsRemoved: number; referencesCleared: number } {
+  let assignmentsRemoved = 0;
+  let referencesCleared = 0;
+
+  for (const action of rule.actions) {
+    if (action.type === "set_fields") {
+      for (const assignment of action.assignments) {
+        if (removedKeys.has(assignment.targetKey)) {
+          assignmentsRemoved += 1;
+        } else if (isRemovedReference(assignment.value, removedKeys)) {
+          referencesCleared += 1;
+        }
+      }
+
+      continue;
+    }
+
+    for (const slot of getActionDynamicValues(action)) {
+      if (isRemovedReference(slot.value, removedKeys)) {
+        referencesCleared += 1;
+      }
+    }
+  }
+
+  return { assignmentsRemoved, referencesCleared };
+}
+
 /**
  * Diff a before/after tree pair into the impact the designer is shown. Shared
  * by every removal shape so a new one cannot describe its consequences
@@ -137,29 +281,74 @@ function compareRemoval(
   layer: PresentationLayer,
   after: PresentationLayer,
   buckets: ScopeKeyBucket[],
-  formLinkage: FieldLinkage | undefined
+  formLinkage: FieldLinkage | undefined,
+  dataSources: readonly FormDataSource[] | undefined
 ): RemovalImpact {
-  const beforeRules = collectRulesByOwner(layer);
+  const keysByScope = new Map<string, ReadonlySet<string>>();
+
+  for (const bucket of buckets) {
+    keysByScope.set(bucket.scope.join("/"), bucket.keys);
+  }
+
+  const beforeNodes = collectNodesWithScope(layer);
   const afterRules = collectRulesByOwner(after);
   const removedRules: RemovalImpactOwner[] = [];
+  const removedAssignments: RemovalImpactOwner[] = [];
+  const clearedReferences: RemovalImpactOwner[] = [];
 
-  for (const [ownerId, info] of beforeRules) {
+  for (const [ownerId, info] of beforeNodes) {
     if (findNode(after, ownerId) === undefined) {
-      // The owner died with the subtree — its rules are part of the removal
-      // itself, not collateral the designer needs a warning about.
+      // The owner died with the subtree — its rules and refs are part of the
+      // removal itself, not collateral the designer needs a warning about.
       continue;
     }
 
+    const removedKeys = keysByScope.get(info.scopeId);
+
+    if (removedKeys === undefined || removedKeys.size === 0) {
+      continue;
+    }
+
+    const rules = info.node.linkage?.rules ?? [];
     // An owner whose every rule was pruned no longer appears in the after
     // map at all, so missing means "all lost", not "untouched".
     const survivorIds = afterRules.get(ownerId)?.ruleIds ?? new Set<string>();
-    const lost = [...info.ruleIds].filter(ruleId => !survivorIds.has(ruleId)).length;
+    let lostRules = 0;
+    let lostAssignments = 0;
+    let lostReferences = countClearedNodeOptionSourceReferences(info.node, removedKeys);
 
-    if (lost > 0) {
+    for (const rule of rules) {
+      if (survivorIds.has(rule.id)) {
+        const partial = countSurvivingRuleImpacts(rule, removedKeys);
+
+        lostAssignments += partial.assignmentsRemoved;
+        lostReferences += partial.referencesCleared;
+      } else {
+        lostRules += 1;
+      }
+    }
+
+    if (lostRules > 0) {
       removedRules.push({
         ownerId,
         ownerLabel: info.label,
-        count: lost
+        count: lostRules
+      });
+    }
+
+    if (lostAssignments > 0) {
+      removedAssignments.push({
+        ownerId,
+        ownerLabel: info.label,
+        count: lostAssignments
+      });
+    }
+
+    if (lostReferences > 0) {
+      clearedReferences.push({
+        ownerId,
+        ownerLabel: info.label,
+        count: lostReferences
       });
     }
   }
@@ -168,17 +357,70 @@ function compareRemoval(
   const unreachable = collectUnreachableHidden(after).filter(field => !previouslyUnreachable.has(field.id));
 
   let formRulesRemoved = 0;
+  let formAssignmentsRemoved = 0;
+  let formReferencesCleared = 0;
+  const rootBucket = buckets.find(bucket => isRootScope(bucket.scope));
 
-  if (formLinkage?.rules !== undefined) {
+  if (formLinkage?.rules !== undefined && rootBucket !== undefined && rootBucket.keys.size > 0) {
     const pruned = pruneFormLinkageForRootBucket(formLinkage, buckets);
-    formRulesRemoved = formLinkage.rules.length - (pruned.rules?.length ?? 0);
+    const survivorIds = new Set((pruned.rules ?? []).map(rule => rule.id));
+
+    for (const rule of formLinkage.rules) {
+      if (!survivorIds.has(rule.id)) {
+        formRulesRemoved += 1;
+        continue;
+      }
+
+      const partial = countSurvivingRuleImpacts(rule, rootBucket.keys);
+
+      formAssignmentsRemoved += partial.assignmentsRemoved;
+      formReferencesCleared += partial.referencesCleared;
+    }
+  }
+
+  const clearedDataSourceReferences: RemovalImpactField[] = [];
+
+  if (dataSources !== undefined && dataSources.length > 0 && rootBucket !== undefined && rootBucket.keys.size > 0) {
+    const prunedSources = pruneDataSourcesKeyReferences([...dataSources], buckets);
+
+    if (prunedSources !== undefined) {
+      for (const [index, source] of dataSources.entries()) {
+        if (prunedSources[index] !== source) {
+          clearedDataSourceReferences.push({
+            id: source.id,
+            label: source.name.trim().length > 0 ? source.name.trim() : source.id
+          });
+        }
+      }
+    }
   }
 
   return {
     removedRules,
+    removedAssignments,
+    clearedReferences,
     unreachable,
-    formRulesRemoved
+    formRulesRemoved,
+    formAssignmentsRemoved,
+    formReferencesCleared,
+    clearedDataSourceReferences
   };
+}
+
+function collectNodesWithScope(
+  layer: PresentationLayer
+): Map<string, { label: string; node: Block; scopeId: string }> {
+  const nodes = new Map<string, { label: string; node: Block; scopeId: string }>();
+
+  walkNodes(layer, (node, scope) => {
+    nodes.set(node.id, {
+      label: nodeLabel(node) ?? node.id,
+      node,
+      scopeId: scope.join("/")
+    });
+  });
+
+  return nodes;
 }
 
 function collectRulesByOwner(layer: PresentationLayer): Map<string, { label: string; ruleIds: Set<string> }> {

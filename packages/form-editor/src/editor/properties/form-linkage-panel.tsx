@@ -34,13 +34,18 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
   const rules = schema.linkage?.rules ?? [];
   const {
     dataSourceOptions,
+    dataSources,
     fieldOptions: sourceOptions,
     issuesByRule,
-    targetOptions
+    scopeFieldsByKey,
+    targetOptions,
+    variables,
+    writableTargets
   } = useLinkageEditorModel({
     layer: pcLayer,
     nodeId: null,
     dataSources: schema.dataSources,
+    variables: schema.variables,
     formLinkage: schema.linkage
   });
   // A `condition` trigger with no comparable root-scope source field yields an
@@ -57,13 +62,18 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
       allowStateActions={false}
       createRule={() => createFormRule(sourceOptions[0]?.value)}
       dataSourceOptions={dataSourceOptions}
+      dataSources={dataSources}
       issuesByRule={issuesByRule}
       isTargetKeyed={false}
       noun="事件"
       rules={rules}
+      scopeFieldsByKey={scopeFieldsByKey}
+      scopeNodeId={null}
       sourceOptions={sourceOptions}
       targetOptions={targetOptions}
       triggerKinds={triggerKinds}
+      variables={variables}
+      writableTargets={writableTargets}
       onChange={commit}
     />
   );

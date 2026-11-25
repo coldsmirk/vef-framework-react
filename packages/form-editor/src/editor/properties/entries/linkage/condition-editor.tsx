@@ -1,18 +1,20 @@
-import type { SelectProps } from "@vef-framework-react/components";
 import type { FC } from "react";
 
 import type {
+  FormVariable,
   LinkageCondition,
   LinkageConditionGroup,
   LinkageConditionLeaf
 } from "../../../../types";
+import type { ReferenceScope } from "../../reference-scope";
 import type { SourceFieldOption } from "./options";
 
 import { Button, Input, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { EditorIcon } from "../../../../icons";
 import { useContextSources } from "../../../context-sources";
+import { ReferencePicker } from "../../reference-scope";
 import { coerceToString } from "../coerce";
 import { ExpressionInput } from "./expression-input";
 import {
@@ -37,7 +39,6 @@ import {
   conditionRowDeleteCss,
   conditionRowFullCss,
   expressionHeaderLabelCss,
-  missingSourceLabelCss,
   selectStyle
 } from "./styles";
 
@@ -48,9 +49,16 @@ import {
  */
 const SOURCE_POPUP_WIDTH = 240;
 
+const EMPTY_VARIABLES: readonly FormVariable[] = [];
+
 export interface ConditionEditorProps {
   condition: LinkageCondition;
   sourceOptions: SourceFieldOption[];
+  /**
+   * Form-global variables offered alongside fields and host system variables
+   * through the shared {@link ReferencePicker}.
+   */
+  variables?: readonly FormVariable[];
   /**
    * The owning block's data-binding key. The expression → visual switch
    * seeds its first condition with another field when one exists — a
@@ -71,6 +79,7 @@ export interface ConditionEditorProps {
 export const ConditionEditor: FC<ConditionEditorProps> = ({
   condition,
   sourceOptions,
+  variables = EMPTY_VARIABLES,
   selfKey,
   onChange
 }) => {
@@ -93,6 +102,7 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
         condition={condition}
         depth={0}
         sourceOptions={sourceOptions}
+        variables={variables}
         onChange={onChange}
         onSwitchToExpression={() => onChange(createExpression())}
       />
@@ -110,6 +120,7 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
     <GroupConditionEditor
       depth={0}
       sourceOptions={sourceOptions}
+      variables={variables}
       condition={{
         kind: "group",
         logic: "all",
@@ -197,6 +208,7 @@ interface GroupConditionEditorProps {
   condition: LinkageConditionGroup;
   depth: number;
   sourceOptions: SourceFieldOption[];
+  variables: readonly FormVariable[];
   /**
    * Switch the entire root condition into expression mode. Only the depth-0
    * group exposes this — nested groups do not (mode-switching mid-tree
@@ -217,6 +229,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
   condition,
   depth,
   sourceOptions,
+  variables,
   onChange,
   onRemoveSelf,
   onSwitchToExpression
@@ -320,6 +333,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
               condition={child}
               depth={depth + 1}
               sourceOptions={sourceOptions}
+              variables={variables}
               onChange={next => updateChild(index, next)}
               onRemoveSelf={() => removeChild(index)}
             />
@@ -358,6 +372,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
             key={child.id ?? index}
             condition={child}
             sourceOptions={sourceOptions}
+            variables={variables}
             onChange={next => updateChild(index, next)}
             onRemove={() => removeChild(index)}
           />
@@ -398,6 +413,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
 interface LeafConditionEditorProps {
   condition: LinkageConditionLeaf;
   sourceOptions: SourceFieldOption[];
+  variables: readonly FormVariable[];
   onChange: (next: LinkageConditionLeaf) => void;
   onRemove: () => void;
 }
@@ -405,51 +421,33 @@ interface LeafConditionEditorProps {
 const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
   condition,
   sourceOptions,
+  variables,
   onChange,
   onRemove
 }) => {
   const contextSources = useContextSources();
   const showValueInput = operatorNeedsValue(condition.operator);
-  const hasSource = condition.sourceKey.length > 0;
-  // A dangling sourceKey (its field was deleted or renamed elsewhere, or a
-  // context source no longer declared) keeps its raw key visible with an
-  // explicit "未找到" affordance instead of silently rendering the bare string
-  // as if it resolved.
-  const sourceUnresolved = hasSource
-    && sourceOptions.every(option => option.value !== condition.sourceKey)
-    && contextSources.every(source => source.key !== condition.sourceKey);
-  const danglingOptions = sourceUnresolved
-    ? [
-        {
-          value: condition.sourceKey,
-          label: <span css={missingSourceLabelCss}>{`${condition.sourceKey}（未找到字段）`}</span>
-        }
-      ]
-    : [];
-  // With no declared context sources the picker stays a flat field list; with
-  // them it groups fields and host context so the two namespaces read apart.
-  const leafSourceOptions: SelectProps["options"] = contextSources.length === 0
-    ? [...sourceOptions, ...danglingOptions]
-    : [
-        { label: "表单字段", options: sourceOptions },
-        {
-          label: "系统变量",
-          options: contextSources.map(source => {
-            return { value: source.key, label: source.label };
-          })
-        },
-        ...danglingOptions
-      ];
+  // Shared candidate assembly with DynamicValueEditor's ReferencePicker: both
+  // surfaces expose the exact same fields, form variables, and system variables
+  // (conditions never see step outputs, so `allowSteps` stays false).
+  const referenceScope = useMemo<ReferenceScope>(() => {
+    return {
+      fieldOptions: sourceOptions,
+      variables,
+      contextSources,
+      allowSteps: false
+    };
+  }, [sourceOptions, variables, contextSources]);
 
   return (
     <div css={conditionRowCss}>
-      <Select
-        options={leafSourceOptions}
+      <ReferencePicker
+        flatSingleFieldGroup
         placeholder="选择源字段"
         popupMatchSelectWidth={SOURCE_POPUP_WIDTH}
-        style={selectStyle}
-        value={hasSource ? condition.sourceKey : undefined}
-        onChange={value => onChange({ ...condition, sourceKey: String(value) })}
+        scope={referenceScope}
+        value={condition.sourceKey}
+        onChange={sourceKey => onChange({ ...condition, sourceKey })}
       />
 
       <Select

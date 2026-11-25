@@ -129,6 +129,6 @@ describe("FormLinkagePanel", () => {
       ]
     });
 
-    expect(screen.getByText("variable 尚未填写")).toBeInTheDocument();
+    expect(screen.getByText("步骤 1：尚未填写目标变量名")).toBeInTheDocument();
   });
 });

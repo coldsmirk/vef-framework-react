@@ -1,13 +1,15 @@
 import type { FC } from "react";
 
-import type { EntryComponentProps, FieldLinkage, FieldLinkageDefaults } from "../../../../types";
+import type { EntryComponentProps, FieldDefinition, FieldLinkage, FieldLinkageDefaults, FormField } from "../../../../types";
 
 import { Switch } from "@vef-framework-react/components";
 import { useMemo } from "react";
 
 import { isKeyedField } from "../../../../engine/keys";
 import { FIELD_TRIGGER_KINDS } from "../../../../engine/linkage";
+import { useOptionalFieldRegistry } from "../../../../store/engine-provider";
 import { useCurrentLayer } from "../../../../store/form-store";
+import { usePreviewRuntime } from "../../../preview-runtime-context";
 import { createRule, normalizeLinkage } from "./mutators";
 import { seedSourceKey } from "./options";
 import { RuleListEditor } from "./rule-list-editor";
@@ -22,12 +24,42 @@ import {
   rootCss,
   titleCss
 } from "./styles";
+import { buildFieldLinkageTemplates } from "./templates";
 import { useLinkageEditorModel } from "./use-linkage-editor-model";
 
 export type DefaultsKey = keyof FieldLinkageDefaults;
 
 function readLinkage(value: unknown): FieldLinkage {
   return value && typeof value === "object" ? value as FieldLinkage : {};
+}
+
+/**
+ * Plain-Chinese description of the `commit` ("输入完成时") trigger tailored to
+ * the control's actual runtime commit semantics, instead of a one-size-fits-all
+ * "回车或离开".
+ */
+export function commitHintForField(field: FormField, definition: FieldDefinition | undefined): string {
+  if (field.type === "textarea") {
+    return "离开输入框且内容变化时触发";
+  }
+
+  if (definition?.config.commit === "entry" || field.type === "textfield" || field.type === "number") {
+    return "按回车或离开输入框且内容变化时触发";
+  }
+
+  if (field.type === "switch") {
+    return "切换开关状态后触发";
+  }
+
+  if (field.type === "upload") {
+    return "文件变更后触发";
+  }
+
+  if (field.type === "code-editor") {
+    return "内容变化后触发";
+  }
+
+  return "每次选择后触发";
 }
 
 export const LinkageRulesEntry: FC<EntryComponentProps> = ({
@@ -37,22 +69,28 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   onChange
 }) => {
   const layer = useCurrentLayer();
+  const registry = useOptionalFieldRegistry();
+  const { serviceCapabilities } = usePreviewRuntime();
   const linkage = readLinkage(entry.read(field));
   const rules = linkage.rules ?? [];
   const isTargetKeyed = isKeyedField(field);
-  // Field options, data-source options, and deferred rule diagnostics —
-  // resolved in the target field's own value scope (a subform field references
-  // its row siblings, not the outer form). Condition sources and `set_fields`
-  // targets resolve from the same scope.
+  // Field options, data-source options, variables, and deferred rule
+  // diagnostics — resolved in the target field's own value scope (a subform
+  // field references its row siblings, not the outer form).
   const {
     dataSourceOptions,
+    dataSources,
     fieldOptions,
     issuesByRule,
-    targetOptions
+    scopeFieldsByKey,
+    targetOptions,
+    variables,
+    writableTargets
   } = useLinkageEditorModel({
     layer,
     nodeId: field.id,
-    dataSources: schema.dataSources
+    dataSources: schema.dataSources,
+    variables: schema.variables
   });
   // Seed a new rule's condition off a SIBLING so it reads naturally; a field
   // whose only in-scope source is itself falls back to an edge rule rather than
@@ -60,6 +98,14 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
   const seedKey = seedSourceKey(fieldOptions, selfKey);
+  const commitHint = useMemo(
+    () => commitHintForField(field, registry?.get(field.type)),
+    [field, registry]
+  );
+  const templates = useMemo(
+    () => buildFieldLinkageTemplates({ field, hasRequest: serviceCapabilities?.hasRequest }),
+    [field, serviceCapabilities?.hasRequest]
+  );
   // Drop trigger kinds the target can't actually use, rather than letting an
   // author configure a silently-inert (and validator-rejected) rule:
   // - `change` and `commit` ride a keyed field's value edits, so a non-keyed
@@ -112,18 +158,26 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
 
       <RuleListEditor
         allowStateActions
+        commitHint={commitHint}
         // No sibling source seeds an edge rule; the edge must suit the target,
         // so pass whether it's keyed (a non-keyed block can't fire `change`).
         createRule={() => createRule(seedKey, isTargetKeyed)}
         dataSourceOptions={dataSourceOptions}
+        dataSources={dataSources}
         issuesByRule={issuesByRule}
         isTargetKeyed={isTargetKeyed}
         noun="联动"
+        ownerField={field}
         rules={rules}
+        scopeFieldsByKey={scopeFieldsByKey}
+        scopeNodeId={field.id}
         selfKey={selfKey}
         sourceOptions={fieldOptions}
         targetOptions={targetOptions}
+        templates={templates}
         triggerKinds={triggerKinds}
+        variables={variables}
+        writableTargets={writableTargets}
         onChange={next => commit({ ...linkage, rules: next })}
       />
     </div>

@@ -141,10 +141,10 @@ describe("ConditionEditor", () => {
       expect(lastCondition(onCommit)).toEqual(group([leaf({ value: "10" })]));
     });
 
-    it("renders a dangling source key with a 未找到字段 affordance", () => {
+    it("renders a dangling source key with a 未识别 affordance", () => {
       render(<Harness initial={group([leaf({ sourceKey: "ghost" })])} onCommit={vi.fn()} />);
 
-      expect(screen.getByText("ghost（未找到字段）")).toBeInTheDocument();
+      expect(screen.getByText("ghost（未识别）")).toBeInTheDocument();
     });
   });
 

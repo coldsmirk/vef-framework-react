@@ -1,87 +1,448 @@
-import type { FC, ReactElement } from "react";
+import type { ChangeEvent, FC, ReactElement } from "react";
 
-import type { FieldAssignment, FieldLinkageAction, LinkageActionType, LinkageAlertLevel, SelectRecordWhenNone } from "../../../../types";
+import type { PriorStepSchema, WritableTargetField } from "../../../../engine/linkage";
+import type { ValidationSeverity } from "../../../../engine/validation";
+import type {
+  ActionErrorPolicy,
+  FieldLinkageAction,
+  FormDataSource,
+  FormField,
+  KeyedFormField,
+  LinkageActionType,
+  LinkageAlertLevel
+} from "../../../../types";
+import type { ReferenceScope } from "../../reference-scope";
+import type { ActionSummaryContext } from "./action-summary";
 import type { OptionItem, SourceFieldOption } from "./options";
 
 import { css } from "@emotion/react";
 import { Button, CodeEditor, globalCssVars, Input, Select } from "@vef-framework-react/components";
-import { useMemo } from "react";
+import { useSortable } from "@vef-framework-react/core";
+import { useMemo, useState } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
+import { collectStepOutputNames, isEffectAction } from "../../../../engine/linkage";
+import { isValidIdentifier } from "../../../../engine/validation";
 import { EditorIcon } from "../../../../icons";
 import { DynamicValueEditor as ActionValueEditor } from "../../dynamic-value-editor";
-import { RemoteRequestEditor } from "../../remote-request-editor";
+import { ReferenceScopeProvider } from "../../reference-scope";
+import { CatalogRemoteRequestEditor } from "../../remote-request-editor";
+import { formatActionSummaryLine, summarizeAction } from "./action-summary";
 import { NO_COMPLETION_SETUP } from "./expression-input";
-import { createActionFor } from "./mutators";
 import { actionLabelFor, alertLevelOptions, isLinkageActionType } from "./options";
+import { SelectRecordEditor } from "./select-record-editor";
+import { SetFieldsEditor } from "./set-fields-editor";
 import {
   actionCardCss,
   actionDeleteCss,
-  actionHeaderCss,
-  addInlineButtonCss,
   codeEditorWrapperCss,
   selectStyle
 } from "./styles";
 
-const assignmentRowCss = css({
+const ON_ERROR_OPTIONS: Array<OptionItem<ActionErrorPolicy>> = [
+  { value: "stop", label: "失败时终止后续动作（默认）" },
+  { value: "continue", label: "忽略错误继续后续动作" }
+];
+
+const stepCardCss = css({
   display: "flex",
   flexDirection: "column",
-  gap: 6,
-  padding: 8,
   border: `1px solid ${globalCssVars.colorBorderSecondary}`,
   borderRadius: globalCssVars.borderRadius,
-  background: globalCssVars.colorBgContainer
+  background: globalCssVars.colorFillQuaternary,
+  transition: `border-color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, box-shadow ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`
 });
 
-const assignmentHeaderCss = css({
+const stepCardHighlightedCss = css({
+  borderColor: globalCssVars.colorPrimary,
+  boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBg}`
+});
+
+const stepCardDraggingCss = css({
+  background: globalCssVars.colorBgElevated,
+  boxShadow: globalCssVars.shadowLg
+});
+
+const stepHeaderCss = css({
   display: "flex",
   alignItems: "center",
-  gap: 6
+  gap: 4,
+  padding: "6px 8px",
+  minHeight: 38
 });
 
-const WHEN_NONE_OPTIONS: Array<OptionItem<SelectRecordWhenNone>> = [
-  { value: "stop", label: "无匹配时终止后续动作" },
-  { value: "continue", label: "无匹配时继续（结果为空）" }
-];
+const dragHandleCss = css({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 20,
+  height: 22,
+  flexShrink: 0,
+  borderRadius: globalCssVars.borderRadiusSm,
+  color: globalCssVars.colorTextTertiary,
+  cursor: "grab",
+  transition: `color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
+
+  "&:hover": {
+    color: globalCssVars.colorText,
+    background: globalCssVars.colorFillTertiary
+  },
+
+  "&:focus-visible": {
+    outline: "none",
+    color: globalCssVars.colorText,
+    background: globalCssVars.colorFillTertiary,
+    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
+  },
+
+  "&:active": {
+    cursor: "grabbing"
+  },
+
+  "& > svg": {
+    width: 14,
+    height: 14
+  }
+});
+
+const toggleSummaryCss = css({
+  flex: 1,
+  minWidth: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "2px 4px",
+  border: "none",
+  borderRadius: globalCssVars.borderRadiusSm,
+  background: "transparent",
+  color: globalCssVars.colorText,
+  textAlign: "left",
+  cursor: "pointer",
+  transition: `background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
+
+  "&:hover": {
+    background: globalCssVars.colorFillTertiary
+  },
+
+  "&:focus-visible": {
+    outline: "none",
+    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
+  }
+});
+
+const chevronCss = css({
+  display: "inline-flex",
+  flexShrink: 0,
+  color: globalCssVars.colorTextTertiary,
+
+  "& > svg": {
+    width: 14,
+    height: 14
+  }
+});
+
+const stepIndexBadgeCss = css({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 18,
+  height: 18,
+  padding: "0 4px",
+  borderRadius: 9,
+  background: globalCssVars.colorFillSecondary,
+  fontSize: 11,
+  fontWeight: 600,
+  fontVariantNumeric: "tabular-nums",
+  color: globalCssVars.colorTextSecondary,
+  flexShrink: 0
+});
+
+const summaryTextCss = css({
+  flex: 1,
+  minWidth: 0,
+  fontSize: globalCssVars.fontSizeSm,
+  fontWeight: 500,
+  lineHeight: 1.4,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+});
+
+const summaryIncompleteCss = css({
+  color: globalCssVars.colorTextSecondary
+});
+
+const issueDotCss = css({
+  width: 6,
+  height: 6,
+  borderRadius: "50%",
+  flexShrink: 0
+});
+
+const issueErrorDotCss = css({
+  background: globalCssVars.colorError
+});
+
+const issueWarningDotCss = css({
+  background: globalCssVars.colorWarning
+});
+
+const badgeRowCss = css({
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  flexShrink: 0
+});
+
+const continueBadgeCss = css({
+  padding: "1px 6px",
+  borderRadius: 9,
+  background: globalCssVars.colorFillSecondary,
+  fontSize: 11,
+  color: globalCssVars.colorTextSecondary,
+  whiteSpace: "nowrap"
+});
+
+const unsupportedBadgeCss = css({
+  padding: "1px 6px",
+  borderRadius: 9,
+  background: globalCssVars.colorWarningBg,
+  fontSize: 11,
+  color: globalCssVars.colorWarningText,
+  whiteSpace: "nowrap"
+});
+
+const iconButtonCss = css({
+  width: 26,
+  height: 26,
+  padding: 0,
+  flexShrink: 0
+});
+
+const stepBodyCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "8px 10px 10px",
+  borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`
+});
+
+const unsupportedBannerCss = css({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 6,
+  padding: "6px 8px",
+  borderRadius: globalCssVars.borderRadius,
+  background: globalCssVars.colorWarningBg,
+  color: globalCssVars.colorWarningText,
+  fontSize: globalCssVars.fontSizeSm,
+  lineHeight: 1.5
+});
+
+const fieldStackCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 4
+});
+
+const fieldLabelCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary
+});
+
+const fieldErrorCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorErrorText,
+  lineHeight: 1.4
+});
+
+const fieldHintCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  color: globalCssVars.colorTextTertiary,
+  lineHeight: 1.4
+});
+
+const onErrorRowCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  paddingTop: 4,
+  borderTop: `1px dashed ${globalCssVars.colorBorderSecondary}`
+});
+
+export interface OnErrorSelectProps {
+  value: ActionErrorPolicy | undefined;
+  onChange: (next: ActionErrorPolicy) => void;
+}
+
+export function OnErrorSelect({ onChange, value }: OnErrorSelectProps): ReactElement {
+  return (
+    <Select
+      aria-label="失败处理"
+      options={ON_ERROR_OPTIONS}
+      style={selectStyle}
+      value={value ?? "stop"}
+      onChange={next => onChange(next === "continue" ? "continue" : "stop")}
+    />
+  );
+}
+
+interface StepOutputInputProps {
+  value: string;
+  required: boolean;
+  placeholder: string;
+  usedNames: ReadonlySet<string>;
+  onCommit: (nextOutput: string | undefined) => void;
+}
+
+/**
+ * Draft-buffered step output name input for inline editing inside the right
+ * panel. Validates identifier syntax and rule-wide uniqueness on commit; valid
+ * renames propagate to all subsequent `$steps.<old>` references in one step.
+ */
+function StepOutputInput({
+  onCommit,
+  placeholder,
+  required,
+  usedNames,
+  value
+}: StepOutputInputProps): ReactElement {
+  const [draft, setDraft] = useState<string | null>(null);
+  const current = draft ?? value;
+  const trimmed = current.trim();
+
+  let error: string | null = null;
+
+  if (trimmed.length === 0) {
+    if (required) {
+      error = "请填写结果名";
+    }
+  } else if (!isValidIdentifier(trimmed)) {
+    error = "结果名需以字母或下划线开头，仅含字母、数字或下划线";
+  } else if (usedNames.has(trimmed)) {
+    error = `结果名「${trimmed}」与本规则其它步骤重复`;
+  }
+
+  const commit = (): void => {
+    if (draft === null) {
+      return;
+    }
+
+    const next = draft.trim();
+    setDraft(null);
+
+    if (next === value) {
+      return;
+    }
+
+    if (next.length === 0) {
+      if (!required) {
+        onCommit(undefined);
+      }
+
+      return;
+    }
+
+    if (isValidIdentifier(next) && !usedNames.has(next)) {
+      onCommit(next);
+    }
+  };
+
+  return (
+    <div css={fieldStackCss}>
+      <span css={fieldLabelCss}>{required ? "结果名" : "结果名（可选）"}</span>
+
+      <Input
+        aria-label="步骤结果名"
+        placeholder={placeholder}
+        status={error === null ? undefined : "warning"}
+        value={current}
+        onBlur={commit}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(sanitizeKey(event.target.value))}
+        onFocus={() => setDraft(value)}
+        onPressEnter={commit}
+      />
+
+      {error === null
+        ? <span css={fieldHintCss}>改名后将自动更新后续步骤中的引用</span>
+        : <span css={fieldErrorCss}>{error}</span>}
+    </div>
+  );
+}
 
 export interface ActionEditorProps {
   action: FieldLinkageAction;
-  /**
-   * Action types offered for this rule, already filtered by trigger family,
-   * keyed-ness, and wired host services (see `actionOptionsFor`).
-   */
-  availableActions: Array<OptionItem<LinkageActionType>>;
-  /**
-   * Same-scope writable keyed fields, used as `set_fields` targets.
-   */
-  targetOptions: SourceFieldOption[];
-  /**
-   * Form-global data sources by id, used as `refresh_data_source` targets.
-   */
-  dataSourceOptions: SourceFieldOption[];
-  /**
-   * Whether the remove control is shown (a rule keeps at least one action).
-   */
+  actionIndex: number;
+  allActions: readonly FieldLinkageAction[];
+  sortableId: string;
+  expanded: boolean;
+  highlighted: boolean;
+  canReorder: boolean;
   canRemove: boolean;
+  canEditInModal: boolean;
+  issueSeverity: ValidationSeverity | undefined;
+  unsupportedReason: string | null;
+  availableActions: Array<OptionItem<LinkageActionType>>;
+  targetOptions: SourceFieldOption[];
+  writableTargets: readonly WritableTargetField[];
+  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
+  dataSources: readonly FormDataSource[];
+  dataSourceOptions: SourceFieldOption[];
+  ownerField?: FormField;
+  referenceScope: ReferenceScope;
+  priorSteps: readonly PriorStepSchema[];
+  summaryContext: ActionSummaryContext;
+  stepRef?: (node: HTMLDivElement | null) => void;
+  onToggleExpand: () => void;
+  onOpenModal: () => void;
+  onChangeType: (nextType: LinkageActionType) => void;
   onChange: (next: FieldLinkageAction) => void;
+  onRenameOutput: (nextOutput: string | undefined) => void;
   onRemove: () => void;
 }
 
 /**
- * Edits a single action within a rule's action list. Stored actions whose type
- * is omitted from `availableActions` (e.g. `api_call` / `navigate` when the
- * host has not wired that service) stay selectable and editable so opening an
- * existing schema never loses data.
+ * Collapsible, drag-sortable step card for one linkage action. Keeps the whole
+ * sequence scannable in one screen when collapsed (showing a plain-Chinese
+ * summary, `失败继续` / `当前宿主不支持` badges, and a direct modal-edit trigger
+ * for complex steps), and unfolds into the full inline editor when expanded.
  */
 export const ActionEditor: FC<ActionEditorProps> = ({
   action,
+  actionIndex,
+  allActions,
   availableActions,
+  canEditInModal,
   canRemove,
+  canReorder,
   dataSourceOptions,
-  targetOptions,
+  dataSources,
+  expanded,
+  highlighted,
+  issueSeverity,
   onChange,
-  onRemove
+  onChangeType,
+  onOpenModal,
+  onRemove,
+  onRenameOutput,
+  onToggleExpand,
+  ownerField,
+  priorSteps,
+  referenceScope,
+  scopeFieldsByKey,
+  sortableId,
+  stepRef,
+  summaryContext,
+  targetOptions,
+  unsupportedReason,
+  writableTargets
 }) => {
+  const {
+    handleRef,
+    isDragging,
+    ref: sortableRef
+  } = useSortable({ id: sortableId, index: actionIndex });
+
   const selectOptions = useMemo(
     () => availableActions.some(option => option.value === action.type)
       ? availableActions
@@ -89,55 +450,193 @@ export const ActionEditor: FC<ActionEditorProps> = ({
     [action.type, availableActions]
   );
 
+  const summary = useMemo(
+    () => summarizeAction(action, summaryContext),
+    [action, summaryContext]
+  );
+
+  const summaryLine = formatActionSummaryLine(summary);
+  const effectAction = isEffectAction(action);
+
+  const usedOutputs = useMemo(
+    () => collectStepOutputNames(allActions, actionIndex),
+    [allActions, actionIndex]
+  );
+
+  const setCardRef = (node: HTMLDivElement | null): void => {
+    sortableRef(node);
+    stepRef?.(node);
+  };
+
   return (
-    <div css={actionCardCss}>
-      <div css={actionHeaderCss}>
-        <Select
-          options={selectOptions}
-          style={selectStyle}
-          value={action.type}
-          onChange={value => {
-            if (!isLinkageActionType(value)) {
-              return;
-            }
-
-            // Swapping the type resets the payload to that type's defaults but
-            // keeps the action's client-stable id, so the list key (and thus
-            // this editor's DOM) survives the switch.
-            const next = createActionFor(value);
-            onChange(action.id === undefined ? next : { ...next, id: action.id });
-          }}
-        />
-
-        {canRemove
+    <div
+      ref={setCardRef}
+      data-action-index={actionIndex}
+      css={[
+        stepCardCss,
+        highlighted && stepCardHighlightedCss,
+        isDragging && stepCardDraggingCss
+      ]}
+    >
+      <div css={stepHeaderCss}>
+        {canReorder
           ? (
-              <Button
-                aria-label="删除动作"
-                css={actionDeleteCss}
-                icon={<EditorIcon name="x" />}
-                size="small"
-                type="text"
-                onClick={onRemove}
-              />
+              <span
+                ref={handleRef}
+                aria-label={`拖动排序步骤 ${actionIndex + 1}`}
+                css={dragHandleCss}
+                role="button"
+                tabIndex={0}
+                title="拖动排序"
+              >
+                <EditorIcon name="grip-vertical" />
+              </span>
             )
           : null}
+
+        <button
+          aria-expanded={expanded}
+          css={toggleSummaryCss}
+          title={summaryLine}
+          type="button"
+          onClick={onToggleExpand}
+        >
+          <span aria-hidden css={chevronCss}>
+            <EditorIcon name={expanded ? "chevron-down" : "chevron-right"} />
+          </span>
+
+          <span css={stepIndexBadgeCss}>{actionIndex + 1}</span>
+
+          {issueSeverity === undefined
+            ? null
+            : <span aria-hidden css={[issueDotCss, issueSeverity === "error" ? issueErrorDotCss : issueWarningDotCss]} />}
+
+          <span css={[summaryTextCss, summary.incomplete && summaryIncompleteCss]}>
+            {summaryLine}
+          </span>
+        </button>
+
+        <div css={badgeRowCss}>
+          {effectAction && action.onError === "continue"
+            ? <span css={continueBadgeCss}>失败继续</span>
+            : null}
+
+          {unsupportedReason === null
+            ? null
+            : <span css={unsupportedBadgeCss}>当前宿主不支持</span>}
+
+          {canEditInModal
+            ? (
+                <Button
+                  aria-label="弹窗编辑步骤"
+                  css={iconButtonCss}
+                  icon={<EditorIcon name="square-pen" />}
+                  size="small"
+                  title="在宽弹窗中编辑"
+                  type="text"
+                  onClick={onOpenModal}
+                />
+              )
+            : null}
+
+          {canRemove
+            ? (
+                <Button
+                  aria-label="删除动作"
+                  css={actionDeleteCss}
+                  icon={<EditorIcon name="x" />}
+                  size="small"
+                  type="text"
+                  onClick={onRemove}
+                />
+              )
+            : null}
+        </div>
       </div>
 
-      <ActionBody
-        action={action}
-        dataSourceOptions={dataSourceOptions}
-        targetOptions={targetOptions}
-        onChange={onChange}
-      />
+      {expanded
+        ? (
+            <div css={stepBodyCss}>
+              <Select
+                options={selectOptions}
+                style={selectStyle}
+                value={action.type}
+                onChange={value => {
+                  if (isLinkageActionType(value) && value !== action.type) {
+                    onChangeType(value);
+                  }
+                }}
+              />
+
+              {unsupportedReason === null
+                ? null
+                : (
+                    <div css={unsupportedBannerCss} role="status">
+                      <EditorIcon name="triangle-alert" />
+                      <span>{unsupportedReason}</span>
+                    </div>
+                  )}
+
+              <ReferenceScopeProvider value={referenceScope}>
+                <ActionBody
+                  action={action}
+                  actionIndex={actionIndex}
+                  allActions={allActions}
+                  dataSourceOptions={dataSourceOptions}
+                  dataSources={dataSources}
+                  ownerField={ownerField}
+                  priorSteps={priorSteps}
+                  scopeFieldsByKey={scopeFieldsByKey}
+                  targetOptions={targetOptions}
+                  usedOutputs={usedOutputs}
+                  writableTargets={writableTargets}
+                  onChange={onChange}
+                  onRenameOutput={onRenameOutput}
+                />
+              </ReferenceScopeProvider>
+
+              {effectAction
+                ? (
+                    <div css={onErrorRowCss}>
+                      <span css={fieldLabelCss}>失败处理</span>
+
+                      <OnErrorSelect
+                        value={action.onError}
+                        onChange={next => {
+                          if (next === "continue") {
+                            onChange({ ...action, onError: "continue" });
+                            return;
+                          }
+
+                          const cleaned = { ...action };
+                          delete cleaned.onError;
+                          onChange(cleaned);
+                        }}
+                      />
+                    </div>
+                  )
+                : null}
+            </div>
+          )
+        : null}
     </div>
   );
 };
 
 interface ActionBodyProps {
   action: FieldLinkageAction;
+  actionIndex: number;
+  allActions: readonly FieldLinkageAction[];
+  dataSources: readonly FormDataSource[];
   dataSourceOptions: SourceFieldOption[];
+  ownerField?: FormField;
+  priorSteps: readonly PriorStepSchema[];
+  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
   targetOptions: SourceFieldOption[];
+  usedOutputs: ReadonlySet<string>;
+  writableTargets: readonly WritableTargetField[];
   onChange: (next: FieldLinkageAction) => void;
+  onRenameOutput: (nextOutput: string | undefined) => void;
 }
 
 /**
@@ -146,16 +645,27 @@ interface ActionBodyProps {
  */
 function ActionBody({
   action,
+  actionIndex,
+  allActions,
   dataSourceOptions,
+  dataSources,
+  onChange,
+  onRenameOutput,
+  ownerField,
+  priorSteps,
+  scopeFieldsByKey,
   targetOptions,
-  onChange
+  usedOutputs,
+  writableTargets
 }: ActionBodyProps): ReactElement | null {
   switch (action.type) {
     case "assign": {
       return (
         <ActionValueEditor
+          dataSources={dataSources}
           expressionPlaceholder="field.A + field.B"
           literalPlaceholder="赋值内容"
+          targetField={ownerField}
           value={action.value}
           onChange={value => onChange({ ...action, value })}
         />
@@ -163,81 +673,23 @@ function ActionBody({
     }
 
     case "set_fields": {
-      const updateAssignment = (index: number, next: FieldAssignment): void => {
-        onChange({
-          ...action,
-          assignments: action.assignments.map((item, current) => current === index ? next : item)
-        });
-      };
-
-      const removeAssignment = (index: number): void => {
-        onChange({
-          ...action,
-          assignments: action.assignments.filter((_, current) => current !== index)
-        });
-      };
-
-      const addAssignment = (): void => {
-        onChange({
-          ...action,
-          assignments: [...action.assignments, { targetKey: "", value: { kind: "literal", value: "" } }]
-        });
-      };
-
       return (
-        <>
-          {action.assignments.map((assignment, index) => (
-            <div key={index} css={assignmentRowCss}>
-              <div css={assignmentHeaderCss}>
-                <Select
-                  options={targetOptions}
-                  placeholder="选择目标字段"
-                  style={selectStyle}
-                  value={assignment.targetKey.length > 0 ? assignment.targetKey : undefined}
-                  onChange={value => updateAssignment(index, { ...assignment, targetKey: String(value) })}
-                />
-
-                {action.assignments.length > 1
-                  ? (
-                      <Button
-                        aria-label="删除字段赋值"
-                        css={actionDeleteCss}
-                        icon={<EditorIcon name="x" />}
-                        size="small"
-                        type="text"
-                        onClick={() => removeAssignment(index)}
-                      />
-                    )
-                  : null}
-              </div>
-
-              <ActionValueEditor
-                expressionPlaceholder="field.A"
-                literalPlaceholder="写入的值"
-                value={assignment.value}
-                onChange={value => updateAssignment(index, { ...assignment, value })}
-              />
-            </div>
-          ))}
-
-          <Button
-            css={addInlineButtonCss}
-            icon={<EditorIcon name="plus" />}
-            size="small"
-            type="dashed"
-            onClick={addAssignment}
-          >
-            新增字段赋值
-          </Button>
-        </>
+        <SetFieldsEditor
+          assignments={action.assignments}
+          dataSources={dataSources}
+          priorSteps={priorSteps}
+          targetOptions={targetOptions}
+          writableTargets={writableTargets}
+          onChange={assignments => onChange({ ...action, assignments })}
+        />
       );
     }
 
     case "set_variable": {
       return (
-        <>
+        <div css={actionCardCss}>
           <Input
-            placeholder="变量名（$vars.名称）"
+            placeholder="变量名"
             value={action.variable}
             onChange={event => onChange({ ...action, variable: sanitizeKey(event.target.value) })}
           />
@@ -248,7 +700,7 @@ function ActionBody({
             value={action.value}
             onChange={value => onChange({ ...action, value })}
           />
-        </>
+        </div>
       );
     }
 
@@ -297,27 +749,20 @@ function ActionBody({
     }
 
     case "api_call": {
-      // The full request — version and bound parameters included, which the
-      // runtime resolves before `FormServices.request` runs.
       return (
         <>
-          <RemoteRequestEditor request={action.request} onChange={request => onChange({ ...action, request })} />
+          <CatalogRemoteRequestEditor
+            showDeclaredFields
+            request={action.request}
+            onChange={request => onChange({ ...action, request })}
+          />
 
-          <Input
-            placeholder="结果名（可选，供后续动作引用 $steps.名称）"
+          <StepOutputInput
+            placeholder="如 result（留空不保存结果）"
+            required={false}
+            usedNames={usedOutputs}
             value={action.output ?? ""}
-            onChange={event => {
-              const sanitized = sanitizeKey(event.target.value);
-
-              if (sanitized.length === 0) {
-                const next = { ...action };
-                delete next.output;
-                onChange(next);
-                return;
-              }
-
-              onChange({ ...action, output: sanitized });
-            }}
+            onCommit={onRenameOutput}
           />
         </>
       );
@@ -325,71 +770,26 @@ function ActionBody({
 
     case "select_record": {
       return (
-        <>
-          <ActionValueEditor
-            expressionPlaceholder="$steps.res"
-            literalPlaceholder="来源数据"
-            referencePlaceholder="来源路径，如 $steps.res"
-            value={action.source}
-            onChange={source => onChange({ ...action, source })}
-          />
-
-          <Input
-            placeholder="结果名（必填，如 selected）"
-            value={action.output}
-            onChange={event => onChange({ ...action, output: sanitizeKey(event.target.value) })}
-          />
-
-          <Input
-            placeholder="弹窗标题（可选）"
-            value={action.title ?? ""}
-            onChange={event => {
-              const title = event.target.value;
-
-              if (title.length === 0) {
-                const next = { ...action };
-                delete next.title;
-                onChange(next);
-                return;
-              }
-
-              onChange({ ...action, title });
-            }}
-          />
-
-          <Input
-            placeholder="无匹配提示（可选）"
-            value={action.emptyMessage ?? ""}
-            onChange={event => {
-              const emptyMessage = event.target.value;
-
-              if (emptyMessage.length === 0) {
-                const next = { ...action };
-                delete next.emptyMessage;
-                onChange(next);
-                return;
-              }
-
-              onChange({ ...action, emptyMessage });
-            }}
-          />
-
-          <Select
-            options={WHEN_NONE_OPTIONS}
-            style={selectStyle}
-            value={action.whenNone ?? "stop"}
-            onChange={value => {
-              if (value === "continue") {
-                onChange({ ...action, whenNone: "continue" });
-                return;
-              }
-
-              const next = { ...action };
-              delete next.whenNone;
-              onChange(next);
-            }}
-          />
-        </>
+        <SelectRecordEditor
+          action={action}
+          actionIndex={actionIndex}
+          allActions={allActions}
+          scopeFieldsByKey={scopeFieldsByKey}
+          outputControl={(
+            <StepOutputInput
+              required
+              placeholder="如 selected"
+              usedNames={usedOutputs}
+              value={action.output}
+              onCommit={next => {
+                if (next !== undefined) {
+                  onRenameOutput(next);
+                }
+              }}
+            />
+          )}
+          onChange={onChange}
+        />
       );
     }
 

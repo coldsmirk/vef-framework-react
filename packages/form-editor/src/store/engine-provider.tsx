@@ -111,6 +111,30 @@ export function useFieldRegistry(): FormFieldRegistry {
   return registry;
 }
 
+function noopUnsubscribe(): void {
+  // No registry context is mounted, so there is no subscription to tear down.
+}
+
+const ZERO_REVISION = (): number => 0;
+
+/**
+ * Like {@link useFieldRegistry}, but returns `undefined` when rendered outside
+ * a `<RegistryProvider>` (e.g. standalone property-entry fixtures).
+ */
+export function useOptionalFieldRegistry(): FormFieldRegistry | undefined {
+  const registries = use(RegistryContext);
+  const device = useDevice();
+  const registry = registries?.[device];
+
+  useSyncExternalStore(
+    useCallback(callback => registry ? registry.subscribe(callback) : noopUnsubscribe, [registry]),
+    () => registry ? registry.getRevision() : ZERO_REVISION(),
+    () => registry ? registry.getRevision() : ZERO_REVISION()
+  );
+
+  return registry;
+}
+
 /**
  * The active device's container chrome — the presentational shells for
  * `section` / `tabs` / `subform`. Resolved from the active registry, so it

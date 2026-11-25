@@ -328,7 +328,7 @@ describe("EditorFooter", () => {
       expect(within(dialog!).getByLabelText(/名称/)).toHaveValue("部门");
     });
 
-    it("opens the right form tab for a form-linkage issue", async () => {
+    it("opens the right form tab and focuses the exact step for a form-linkage issue", async () => {
       const user = userEvent.setup();
       const storeApi = setupFooter({
         ...makeSchema(),
@@ -351,10 +351,15 @@ describe("EditorFooter", () => {
       });
 
       await user.click(screen.getByTestId("footer-issues"));
-      await user.click(await screen.findByRole("button", { name: /表单联动/ }));
+      await user.click(await screen.findByRole("button", { name: /表单事件 · 规则 1 · 步骤 1（设置变量）/ }));
 
       expect(storeApi.getState().propertiesTab).toBe("form");
       expect(storeApi.getState().propertiesDrawerOpen).toBe(true);
+      expect(storeApi.getState().pendingLinkageFocus).toEqual({
+        scope: "form",
+        ruleIndex: 0,
+        actionIndex: 0
+      });
     });
   });
 

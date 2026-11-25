@@ -1,17 +1,21 @@
 import type { FC } from "react";
 
-import type { LinkageTrigger, LinkageTriggerKind } from "../../../../types";
+import type { FormVariable, LinkageTrigger, LinkageTriggerKind } from "../../../../types";
 import type { SourceFieldOption } from "./options";
 
-import { Popconfirm, Select, Switch } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Button, globalCssVars, Popconfirm, Select, Switch } from "@vef-framework-react/components";
 
+import { EditorIcon } from "../../../../icons";
+import { useContextSources } from "../../../context-sources";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { ConditionEditor } from "./condition-editor";
-import { createTrigger } from "./mutators";
+import { createGroup, createLeaf, createTrigger } from "./mutators";
 import { isLinkageTriggerKind, seedSourceKey, triggerOptionsFor } from "./options";
 import {
   actionRetriggerCss,
   actionRetriggerLabelCss,
+  addInlineButtonCss,
   defaultHintCss,
   defaultTextCss,
   sectionCss,
@@ -21,12 +25,13 @@ import {
 } from "./styles";
 
 /**
- * Plain-language description of each edge trigger, shown in place of the
- * condition builder when the trigger has no value to compare against.
+ * Plain-language description of each edge trigger. `commit` is overridden per
+ * control via `commitHint` (entry fields vs textarea vs switch vs pickers) so
+ * the description always matches how the control actually commits at runtime.
  */
 const TRIGGER_HINTS: Partial<Record<LinkageTriggerKind, string>> = {
   change: "当该字段的值发生变化时触发",
-  commit: "回车或离开时触发",
+  commit: "输入完成时触发",
   focus: "当该字段获得焦点时触发",
   blur: "当该字段失去焦点时触发",
   click: "当点击该字段时触发",
@@ -34,6 +39,27 @@ const TRIGGER_HINTS: Partial<Record<LinkageTriggerKind, string>> = {
   beforeSubmit: "当表单提交前触发",
   afterSubmit: "当表单提交成功后触发"
 };
+
+const guardSectionCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+});
+
+const guardHeaderCss = css({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8
+});
+
+const guardTitleCss = css({
+  fontSize: globalCssVars.fontSizeSm,
+  fontWeight: 500,
+  color: globalCssVars.colorTextSecondary
+});
+
+const EMPTY_VARIABLES: readonly FormVariable[] = [];
 
 export interface TriggerEditorProps {
   trigger: LinkageTrigger;
@@ -43,8 +69,16 @@ export interface TriggerEditorProps {
   triggerKinds: readonly LinkageTriggerKind[];
   sourceOptions: SourceFieldOption[];
   /**
-   * The owning block's data-binding key, forwarded so the expression → visual
-   * switch seeds with a different field when one exists.
+   * Form-global variables forwarded to the condition / event-guard picker.
+   */
+  variables?: readonly FormVariable[];
+  /**
+   * Control-specific description of the `commit` trigger ("输入完成时").
+   */
+  commitHint?: string;
+  /**
+   * The owning block's data-binding key, forwarded so condition builders and
+   * event guards seed sensible sources.
    */
   selfKey?: string;
   /**
@@ -53,41 +87,59 @@ export interface TriggerEditorProps {
    */
   hasEffectActions?: boolean;
   /**
-   * Whether switching away from the current trigger discards real work (an
-   * authored condition tree, or state actions the reconcile step would strip).
-   * When set, the kind switch is gated behind a confirmation; an unconfigured
-   * trigger switches instantly.
+   * Whether switching away from the current trigger discards real work (e.g.
+   * state actions that must be stripped when leaving a `condition` trigger).
    */
   confirmKindSwitch: boolean;
   onChange: (next: LinkageTrigger) => void;
+  /**
+   * Optional rule-level trigger-kind switcher that preserves still-applicable
+   * guards (`when` ↔ `condition`) across switches. Falls back to `createTrigger`
+   * when rendered standalone.
+   */
+  onKindSwitch?: (nextKind: LinkageTriggerKind) => void;
 }
 
 /**
  * The WHEN half of a rule: a trigger-kind picker plus, for a `condition`
  * trigger, the visual condition builder (and rule-level `retrigger` toggle when
- * the rule carries effect actions) — or a one-line hint for an edge (event)
- * trigger, which needs no value to compare against.
+ * the rule carries effect actions) — or, for an edge (event) trigger, a
+ * control-accurate description and an optional `when` guard condition.
  */
 export const TriggerEditor: FC<TriggerEditorProps> = ({
+  commitHint,
   confirmKindSwitch,
   hasEffectActions = false,
+  onChange,
+  onKindSwitch,
+  selfKey,
+  sourceOptions,
   trigger,
   triggerKinds,
-  sourceOptions,
-  selfKey,
-  onChange
+  variables = EMPTY_VARIABLES
 }) => {
-  // Switching the trigger kind discards the authored condition / actions; the
-  // Select stays on the current trigger until the user confirms (gated only
-  // when there is real work to lose — `confirmKindSwitch`).
+  const contextSources = useContextSources();
   const kindSwitch = useConfirmableKindSwitch<LinkageTriggerKind>({
     current: trigger.kind,
     needsConfirm: confirmKindSwitch,
-    // Prefer a source other than the rule's own field, mirroring how a freshly
-    // created rule and the visual-mode switch both seed: a self-referencing
-    // condition is almost always a mistake. Self stays selectable afterwards.
-    commit: kind => onChange(createTrigger(kind, seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value))
+    commit: kind => {
+      if (onKindSwitch !== undefined) {
+        onKindSwitch(kind);
+        return;
+      }
+
+      onChange(createTrigger(kind, seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value));
+    }
   });
+
+  const guardSeed = selfKey
+    ?? sourceOptions[0]?.value
+    ?? (variables[0]?.name ? `$vars.${variables[0].name}` : undefined)
+    ?? contextSources[0]?.key;
+
+  const edgeHint = trigger.kind === "commit"
+    ? (commitHint ?? TRIGGER_HINTS.commit)
+    : TRIGGER_HINTS[trigger.kind];
 
   return (
     <div css={sectionCss}>
@@ -97,7 +149,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
         cancelText="取消"
         okText="切换"
         open={kindSwitch.pendingKind !== null}
-        title="切换触发方式将丢弃当前条件配置"
+        title="切换触发方式将移除状态类动作"
         onCancel={kindSwitch.cancel}
         onConfirm={kindSwitch.confirm}
       >
@@ -120,6 +172,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                 condition={trigger.condition}
                 selfKey={selfKey}
                 sourceOptions={sourceOptions}
+                variables={variables}
                 onChange={condition => onChange({ ...trigger, condition })}
               />
 
@@ -159,7 +212,61 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                 : null}
             </>
           )
-        : <div css={triggerHintCss}>{TRIGGER_HINTS[trigger.kind]}</div>}
+        : (
+            <>
+              <div css={triggerHintCss}>{edgeHint}</div>
+
+              {trigger.when === undefined
+                ? (
+                    <Button
+                      css={addInlineButtonCss}
+                      disabled={guardSeed === undefined}
+                      icon={<EditorIcon name="plus" />}
+                      size="small"
+                      type="dashed"
+                      onClick={() => {
+                        if (guardSeed === undefined) {
+                          return;
+                        }
+
+                        onChange({
+                          ...trigger,
+                          when: createGroup([createLeaf(guardSeed, "notEmpty")])
+                        });
+                      }}
+                    >
+                      添加执行条件
+                    </Button>
+                  )
+                : (
+                    <div css={guardSectionCss}>
+                      <div css={guardHeaderCss}>
+                        <span css={guardTitleCss}>仅在满足条件时执行</span>
+
+                        <Button
+                          size="small"
+                          type="text"
+                          onClick={() => {
+                            const next = { ...trigger };
+                            delete next.when;
+                            onChange(next);
+                          }}
+                        >
+                          移除条件
+                        </Button>
+                      </div>
+
+                      <ConditionEditor
+                        condition={trigger.when}
+                        selfKey={selfKey}
+                        sourceOptions={sourceOptions}
+                        variables={variables}
+                        onChange={when => onChange({ ...trigger, when })}
+                      />
+                    </div>
+                  )}
+            </>
+          )}
     </div>
   );
 };

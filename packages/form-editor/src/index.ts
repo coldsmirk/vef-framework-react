@@ -169,6 +169,7 @@ export {
   type FormEditorStoreState,
   type FormSchemaPatch,
   type HistoryEntry,
+  type LinkageFocusRef,
   type PropertiesTabId,
   type SaveDataEntryOptions,
   type SidebarTabId

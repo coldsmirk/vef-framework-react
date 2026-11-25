@@ -12,7 +12,8 @@ import type {
 } from "../../../../types";
 
 import { createId } from "../../../../engine/ids";
-import { isStateAction } from "../../../../engine/linkage";
+import { isStateAction, nextUniqueStepOutput } from "../../../../engine/linkage";
+import { operatorNeedsValue } from "./options";
 
 /**
  * Maximum nesting depth the editor UI exposes. Depth 0 = root group;
@@ -28,7 +29,7 @@ export function createLeaf(sourceKey: string, operator: LinkageOperator = "eq"):
     id: createId("Condition"),
     sourceKey,
     operator,
-    value: ""
+    ...operatorNeedsValue(operator) && { value: "" }
   };
 }
 
@@ -49,7 +50,38 @@ export function createExpression(): LinkageCondition {
   };
 }
 
-export function createActionFor(type: LinkageActionType): FieldLinkageAction {
+function latestStepOutput(actions: readonly FieldLinkageAction[] | undefined): string | undefined {
+  if (actions === undefined) {
+    return undefined;
+  }
+
+  for (let index = actions.length - 1; index >= 0; index -= 1) {
+    const action = actions[index];
+
+    if (
+      action !== undefined
+      && (action.type === "api_call" || action.type === "select_record")
+      && typeof action.output === "string"
+      && action.output.length > 0
+    ) {
+      return action.output;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Seed a fresh action of `type`. When `existingActions` is supplied (the
+ * rule's current action list), `api_call` and `select_record` allocate
+ * rule-unique `output` names (`result`, `result_2`, … / `selected`,
+ * `selected_2`, …), and `select_record` defaults its `source` to the latest
+ * prior step's output when one exists.
+ */
+export function createActionFor(
+  type: LinkageActionType,
+  existingActions?: readonly FieldLinkageAction[]
+): FieldLinkageAction {
   const id = createId("Action");
 
   // Exhaustive over LinkageActionType — payload-free kinds are split so each
@@ -119,16 +151,19 @@ export function createActionFor(type: LinkageActionType): FieldLinkageAction {
       return {
         id,
         type,
-        request: { resource: "", action: "" }
+        request: { resource: "", action: "" },
+        output: nextUniqueStepOutput(existingActions ?? [], "result")
       };
     }
 
     case "select_record": {
+      const priorOutput = latestStepOutput(existingActions);
+
       return {
         id,
         type,
-        source: { kind: "reference", path: "" },
-        output: "selected"
+        source: { kind: "reference", path: priorOutput === undefined ? "" : `$steps.${priorOutput}` },
+        output: nextUniqueStepOutput(existingActions ?? [], "selected")
       };
     }
 
@@ -230,12 +265,61 @@ export function reconcileRuleTrigger(
 }
 
 /**
+ * Switch a rule's trigger kind while preserving every still-applicable guard:
+ * - event → event: keeps `when` untouched
+ * - event → condition: promotes `when` into `condition` (or seeds a fresh group)
+ * - condition → event: carries an authored `condition` into `when`
+ *
+ * State actions are still reconciled through {@link reconcileRuleTrigger} when
+ * leaving a `condition` trigger.
+ */
+export function switchRuleTrigger(
+  rule: FieldLinkageRule,
+  nextKind: LinkageTriggerKind,
+  allowStateActions: boolean,
+  fallbackSourceKey?: string
+): FieldLinkageRule {
+  if (rule.trigger.kind === nextKind) {
+    return rule;
+  }
+
+  let nextTrigger: LinkageTrigger;
+
+  if (nextKind === "condition") {
+    const promoted = rule.trigger.kind === "condition" ? undefined : rule.trigger.when;
+
+    nextTrigger = promoted === undefined
+      ? createTrigger("condition", fallbackSourceKey)
+      : { kind: "condition", condition: promoted };
+  } else if (rule.trigger.kind === "condition") {
+    nextTrigger = conditionHasAuthoredContent(rule.trigger.condition)
+      ? { kind: nextKind, when: rule.trigger.condition }
+      : { kind: nextKind };
+  } else {
+    nextTrigger = rule.trigger.when === undefined
+      ? { kind: nextKind }
+      : { kind: nextKind, when: rule.trigger.when };
+  }
+
+  return reconcileRuleTrigger(rule, nextTrigger, allowStateActions);
+}
+
+/**
+ * Whether switching `rule`'s trigger kind discards user work: since guards now
+ * carry across every trigger switch, only leaving a `condition` trigger that
+ * holds state actions loses work (the state actions must be stripped).
+ */
+export function triggerSwitchStripsStateActions(rule: FieldLinkageRule): boolean {
+  return rule.trigger.kind === "condition" && rule.actions.some(action => isStateAction(action));
+}
+
+/**
  * Whether a condition tree carries user-authored content worth confirming
- * before a destructive replace (group ↔ expression, trigger-kind change). A
- * freshly seeded tree — an empty group, or a group holding exactly one
- * pristine leaf (default `eq` operator, no value typed) — is trivially
- * reconstructible, so switching away from it stays instant; anything beyond
- * that loses real work and deserves a confirmation.
+ * before a destructive replace (group ↔ expression) or carrying across a
+ * trigger-kind switch (`condition` → event `when`). A freshly seeded tree — an
+ * empty group, or a group holding exactly one pristine leaf (default `eq`
+ * operator, no value typed) — is trivially reconstructible; anything beyond
+ * that carries real authored logic.
  */
 export function conditionHasAuthoredContent(condition: LinkageCondition): boolean {
   let current = condition;

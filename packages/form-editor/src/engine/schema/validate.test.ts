@@ -1029,7 +1029,7 @@ describe("validateSchema", () => {
         expect.objectContaining({
           code: "request_incomplete",
           path: "presentations.pc.children[0].dataSource.request",
-          message: "请求尚未配置完整：缺少资源（resource）和动作（action）"
+          message: "请求尚未配置完整：缺少资源和动作"
         })
       ]);
     });
@@ -1041,7 +1041,7 @@ describe("validateSchema", () => {
         expect.objectContaining({
           code: "request_incomplete",
           path: "presentations.pc.children[0].dataSource.request.action",
-          message: "请求尚未配置完整：缺少动作（action）"
+          message: "请求尚未配置完整：缺少动作"
         })
       ]);
     });

@@ -40,6 +40,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   const storeApi = useFormEditorStoreApi();
   const layer = useCurrentLayer();
   const dataSources = useFormEditorStore(state => state.schema.dataSources);
+  const schemaVariables = useFormEditorStore(state => state.schema.variables);
   const linkage = readLinkage(node.linkage);
   const rules = linkage.rules ?? [];
 
@@ -49,13 +50,18 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   // their own scope), mirroring the validator's resolution.
   const {
     dataSourceOptions,
+    dataSources: resolvedDataSources,
     fieldOptions,
     issuesByRule,
-    targetOptions
+    scopeFieldsByKey,
+    targetOptions,
+    variables,
+    writableTargets
   } = useLinkageEditorModel({
     layer,
     nodeId: node.id,
-    dataSources
+    dataSources,
+    variables: schemaVariables
   });
 
   const seedSourceKey = fieldOptions[0]?.value;
@@ -92,13 +98,18 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
         addDisabledReason={addDisabledReason}
         createRule={() => createRule(seedSourceKey, false)}
         dataSourceOptions={dataSourceOptions}
+        dataSources={resolvedDataSources}
         issuesByRule={issuesByRule}
         isTargetKeyed={false}
         noun="联动"
         rules={rules}
+        scopeFieldsByKey={scopeFieldsByKey}
+        scopeNodeId={node.id}
         sourceOptions={fieldOptions}
         targetOptions={targetOptions}
         triggerKinds={triggerKinds}
+        variables={variables}
+        writableTargets={writableTargets}
         onChange={next => commit({ ...linkage, rules: next })}
       />
     </div>

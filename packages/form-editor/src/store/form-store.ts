@@ -91,6 +91,17 @@ export interface DataEntryRef {
   id: string;
 }
 
+/**
+ * One-shot navigation request targeting a specific linkage rule (and optional
+ * step inside it), dispatched when jumping from a diagnostic in the footer.
+ */
+export interface LinkageFocusRef {
+  scope: "node" | "form";
+  nodeId?: string;
+  ruleIndex: number;
+  actionIndex?: number;
+}
+
 export interface SaveDataEntryOptions {
   /**
    * Id of the entry a new one is placed right after; appended when omitted.
@@ -157,6 +168,11 @@ export interface FormEditorStoreState {
    * cleared by the panel that handles it.
    */
   pendingDataEdit: DataEntryRef | null;
+  /**
+   * One-shot request to focus a linkage rule (and optional action step) in the
+   * right properties panel, cleared by the rule list that handles it.
+   */
+  pendingLinkageFocus: LinkageFocusRef | null;
   viewMode: EditorViewMode;
   device: EditorDeviceMode;
 
@@ -195,6 +211,16 @@ export interface FormEditorStoreState {
    * Clear a consumed {@link pendingDataEdit} request.
    */
   clearPendingDataEdit: () => void;
+  /**
+   * Navigate the right properties panel to a specific linkage rule (and
+   * optional step inside it), selecting the owning node or switching to the
+   * `表单` tab as needed (no-op outside edit mode).
+   */
+  requestLinkageFocus: (focus: LinkageFocusRef) => void;
+  /**
+   * Clear a consumed {@link pendingLinkageFocus} request.
+   */
+  clearPendingLinkageFocus: () => void;
   /**
    * Switch the right properties panel's top-level tab and open the narrow
    * right overlay (no-op outside edit mode, or when `"control"` is requested
@@ -467,6 +493,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
       propertiesTab: "form",
       propertiesDrawerOpen: false,
       pendingDataEdit: null,
+      pendingLinkageFocus: null,
       viewMode: "edit",
       device: "pc",
       past: [],
@@ -480,6 +507,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           schema,
           ...CLEARED_SELECTION,
           pendingDataEdit: null,
+          pendingLinkageFocus: null,
           past: [],
           future: []
         });
@@ -490,7 +518,8 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({
           schema: createEmptySchema(),
           ...CLEARED_SELECTION,
-          pendingDataEdit: null
+          pendingDataEdit: null,
+          pendingLinkageFocus: null
         });
       },
 
@@ -605,6 +634,49 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         }
       },
 
+      requestLinkageFocus: focus => {
+        const {
+          device,
+          schema,
+          viewMode
+        } = get();
+
+        if (viewMode !== "edit") {
+          return;
+        }
+
+        if (focus.scope === "form") {
+          set({
+            propertiesTab: "form",
+            propertiesDrawerOpen: true,
+            pendingLinkageFocus: { ...focus }
+          });
+          return;
+        }
+
+        if (focus.nodeId === undefined) {
+          return;
+        }
+
+        const node = findNode(currentLayer(schema, device), focus.nodeId);
+
+        if (!node) {
+          return;
+        }
+
+        coalesceKey = null;
+        set({
+          ...selectPatch(focus.nodeId),
+          pendingLinkageFocus: { ...focus }
+        });
+      },
+
+      clearPendingLinkageFocus: () => {
+        if (get().pendingLinkageFocus !== null) {
+          set({ pendingLinkageFocus: null });
+        }
+      },
+
       setPropertiesTab: tab => {
         const { selectedId, viewMode } = get();
 
@@ -636,7 +708,8 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           set({
             viewMode: mode,
             propertiesDrawerOpen: false,
-            pendingDataEdit: null
+            pendingDataEdit: null,
+            pendingLinkageFocus: null
           });
           return;
         }

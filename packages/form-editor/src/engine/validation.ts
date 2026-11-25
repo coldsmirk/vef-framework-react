@@ -247,28 +247,28 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   condition_kind_invalid: "kind 不是受支持的条件类型",
   logic_invalid: "logic 必须为 \"all\" 或 \"any\"",
   condition_group_empty: "条件组没有子条件：「全部满足」时规则始终生效，「任一满足」时规则永不生效",
-  operator_invalid: "operator 不是受支持的联动操作符",
-  source_key_empty: "sourceKey 尚未选择",
-  source_empty: "表达式 / 脚本内容为空",
-  actions_not_array: "actions 必须是数组",
+  operator_invalid: "条件比较方式不受支持",
+  source_key_empty: "尚未选择引用字段",
+  source_empty: "表达式或脚本内容为空",
+  actions_not_array: "动作列表必须是数组",
   actions_empty: "规则没有任何动作，不会生效",
-  assignments_empty: "写入字段动作没有配置任何目标赋值",
+  assignments_empty: "「设置字段」动作尚未配置任何目标字段",
   action_malformed: "动作结构无效",
-  defaults_requires_keyed_leaf: "defaults.required 只能用于 keyed 叶子字段",
-  defaults_on_form_scope: "表单级联动不支持 defaults（表单没有自身字段）",
+  defaults_requires_keyed_leaf: "默认必填只能用于数据录入控件",
+  defaults_on_form_scope: "表单级事件不支持默认状态配置",
   default_hidden_unreachable: "默认隐藏但没有任何「显示」动作的规则，运行时将永远不可见",
-  target_key_empty: "targetKey 尚未选择",
-  output_invalid: "output 必须是合法标识符（字母或下划线开头，仅含字母、数字和下划线）",
-  when_none_invalid: "whenNone 必须为 \"continue\" 或 \"stop\"",
-  on_error_invalid: "onError 必须为 \"stop\" 或 \"continue\"",
-  variable_empty: "variable 尚未填写",
-  data_source_id_empty: "dataSourceId 尚未选择",
+  target_key_empty: "尚未选择目标字段",
+  output_invalid: "步骤结果名须以字母或下划线开头，仅含字母、数字和下划线",
+  when_none_invalid: "无匹配处理方式配置无效",
+  on_error_invalid: "失败处理方式配置无效",
+  variable_empty: "尚未填写目标变量名",
+  data_source_id_empty: "尚未选择要刷新的数据源",
   code_set_empty: "数据字典尚未选择",
-  value_malformed: "取值结构无效：须为 literal、reference 或 expression 形态",
-  alert_level_invalid: "level 不是受支持的提示级别",
-  retrigger_invalid: "retrigger 必须为 \"edge\" 或 \"always\"",
-  retrigger_ignored: "retrigger 仅对条件触发生效，事件触发将忽略该配置",
-  self_reference: "条件不能引用本节点自身（该规则会写入自身的值）"
+  value_malformed: "取值结构无效：须为字面量、引用或表达式",
+  alert_level_invalid: "提示级别配置无效",
+  retrigger_invalid: "重复触发方式配置无效",
+  retrigger_ignored: "重复触发仅对条件触发生效，事件触发将忽略该配置",
+  self_reference: "条件不能引用本控件自身（该规则会写入自身的值）"
 };
 
 /**
@@ -298,13 +298,13 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
   state_action_on_edge_trigger: "\"{type}\" 是状态动作，只能用于条件触发",
   state_action_on_form_scope: "\"{type}\" 是状态动作，不能用于表单级联动",
   action_requires_keyed_leaf: "\"{type}\" 只能用于 keyed 叶子字段",
-  source_key_unresolved: "sourceKey 未指向同一作用域内已存在的 keyed 节点：{key}",
-  source_scope_unknown: "sourceKey 的变量作用域不存在（可用 $form / $vars / $user / $node / $applicant / $globals）：{key}",
-  target_key_unresolved: "targetKey 未指向同一作用域内已存在的 keyed 节点：{key}",
-  target_not_writable: "目标字段 \"{key}\"（{type}）不支持作为写入目标",
-  target_key_duplicate: "同一写入动作中目标字段重复：{key}",
-  output_duplicate: "规则内步骤结果名重复：{output}",
-  step_output_unresolved: "$steps.{step} 未引用本规则中更早的步骤结果",
+  source_key_unresolved: "引用的字段「{key}」在当前作用域中不存在",
+  source_scope_unknown: "无法识别的引用路径「{key}」",
+  target_key_unresolved: "目标字段「{key}」在当前作用域中不存在",
+  target_not_writable: "目标字段「{key}」不支持写入值",
+  target_key_duplicate: "同一「设置字段」动作中重复写入了目标字段「{key}」",
+  output_duplicate: "规则内步骤结果名「{output}」重复",
+  step_output_unresolved: "引用的步骤结果「{step}」不存在或位于当前步骤之后",
   cycle_detected: "联动规则存在循环依赖：{cycle}"
 };
 
@@ -431,11 +431,11 @@ export function validateRemoteRequest(request: unknown, path: string, ruleId?: s
   const actionMissing = action === "";
 
   if (resourceMissing && actionMissing) {
-    issues.push(createIssue(path, "request_incomplete", { missing: "资源（resource）和动作（action）" }, ruleId));
+    issues.push(createIssue(path, "request_incomplete", { missing: "资源和动作" }, ruleId));
   } else if (resourceMissing) {
-    issues.push(createIssue(`${path}.resource`, "request_incomplete", { missing: "资源（resource）" }, ruleId));
+    issues.push(createIssue(`${path}.resource`, "request_incomplete", { missing: "资源" }, ruleId));
   } else if (actionMissing) {
-    issues.push(createIssue(`${path}.action`, "request_incomplete", { missing: "动作（action）" }, ruleId));
+    issues.push(createIssue(`${path}.action`, "request_incomplete", { missing: "动作" }, ruleId));
   }
 
   if (request.params !== undefined && !isRecord(request.params)) {

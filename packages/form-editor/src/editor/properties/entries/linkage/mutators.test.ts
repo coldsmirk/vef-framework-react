@@ -72,7 +72,8 @@ describe("createActionFor", () => {
     expect(createActionFor("api_call")).toEqual({
       id: expect.any(String),
       type: "api_call",
-      request: { resource: "", action: "" }
+      request: { resource: "", action: "" },
+      output: "result"
     });
   });
 

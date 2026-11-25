@@ -232,11 +232,6 @@ export const conditionNoticeCss = css({
   lineHeight: 1.5
 });
 
-// Option label for a leaf source key that no longer resolves to a field.
-export const missingSourceLabelCss = css({
-  color: globalCssVars.colorWarningText
-});
-
 export const triggerHintCss = css({
   padding: "8px 10px",
   border: `1px dashed ${globalCssVars.colorBorderSecondary}`,
@@ -275,12 +270,6 @@ export const actionCardCss = css({
   border: `1px solid ${globalCssVars.colorBorderSecondary}`,
   borderRadius: globalCssVars.borderRadius,
   background: globalCssVars.colorFillQuaternary
-});
-
-export const actionHeaderCss = css({
-  display: "flex",
-  alignItems: "center",
-  gap: 8
 });
 
 export const actionDeleteCss = css({

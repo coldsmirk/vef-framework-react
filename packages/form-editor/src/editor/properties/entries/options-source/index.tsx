@@ -1,15 +1,21 @@
 import type { FC, ReactElement } from "react";
 
 import type { EntryComponentProps, FieldOptionSource, FormDataSource } from "../../../../types";
+import type { ReferenceScope } from "../../reference-scope";
 import type { OptionSourceKind } from "./source-mutators";
 
 import { css } from "@emotion/react";
 import { globalCssVars, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
+import { useMemo } from "react";
 
+import { findScope } from "../../../../engine/schema/walk";
+import { useContextSources } from "../../../context-sources";
 import { OptionListEditor } from "../../option-editors";
+import { ReferenceScopeProvider } from "../../reference-scope";
 import { RemoteOptionSourceEditor } from "../../remote-option-source-editor";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { descriptionCss, entryLabelCss } from "../entry-field";
+import { collectSourceCandidates, getSourceFieldOptions } from "../linkage/options";
 import { CodeSetSource } from "./code-set-source";
 import { optionSourceHasPayload, setOptionSourceKind } from "./source-mutators";
 
@@ -136,21 +142,48 @@ export function OptionSourceEditor({
 
 /**
  * Property-entry wrapper around {@link OptionSourceEditor} for selection fields.
+ * Provides a {@link ReferenceScopeProvider} so inline remote option params
+ * offer the same grouped field / variable / system-variable picker as linkage.
  */
 export const OptionsSourceEntry: FC<EntryComponentProps> = ({
   entry,
   field,
   schema,
   onChange
-}) => (
-  <OptionSourceEditor
-    dataSources={schema.dataSources ?? []}
-    description={entry.description}
-    label={entry.label}
-    source={readSource(entry.read(field))}
-    onChange={onChange}
-  />
-);
+}) => {
+  const contextSources = useContextSources();
+  const referenceScope = useMemo<ReferenceScope>(() => {
+    const mobileLayer = schema.presentations.mobile;
+    const pcScope = findScope(schema.presentations.pc, field.id);
+    const mobileScope = pcScope === undefined && mobileLayer !== undefined
+      ? findScope(mobileLayer, field.id)
+      : undefined;
+    const ownerLayer = mobileScope !== undefined && mobileLayer !== undefined
+      ? mobileLayer
+      : schema.presentations.pc;
+    const scopeKey = (pcScope ?? mobileScope ?? []).join("/");
+    const candidates = collectSourceCandidates(ownerLayer, scope => scope.join("/") === scopeKey);
+
+    return {
+      fieldOptions: getSourceFieldOptions({ components: candidates }),
+      variables: schema.variables ?? [],
+      contextSources,
+      allowSteps: false
+    };
+  }, [schema.presentations.pc, schema.presentations.mobile, field.id, schema.variables, contextSources]);
+
+  return (
+    <ReferenceScopeProvider value={referenceScope}>
+      <OptionSourceEditor
+        dataSources={schema.dataSources ?? []}
+        description={entry.description}
+        label={entry.label}
+        source={readSource(entry.read(field))}
+        onChange={onChange}
+      />
+    </ReferenceScopeProvider>
+  );
+};
 
 function RefSource({
   dataSourceId,

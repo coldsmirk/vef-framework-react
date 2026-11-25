@@ -1,6 +1,6 @@
 import type { SchemaIssue } from "../engine/validation";
 import type { DataEntryRef, FormEditorStoreApi, PropertiesTabId, SidebarTabId } from "../store/form-store";
-import type { Block, FormSchema, PresentationDevice, PresentationLayer } from "../types";
+import type { Block, FieldLinkage, FormSchema, PresentationDevice, PresentationLayer } from "../types";
 
 import { useCallback } from "react";
 
@@ -8,14 +8,18 @@ import { assertNever } from "../engine/assert-never";
 import { isKeyedNode } from "../engine/keys";
 import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/walk";
 import { useFormEditorStoreApi } from "../store/form-store";
+import { actionLabelFor } from "./properties/entries/linkage/options";
 
 /**
- * Where a diagnostic can be shown: a node of one device's tree, a form-global
- * data source or variable (its edit modal on `数据`), a left-sidebar tab
- * (`data`), or a right-properties tab (`form`).
+ * Where a diagnostic can be shown: a node of one device's tree, a specific
+ * linkage rule (and optional action step) on a node or on the form, a
+ * form-global data source or variable (its edit modal on `数据`), a left-sidebar
+ * tab (`data`), or a right-properties tab (`form`).
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
+    | { kind: "linkage"; scope: "node"; device: PresentationDevice; nodeId: string; ruleIndex: number; actionIndex?: number }
+    | { kind: "linkage"; scope: "form"; ruleIndex: number; actionIndex?: number }
     | { kind: "dataEntry"; entry: DataEntryRef }
     | { kind: "sidebar"; tab: SidebarTabId }
     | { kind: "properties"; tab: PropertiesTabId };
@@ -30,6 +34,10 @@ const BODY_SEGMENT = /^(?<body>children|tabs|template)\[(?<index>\d+)\]$/;
 
 const NODE_SEGMENT = /^node\[(?<id>[^\]]+)\]$/;
 
+const RULES_SEGMENT = /^rules\[(?<index>\d+)\]$/;
+
+const ACTIONS_SEGMENT = /^actions\[(?<index>\d+)\]$/;
+
 const DATA_SOURCES_HEAD = /^dataSources(?:\[\d+\])?$/;
 
 const VARIABLES_HEAD = /^variables(?:\[\d+\])?$/;
@@ -39,6 +47,37 @@ const VARIABLES_HEAD = /^variables(?:\[\d+\])?$/;
  * field keyed `id` is never mistaken for the target of an `id_required`.
  */
 const ENVELOPE_PATHS: ReadonlySet<string> = new Set(["", "id", "version", "presentations"]);
+
+/**
+ * Parse `.rules[r]` (and optional `.actions[a]`) immediately following a
+ * `linkage` segment. Returns `undefined` when the path does not name a rule.
+ */
+function parseLinkageTrail(segments: readonly string[]): {
+  ruleIndex: number;
+  actionIndex?: number;
+  inWhenGuard: boolean;
+} | undefined {
+  const [ruleSegment, nextSegment, thirdSegment] = segments;
+
+  if (ruleSegment === undefined) {
+    return undefined;
+  }
+
+  const ruleMatch = RULES_SEGMENT.exec(ruleSegment)?.groups?.index;
+
+  if (ruleMatch === undefined) {
+    return undefined;
+  }
+
+  const ruleIndex = Number(ruleMatch);
+  const actionMatch = nextSegment === undefined ? undefined : ACTIONS_SEGMENT.exec(nextSegment)?.groups?.index;
+
+  return {
+    ruleIndex,
+    ...actionMatch !== undefined && { actionIndex: Number(actionMatch) },
+    inWhenGuard: nextSegment === "trigger" && thirdSegment === "when"
+  };
+}
 
 /**
  * The block list a `children` / `template` accessor opens on `node`.
@@ -125,21 +164,17 @@ function devicesByPreference(device: PresentationDevice): PresentationDevice[] {
   return [device, ...DEVICES.filter(candidate => candidate !== device)];
 }
 
-function findInDevices(
+function findNodeInDevices(
   schema: FormSchema,
   device: PresentationDevice,
   find: (layer: PresentationLayer) => string | undefined
-): IssueTarget | undefined {
+): { device: PresentationDevice; nodeId: string } | undefined {
   for (const candidate of devicesByPreference(device)) {
     const layer = schema.presentations[candidate];
     const nodeId = layer === undefined ? undefined : find(layer);
 
     if (nodeId !== undefined) {
-      return {
-        kind: "node",
-        device: candidate,
-        nodeId
-      };
+      return { device: candidate, nodeId };
     }
   }
 
@@ -171,10 +206,46 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
   const nodeId = NODE_SEGMENT.exec(head)?.groups?.id;
 
   if (nodeId !== undefined) {
-    return findInDevices(schema, device, layer => findNode(layer, nodeId)?.id);
+    const found = findNodeInDevices(schema, device, layer => findNode(layer, nodeId)?.id);
+
+    if (found === undefined) {
+      return undefined;
+    }
+
+    if (second === "linkage") {
+      const trail = parseLinkageTrail(segments.slice(2));
+
+      if (trail !== undefined) {
+        return {
+          kind: "linkage",
+          scope: "node",
+          device: found.device,
+          nodeId: found.nodeId,
+          ruleIndex: trail.ruleIndex,
+          ...trail.actionIndex !== undefined && { actionIndex: trail.actionIndex }
+        };
+      }
+    }
+
+    return {
+      kind: "node",
+      device: found.device,
+      nodeId: found.nodeId
+    };
   }
 
   if (head === "linkage" || (head === "schema" && second === "linkage")) {
+    const trail = parseLinkageTrail(head === "linkage" ? segments.slice(1) : segments.slice(2));
+
+    if (trail !== undefined) {
+      return {
+        kind: "linkage",
+        scope: "form",
+        ruleIndex: trail.ruleIndex,
+        ...trail.actionIndex !== undefined && { actionIndex: trail.actionIndex }
+      };
+    }
+
     return { kind: "properties", tab: "form" };
   }
 
@@ -190,11 +261,19 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
     return undefined;
   }
 
-  return findInDevices(schema, device, layer => nodeIdByKeyChain(layer, segments));
+  const foundByKey = findNodeInDevices(schema, device, layer => nodeIdByKeyChain(layer, segments));
+
+  return foundByKey === undefined
+    ? undefined
+    : {
+        kind: "node",
+        device: foundByKey.device,
+        nodeId: foundByKey.nodeId
+      };
 }
 
 /**
- * The 1-based position an indexed head (`dataSources[2]`) names, or
+ * The 0-based position an indexed head (`dataSources[2]`) names, or
  * `undefined` for a bare one (`dataSources`).
  */
 function headIndex(path: string): number | undefined {
@@ -249,12 +328,31 @@ function describeDataPath(path: string, schema: FormSchema): string | undefined 
   return undefined;
 }
 
+function describeLinkageDetail(
+  linkage: FieldLinkage | undefined,
+  ruleIndex: number,
+  actionIndex: number | undefined,
+  inWhenGuard: boolean
+): string {
+  const parts = [`规则 ${ruleIndex + 1}`];
+
+  if (actionIndex !== undefined) {
+    const action = linkage?.rules?.[ruleIndex]?.actions[actionIndex];
+    const typeLabel = action === undefined ? "" : `（${actionLabelFor(action.type)}）`;
+
+    parts.push(`步骤 ${actionIndex + 1}${typeLabel}`);
+  } else if (inWhenGuard) {
+    parts.push("执行条件");
+  }
+
+  return parts.join(" · ");
+}
+
 /**
  * Where a diagnostic is, in the designer's own words — the field it is about
- * (`金额`, `移动端 · 备注`) or the form-level entry (`数据源「部门」`,
- * `表单联动`) — or `undefined` when the path names nothing the designer shows.
- * A raw path such as `presentations.pc.children[3].key` is for a developer;
- * the designer reading the issue list wants the name they gave the thing.
+ * (`金额`, `移动端 · 备注`), the exact linkage step (`工号 · 规则 1 · 步骤 3（设置字段）`),
+ * or the form-level entry (`数据源「部门」`, `表单事件 · 规则 1 · 步骤 2（选择记录）`)
+ * — or `undefined` when the path names nothing the designer shows.
  */
 export function describeIssueLocation(path: string, schema: FormSchema, device: PresentationDevice): string | undefined {
   const target = locateIssue(path, schema, device);
@@ -270,6 +368,25 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
       const name = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
 
       return target.device === "mobile" ? `移动端 · ${name}` : name;
+    }
+
+    case "linkage": {
+      const segments = path.split(".");
+      const trail = target.scope === "node"
+        ? parseLinkageTrail(segments.slice(2))
+        : parseLinkageTrail(segments[0] === "linkage" ? segments.slice(1) : segments.slice(2));
+      const inWhenGuard = trail?.inWhenGuard === true;
+
+      if (target.scope === "form") {
+        return `表单事件 · ${describeLinkageDetail(schema.linkage, target.ruleIndex, target.actionIndex, inWhenGuard)}`;
+      }
+
+      const layer = schema.presentations[target.device];
+      const node = layer === undefined ? undefined : findNode(layer, target.nodeId);
+      const rawName = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
+      const prefix = target.device === "mobile" ? `移动端 · ${rawName}` : rawName;
+
+      return `${prefix} · ${describeLinkageDetail(node?.linkage, target.ruleIndex, target.actionIndex, inWhenGuard)}`;
     }
 
     case "dataEntry": {
@@ -318,6 +435,29 @@ function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): voi
       return;
     }
 
+    case "linkage": {
+      if (target.scope === "node") {
+        if (state.device !== target.device) {
+          state.setDevice(target.device);
+        }
+
+        storeApi.getState().requestLinkageFocus({
+          scope: "node",
+          nodeId: target.nodeId,
+          ruleIndex: target.ruleIndex,
+          ...target.actionIndex !== undefined && { actionIndex: target.actionIndex }
+        });
+        return;
+      }
+
+      state.requestLinkageFocus({
+        scope: "form",
+        ruleIndex: target.ruleIndex,
+        ...target.actionIndex !== undefined && { actionIndex: target.actionIndex }
+      });
+      return;
+    }
+
     default: {
       assertNever(target);
     }
@@ -344,10 +484,11 @@ export function useIssueDescriber(): (issue: SchemaIssue) => string | undefined 
 
 /**
  * Resolves a diagnostic to the action that shows it — selecting the node it is
- * about (switching device when needed; the canvas scrolls a selection into
- * view) or switching the owning side panel to its tab — or `undefined` when it
- * cannot be shown. Reads the store when called, so the resolver itself is
- * stable and never re-renders a list on schema edits.
+ * about (switching device and focusing the exact linkage rule/action when
+ * needed; the canvas scrolls a selection into view) or switching the owning
+ * side panel to its tab — or `undefined` when it cannot be shown. Reads the
+ * store when called, so the resolver itself is stable and never re-renders a
+ * list on schema edits.
  */
 export function useIssueNavigator(): (issue: SchemaIssue) => (() => void) | undefined {
   const storeApi = useFormEditorStoreApi();
