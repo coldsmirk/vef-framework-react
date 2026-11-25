@@ -1,19 +1,21 @@
 import type { DragEndEvent } from "@vef-framework-react/core";
-import type { ChangeEvent, ReactElement } from "react";
+import type { ChangeEvent, Dispatch, ReactElement, SetStateAction } from "react";
 
 import type { FieldOption } from "../../types";
 
 import { css } from "@emotion/react";
 import { Button, Checkbox, globalCssVars, Input } from "@vef-framework-react/components";
-import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
+import { DragDropProvider, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
+import { omit } from "@vef-framework-react/shared";
 import { useRef, useState } from "react";
 
 import {
   collectOptionValues,
   findDuplicateOptionValues,
-  hasOptionChildren
+  walkOptionTree
 } from "../../engine/options";
 import { EditorIcon } from "../../icons";
+import { draggingRowCss, DragHandle, reorderRows } from "./sortable-rows";
 
 const rootCss = css({
   display: "flex",
@@ -33,82 +35,6 @@ const flatItemCss = css({
   gap: 6
 });
 
-const optionRowCss = css({
-  display: "flex",
-  alignItems: "center",
-  gap: 6
-});
-
-const iconButtonCss = css({
-  width: 24,
-  height: 24,
-  padding: 0,
-  flexShrink: 0
-});
-
-const detailToggleActiveCss = css({
-  color: globalCssVars.colorPrimary
-});
-
-// The drag grip that reorders a flat row. Quiet by default, brightening on
-// hover/focus; focusable so dnd-kit's KeyboardSensor can pick the row up with
-// Enter and move it with the arrow keys.
-const dragHandleCss = css({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 24,
-  height: 24,
-  flexShrink: 0,
-  borderRadius: globalCssVars.borderRadiusSm,
-  color: globalCssVars.colorTextTertiary,
-  cursor: "grab",
-  transition: [
-    `color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
-    `background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`
-  ].join(", "),
-
-  "&:hover": {
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary
-  },
-
-  "&:focus-visible": {
-    outline: "none",
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary,
-    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
-  },
-
-  "&:active": {
-    cursor: "grabbing"
-  },
-
-  "& > svg": {
-    width: 14,
-    height: 14
-  }
-});
-
-// The row lifts to a solid, shadowed surface while dragging so it reads as
-// picked-up above its neighbours.
-const optionRowDraggingCss = css({
-  borderRadius: globalCssVars.borderRadius,
-  background: globalCssVars.colorBgElevated,
-  boxShadow: globalCssVars.shadowLg
-});
-
-const detailSubRowCss = css({
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  paddingLeft: 30
-});
-
-const detailCheckboxCss = css({
-  flexShrink: 0
-});
-
 const treeRowContainerCss = css({
   display: "flex",
   flexDirection: "column",
@@ -123,6 +49,12 @@ const treeRowNestedCss = css({
   borderLeft: `2px solid ${globalCssVars.colorBorder}`
 });
 
+const flatRowHeaderCss = css({
+  display: "flex",
+  alignItems: "center",
+  gap: 6
+});
+
 const treeRowHeaderCss = css({
   display: "flex",
   flexDirection: "column",
@@ -135,7 +67,7 @@ const treeRowHeaderCss = css({
   }
 });
 
-const treeInputsGroupCss = css({
+const inputsGroupCss = css({
   display: "flex",
   alignItems: "center",
   gap: 6,
@@ -143,7 +75,7 @@ const treeInputsGroupCss = css({
   minWidth: 0
 });
 
-const treeActionsCss = css({
+const actionsCss = css({
   display: "flex",
   alignItems: "center",
   gap: 2,
@@ -151,9 +83,31 @@ const treeActionsCss = css({
   justifyContent: "flex-end"
 });
 
+const iconButtonCss = css({
+  width: 24,
+  height: 24,
+  padding: 0,
+  flexShrink: 0
+});
+
+const detailToggleActiveCss = css({
+  color: globalCssVars.colorPrimary
+});
+
 const foldSpacerCss = css({
   width: 24,
   height: 24,
+  flexShrink: 0
+});
+
+const detailSubRowCss = css({
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  paddingLeft: 30
+});
+
+const detailCheckboxCss = css({
   flexShrink: 0
 });
 
@@ -190,8 +144,6 @@ const bulkActionsCss = css({
   gap: 8
 });
 
-export type OptionTreePath = readonly number[];
-
 export interface OptionListEditorProps {
   options: FieldOption[];
   onChange: (next: FieldOption[]) => void;
@@ -208,6 +160,23 @@ export interface OptionListEditorProps {
    * inline static lists single-level.
    */
   allowHierarchy?: boolean;
+}
+
+interface PreorderOptionEntry {
+  depth: number;
+  option: FieldOption;
+}
+
+interface OptionTreeRow extends PreorderOptionEntry {
+  id: string;
+}
+
+let optionRowIdCounter = 0;
+
+function nextOptionRowId(): string {
+  optionRowIdCounter += 1;
+
+  return `option-row-${optionRowIdCounter}`;
 }
 
 function nextUniqueItemValue(used: Set<string>, seqRef: { current: number }): string {
@@ -306,20 +275,8 @@ export function parseIndentedOptionLines(
   return roots;
 }
 
-function withNormalizedChildren(option: FieldOption, children: FieldOption[] | undefined): FieldOption {
-  if (children === undefined || children.length === 0) {
-    const next: FieldOption = { ...option };
-
-    delete next.children;
-
-    return next;
-  }
-
-  return { ...option, children };
-}
-
 function patchOptionMetadata(option: FieldOption, patch: Partial<FieldOption>): FieldOption {
-  const next: FieldOption = { ...option, ...patch };
+  const next: FieldOption = { ...omit(option, ["children"]), ...patch };
 
   if (next.disabled !== true) {
     delete next.disabled;
@@ -329,246 +286,96 @@ function patchOptionMetadata(option: FieldOption, patch: Partial<FieldOption>): 
     delete next.description;
   }
 
-  return withNormalizedChildren(next, next.children);
+  delete next.children;
+
+  return next;
 }
 
-/**
- * Immutably update the option at `path` inside a hierarchical option tree.
- */
-export function updateOptionAtPath(
-  options: readonly FieldOption[],
-  path: OptionTreePath,
-  updater: (option: FieldOption) => FieldOption
-): FieldOption[] {
-  const [head, ...rest] = path;
+function flattenOptionRows(options: readonly FieldOption[]): PreorderOptionEntry[] {
+  const rows: PreorderOptionEntry[] = [];
 
-  if (head === undefined) {
-    return [...options];
-  }
-
-  return options.map((option, index) => {
-    if (index !== head) {
-      return option;
-    }
-
-    if (rest.length === 0) {
-      return updater(option);
-    }
-
-    return withNormalizedChildren(option, updateOptionAtPath(option.children ?? [], rest, updater));
+  walkOptionTree(options, (option, { depth }) => {
+    rows.push({ depth, option: omit(option, ["children"]) });
   });
+
+  return rows;
 }
 
-/**
- * Immutably remove the option (and its subtree) at `path`.
- */
-export function removeOptionAtPath(options: readonly FieldOption[], path: OptionTreePath): FieldOption[] {
-  const [head, ...rest] = path;
+function rebuildOptionTree(rows: readonly PreorderOptionEntry[]): FieldOption[] {
+  const roots: FieldOption[] = [];
+  const stack: Array<{ depth: number; node: FieldOption }> = [];
 
-  if (head === undefined) {
-    return [...options];
-  }
+  for (const row of rows) {
+    const node: FieldOption = { ...omit(row.option, ["children"]) };
 
-  if (rest.length === 0) {
-    return options.filter((_option, index) => index !== head);
-  }
-
-  return options.map((option, index) => index === head
-    ? withNormalizedChildren(option, removeOptionAtPath(option.children ?? [], rest))
-    : option);
-}
-
-/**
- * Append a blank child option under the node at `path`.
- */
-export function addChildOptionAtPath(options: readonly FieldOption[], path: OptionTreePath): FieldOption[] {
-  return updateOptionAtPath(options, path, option => {
-    const children = [...option.children ?? [], { label: "", value: "" }];
-
-    return { ...option, children };
-  });
-}
-
-/**
- * Demote (indent) the option at `path` into the last child of its immediately
- * preceding sibling. Returns `null` when the node has no preceding sibling.
- */
-export function indentOptionAtPath(
-  options: readonly FieldOption[],
-  path: OptionTreePath
-): { options: FieldOption[]; nextPath: number[] } | null {
-  const leafIndex = path.at(-1);
-
-  if (leafIndex === undefined || leafIndex === 0) {
-    return null;
-  }
-
-  const parentPath = path.slice(0, -1);
-  let targetSiblingChildIndex = 0;
-
-  const transformList = (list: readonly FieldOption[]): FieldOption[] => {
-    const moving = list[leafIndex];
-    const prevSibling = list[leafIndex - 1];
-
-    if (moving === undefined || prevSibling === undefined) {
-      return [...list];
+    while (stack.length > 0 && stack.at(-1)!.depth >= row.depth) {
+      stack.pop();
     }
 
-    const nextChildren = [...prevSibling.children ?? [], moving];
+    const parent = stack.at(-1)?.node;
 
-    targetSiblingChildIndex = nextChildren.length - 1;
-
-    return list.flatMap((item, index) => {
-      if (index === leafIndex) {
-        return [];
-      }
-
-      if (index === leafIndex - 1) {
-        return [{ ...item, children: nextChildren }];
-      }
-
-      return [item];
-    });
-  };
-
-  const nextOptions = parentPath.length === 0
-    ? transformList(options)
-    : updateOptionAtPath(options, parentPath, parent => withNormalizedChildren(parent, transformList(parent.children ?? [])));
-
-  return {
-    options: nextOptions,
-    nextPath: [...parentPath, leafIndex - 1, targetSiblingChildIndex]
-  };
-}
-
-/**
- * Promote (outdent) the option at `path` so it becomes the immediate next
- * sibling of its current parent. Returns `null` when the node is already at
- * root depth.
- */
-export function outdentOptionAtPath(
-  options: readonly FieldOption[],
-  path: OptionTreePath
-): { options: FieldOption[]; nextPath: number[] } | null {
-  if (path.length < 2) {
-    return null;
-  }
-
-  const childIndex = path.at(-1)!;
-  const parentIndex = path.at(-2)!;
-  const grandParentPath = path.slice(0, -2);
-
-  const transformGrandList = (list: readonly FieldOption[]): FieldOption[] => {
-    const parent = list[parentIndex];
-    const moving = parent?.children?.[childIndex];
-
-    if (parent === undefined || moving === undefined) {
-      return [...list];
+    if (parent === undefined) {
+      roots.push(node);
+    } else {
+      parent.children ??= [];
+      parent.children.push(node);
     }
 
-    const remainingChildren = (parent.children ?? []).filter((_item, index) => index !== childIndex);
-    const updatedParent = withNormalizedChildren(parent, remainingChildren);
+    stack.push({ depth: row.depth, node });
+  }
 
-    return list.flatMap((item, index) => index === parentIndex ? [updatedParent, moving] : [item]);
-  };
-
-  const nextOptions = grandParentPath.length === 0
-    ? transformGrandList(options)
-    : updateOptionAtPath(options, grandParentPath, gp => withNormalizedChildren(gp, transformGrandList(gp.children ?? [])));
-
-  return {
-    options: nextOptions,
-    nextPath: [...grandParentPath, parentIndex + 1]
-  };
+  return roots;
 }
 
-/**
- * Move an option up (`-1`) or down (`1`) among its siblings at the same parent.
- */
-export function moveOptionSiblingAtPath(
-  options: readonly FieldOption[],
-  path: OptionTreePath,
-  direction: -1 | 1
-): { options: FieldOption[]; nextPath: number[] } | null {
-  const leafIndex = path.at(-1);
+function subtreeEnd(rows: readonly OptionTreeRow[], index: number): number {
+  const baseDepth = rows[index]!.depth;
+  let end = index + 1;
 
-  if (leafIndex === undefined) {
-    return null;
+  while (end < rows.length && rows[end]!.depth > baseDepth) {
+    end += 1;
   }
 
-  const targetIndex = leafIndex + direction;
+  return end;
+}
 
-  if (targetIndex < 0) {
-    return null;
+function findParentIndex(rows: readonly OptionTreeRow[], index: number): number {
+  const targetDepth = rows[index]!.depth - 1;
+
+  if (targetDepth < 0) {
+    return -1;
   }
 
-  const parentPath = path.slice(0, -1);
-  let moved = false;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (rows[i]!.depth === targetDepth) {
+      return i;
+    }
+  }
 
-  const swapInList = (list: readonly FieldOption[]): FieldOption[] => {
-    if (targetIndex >= list.length) {
-      return [...list];
+  return -1;
+}
+
+function findPrevSiblingIndex(rows: readonly OptionTreeRow[], index: number): number {
+  const baseDepth = rows[index]!.depth;
+
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const { depth } = rows[i]!;
+
+    if (depth < baseDepth) {
+      return -1;
     }
 
-    const next = [...list];
-    const current = next[leafIndex];
-    const neighbor = next[targetIndex];
-
-    if (current === undefined || neighbor === undefined) {
-      return next;
+    if (depth === baseDepth) {
+      return i;
     }
-
-    next[leafIndex] = neighbor;
-    next[targetIndex] = current;
-    moved = true;
-
-    return next;
-  };
-
-  const nextOptions = parentPath.length === 0
-    ? swapInList(options)
-    : updateOptionAtPath(options, parentPath, parent => withNormalizedChildren(parent, swapInList(parent.children ?? [])));
-
-  return moved ? { options: nextOptions, nextPath: [...parentPath, targetIndex] } : null;
-}
-
-let optionRowIdCounter = 0;
-
-/**
- * Mint an ephemeral row id. UI-only — keys editor rows while the list is being
- * edited and is never persisted into the schema.
- */
-function nextOptionRowId(): string {
-  optionRowIdCounter += 1;
-
-  return `option-row-${optionRowIdCounter}`;
-}
-
-/**
- * Reorder an option list from a sortable drag. Drives off the UI-only row-id
- * array (the sortable item ids) so `moveDragItem` stays type-safe, then permutes
- * the options into the same order — the two lockstep arrays can never drift.
- * Returns `null` for a no-op (cancel / dropped in place), which the caller uses
- * to skip an empty commit. Exported so the reorder can be unit-tested with a
- * fabricated drag event, the same way the canvas drag-end handler is.
- */
-export function reorderOptionRows(
-  options: FieldOption[],
-  rowIds: string[],
-  event: DragEndEvent
-): { options: FieldOption[]; rowIds: string[] } | null {
-  const nextIds = moveDragItem(rowIds, event);
-
-  if (nextIds === rowIds) {
-    return null;
   }
 
-  const optionByRowId = new Map(rowIds.map((rowId, index) => [rowId, options[index]] as const));
-  const nextOptions = nextIds
-    .map(rowId => optionByRowId.get(rowId))
-    .filter((option): option is FieldOption => option !== undefined);
+  return -1;
+}
 
-  return { options: nextOptions, rowIds: nextIds };
+function findNextSiblingIndex(rows: readonly OptionTreeRow[], index: number): number {
+  const end = subtreeEnd(rows, index);
+
+  return end < rows.length && rows[end]!.depth === rows[index]!.depth ? end : -1;
 }
 
 function OptionDetailFields({
@@ -599,85 +406,199 @@ function OptionDetailFields({
   );
 }
 
-interface OptionRowProps {
-  id: string;
+interface VisibleOptionRow {
+  row: OptionTreeRow;
   index: number;
-  option: FieldOption;
-  duplicated: boolean;
+  hasChildren: boolean;
+  collapsed: boolean;
+  canIndent: boolean;
+  canOutdent: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}
+
+interface OptionRowProps {
+  allowHierarchy: boolean;
+  canIndent: boolean;
+  canMoveDown: boolean;
+  canMoveUp: boolean;
+  canOutdent: boolean;
+  collapsed: boolean;
+  containerRef?: (element: Element | null) => void;
   detailsOpen: boolean;
-  onToggleDetails: () => void;
+  dragHandle?: ReactElement;
+  duplicated: boolean;
+  hasChildren: boolean;
+  isDragging?: boolean;
+  row: OptionTreeRow;
+  onAddChild: () => void;
+  onIndent: () => void;
+  onMoveDown: () => void;
+  onMoveUp: () => void;
+  onOutdent: () => void;
   onPatch: (patch: Partial<FieldOption>) => void;
   onRemove: () => void;
+  onToggleCollapsed: () => void;
+  onToggleDetails: () => void;
 }
 
 /**
- * One sortable flat option row: a drag grip, the label/value inputs, an
- * optional expandable detail toggle (description / disabled), and a delete
- * button.
+ * Unified row renderer shared by flat and hierarchical option lists. Every row
+ * is keyed by its stable ephemeral `row.id` so open details, collapse state,
+ * and input focus follow the logical option across deletes, sibling moves,
+ * indent/outdent, and drag reordering.
  */
 function OptionRow({
+  allowHierarchy,
+  canIndent,
+  canMoveDown,
+  canMoveUp,
+  canOutdent,
+  collapsed,
+  containerRef,
   detailsOpen,
+  dragHandle,
   duplicated,
-  id,
-  index,
+  hasChildren,
+  isDragging = false,
+  onAddChild,
+  onIndent,
+  onMoveDown,
+  onMoveUp,
+  onOutdent,
   onPatch,
   onRemove,
+  onToggleCollapsed,
   onToggleDetails,
-  option
+  row
 }: OptionRowProps): ReactElement {
-  const {
-    handleRef,
-    isDragging,
-    ref
-  } = useSortable({ id, index });
+  const { depth, option } = row;
   const hasDetailMeta = option.disabled === true || (option.description !== undefined && option.description.length > 0);
+  const indentPx = allowHierarchy ? Math.min(depth, 6) * 14 : 0;
 
   return (
-    <div ref={ref} css={[flatItemCss, isDragging && optionRowDraggingCss]}>
-      <div css={optionRowCss}>
-        <span
-          ref={handleRef}
-          aria-label="拖动排序"
-          css={dragHandleCss}
-          role="button"
-          tabIndex={0}
-          title="拖动排序"
-        >
-          <EditorIcon name="grip-vertical" />
-        </span>
+    <div
+      ref={containerRef}
+      style={indentPx > 0 ? { marginLeft: indentPx } : undefined}
+      css={allowHierarchy
+        ? [treeRowContainerCss, depth > 0 && treeRowNestedCss]
+        : [flatItemCss, isDragging && draggingRowCss]}
+    >
+      <div css={allowHierarchy ? treeRowHeaderCss : flatRowHeaderCss}>
+        <div css={inputsGroupCss}>
+          {allowHierarchy
+            ? hasChildren
+              ? (
+                  <Button
+                    aria-expanded={!collapsed}
+                    aria-label={collapsed ? "展开子项" : "折叠子项"}
+                    css={iconButtonCss}
+                    icon={<EditorIcon name={collapsed ? "chevron-right" : "chevron-down"} />}
+                    size="small"
+                    title={collapsed ? "展开子项" : "折叠子项"}
+                    type="text"
+                    onClick={onToggleCollapsed}
+                  />
+                )
+              : <span aria-hidden css={foldSpacerCss} />
+            : dragHandle}
 
-        <Input
-          placeholder="标签"
-          value={option.label}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onPatch({ label: event.target.value })}
-        />
+          <Input
+            placeholder="标签"
+            value={option.label}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => onPatch({ label: event.target.value })}
+          />
 
-        <Input
-          placeholder="值"
-          status={duplicated ? "warning" : undefined}
-          value={String(option.value)}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onPatch({ value: event.target.value })}
-        />
+          <Input
+            placeholder="值"
+            status={duplicated ? "warning" : undefined}
+            value={String(option.value)}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => onPatch({ value: event.target.value })}
+          />
+        </div>
 
-        <Button
-          aria-expanded={detailsOpen}
-          aria-label="选项详情"
-          css={[iconButtonCss, (detailsOpen || hasDetailMeta) && detailToggleActiveCss]}
-          icon={<EditorIcon name="sliders-horizontal" />}
-          size="small"
-          title="描述与禁用"
-          type="text"
-          onClick={onToggleDetails}
-        />
+        <div css={actionsCss}>
+          {allowHierarchy
+            ? (
+                <>
+                  <Button
+                    aria-label="添加子项"
+                    css={iconButtonCss}
+                    icon={<EditorIcon name="corner-down-right" />}
+                    size="small"
+                    title="添加子项"
+                    type="text"
+                    onClick={onAddChild}
+                  />
 
-        <Button
-          aria-label="删除选项"
-          css={iconButtonCss}
-          icon={<EditorIcon name="trash-2" />}
-          size="small"
-          type="text"
-          onClick={onRemove}
-        />
+                  <Button
+                    aria-label="升级"
+                    css={iconButtonCss}
+                    disabled={!canOutdent}
+                    icon={<EditorIcon name="indent-decrease" />}
+                    size="small"
+                    title="升级为上级同级项"
+                    type="text"
+                    onClick={onOutdent}
+                  />
+
+                  <Button
+                    aria-label="降级"
+                    css={iconButtonCss}
+                    disabled={!canIndent}
+                    icon={<EditorIcon name="indent-increase" />}
+                    size="small"
+                    title="降级为前一项的子项"
+                    type="text"
+                    onClick={onIndent}
+                  />
+
+                  <Button
+                    aria-label="上移"
+                    css={iconButtonCss}
+                    disabled={!canMoveUp}
+                    icon={<EditorIcon name="chevron-up" />}
+                    size="small"
+                    title="同级上移"
+                    type="text"
+                    onClick={onMoveUp}
+                  />
+
+                  <Button
+                    aria-label="下移"
+                    css={iconButtonCss}
+                    disabled={!canMoveDown}
+                    icon={<EditorIcon name="chevron-down" />}
+                    size="small"
+                    title="同级下移"
+                    type="text"
+                    onClick={onMoveDown}
+                  />
+                </>
+              )
+            : null}
+
+          <Button
+            aria-expanded={detailsOpen}
+            aria-label="选项详情"
+            css={[iconButtonCss, (detailsOpen || hasDetailMeta) && detailToggleActiveCss]}
+            icon={<EditorIcon name="sliders-horizontal" />}
+            size="small"
+            title="描述与禁用"
+            type="text"
+            onClick={onToggleDetails}
+          />
+
+          <Button
+            aria-label="删除选项"
+            css={iconButtonCss}
+            icon={<EditorIcon name="trash-2" />}
+            size="small"
+            title="删除选项"
+            type="text"
+            onClick={onRemove}
+          />
+        </div>
       </div>
 
       {detailsOpen ? <OptionDetailFields option={option} onChange={onPatch} /> : null}
@@ -685,55 +606,30 @@ function OptionRow({
   );
 }
 
-interface FlattenedTreeItem {
-  option: FieldOption;
-  path: number[];
-  pathKey: string;
-  depth: number;
-  siblingIndex: number;
-  siblingCount: number;
-  hasChildren: boolean;
-  collapsed: boolean;
-}
+function SortableOptionRow(props: Omit<OptionRowProps, "containerRef" | "dragHandle" | "isDragging"> & { index: number }): ReactElement {
+  const { index, row } = props;
+  const {
+    handleRef,
+    isDragging,
+    ref
+  } = useSortable({ id: row.id, index });
 
-function flattenEditableTree(
-  options: readonly FieldOption[],
-  collapsedPaths: ReadonlySet<string>,
-  parentPath: readonly number[] = []
-): FlattenedTreeItem[] {
-  const out: FlattenedTreeItem[] = [];
-
-  for (const [index, option] of options.entries()) {
-    const path = [...parentPath, index];
-    const pathKey = path.join(".");
-    const hasChildren = hasOptionChildren(option);
-    const collapsed = hasChildren && collapsedPaths.has(pathKey);
-
-    out.push({
-      option,
-      path,
-      pathKey,
-      depth: parentPath.length,
-      siblingIndex: index,
-      siblingCount: options.length,
-      hasChildren,
-      collapsed
-    });
-
-    if (hasChildren && !collapsed) {
-      out.push(...flattenEditableTree(option.children!, collapsedPaths, path));
-    }
-  }
-
-  return out;
+  return (
+    <OptionRow
+      {...props}
+      containerRef={ref}
+      dragHandle={<DragHandle handleRef={handleRef} />}
+      isDragging={isDragging}
+    />
+  );
 }
 
 /**
- * Inline editor for a static option list or tree. Shared by the field
- * option-source entry, the fixed-row subform source editor, and the form-global
- * data-source modal so row layout, duplicate-value detection, metadata
- * (`disabled` / `description`), hierarchy operations, and bulk paste live in
- * one place.
+ * Inline editor for a static option list or tree. Internally flattens the tree
+ * into pre-order rows (`{ id, depth, option }`) with ephemeral row IDs kept in
+ * lockstep with every edit, so a flat list is simply a depth-0 tree and every
+ * structural edit (add, remove, indent, outdent, sibling move, drag reorder)
+ * preserves row identity, focus, open detail drawers, and collapse state.
  */
 export function OptionListEditor({
   allowBulkPaste = false,
@@ -745,59 +641,175 @@ export function OptionListEditor({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [openDetails, setOpenDetails] = useState<Set<string>>(() => new Set());
-  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
 
-  if (!allowHierarchy && rowIdsRef.current.length !== options.length) {
-    rowIdsRef.current = options.map(() => nextOptionRowId());
+  const flatEntries = flattenOptionRows(options);
+
+  if (rowIdsRef.current.length !== flatEntries.length) {
+    rowIdsRef.current = flatEntries.map(() => nextOptionRowId());
   }
 
-  const rowIds = rowIdsRef.current;
+  const rows: OptionTreeRow[] = flatEntries.map((entry, index) => {
+    return {
+      id: rowIdsRef.current[index]!,
+      depth: entry.depth,
+      option: entry.option
+    };
+  });
+
   const duplicated = findDuplicateOptionValues(options);
   const bulkPasteEnabled = allowBulkPaste || allowHierarchy;
 
-  const toggleDetails = (key: string): void => {
+  const commitRows = (nextRows: readonly OptionTreeRow[]): void => {
+    rowIdsRef.current = nextRows.map(row => row.id);
+    onChange(rebuildOptionTree(nextRows));
+  };
+
+  const toggleInSet = (setter: Dispatch<SetStateAction<Set<string>>>, id: string): void => {
+    setter(prev => {
+      const next = new Set(prev);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  };
+
+  const uncollapseId = (id: string): void => {
+    setCollapsedIds(prev => {
+      if (!prev.has(id)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const patchRow = (index: number, patch: Partial<FieldOption>): void => {
+    const current = rows[index];
+
+    if (current === undefined) {
+      return;
+    }
+
+    commitRows(rows.with(index, { ...current, option: patchOptionMetadata(current.option, patch) }));
+  };
+
+  const removeRow = (index: number): void => {
+    const end = subtreeEnd(rows, index);
+    const removedIds = new Set(rows.slice(index, end).map(row => row.id));
+
     setOpenDetails(prev => {
       const next = new Set(prev);
 
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
+      for (const id of removedIds) {
+        next.delete(id);
       }
 
-      return next;
+      return next.size === prev.size ? prev : next;
     });
-  };
-
-  const toggleCollapsed = (pathKey: string): void => {
-    setCollapsedPaths(prev => {
+    setCollapsedIds(prev => {
       const next = new Set(prev);
 
-      if (next.has(pathKey)) {
-        next.delete(pathKey);
-      } else {
-        next.add(pathKey);
+      for (const id of removedIds) {
+        next.delete(id);
       }
 
-      return next;
+      return next.size === prev.size ? prev : next;
     });
-  };
-
-  const setFlatRow = (index: number, patch: Partial<FieldOption>): void => {
-    onChange(options.map((option, current) => current === index ? patchOptionMetadata(option, patch) : option));
-  };
-
-  const removeFlatRow = (index: number): void => {
-    rowIdsRef.current = rowIds.filter((_id, current) => current !== index);
-    onChange(options.filter((_option, current) => current !== index));
+    commitRows([...rows.slice(0, index), ...rows.slice(end)]);
   };
 
   const addRootRow = (): void => {
-    if (!allowHierarchy) {
-      rowIdsRef.current = [...rowIds, nextOptionRowId()];
+    commitRows([
+      ...rows,
+      {
+        id: nextOptionRowId(),
+        depth: 0,
+        option: { label: "", value: "" }
+      }
+    ]);
+  };
+
+  const addChildRow = (index: number): void => {
+    const parent = rows[index];
+
+    if (parent === undefined) {
+      return;
     }
 
-    onChange([...options, { label: "", value: "" }]);
+    const end = subtreeEnd(rows, index);
+    const child: OptionTreeRow = {
+      id: nextOptionRowId(),
+      depth: parent.depth + 1,
+      option: { label: "", value: "" }
+    };
+
+    uncollapseId(parent.id);
+    commitRows([...rows.slice(0, end), child, ...rows.slice(end)]);
+  };
+
+  const indentRow = (index: number): void => {
+    const prevSiblingIndex = findPrevSiblingIndex(rows, index);
+
+    if (prevSiblingIndex === -1) {
+      return;
+    }
+
+    const end = subtreeEnd(rows, index);
+
+    uncollapseId(rows[prevSiblingIndex]!.id);
+    commitRows(rows.map((row, current) => current >= index && current < end
+      ? { ...row, depth: row.depth + 1 }
+      : row));
+  };
+
+  const outdentRow = (index: number): void => {
+    const parentIndex = findParentIndex(rows, index);
+
+    if (parentIndex === -1) {
+      return;
+    }
+
+    const end = subtreeEnd(rows, index);
+    const parentEnd = subtreeEnd(rows, parentIndex);
+    const movedBlock = rows.slice(index, end).map(row => {
+      return { ...row, depth: row.depth - 1 };
+    });
+    const trailingSiblings = rows.slice(end, parentEnd);
+
+    commitRows([...rows.slice(0, index), ...trailingSiblings, ...movedBlock, ...rows.slice(parentEnd)]);
+  };
+
+  const moveSiblingRow = (index: number, direction: -1 | 1): void => {
+    if (direction === -1) {
+      const prevIndex = findPrevSiblingIndex(rows, index);
+
+      if (prevIndex === -1) {
+        return;
+      }
+
+      const end = subtreeEnd(rows, index);
+
+      commitRows([...rows.slice(0, prevIndex), ...rows.slice(index, end), ...rows.slice(prevIndex, index), ...rows.slice(end)]);
+      return;
+    }
+
+    const nextIndex = findNextSiblingIndex(rows, index);
+
+    if (nextIndex === -1) {
+      return;
+    }
+
+    const nextEnd = subtreeEnd(rows, nextIndex);
+
+    commitRows([...rows.slice(0, index), ...rows.slice(nextIndex, nextEnd), ...rows.slice(index, nextIndex), ...rows.slice(nextEnd)]);
   };
 
   const applyBulkPaste = (mode: "append" | "replace"): void => {
@@ -812,263 +824,121 @@ export function OptionListEditor({
       return;
     }
 
-    const next = mode === "append" ? [...options, ...parsed] : parsed;
+    const parsedRows: OptionTreeRow[] = flattenOptionRows(parsed).map(entry => {
+      return {
+        id: nextOptionRowId(),
+        depth: entry.depth,
+        option: entry.option
+      };
+    });
 
-    if (!allowHierarchy) {
-      rowIdsRef.current = next.map(() => nextOptionRowId());
-    } else if (mode === "replace") {
-      setCollapsedPaths(new Set());
+    if (mode === "replace") {
+      setOpenDetails(new Set());
+      setCollapsedIds(new Set());
+      commitRows(parsedRows);
+    } else {
+      commitRows([...rows, ...parsedRows]);
     }
 
-    onChange(next);
     setBulkOpen(false);
     setBulkText("");
   };
 
   const handleDragEnd = (event: DragEndEvent): void => {
-    // History coalesces per property entry, so the reorder is one undoable step.
-    const result = reorderOptionRows(options, rowIds, event);
+    const result = reorderRows(rows, rowIdsRef.current, event);
 
-    if (result === null) {
-      return;
+    if (result !== null) {
+      commitRows(result.rows);
     }
-
-    rowIdsRef.current = result.rowIds;
-    onChange(result.options);
   };
 
-  const treeItems = allowHierarchy ? flattenEditableTree(options, collapsedPaths) : [];
+  const visibleRows: VisibleOptionRow[] = [];
+  let hiddenAboveDepth: number | null = null;
+
+  for (const [index, row] of rows.entries()) {
+    if (hiddenAboveDepth !== null) {
+      if (row.depth > hiddenAboveDepth) {
+        continue;
+      }
+
+      hiddenAboveDepth = null;
+    }
+
+    const hasChildren = allowHierarchy && index + 1 < rows.length && rows[index + 1]!.depth > row.depth;
+    const collapsed = hasChildren && collapsedIds.has(row.id);
+
+    if (collapsed) {
+      hiddenAboveDepth = row.depth;
+    }
+
+    const prevSiblingIndex = allowHierarchy ? findPrevSiblingIndex(rows, index) : -1;
+    const nextSiblingIndex = allowHierarchy ? findNextSiblingIndex(rows, index) : -1;
+
+    visibleRows.push({
+      row,
+      index,
+      hasChildren,
+      collapsed,
+      canIndent: prevSiblingIndex !== -1,
+      canOutdent: row.depth > 0,
+      canMoveUp: prevSiblingIndex !== -1,
+      canMoveDown: nextSiblingIndex !== -1
+    });
+  }
+
+  const renderRow = (item: VisibleOptionRow): ReactElement => {
+    const {
+      canIndent,
+      canMoveDown,
+      canMoveUp,
+      canOutdent,
+      collapsed,
+      hasChildren,
+      index,
+      row
+    } = item;
+    const sharedProps = {
+      allowHierarchy,
+      canIndent,
+      canMoveDown,
+      canMoveUp,
+      canOutdent,
+      collapsed,
+      detailsOpen: openDetails.has(row.id),
+      duplicated: duplicated.includes(String(row.option.value)),
+      hasChildren,
+      row,
+      onAddChild: () => addChildRow(index),
+      onIndent: () => indentRow(index),
+      onMoveDown: () => moveSiblingRow(index, 1),
+      onMoveUp: () => moveSiblingRow(index, -1),
+      onOutdent: () => outdentRow(index),
+      onPatch: (patch: Partial<FieldOption>) => patchRow(index, patch),
+      onRemove: () => removeRow(index),
+      onToggleCollapsed: () => toggleInSet(setCollapsedIds, row.id),
+      onToggleDetails: () => toggleInSet(setOpenDetails, row.id)
+    };
+
+    return allowHierarchy
+      ? <OptionRow key={row.id} {...sharedProps} />
+      : <SortableOptionRow key={row.id} index={index} {...sharedProps} />;
+  };
+
+  const renderedRows = visibleRows.map(item => renderRow(item));
 
   return (
     <div css={rootCss}>
-      {options.length === 0 ? <span css={emptyCss}>暂无选项</span> : null}
+      {rows.length === 0 ? <span css={emptyCss}>暂无选项</span> : null}
 
       {allowHierarchy
-        ? treeItems.map(item => {
-            const {
-              collapsed,
-              depth,
-              hasChildren,
-              option,
-              path,
-              pathKey,
-              siblingCount,
-              siblingIndex
-            } = item;
-            const detailsOpen = openDetails.has(pathKey);
-            const hasDetailMeta = option.disabled === true
-              || (option.description !== undefined && option.description.length > 0);
-            const indentPx = Math.min(depth, 6) * 14;
-
-            return (
-              <div
-                key={pathKey}
-                css={[treeRowContainerCss, depth > 0 && treeRowNestedCss]}
-                style={indentPx > 0 ? { marginLeft: indentPx } : undefined}
-              >
-                <div css={treeRowHeaderCss}>
-                  <div css={treeInputsGroupCss}>
-                    {hasChildren
-                      ? (
-                          <Button
-                            aria-expanded={!collapsed}
-                            aria-label={collapsed ? "展开子项" : "折叠子项"}
-                            css={iconButtonCss}
-                            icon={<EditorIcon name={collapsed ? "chevron-right" : "chevron-down"} />}
-                            size="small"
-                            title={collapsed ? "展开子项" : "折叠子项"}
-                            type="text"
-                            onClick={() => toggleCollapsed(pathKey)}
-                          />
-                        )
-                      : <span aria-hidden css={foldSpacerCss} />}
-
-                    <Input
-                      placeholder="标签"
-                      value={option.label}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(
-                        updateOptionAtPath(options, path, current => patchOptionMetadata(current, { label: event.target.value }))
-                      )}
-                    />
-
-                    <Input
-                      placeholder="值"
-                      status={duplicated.includes(String(option.value)) ? "warning" : undefined}
-                      value={String(option.value)}
-                      onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(
-                        updateOptionAtPath(options, path, current => patchOptionMetadata(current, { value: event.target.value }))
-                      )}
-                    />
-                  </div>
-
-                  <div css={treeActionsCss}>
-                    <Button
-                      aria-label="添加子项"
-                      css={iconButtonCss}
-                      icon={<EditorIcon name="corner-down-right" />}
-                      size="small"
-                      title="添加子项"
-                      type="text"
-                      onClick={() => {
-                        setCollapsedPaths(prev => {
-                          if (!prev.has(pathKey)) {
-                            return prev;
-                          }
-
-                          const next = new Set(prev);
-                          next.delete(pathKey);
-                          return next;
-                        });
-                        onChange(addChildOptionAtPath(options, path));
-                      }}
-                    />
-
-                    <Button
-                      aria-label="升级"
-                      css={iconButtonCss}
-                      disabled={depth === 0}
-                      icon={<EditorIcon name="indent-decrease" />}
-                      size="small"
-                      title="升级为上级同级项"
-                      type="text"
-                      onClick={() => {
-                        const result = outdentOptionAtPath(options, path);
-
-                        if (result !== null) {
-                          onChange(result.options);
-                        }
-                      }}
-                    />
-
-                    <Button
-                      aria-label="降级"
-                      css={iconButtonCss}
-                      disabled={siblingIndex === 0}
-                      icon={<EditorIcon name="indent-increase" />}
-                      size="small"
-                      title="降级为前一项的子项"
-                      type="text"
-                      onClick={() => {
-                        const result = indentOptionAtPath(options, path);
-
-                        if (result !== null) {
-                          const parentKey = result.nextPath.slice(0, -1).join(".");
-
-                          setCollapsedPaths(prev => {
-                            if (!prev.has(parentKey)) {
-                              return prev;
-                            }
-
-                            const next = new Set(prev);
-                            next.delete(parentKey);
-                            return next;
-                          });
-                          onChange(result.options);
-                        }
-                      }}
-                    />
-
-                    <Button
-                      aria-label="上移"
-                      css={iconButtonCss}
-                      disabled={siblingIndex === 0}
-                      icon={<EditorIcon name="chevron-up" />}
-                      size="small"
-                      title="同级上移"
-                      type="text"
-                      onClick={() => {
-                        const result = moveOptionSiblingAtPath(options, path, -1);
-
-                        if (result !== null) {
-                          onChange(result.options);
-                        }
-                      }}
-                    />
-
-                    <Button
-                      aria-label="下移"
-                      css={iconButtonCss}
-                      disabled={siblingIndex >= siblingCount - 1}
-                      icon={<EditorIcon name="chevron-down" />}
-                      size="small"
-                      title="同级下移"
-                      type="text"
-                      onClick={() => {
-                        const result = moveOptionSiblingAtPath(options, path, 1);
-
-                        if (result !== null) {
-                          onChange(result.options);
-                        }
-                      }}
-                    />
-
-                    <Button
-                      aria-expanded={detailsOpen}
-                      aria-label="选项详情"
-                      css={[iconButtonCss, (detailsOpen || hasDetailMeta) && detailToggleActiveCss]}
-                      icon={<EditorIcon name="sliders-horizontal" />}
-                      size="small"
-                      title="描述与禁用"
-                      type="text"
-                      onClick={() => toggleDetails(pathKey)}
-                    />
-
-                    <Button
-                      aria-label="删除选项"
-                      css={iconButtonCss}
-                      icon={<EditorIcon name="trash-2" />}
-                      size="small"
-                      title="删除选项"
-                      type="text"
-                      onClick={() => onChange(removeOptionAtPath(options, path))}
-                    />
-                  </div>
-                </div>
-
-                {detailsOpen
-                  ? (
-                      <OptionDetailFields
-                        option={option}
-                        onChange={patch => onChange(
-                          updateOptionAtPath(options, path, current => patchOptionMetadata(current, patch))
-                        )}
-                      />
-                    )
-                  : null}
-              </div>
-            );
-          })
-
+        ? renderedRows
         : (
             // Scoped to its own DragDropProvider so an option-row drag never routes
             // into the editor canvas's drag context (the properties panel renders
             // inside the canvas provider). Restricted to the vertical axis, as a
             // plain reorderable list.
             <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={handleDragEnd}>
-              {options.map((option, index) => {
-                const id = rowIds[index];
-
-                // rowIds is kept in lockstep with options (synced at the top of the
-                // component), so an id is always present here — the guard just
-                // satisfies the index access under `noUncheckedIndexedAccess`.
-                if (id === undefined) {
-                  return null;
-                }
-
-                return (
-                  <OptionRow
-                    key={id}
-                    detailsOpen={openDetails.has(id)}
-                    duplicated={duplicated.includes(String(option.value))}
-                    id={id}
-                    index={index}
-                    option={option}
-                    onPatch={patch => setFlatRow(index, patch)}
-                    onRemove={() => removeFlatRow(index)}
-                    onToggleDetails={() => toggleDetails(id)}
-                  />
-                );
-              })}
+              {renderedRows}
             </DragDropProvider>
           )}
 
@@ -1106,7 +976,7 @@ export function OptionListEditor({
                   取消
                 </Button>
 
-                {options.length > 0
+                {rows.length > 0
                   ? (
                       <Button size="small" onClick={() => applyBulkPaste("append")}>
                         追加
@@ -1115,7 +985,7 @@ export function OptionListEditor({
                   : null}
 
                 <Button size="small" type="primary" onClick={() => applyBulkPaste("replace")}>
-                  {options.length > 0 ? "替换全部" : "导入"}
+                  {rows.length > 0 ? "替换全部" : "导入"}
                 </Button>
               </div>
             </div>

@@ -90,6 +90,18 @@ describe("RemoteOptionSourceEditor", () => {
       expect(onCommit).toHaveBeenLastCalledWith(expect.objectContaining({ mapping: { valueKey: "id" } }));
     });
 
+    it("shows default key placeholders for disabled and description and lists all default mapping keys in the hint", () => {
+      render(<Harness initial={{ request: { resource: "md/department", action: "find_options" } }} />);
+
+      expect(screen.getByPlaceholderText("label")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("value")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("disabled")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("description")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("children")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("可选（平铺建树）")).toBeInTheDocument();
+      expect(screen.getByText(/label \/ value \/ disabled \/ description \/ children/)).toBeInTheDocument();
+    });
+
     it("edits childrenKey and parentKey hierarchy mapping fields", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();

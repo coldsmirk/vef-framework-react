@@ -76,7 +76,7 @@ function OptionMappingFields({ mapping, onChange }: OptionMappingFieldsProps): R
   };
 
   return (
-    <RequestSection hint="留空时读取 label / value / children；填写父级字段后按平铺记录建树" title="字段映射">
+    <RequestSection hint="留空时默认读取 label / value / disabled / description / children；填写父级字段后按平铺记录建树" title="字段映射">
       <div css={requestGridCss}>
         <LabeledControl label="显示字段">
           <Input placeholder="label" value={mapping?.labelKey ?? ""} onChange={event => patch({ labelKey: event.target.value })} />
@@ -87,11 +87,11 @@ function OptionMappingFields({ mapping, onChange }: OptionMappingFieldsProps): R
         </LabeledControl>
 
         <LabeledControl label="禁用字段">
-          <Input placeholder="可选" value={mapping?.disabledKey ?? ""} onChange={event => patch({ disabledKey: event.target.value })} />
+          <Input placeholder="disabled" value={mapping?.disabledKey ?? ""} onChange={event => patch({ disabledKey: event.target.value })} />
         </LabeledControl>
 
         <LabeledControl label="描述字段">
-          <Input placeholder="可选" value={mapping?.descriptionKey ?? ""} onChange={event => patch({ descriptionKey: event.target.value })} />
+          <Input placeholder="description" value={mapping?.descriptionKey ?? ""} onChange={event => patch({ descriptionKey: event.target.value })} />
         </LabeledControl>
 
         <LabeledControl label="子级字段">

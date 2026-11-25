@@ -10,9 +10,9 @@ import { useState } from "react";
 import {
   OptionListEditor,
   parseBulkOptionLines,
-  parseIndentedOptionLines,
-  reorderOptionRows
+  parseIndentedOptionLines
 } from "./option-editors";
+import { reorderRows } from "./sortable-rows";
 
 interface HarnessProps {
   initial: FieldOption[];
@@ -107,37 +107,37 @@ describe("OptionListEditor", () => {
 
   describe("reordering", () => {
     it("moves a row down", () => {
-      const result = reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1));
+      const result = reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1));
 
       expect(result).toEqual({
-        options: [
+        rows: [
           { label: "B", value: "b" },
           { label: "A", value: "a" },
           { label: "C", value: "c" }
         ],
-        rowIds: ["r1", "r0", "r2"]
+        ids: ["r1", "r0", "r2"]
       });
     });
 
     it("moves a row up", () => {
-      const result = reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r2", 1));
+      const result = reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r2", 1));
 
       expect(result).toEqual({
-        options: [
+        rows: [
           { label: "A", value: "a" },
           { label: "C", value: "c" },
           { label: "B", value: "b" }
         ],
-        rowIds: ["r0", "r2", "r1"]
+        ids: ["r0", "r2", "r1"]
       });
     });
 
     it("returns null when the drag is canceled", () => {
-      expect(reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1, true))).toBeNull();
+      expect(reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1, true))).toBeNull();
     });
 
     it("returns null when a row is dropped in its own slot", () => {
-      expect(reorderOptionRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 0))).toBeNull();
+      expect(reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 0))).toBeNull();
     });
 
     it("renders a drag handle per row and no step buttons", () => {
@@ -384,6 +384,77 @@ describe("OptionListEditor", () => {
           children: [{ label: "上海", value: "item_3" }]
         }
       ]);
+    });
+
+    it("keeps open detail drawers, collapse state, and DOM inputs pinned to logical rows across delete, move, indent, and outdent", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Harness
+          allowHierarchy
+          initial={[
+            { label: "甲区", value: "a" },
+            {
+              label: "乙区",
+              value: "b",
+              children: [{ label: "乙子项", value: "b1" }]
+            },
+            {
+              label: "丙区",
+              value: "c",
+              description: "丙说明",
+              children: [{ label: "丙子项", value: "c1" }]
+            }
+          ]}
+        />
+      );
+
+      // Collapse 乙区 and open details on 丙区 (plus collapse 丙区 too after recording inputs).
+      const inputForC = screen.getByDisplayValue("丙区");
+      const foldButtons = screen.getAllByRole("button", { name: "折叠子项" });
+      await user.click(foldButtons[0]!);
+      expect(screen.queryByDisplayValue("乙子项")).not.toBeInTheDocument();
+
+      // Open details on 丙区 (currently index 2 among visible rows: 甲区, 乙区, 丙区, 丙子项).
+      const detailButtons = screen.getAllByRole("button", { name: "选项详情" });
+      await user.click(detailButtons[2]!);
+      const descInputForC = screen.getByDisplayValue("丙说明");
+
+      // 1. Delete 甲区 — 乙区 stays collapsed and 丙区 keeps its open details & same DOM inputs.
+      const removeButtons = screen.getAllByRole("button", { name: "删除选项" });
+      await user.click(removeButtons[0]!);
+      expect(screen.queryByDisplayValue("甲区")).not.toBeInTheDocument();
+      expect(screen.queryByDisplayValue("乙子项")).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue("丙区")).toBe(inputForC);
+      expect(screen.getByDisplayValue("丙说明")).toBe(descInputForC);
+
+      // 2. Move 丙区 up above 乙区 — 乙区 stays collapsed and 丙区 keeps its open details & DOM inputs.
+      const moveUpButtons = screen.getAllByRole("button", { name: "上移" });
+      await user.click(moveUpButtons[1]!);
+      expect(screen.queryByDisplayValue("乙子项")).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue("丙子项")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("丙区")).toBe(inputForC);
+      expect(screen.getByDisplayValue("丙说明")).toBe(descInputForC);
+
+      // Move 丙区 back down, collapse 丙区, then indent under 乙区 — 丙区 stays collapsed with details open.
+      await user.click(screen.getAllByRole("button", { name: "下移" })[0]!);
+      await user.click(screen.getByRole("button", { name: "折叠子项" }));
+      expect(screen.queryByDisplayValue("丙子项")).not.toBeInTheDocument();
+
+      await user.click(screen.getAllByRole("button", { name: "降级" })[1]!);
+      // Indenting under collapsed 乙区 uncollapses 乙区 (so 乙子项 and 丙区 appear),
+      // while 丙区 itself remains collapsed and keeps its open detail drawer & DOM inputs.
+      expect(screen.getByDisplayValue("乙子项")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("丙子项")).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue("丙区")).toBe(inputForC);
+      expect(screen.getByDisplayValue("丙说明")).toBe(descInputForC);
+
+      // 3. Outdent 丙区 back to root — still collapsed, details still open, same DOM inputs.
+      // Visible order: 乙区(0), 乙子项(1), 丙区(2).
+      await user.click(screen.getAllByRole("button", { name: "升级" })[2]!);
+      expect(screen.queryByDisplayValue("丙子项")).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue("丙区")).toBe(inputForC);
+      expect(screen.getByDisplayValue("丙说明")).toBe(descInputForC);
     });
   });
 });
