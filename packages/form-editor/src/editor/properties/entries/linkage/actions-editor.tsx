@@ -1,3 +1,4 @@
+import type { DragDropEventHandlers } from "@vef-framework-react/core";
 import type { FC } from "react";
 
 import type { ValidationIssue, ValidationSeverity } from "../../../../engine/validation";
@@ -10,6 +11,7 @@ import { DragDropProvider, RestrictToVerticalAxis } from "@vef-framework-react/c
 import { useLatest } from "@vef-framework-react/hooks";
 import { useEffect, useMemo, useState } from "react";
 
+import { createId } from "../../../../engine/ids";
 import {
   findBrokenStepReferences,
   findDependentStepsAfter,
@@ -31,6 +33,8 @@ import { createActionFor } from "./mutators";
 import { actionOptionsFor } from "./options";
 import { actionsListCss, addInlineButtonCss, sectionCss, sectionLabelCss } from "./styles";
 
+type DragEndHandler = DragDropEventHandlers["onDragEnd"];
+
 interface ModalSession {
   key: number;
   actionIndex: number;
@@ -51,6 +55,15 @@ function actionKey(action: FieldLinkageAction, index: number): string {
 
 function actionKeys(actions: readonly FieldLinkageAction[]): string[] {
   return actions.map((action, index) => actionKey(action, index));
+}
+
+/**
+ * The action under an id of its own, which a moved step needs to keep its
+ * identity: one that goes by its position would pass it to whichever step
+ * takes its place.
+ */
+function identified(action: FieldLinkageAction): FieldLinkageAction {
+  return action.id === undefined ? { ...action, id: createId("Action") } : action;
 }
 
 function unsupportedReasonFor(
@@ -153,6 +166,12 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   const [attention, setAttention] = useState<{ key: string } | null>(null);
   const [modalSession, setModalSession] = useState<ModalSession | null>(null);
 
+  // The order a drag left, shown while the reader decides on the references it
+  // breaks. The drag has moved the rows' elements by then, so declining it puts
+  // them back only if this order was rendered first.
+  const [proposed, setProposed] = useState<FieldLinkageAction[] | null>(null);
+  const shown = proposed ?? actions;
+
   const availableActions = useMemo(
     () => actionOptionsFor({
       triggerKind,
@@ -168,8 +187,8 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   // Only an effect step reads the results before it; a state action is derived
   // outside any sequence.
   const priorStepsByIndex = useMemo(
-    () => actions.map((action, index) => isEffectAction(action) ? resolvePriorStepSchemas(actions, index, apis) : undefined),
-    [actions, apis]
+    () => shown.map((action, index) => isEffectAction(action) ? resolvePriorStepSchemas(shown, index, apis) : undefined),
+    [shown, apis]
   );
 
   const severities = useMemo(() => worstSeverities(issues), [issues]);
@@ -272,53 +291,59 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
     onChange(renameStepOutputInRule(replaced, index, getStepOutputName(next)));
   };
 
+  const handleDragEnd: DragEndHandler = (event, manager) => {
+    const reordered = reorderRows(actions, actionKeys(actions), event)?.rows.map(action => identified(action));
+
+    if (reordered === undefined) {
+      return;
+    }
+
+    const broken = findBrokenStepReferences(reordered);
+
+    if (broken.length === 0) {
+      onChange(reordered);
+      return;
+    }
+
+    setProposed(reordered);
+
+    // Asked once the order is rendered: the native fallback answers at once.
+    void manager.renderer.rendering.then(() => confirmDialog(
+      "调整顺序后部分步骤的引用将失效，仍要移动吗？",
+      broken
+        .map(item => `步骤 ${item.consumerIndex + 1} 引用了结果「${item.stepName}」，它要到步骤 ${item.producerIndex + 1} 才产生`)
+        .join("；"),
+      {
+        okText: "仍然移动",
+        cancelText: "取消",
+        onOk: () => {
+          setProposed(null);
+          onChange(reordered);
+        },
+        onCancel: () => setProposed(null)
+      }
+    ));
+  };
+
   return (
     <div css={sectionCss}>
       <span css={sectionLabelCss}>THEN</span>
 
-      <DragDropProvider
-        modifiers={[RestrictToVerticalAxis]}
-        onDragEnd={event => {
-          const reordered = reorderRows(actions, actionKeys(actions), event)?.rows;
-
-          if (reordered === undefined) {
-            return;
-          }
-
-          const broken = findBrokenStepReferences(reordered);
-
-          if (broken.length === 0) {
-            onChange(reordered);
-            return;
-          }
-
-          confirmDialog(
-            "调整顺序后部分步骤的引用将失效，仍要移动吗？",
-            broken
-              .map(item => `步骤 ${item.consumerIndex + 1} 引用了结果「${item.stepName}」，它要到步骤 ${item.producerIndex + 1} 才产生`)
-              .join("；"),
-            {
-              okText: "仍然移动",
-              cancelText: "取消",
-              onOk: () => onChange(reordered)
-            }
-          );
-        }}
-      >
+      <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={handleDragEnd}>
         <div css={actionsListCss}>
-          {actions.map((action, index) => {
+          {shown.map((action, index) => {
             const key = actionKey(action, index);
 
             return (
               <ActionEditor
                 key={key}
                 action={action}
-                actions={actions}
+                actions={shown}
                 attention={attention?.key === key ? attention : null}
                 availableActions={availableActions}
                 expanded={expandedKeys.has(key)}
                 index={index}
-                issueSeverity={severities.get(index)}
+                issueSeverity={proposed === null ? severities.get(index) : undefined}
                 priorSteps={priorStepsByIndex[index]}
                 scope={scope}
                 selfKey={selfKey}

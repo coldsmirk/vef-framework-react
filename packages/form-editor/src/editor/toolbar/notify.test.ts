@@ -112,6 +112,15 @@ describe("confirmDialog", () => {
       expect(onOk).not.toHaveBeenCalled();
     });
 
+    it("forwards the decline callback", () => {
+      const vef = installVefGlobal();
+      const onCancel = vi.fn();
+
+      confirmDialog("确认清空？", "该操作可撤销。", { onOk: vi.fn(), onCancel });
+
+      expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({ onCancel }));
+    });
+
     it("forwards custom okText and cancelText when supplied", () => {
       const vef = installVefGlobal();
       const onOk = vi.fn();
@@ -139,13 +148,15 @@ describe("confirmDialog", () => {
       expect(onOk).toHaveBeenCalledTimes(1);
     });
 
-    it("skips the callback when the native confirm is rejected", () => {
+    it("runs the decline callback alone when the native confirm is rejected", () => {
       vi.spyOn(globalThis, "confirm").mockReturnValue(false);
       const onOk = vi.fn();
+      const onCancel = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
+      confirmDialog("确认清空？", "该操作可撤销。", { onOk, onCancel });
 
       expect(onOk).not.toHaveBeenCalled();
+      expect(onCancel).toHaveBeenCalledTimes(1);
     });
 
     it("falls back to the plain-text detail for a rich content body", () => {

@@ -21,6 +21,7 @@ import userEvent from "@testing-library/user-event";
 import { useEffect, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { dragSortableRow } from "../../../../../test-utils";
 import { createDefaultRegistry } from "../../../../engine/registry/defaults";
 import { RegistryProvider } from "../../../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../../../store/form-store";
@@ -269,6 +270,41 @@ function StatefulLinkageHarness({
       </DataSourceApisProvider>
     </PreviewRuntimeProvider>
   );
+}
+
+/**
+ * Two steps, the second drawing from the first.
+ */
+function dependentSteps(withIds = true): FieldLinkage {
+  return {
+    rules: [
+      {
+        id: "R1",
+        trigger: { kind: "commit" },
+        actions: [
+          {
+            ...withIds && { id: "A1" },
+            type: "api_call",
+            request: { resource: "md/staff", action: "lookup" },
+            output: "result"
+          },
+          {
+            ...withIds && { id: "A2" },
+            type: "select_record",
+            source: { kind: "reference", path: "$steps.result" },
+            output: "selected"
+          }
+        ]
+      }
+    ]
+  };
+}
+
+/**
+ * The steps' summaries as they stand on screen.
+ */
+function summaries(): string[] {
+  return screen.getAllByText(/^(?:调用接口|选择记录) · /).map(element => element.textContent);
 }
 
 describe("action sequence designer", () => {
@@ -698,6 +734,64 @@ describe("action sequence designer", () => {
       await user.click(onErrorSelect);
       await user.click(await screen.findByText("忽略失败，继续后续步骤"));
       expect(screen.getByText("失败继续")).toBeInTheDocument();
+    });
+  });
+
+  describe("moving a step", () => {
+    const HANDLES = { name: /^拖动排序步骤/ };
+
+    function shownSteps(): string[] {
+      return screen.getAllByRole("button", HANDLES).map(handle => handle.getAttribute("aria-label") as string);
+    }
+
+    async function dragFirstStepLast(): Promise<void> {
+      await dragSortableRow({
+        handles: screen.getAllByRole("button", HANDLES),
+        from: 0,
+        to: 1
+      });
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("shows the steps in their own order again once a move that breaks references is declined", async () => {
+      const onCommit = vi.fn();
+      const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+      render(<StatefulLinkageHarness initialLinkage={dependentSteps()} onCommit={onCommit} />);
+      await dragFirstStepLast();
+
+      expect(confirmSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("步骤 1 引用了结果「result」，它要到步骤 2 才产生"));
+      expect(onCommit).not.toHaveBeenCalled();
+      expect(shownSteps()).toEqual(["拖动排序步骤 1", "拖动排序步骤 2"]);
+      expect(summaries()).toEqual([expect.stringContaining("调用接口"), expect.stringContaining("选择记录")]);
+    });
+
+    it("moves the step once the move is confirmed", async () => {
+      const onCommit = vi.fn();
+
+      vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+      render(<StatefulLinkageHarness initialLinkage={dependentSteps()} onCommit={onCommit} />);
+      await dragFirstStepLast();
+
+      expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions.map(action => action.id)).toEqual(["A2", "A1"]);
+      expect(summaries()).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
+    });
+
+    it("shows the steps as committed where they came without ids", async () => {
+      const onCommit = vi.fn();
+
+      vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+      render(<StatefulLinkageHarness initialLinkage={dependentSteps(false)} onCommit={onCommit} />);
+      await dragFirstStepLast();
+
+      expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions.map(action => action.type)).toEqual([
+        "select_record",
+        "api_call"
+      ]);
+      expect(summaries()).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
     });
   });
 

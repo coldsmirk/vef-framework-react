@@ -82,6 +82,10 @@ export function infoDialog(title: string, content: ReactNode, detail?: string): 
 export interface ConfirmDialogOptions {
   onOk: () => void;
   /**
+   * Called when the reader declines, by the button or by closing the dialog.
+   */
+  onCancel?: () => void;
+  /**
    * Visual intent of the confirm button.
    *
    * @default "danger"
@@ -114,6 +118,7 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
     detail,
     okText = "确认",
     okType = "danger",
+    onCancel,
     onOk
   } = options;
   const modal = globalThis.$vef?.modal;
@@ -125,7 +130,8 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
       okText,
       okType,
       cancelText,
-      onOk
+      onOk,
+      onCancel
     });
     return;
   }
@@ -137,5 +143,7 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
   // eslint-disable-next-line no-alert -- intentional fallback when $vef.modal is unavailable
   if (globalThis.confirm?.(text === undefined ? title : `${title}\n\n${text}`)) {
     onOk();
+  } else {
+    onCancel?.();
   }
 }
