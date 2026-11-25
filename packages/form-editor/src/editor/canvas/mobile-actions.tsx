@@ -8,16 +8,16 @@ import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-stor
 import { syncMobileFromPc } from "../sync-mobile-from-pc";
 
 /**
- * Actions on the mobile presentation as a whole, shown above the phone. Absent
- * while mobile is undesigned: the seed state inside the phone offers the same
- * sync there, next to the blank start.
+ * Actions on the mobile presentation as a whole, shown above the phone while
+ * editing it. Absent while mobile is undesigned: the seed state inside the phone
+ * offers the same sync there, next to the blank start.
  */
 export function MobileActions(): ReactElement | null {
-  const isDesigned = useFormEditorStore(s => s.schema.presentations.mobile !== undefined);
+  const isOffered = useFormEditorStore(s => s.viewMode === "edit" && s.schema.presentations.mobile !== undefined);
   const storeApi = useFormEditorStoreApi();
   const registries = useDeviceRegistries();
 
-  if (!isDesigned) {
+  if (!isOffered) {
     return null;
   }
 

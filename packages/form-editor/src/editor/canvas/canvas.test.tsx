@@ -668,7 +668,7 @@ describe("Canvas", () => {
       vi.unstubAllGlobals();
     });
 
-    it("is offered beside the phone only", () => {
+    it("is offered beside the phone being edited only", () => {
       const storeApi = setupCanvas({ schema: makeDivergedSchema() });
 
       expect(screen.queryByRole("button", { name: "从 PC 同步" })).not.toBeInTheDocument();
@@ -678,6 +678,12 @@ describe("Canvas", () => {
       });
 
       expect(screen.getByRole("button", { name: "从 PC 同步" })).toBeInTheDocument();
+
+      act(() => {
+        storeApi.getState().setViewMode("preview");
+      });
+
+      expect(screen.queryByRole("button", { name: "从 PC 同步" })).not.toBeInTheDocument();
 
       act(() => {
         storeApi.getState().setViewMode("json");
