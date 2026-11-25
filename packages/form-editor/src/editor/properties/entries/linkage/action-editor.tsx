@@ -426,6 +426,7 @@ function ActionBody({
         <SetFieldsEditor
           assignments={action.assignments}
           scope={scope}
+          selfKey={selfKey}
           onChange={assignments => onChange({ ...action, assignments })}
         />
       );

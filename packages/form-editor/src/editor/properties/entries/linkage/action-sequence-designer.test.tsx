@@ -517,7 +517,8 @@ describe("action sequence designer", () => {
       await user.click(within(dialog).getByRole("button", { name: /按名称匹配/ }));
       await user.click(await screen.findByText(/步骤 2 · 职员查询 · 选中记录/));
 
-      expect(within(dialog).getByRole("status")).toHaveTextContent(/已按名称匹配并新增 4 项写入/);
+      // The rule's own field (工号) is left out although the step declares it.
+      expect(within(dialog).getByRole("status")).toHaveTextContent(/已按名称匹配并新增 3 项写入/);
       await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
       const afterMatch = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
@@ -525,7 +526,6 @@ describe("action sequence designer", () => {
       expect(setFieldsAction).toMatchObject({
         type: "set_fields",
         assignments: [
-          { targetKey: "number", value: { kind: "reference", path: "$steps.selected.number" } },
           { targetKey: "name", value: { kind: "reference", path: "$steps.selected.name" } },
           { targetKey: "phone", value: { kind: "reference", path: "$steps.selected.phoneNumber" } },
           { targetKey: "gender", value: { kind: "reference", path: "$steps.selected.gender" } }
@@ -534,7 +534,7 @@ describe("action sequence designer", () => {
 
       // Expand step 2 (select_record) and check auto-inferred columns preview.
       await user.click(screen.getByRole("button", { name: /选择记录 · result → selected/ }));
-      expect(screen.getByText("留空时展示后续步骤引用的列：工号、姓名、手机号、性别")).toBeInTheDocument();
+      expect(screen.getByText("留空时展示后续步骤引用的列：姓名、手机号、性别")).toBeInTheDocument();
 
       // Rename step 1's output in modal and verify step 2's source follows automatically.
       const updatedModalButtons = screen.getAllByRole("button", { name: "弹窗编辑步骤" });

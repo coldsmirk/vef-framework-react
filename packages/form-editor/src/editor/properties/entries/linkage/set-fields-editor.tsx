@@ -261,18 +261,26 @@ function collectDuplicates(assignments: readonly FieldAssignment[]): ReadonlySet
 export interface SetFieldsEditorProps {
   assignments: FieldAssignment[];
   scope: LinkageScope;
+  /**
+   * The key of the field the rule belongs to; absent on a container's or the
+   * form's own rules.
+   */
+  selfKey?: string;
   onChange: (assignments: FieldAssignment[]) => void;
 }
 
 /**
  * The mapping table of a `set_fields` step: target field ← literal, reference
  * or expression, with the declared fields of an earlier step's result matched
- * onto the controls by name on request.
+ * onto the controls by name on request. Matching leaves the rule's own field
+ * out: written back by what its value looked up, it would lose what the user
+ * just typed whenever the lookup finds nothing.
  */
 export function SetFieldsEditor({
   assignments,
   onChange,
-  scope
+  scope,
+  selfKey
 }: SetFieldsEditorProps): ReactElement {
   const {
     dataSources,
@@ -294,7 +302,8 @@ export function SetFieldsEditor({
   const matchableSteps = priorSteps.filter(step => step.fields.length > 0).toReversed();
 
   const runMatch = (step: PriorStepSchema): void => {
-    const { added, nextAssignments } = matchStepFieldsToTargets(step, writableTargets, assignments);
+    const matchTargets = writableTargets.filter(field => field.key !== selfKey);
+    const { added, nextAssignments } = matchStepFieldsToTargets(step, matchTargets, assignments);
 
     if (added.length > 0) {
       rows.replaceAll(nextAssignments);
@@ -302,7 +311,7 @@ export function SetFieldsEditor({
 
     setMatchStatus(added.length > 0
       ? `已按名称匹配并新增 ${added.length} 项写入`
-      : "没有可自动匹配的新字段（同名字段已全部映射或无同名项）");
+      : "没有可自动匹配的新字段（同名字段已全部映射或无同名项，触发字段自身不参与匹配）");
   };
 
   const matchDropdownItems: DropdownMenuItem[] = matchableSteps.map(step => {

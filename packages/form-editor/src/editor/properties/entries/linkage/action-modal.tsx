@@ -39,6 +39,7 @@ export interface ActionDraftModalProps {
   index: number;
   priorSteps: readonly PriorStepSchema[];
   scope: LinkageScope;
+  selfKey?: string;
   onClose: () => void;
   onAfterClose: () => void;
   onSubmit: (next: ModalEditableAction) => void;
@@ -56,7 +57,8 @@ export function ActionDraftModal({
   onSubmit,
   open,
   priorSteps,
-  scope
+  scope,
+  selfKey
 }: ActionDraftModalProps): ReactElement {
   const [draft, setDraft] = useState(action);
   const [outputError, setOutputError] = useState<string | null>(null);
@@ -138,6 +140,7 @@ export function ActionDraftModal({
                 <SetFieldsEditor
                   assignments={draft.assignments}
                   scope={scope}
+                  selfKey={selfKey}
                   onChange={assignments => setDraft({ ...draft, assignments })}
                 />
               </DraftField>

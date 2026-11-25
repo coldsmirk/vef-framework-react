@@ -215,7 +215,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
 
     confirmDialog(
       `步骤 ${index + 1} 的结果正被后续步骤引用，仍要删除吗？`,
-      `${listSteps(dependents)}引用了该步骤的结果，删除后这些引用将失效。`,
+      `${listSteps(dependents)} 引用了该步骤的结果，删除后这些引用将失效。`,
       {
         okText: "仍然删除",
         cancelText: "取消",
@@ -240,7 +240,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
 
     confirmDialog(
       `步骤 ${index + 1} 的结果正被后续步骤引用，仍要更改类型吗？`,
-      `${listSteps(dependents)}引用了该步骤的结果，更改类型后这些引用将失效。`,
+      `${listSteps(dependents)} 引用了该步骤的结果，更改类型后这些引用将失效。`,
       {
         okText: "仍然更改",
         cancelText: "取消",
@@ -365,6 +365,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
               open={modalSession.open}
               priorSteps={priorStepsByIndex[modalSession.actionIndex] ?? []}
               scope={scope}
+              selfKey={selfKey}
               onAfterClose={() => setModalSession(current => current?.open ? current : null)}
               onClose={() => setModalSession(current => current && { ...current, open: false })}
               onSubmit={next => commitModal(modalSession.actionIndex, next)}
