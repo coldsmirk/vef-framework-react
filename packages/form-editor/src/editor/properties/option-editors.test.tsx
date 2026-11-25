@@ -166,15 +166,21 @@ describe("OptionListEditor", () => {
       expect(screen.queryByDisplayValue("B")).not.toBeInTheDocument();
     });
 
-    it("appends a blank row", async () => {
+    it("appends blank rows under values of their own", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
 
       render(<Harness initial={threeOptions()} onCommit={onCommit} />);
 
       await user.click(screen.getByRole("button", { name: /添加选项/ }));
+      await user.click(screen.getByRole("button", { name: /添加选项/ }));
 
-      expect(onCommit).toHaveBeenLastCalledWith([...threeOptions(), { label: "", value: "" }]);
+      expect(onCommit).toHaveBeenLastCalledWith([
+        ...threeOptions(),
+        { label: "", value: "item_1" },
+        { label: "", value: "item_2" }
+      ]);
+      expect(screen.queryByText(/选项值重复/)).not.toBeInTheDocument();
     });
   });
 
@@ -325,7 +331,7 @@ describe("OptionListEditor", () => {
           value: "east",
           children: [
             { label: "上海", value: "sh" },
-            { label: "", value: "" }
+            { label: "", value: "item_1" }
           ]
         }
       ]);
@@ -337,7 +343,7 @@ describe("OptionListEditor", () => {
           label: "华东",
           value: "east",
           children: [
-            { label: "", value: "" },
+            { label: "", value: "item_1" },
             { label: "上海", value: "sh" }
           ]
         }
@@ -350,12 +356,13 @@ describe("OptionListEditor", () => {
         {
           label: "华东",
           value: "east",
-          children: [{ label: "", value: "" }]
+          children: [{ label: "", value: "item_1" }]
         },
         { label: "上海", value: "sh" }
       ]);
 
       // Duplicate value across tree levels surfaces the inline warning.
+      await user.clear(screen.getAllByPlaceholderText("值")[1]!);
       await user.type(screen.getAllByPlaceholderText("值")[1]!, "east");
       expect(screen.getByText("选项值重复：east")).toBeInTheDocument();
     });

@@ -291,6 +291,7 @@ describe("form data sources panel", () => {
       await user.type(within(dialog).getByLabelText(/名称/), "审批状态");
       await user.click(within(dialog).getByRole("button", { name: /添加选项/ }));
       await user.type(within(dialog).getByPlaceholderText("标签"), "通过");
+      await user.clear(within(dialog).getByPlaceholderText("值"));
       await user.type(within(dialog).getByPlaceholderText("值"), "approved");
 
       expect(storeSources(api)).toHaveLength(0);
@@ -343,7 +344,7 @@ describe("form data sources panel", () => {
       expect(storeSources(api)).toHaveLength(2);
       expect(storeSources(api)[1]).toMatchObject({
         name: "省份",
-        options: [{ label: "上海", value: "" }]
+        options: [{ label: "上海", value: "item_1" }]
       });
     });
   });
@@ -374,7 +375,7 @@ describe("form data sources panel", () => {
 
       expect(storeSources(api)[0]).toMatchObject({
         name: "主要城市",
-        options: [{ label: "北京", value: "bj" }, { label: "", value: "" }]
+        options: [{ label: "北京", value: "bj" }, { label: "", value: "item_1" }]
       });
       expect(api.getState().past).toHaveLength(1);
 

@@ -673,27 +673,23 @@ export function OptionListEditor({
     commitRows(rows.toSpliced(index, subtreeEnd(rows, index) - index));
   };
 
+  const createRow = (depth: number): OptionTreeRow => {
+    return {
+      id: nextRowId(),
+      depth,
+      option: { label: "", value: nextUniqueItemValue(collectOptionValues(options), { current: 1 }) }
+    };
+  };
+
   const addRootRow = (): void => {
-    commitRows([
-      ...rows,
-      {
-        id: nextRowId(),
-        depth: 0,
-        option: { label: "", value: "" }
-      }
-    ]);
+    commitRows([...rows, createRow(0)]);
   };
 
   const addChildRow = (index: number): void => {
     const parent = rows[index]!;
-    const child: OptionTreeRow = {
-      id: nextRowId(),
-      depth: parent.depth + 1,
-      option: { label: "", value: "" }
-    };
 
     expand(parent.id);
-    commitRows(rows.toSpliced(subtreeEnd(rows, index), 0, child));
+    commitRows(rows.toSpliced(subtreeEnd(rows, index), 0, createRow(parent.depth + 1)));
   };
 
   const indentRow = (index: number): void => {

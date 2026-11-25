@@ -60,7 +60,7 @@ describe("options source entry", () => {
 
       await user.click(screen.getByRole("button", { name: /添加选项/ }));
 
-      expect(onChange).toHaveBeenCalledWith({ kind: "static", options: [{ label: "北京", value: "bj" }, { label: "", value: "" }] });
+      expect(onChange).toHaveBeenCalledWith({ kind: "static", options: [{ label: "北京", value: "bj" }, { label: "", value: "item_1" }] });
     });
 
     it("removes an option", async () => {
@@ -126,7 +126,7 @@ describe("options source entry", () => {
           {
             label: "华东",
             value: "east",
-            children: [{ label: "", value: "" }]
+            children: [{ label: "", value: "item_1" }]
           }
         ]
       });
