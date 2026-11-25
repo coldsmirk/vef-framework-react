@@ -5,6 +5,7 @@ import { globalCssVars } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { OverlayContainerProvider } from "../../components/mobile/scope";
+import { ACTION_BAR_RISE } from "./canvas-field";
 
 /* -- Mobile device frame --------------------------------------------------- */
 
@@ -30,10 +31,10 @@ const PHONE_BEZEL = 12;
 // The outer device size — screen plus a bezel on every edge.
 const PHONE_FRAME_WIDTH = PHONE_SCREEN_WIDTH + PHONE_BEZEL * 2;
 const PHONE_FRAME_HEIGHT = PHONE_SCREEN_HEIGHT + PHONE_BEZEL * 2;
-// Status-bar room under the Dynamic Island, and home-indicator room at the
-// bottom — the device's safe-area insets, so content never sits under either.
-const PHONE_SAFE_TOP = 52;
-const PHONE_SAFE_BOTTOM = 26;
+// The device's safe-area insets: the status bar with the Dynamic Island, and
+// the home indicator. Content scrolls between them, never underneath.
+const PHONE_SAFE_TOP = 44;
+const PHONE_SAFE_BOTTOM = 24;
 
 // Auto margins center the device in the canvas (a flex column) and, unlike
 // centered alignment, never push an oversized one past the scrollable start.
@@ -116,18 +117,17 @@ const containedOverlayCss = css({
   }
 });
 
-// The scrolling content viewport inside the screen. Carries the device's
-// safe-area insets (status bar / home indicator) plus the form's horizontal
-// padding. A picker mask covers the screen ABOVE this — the insets pad the
-// content, never the overlay.
+// The scrolling content viewport, filling the screen inside its safe area. A
+// picker mask covers the whole screen ABOVE this — the insets bound the content,
+// never the overlay. The block padding is the headroom the first block's action
+// bar, and a selection ring at either end of the scroll, need.
 export const phoneViewportCss = css({
-  position: "relative",
+  position: "absolute",
+  inset: `${PHONE_SAFE_TOP}px 0 ${PHONE_SAFE_BOTTOM}px`,
   display: "flex",
   flexDirection: "column",
-  width: "100%",
-  height: "100%",
   overflow: "auto",
-  padding: `${PHONE_SAFE_TOP}px ${globalCssVars.spacingXl} ${PHONE_SAFE_BOTTOM}px`,
+  padding: `${ACTION_BAR_RISE}px ${globalCssVars.spacingXl} ${globalCssVars.spacingMd}`,
   // Read as glass, not a scroll pane — the device hides its scrollbar.
   scrollbarWidth: "none",
   "&::-webkit-scrollbar": { display: "none" }
