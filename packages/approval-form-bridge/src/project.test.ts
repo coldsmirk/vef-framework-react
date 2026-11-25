@@ -1582,6 +1582,133 @@ describe("projectFormSchema", () => {
       ]);
     });
 
+    it("compares reference dynamic params across devices and rejects path or kind mismatches", () => {
+      const aligned = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "select",
+            key: "team",
+            dataSource: {
+              kind: "remote",
+              request: {
+                resource: "org/team",
+                action: "list",
+                params: { dept: { kind: "reference", path: "$form.deptId" } }
+              }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "select",
+                key: "team",
+                dataSource: {
+                  kind: "remote",
+                  request: {
+                    resource: "org/team",
+                    action: "list",
+                    params: { dept: { kind: "reference", path: "$form.deptId" } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(aligned.valid).toBe(true);
+      expect(aligned.issues).toEqual([expect.objectContaining({ code: "options_not_static", path: "team" })]);
+
+      const pathMismatch = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "select",
+            key: "team",
+            dataSource: {
+              kind: "remote",
+              request: {
+                resource: "org/team",
+                action: "list",
+                params: { dept: { kind: "reference", path: "$form.deptId" } }
+              }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "select",
+                key: "team",
+                dataSource: {
+                  kind: "remote",
+                  request: {
+                    resource: "org/team",
+                    action: "list",
+                    params: { dept: { kind: "reference", path: "$form.otherDeptId" } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(pathMismatch.valid).toBe(false);
+      expect(pathMismatch.issues).toContainEqual(expect.objectContaining({
+        code: "cross_device_options_mismatch",
+        severity: "error",
+        path: "team"
+      }));
+
+      const kindMismatch = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "select",
+            key: "team",
+            dataSource: {
+              kind: "remote",
+              request: {
+                resource: "org/team",
+                action: "list",
+                params: { dept: { kind: "reference", path: "$form.deptId" } }
+              }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "select",
+                key: "team",
+                dataSource: {
+                  kind: "remote",
+                  request: {
+                    resource: "org/team",
+                    action: "list",
+                    params: { dept: { kind: "expression", source: "$form.deptId" } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ));
+      expect(kindMismatch.valid).toBe(false);
+      expect(kindMismatch.issues).toContainEqual(expect.objectContaining({
+        code: "cross_device_options_mismatch",
+        severity: "error",
+        path: "team"
+      }));
+    });
+
     it("rejects validation divergences on scalar fields and detail tables without duplicating derived storage errors", () => {
       const maxLenDiff = projectFormSchema(schemaOf(
         [

@@ -265,6 +265,10 @@ function dynamicParamEqual(a: DynamicValue, b: DynamicValue): boolean {
     return equalJSONValue(a.value, b.value);
   }
 
+  if (a.kind === "reference" && b.kind === "reference") {
+    return a.path === b.path;
+  }
+
   if (a.kind === "expression" && b.kind === "expression") {
     return a.source === b.source;
   }
