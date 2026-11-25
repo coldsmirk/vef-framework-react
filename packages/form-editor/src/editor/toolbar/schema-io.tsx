@@ -171,7 +171,7 @@ export function SchemaIoModal({ mode, onClose }: SchemaIoModalProps): ReactEleme
 
                 {importError
                   ? (
-                      <ScrollArea scrollbars="vertical" viewportStyle={IMPORT_ERROR_VIEWPORT_STYLE}>
+                      <ScrollArea scrollbars="vertical" type="auto" viewportStyle={IMPORT_ERROR_VIEWPORT_STYLE}>
                         <div css={importErrorCss} role="alert">{importError}</div>
                       </ScrollArea>
                     )
