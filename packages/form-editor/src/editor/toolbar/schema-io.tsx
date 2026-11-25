@@ -9,8 +9,17 @@ import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-stor
 import { applySchemaJson, downloadSchemaJson } from "../schema-apply";
 import { notify } from "./notify";
 
+// Follows the window, so the modal's title and buttons stay in view in a short
+// one and only the text inside scrolls.
+const panelCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  height: "min(560px, calc(100vh - 190px))"
+});
+
 const exportScrollCss = css({
-  maxHeight: "60vh",
+  flex: 1,
   borderRadius: globalCssVars.borderRadius,
   background: globalCssVars.colorBgLayout,
   border: `1px solid ${globalCssVars.colorBorderSecondary}`
@@ -28,13 +37,19 @@ const exportPreCss = css({
 });
 
 const importErrorCss = css({
-  marginTop: 8,
   color: globalCssVars.colorErrorText,
   fontSize: globalCssVars.fontSize,
   whiteSpace: "pre-wrap"
 });
 
+const IMPORT_ERROR_VIEWPORT_STYLE = {
+  maxHeight: 110
+} as const;
+
 const textAreaStyle = {
+  flex: 1,
+  minHeight: 0,
+  resize: "none",
   fontFamily: globalCssVars.fontFamilyCode,
   fontSize: globalCssVars.fontSize
 } as const;
@@ -138,25 +153,32 @@ export function SchemaIoModal({ mode, onClose }: SchemaIoModalProps): ReactEleme
           )}
       onCancel={onClose}
     >
-      {mode === "export"
-        ? (
-            <ScrollArea css={exportScrollCss}>
-              <pre css={exportPreCss}>{exportedJson}</pre>
-            </ScrollArea>
-          )
-        : (
-            <>
-              <Input.TextArea
-                autoSize={{ minRows: 12, maxRows: 24 }}
-                spellCheck={false}
-                style={textAreaStyle}
-                value={importText}
-                onChange={handleChange}
-              />
+      <div css={panelCss}>
+        {mode === "export"
+          ? (
+              <ScrollArea css={exportScrollCss} scrollbars="vertical">
+                <pre css={exportPreCss}>{exportedJson}</pre>
+              </ScrollArea>
+            )
+          : (
+              <>
+                <Input.TextArea
+                  spellCheck={false}
+                  style={textAreaStyle}
+                  value={importText}
+                  onChange={handleChange}
+                />
 
-              {importError ? <div css={importErrorCss} role="alert">{importError}</div> : null}
-            </>
-          )}
+                {importError
+                  ? (
+                      <ScrollArea scrollbars="vertical" viewportStyle={IMPORT_ERROR_VIEWPORT_STYLE}>
+                        <div css={importErrorCss} role="alert">{importError}</div>
+                      </ScrollArea>
+                    )
+                  : null}
+              </>
+            )}
+      </div>
     </Modal>
   );
 }
