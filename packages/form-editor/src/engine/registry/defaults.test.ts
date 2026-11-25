@@ -38,6 +38,7 @@ describe("createDefaultRegistry", () => {
     expect(registry.has("textarea")).toBe(true);
     expect(registry.has("divider")).toBe(true);
     expect(registry.has("alert-block")).toBe(true);
+    expect(registry.has("heading")).toBe(true);
     expect(registry.has("paragraph")).toBe(true);
   });
 

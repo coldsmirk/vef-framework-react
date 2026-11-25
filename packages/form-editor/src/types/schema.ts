@@ -717,16 +717,47 @@ export interface AlertBlockField extends FormFieldBase {
 }
 
 /**
+ * Semantic tone of static text (antd `Typography` `type`). On mobile the
+ * renderers map it to the matching theme color.
+ */
+export type TextTone = "secondary" | "success" | "warning" | "danger";
+
+/**
+ * Heading level, 1 (largest) to 5 (antd `Typography.Title` `level`).
+ */
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5;
+
+/**
+ * Static heading — the form's own title, or the title of a run of fields.
+ * Non-keyed presentation.
+ */
+export interface HeadingField extends FormFieldBase {
+  type: "heading";
+  text?: string;
+  /**
+   * Omitted means 3.
+   */
+  level?: HeadingLevel;
+  /**
+   * Omitted means left.
+   */
+  align?: "left" | "center" | "right";
+  /**
+   * Omitted means the default heading color.
+   */
+  textType?: TextTone;
+}
+
+/**
  * Static paragraph of explanatory text. Non-keyed presentation.
  */
 export interface ParagraphField extends FormFieldBase {
   type: "paragraph";
   text?: string;
   /**
-   * Semantic text tone (antd `Typography` `type`). On mobile the renderer maps
-   * it to the matching theme color. Omitted means the default body color.
+   * Omitted means the default body color.
    */
-  textType?: "secondary" | "success" | "warning" | "danger";
+  textType?: TextTone;
   /**
    * Bold weight (antd `strong`).
    */
@@ -770,6 +801,7 @@ export interface FormFieldTypeMap {
   upload: UploadField;
   divider: DividerField;
   "alert-block": AlertBlockField;
+  heading: HeadingField;
   paragraph: ParagraphField;
 }
 

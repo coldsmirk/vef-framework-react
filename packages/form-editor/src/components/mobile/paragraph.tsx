@@ -5,6 +5,8 @@ import type { FieldComponentProps, ParagraphField } from "../../types";
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
+import { textToneColors } from "./text-tone";
+
 const paragraphCss = css({
   margin: 0,
   color: globalCssVars.colorText,
@@ -12,17 +14,6 @@ const paragraphCss = css({
   lineHeight: globalCssVars.lineHeight,
   whiteSpace: "pre-wrap"
 });
-
-/**
- * Map the semantic text tone onto a theme color, approximating the PC
- * `Typography` `type` palette. An absent tone leaves the base body color.
- */
-const colorByTextType: Record<NonNullable<ParagraphField["textType"]>, string> = {
-  secondary: globalCssVars.colorTextSecondary,
-  success: globalCssVars.colorSuccess,
-  warning: globalCssVars.colorWarning,
-  danger: globalCssVars.colorError
-};
 
 /**
  * Mobile read-only renderer for the static paragraph. antd-mobile ships no
@@ -36,7 +27,7 @@ export const MobileParagraph: FC<FieldComponentProps<ParagraphField, undefined>>
     css={[
       paragraphCss,
       css({
-        color: field.textType ? colorByTextType[field.textType] : undefined,
+        color: field.textType ? textToneColors[field.textType] : undefined,
         fontWeight: field.strong ? 600 : undefined,
         fontStyle: field.italic ? "italic" : undefined
       })

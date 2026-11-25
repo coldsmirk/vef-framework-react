@@ -5,13 +5,29 @@ import type {
   DividerField,
   FieldComponentProps,
   FieldDefinition,
+  HeadingField,
+  HeadingLevel,
   ParagraphField,
-  PropertiesDescriptor
+  PropertiesDescriptor,
+  PropertyEntryOption,
+  TextTone
 } from "../../types";
 
-import { Alert, Divider, Paragraph } from "@vef-framework-react/components";
+import { css } from "@emotion/react";
+import { Alert, Divider, Paragraph, Title } from "@vef-framework-react/components";
 
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
+
+// antd's typography carries its own document-flow margins. A form block's
+// spacing belongs to the stack that lays it out, so the text adds none.
+const flushTextCss = css({ margin: 0 });
+
+const textToneOptions: Array<PropertyEntryOption & { value: TextTone }> = [
+  { value: "secondary", label: "次要" },
+  { value: "success", label: "成功" },
+  { value: "warning", label: "警告" },
+  { value: "danger", label: "危险" }
+];
 
 /* ------------------------------------------------------------------ divider */
 
@@ -166,10 +182,102 @@ export const alertBlockDefinition: FieldDefinition = defineFieldDefinition<Alert
   properties: alertBlockProperties
 });
 
+/* ------------------------------------------------------------------ heading */
+
+/**
+ * The level a heading renders at while it sets none.
+ */
+export const DEFAULT_HEADING_LEVEL: HeadingLevel = 3;
+
+const headingLevels: Array<{ level: HeadingLevel; label: string }> = [
+  { level: 1, label: "一级标题" },
+  { level: 2, label: "二级标题" },
+  { level: 3, label: "三级标题" },
+  { level: 4, label: "四级标题" },
+  { level: 5, label: "五级标题" }
+];
+
+function HeadingView({ field }: FieldComponentProps<HeadingField, undefined>): ReactElement {
+  return (
+    <Title
+      css={[flushTextCss, { textAlign: field.align }]}
+      level={field.level ?? DEFAULT_HEADING_LEVEL}
+      type={field.textType}
+    >
+      {field.text ?? ""}
+    </Title>
+  );
+}
+
+const headingProperties: PropertiesDescriptor = [
+  {
+    id: "general",
+    label: "通用",
+    tab: "props",
+    entries: [
+      definePropertyEntry<HeadingField, string | undefined>({
+        id: "text",
+        label: "文本",
+        type: "text",
+        read: field => field.text,
+        write: (field, text) => { return { ...field, text }; }
+      }),
+      // The select entry reads and writes strings.
+      definePropertyEntry<HeadingField, string>({
+        id: "level",
+        label: "级别",
+        type: "select",
+        options: headingLevels.map(({ label, level }) => { return { value: String(level), label }; }),
+        read: field => String(field.level ?? DEFAULT_HEADING_LEVEL),
+        write: (field, value) => { return { ...field, level: headingLevels.find(({ level }) => String(level) === value)?.level }; }
+      }),
+      definePropertyEntry<HeadingField, HeadingField["align"]>({
+        id: "align",
+        label: "对齐",
+        type: "select",
+        options: [
+          { value: "left", label: "左" },
+          { value: "center", label: "居中" },
+          { value: "right", label: "右" }
+        ],
+        read: field => field.align ?? "left",
+        write: (field, align) => { return { ...field, align }; }
+      }),
+      definePropertyEntry<HeadingField, HeadingField["textType"]>({
+        id: "textType",
+        label: "文本类型",
+        type: "select",
+        options: textToneOptions,
+        read: field => field.textType,
+        write: (field, textType) => { return { ...field, textType }; }
+      })
+    ]
+  }
+];
+
+export const headingDefinition: FieldDefinition = defineFieldDefinition<HeadingField, undefined>({
+  config: {
+    type: "heading",
+    name: "标题",
+    group: "presentation",
+    keyed: false,
+    icon: "heading",
+    create: () => {
+      return { type: "heading", text: "标题" };
+    }
+  },
+  Component: HeadingView,
+  properties: headingProperties
+});
+
 /* ---------------------------------------------------------------- paragraph */
 
 function ParagraphView({ field }: FieldComponentProps<ParagraphField, undefined>): ReactElement {
-  return <Paragraph italic={field.italic} strong={field.strong} type={field.textType}>{field.text ?? ""}</Paragraph>;
+  return (
+    <Paragraph css={flushTextCss} italic={field.italic} strong={field.strong} type={field.textType}>
+      {field.text ?? ""}
+    </Paragraph>
+  );
 }
 
 const paragraphProperties: PropertiesDescriptor = [
@@ -189,12 +297,7 @@ const paragraphProperties: PropertiesDescriptor = [
         id: "textType",
         label: "文本类型",
         type: "select",
-        options: [
-          { value: "secondary", label: "次要" },
-          { value: "success", label: "成功" },
-          { value: "warning", label: "警告" },
-          { value: "danger", label: "危险" }
-        ],
+        options: textToneOptions,
         read: field => field.textType,
         write: (field, textType) => { return { ...field, textType }; }
       }),

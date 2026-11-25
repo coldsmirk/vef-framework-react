@@ -3,7 +3,7 @@ import { checkboxGroupFieldDefinition } from "../../components/checkbox-group-fi
 import { codeEditorDefinition } from "../../components/code-editor";
 import { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../../components/containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../../components/date-field";
-import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../../components/display";
+import { alertBlockDefinition, dividerDefinition, headingDefinition, paragraphDefinition } from "../../components/display";
 import { multiSelectFieldDefinition } from "../../components/multi-select-field";
 import { numberFieldDefinition } from "../../components/number-field";
 import { radioFieldDefinition } from "../../components/radio-field";
@@ -47,9 +47,10 @@ export function registerDefaults(registry: FormFieldRegistry): void {
   registry.register(matrixTableDefinition);
   registry.register(flexDefinition);
   registry.register(gridDefinition);
+  registry.register(headingDefinition);
+  registry.register(paragraphDefinition);
   registry.register(dividerDefinition);
   registry.register(alertBlockDefinition);
-  registry.register(paragraphDefinition);
 
   registry.setContainerChrome(pcContainerChrome);
 }

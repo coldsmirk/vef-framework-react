@@ -445,7 +445,7 @@ function validateBlock(raw: unknown, where: string, scope: string[], ctx: Ctx): 
  * object pasted via import) would crash React with "Objects are not valid as
  * a React child" after a "successful" import. Mirrors the section `title` /
  * tab `label` checks; covers the universal leaf props plus the presentational
- * text props (divider `title`, paragraph `text`, alert `message`).
+ * text props (divider `title`, heading / paragraph `text`, alert `message`).
  */
 const DISPLAY_TEXT_PROPS = ["label", "placeholder", "helperText", "title", "text", "message"] as const;
 

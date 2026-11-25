@@ -16,6 +16,7 @@ const MOBILE_FIELD_TYPES = [
   "button",
   "divider",
   "alert-block",
+  "heading",
   "paragraph"
 ];
 

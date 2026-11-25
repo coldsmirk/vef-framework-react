@@ -1,9 +1,9 @@
-import type { AlertBlockField, DividerField, FieldDefinition, ParagraphField, PropertyEntry } from "../../types";
+import type { AlertBlockField, DividerField, FieldDefinition, HeadingField, ParagraphField, PropertyEntry } from "../../types";
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "./index";
+import { alertBlockDefinition, dividerDefinition, headingDefinition, paragraphDefinition } from "./index";
 
 function entry(definition: FieldDefinition, id: string): PropertyEntry | undefined {
   return definition.properties?.flatMap(group => group.entries).find(item => item.id === id);
@@ -17,6 +17,11 @@ describe("display fields", () => {
       group: "presentation"
     });
     expect(alertBlockDefinition.config).toMatchObject({ type: "alert-block", keyed: false });
+    expect(headingDefinition.config).toMatchObject({
+      type: "heading",
+      keyed: false,
+      group: "presentation"
+    });
     expect(paragraphDefinition.config).toMatchObject({ type: "paragraph", keyed: false });
   });
 
@@ -173,6 +178,61 @@ describe("display fields", () => {
 
       expect(banner?.read(base)).toBeUndefined();
       expect(banner?.write(base, true)).toMatchObject({ banner: true });
+    });
+  });
+
+  describe("heading", () => {
+    const base: HeadingField = {
+      id: "H",
+      type: "heading",
+      text: "输血申请单"
+    };
+
+    function renderHeading(field: HeadingField): void {
+      const { Component } = headingDefinition;
+
+      if (!Component) {
+        throw new Error("heading is missing a Component");
+      }
+
+      render(<Component domId="field-h" field={field} value={undefined} onChange={vi.fn()} />);
+    }
+
+    it("renders a third-level heading when no level is set", () => {
+      renderHeading(base);
+
+      expect(screen.getByRole("heading", { level: 3, name: "输血申请单" })).toBeInTheDocument();
+    });
+
+    it("renders the configured level and alignment", () => {
+      renderHeading({
+        ...base,
+        level: 1,
+        align: "center"
+      });
+
+      expect(screen.getByRole("heading", { level: 1 })).toHaveStyle({ textAlign: "center" });
+    });
+
+    it("stores the picked level as a number", () => {
+      const level = entry(headingDefinition, "level");
+
+      expect(level?.read(base)).toBe("3");
+      expect(level?.write(base, "2")).toMatchObject({ level: 2 });
+    });
+
+    it("reads an unset alignment as left", () => {
+      const align = entry(headingDefinition, "align");
+
+      expect(align?.read(base)).toBe("left");
+      expect(align?.write(base, "center")).toMatchObject({ align: "center" });
+    });
+
+    it("writes the text type through its property entry", () => {
+      const textType = entry(headingDefinition, "textType");
+
+      expect(textType?.read(base)).toBeUndefined();
+      expect(textType?.write(base, "danger")).toMatchObject({ textType: "danger" });
     });
   });
 

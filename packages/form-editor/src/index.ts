@@ -3,7 +3,7 @@ export { checkboxGroupFieldDefinition } from "./components/checkbox-group-field"
 export { codeEditorDefinition } from "./components/code-editor";
 export { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "./components/containers";
 export { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "./components/date-field";
-export { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "./components/display";
+export { alertBlockDefinition, dividerDefinition, headingDefinition, paragraphDefinition } from "./components/display";
 export { mobileFieldDefinitions } from "./components/mobile/definitions";
 export { useMobileScopeContainer } from "./components/mobile/scope";
 export { multiSelectFieldDefinition } from "./components/multi-select-field";

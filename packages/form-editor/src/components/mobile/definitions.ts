@@ -11,6 +11,7 @@ import type {
   FieldComponentProps,
   FieldDefinition,
   FormField,
+  HeadingField,
   MultiSelectField,
   NumberField,
   ParagraphField,
@@ -26,7 +27,7 @@ import { buttonDefinition } from "../button";
 import { checkboxGroupFieldDefinition } from "../checkbox-group-field";
 import { flexDefinition, gridDefinition, matrixTableDefinition, sectionDefinition, subformDefinition, tabsDefinition } from "../containers";
 import { dateFieldDefinition, dateRangeFieldDefinition, datetimeFieldDefinition } from "../date-field";
-import { alertBlockDefinition, dividerDefinition, paragraphDefinition } from "../display";
+import { alertBlockDefinition, dividerDefinition, headingDefinition, paragraphDefinition } from "../display";
 import { multiSelectFieldDefinition } from "../multi-select-field";
 import { numberFieldDefinition } from "../number-field";
 import { radioFieldDefinition } from "../radio-field";
@@ -42,6 +43,7 @@ import { MobileDateInput } from "./date";
 import { MobileDateRangeInput } from "./daterange";
 import { MobileDatetimeInput } from "./datetime";
 import { MobileDivider } from "./divider";
+import { MobileHeading } from "./heading";
 import { MobileMultiSelectInput } from "./multi-select";
 import { MobileNumber } from "./number";
 import { MobileParagraph } from "./paragraph";
@@ -92,9 +94,10 @@ export const mobileFieldDefinitions: FieldDefinition[] = [
   // "未知字段类型" on mobile instead of a working control.
   uploadFieldDefinition,
   mobileDefinition<ButtonField, undefined>(buttonDefinition, MobileButton),
+  mobileDefinition<HeadingField, undefined>(headingDefinition, MobileHeading),
+  mobileDefinition<ParagraphField, undefined>(paragraphDefinition, MobileParagraph),
   mobileDefinition<DividerField, undefined>(dividerDefinition, MobileDivider),
   mobileDefinition<AlertBlockField, undefined>(alertBlockDefinition, MobileAlertBlock),
-  mobileDefinition<ParagraphField, undefined>(paragraphDefinition, MobileParagraph),
   sectionDefinition,
   tabsDefinition,
   subformDefinition,
