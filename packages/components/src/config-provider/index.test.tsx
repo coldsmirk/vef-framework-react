@@ -1,9 +1,36 @@
 import { act, render, screen, waitFor } from "../../test-utils";
-import { showInfoMessage } from "../_base";
+import { showInfoAlert, showInfoMessage } from "../_base";
 import { FormModal } from "../form-modal";
+import { Modal } from "../modal";
 import { Pagination } from "../pagination";
 
 describe("config-provider/ConfigProvider", () => {
+  describe("dialogs", () => {
+    it("centres a modal vertically", () => {
+      render(<Modal open title="Centred" />);
+
+      expect(screen.getByRole("dialog").parentElement).toHaveClass("vef-modal-centered");
+    });
+
+    it("centres an imperative dialog vertically", async () => {
+      render(<div />);
+
+      act(() => {
+        showInfoAlert("Saved");
+      });
+
+      const dialog = await screen.findByRole("dialog");
+
+      expect(dialog.parentElement).toHaveClass("vef-modal-centered");
+    });
+
+    it("lets a single modal opt out", () => {
+      render(<Modal open centered={false} title="Top" />);
+
+      expect(screen.getByRole("dialog").parentElement).not.toHaveClass("vef-modal-centered");
+    });
+  });
+
   describe("component defaults", () => {
     it("applies an application default to an antd-backed component", () => {
       render(<Pagination total={20} />, {

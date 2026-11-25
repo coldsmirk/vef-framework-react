@@ -162,7 +162,6 @@ export const FormModal = memo(<TValues extends object, TData = unknown>(props: F
 
   return (
     <Modal
-      centered
       destroyOnHidden
       draggable={draggable}
       footer={footer}

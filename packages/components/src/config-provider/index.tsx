@@ -44,7 +44,7 @@ export function ConfigProvider({
           image={componentDefaults.Image}
           input={componentDefaults.Input}
           locale={locale}
-          modal={{ mask: { closable: false } }}
+          modal={{ centered: true, mask: { closable: false } }}
           pagination={componentDefaults.Pagination}
           popover={{ arrow: false }}
           prefixCls="vef"

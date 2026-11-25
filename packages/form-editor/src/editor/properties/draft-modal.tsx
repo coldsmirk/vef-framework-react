@@ -101,7 +101,6 @@ export function DraftModal({
 
   return (
     <Modal
-      centered
       destroyOnHidden
       afterClose={onAfterClose}
       open={open}

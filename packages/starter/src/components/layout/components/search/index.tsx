@@ -109,7 +109,6 @@ export function Search() {
     <ClassNames>
       {({ css }) => (
         <Modal
-          centered
           destroyOnHidden
           closable={false}
           css={modalStyle}

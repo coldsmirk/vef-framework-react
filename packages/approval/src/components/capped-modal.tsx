@@ -2,11 +2,10 @@ import type { ModalProps } from "@vef-framework-react/components";
 
 import { Modal } from "@vef-framework-react/components";
 
-export function CappedModal(props: Omit<ModalProps, "centered" | "styles">) {
+export function CappedModal(props: Omit<ModalProps, "styles">) {
   return (
     <Modal
       {...props}
-      centered
       styles={{
         container: {
           display: "flex",
