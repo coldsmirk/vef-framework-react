@@ -159,8 +159,8 @@ describe("locateIssue", () => {
       };
 
       expect(locateIssue("dataSources[0].request", schema, "pc")).toEqual({
-        kind: "dataSource",
-        dataSourceId: "DataSource_1"
+        kind: "dataEntry",
+        entry: { kind: "dataSource", id: "DataSource_1" }
       });
     });
 
@@ -182,8 +182,8 @@ describe("locateIssue", () => {
       };
 
       expect(locateIssue("variables[0].name", schema, "pc")).toEqual({
-        kind: "variable",
-        variableId: "Variable_1"
+        kind: "dataEntry",
+        entry: { kind: "variable", id: "Variable_1" }
       });
     });
 

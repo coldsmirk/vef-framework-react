@@ -1,5 +1,5 @@
 import type { SchemaIssue } from "../engine/validation";
-import type { FormEditorStoreApi, PropertiesTabId, SidebarTabId } from "../store/form-store";
+import type { DataEntryRef, FormEditorStoreApi, PropertiesTabId, SidebarTabId } from "../store/form-store";
 import type { Block, FormSchema, PresentationDevice, PresentationLayer } from "../types";
 
 import { useCallback } from "react";
@@ -10,14 +10,13 @@ import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/wa
 import { useFormEditorStoreApi } from "../store/form-store";
 
 /**
- * Where a diagnostic can be shown: a node of one device's tree, a specific
- * form-global data source or variable (switching to `数据` and opening its
- * edit modal), a left-sidebar tab (`data`), or a right-properties tab (`form`).
+ * Where a diagnostic can be shown: a node of one device's tree, a form-global
+ * data source or variable (its edit modal on `数据`), a left-sidebar tab
+ * (`data`), or a right-properties tab (`form`).
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
-    | { kind: "dataSource"; dataSourceId: string }
-    | { kind: "variable"; variableId: string }
+    | { kind: "dataEntry"; entry: DataEntryRef }
     | { kind: "sidebar"; tab: SidebarTabId }
     | { kind: "properties"; tab: PropertiesTabId };
 
@@ -180,21 +179,11 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
   }
 
   if (DATA_SOURCES_HEAD.test(head)) {
-    const index = headIndex(head);
-    const id = index === undefined ? undefined : schema.dataSources?.[index]?.id;
-
-    return id !== undefined && id.length > 0
-      ? { kind: "dataSource", dataSourceId: id }
-      : { kind: "sidebar", tab: "data" };
+    return dataEntryTarget("dataSource", schema.dataSources, head);
   }
 
   if (VARIABLES_HEAD.test(head)) {
-    const index = headIndex(head);
-    const id = index === undefined ? undefined : schema.variables?.[index]?.id;
-
-    return id !== undefined && id.length > 0
-      ? { kind: "variable", variableId: id }
-      : { kind: "sidebar", tab: "data" };
+    return dataEntryTarget("variable", schema.variables, head);
   }
 
   if (ENVELOPE_PATHS.has(path)) {
@@ -215,6 +204,21 @@ function headIndex(path: string): number | undefined {
 }
 
 /**
+ * The entry a `dataSources[i]` / `variables[i]` path addresses, else the tab
+ * that lists them — a path may name the list itself or an entry that is gone.
+ */
+function dataEntryTarget(
+  kind: DataEntryRef["kind"],
+  entries: ReadonlyArray<{ id: string }> | undefined,
+  head: string
+): IssueTarget {
+  const index = headIndex(head);
+  const id = index === undefined ? undefined : entries?.[index]?.id;
+
+  return id ? { kind: "dataEntry", entry: { kind, id } } : { kind: "sidebar", tab: "data" };
+}
+
+/**
  * A named entry of a form-level list — a data source or a variable — by its
  * name, else by its position.
  */
@@ -226,6 +230,23 @@ function describeListEntry(noun: string, names: ReadonlyArray<string | undefined
   const name = names[index];
 
   return name !== undefined && name.length > 0 ? `${noun}「${name}」` : `${noun} #${index + 1}`;
+}
+
+/**
+ * The data source, the variable, or the list of either that a path is about.
+ */
+function describeDataPath(path: string, schema: FormSchema): string | undefined {
+  const [head = ""] = path.split(".");
+
+  if (DATA_SOURCES_HEAD.test(head)) {
+    return describeListEntry("数据源", (schema.dataSources ?? []).map(source => source.name), headIndex(path));
+  }
+
+  if (VARIABLES_HEAD.test(head)) {
+    return describeListEntry("变量", (schema.variables ?? []).map(variable => variable.name), headIndex(path));
+  }
+
+  return undefined;
 }
 
 /**
@@ -251,38 +272,12 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
       return target.device === "mobile" ? `移动端 · ${name}` : name;
     }
 
-    case "dataSource": {
-      const dataSources = schema.dataSources ?? [];
-      const fallback = dataSources.findIndex(source => source.id === target.dataSourceId);
-      const index = headIndex(path) ?? (fallback === -1 ? undefined : fallback);
-
-      return describeListEntry("数据源", dataSources.map(source => source.name), index);
-    }
-
-    case "variable": {
-      const variables = schema.variables ?? [];
-      const fallback = variables.findIndex(variable => variable.id === target.variableId);
-      const index = headIndex(path) ?? (fallback === -1 ? undefined : fallback);
-
-      return describeListEntry("变量", variables.map(variable => variable.name), index);
+    case "dataEntry": {
+      return describeDataPath(path, schema);
     }
 
     case "sidebar": {
-      if (target.tab !== "data") {
-        return undefined;
-      }
-
-      const [head = ""] = path.split(".");
-
-      if (DATA_SOURCES_HEAD.test(head)) {
-        return describeListEntry("数据源", (schema.dataSources ?? []).map(source => source.name), headIndex(path));
-      }
-
-      if (VARIABLES_HEAD.test(head)) {
-        return describeListEntry("变量", (schema.variables ?? []).map(variable => variable.name), headIndex(path));
-      }
-
-      return undefined;
+      return describeDataPath(path, schema);
     }
 
     case "properties": {
@@ -299,13 +294,8 @@ function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): voi
   const state = storeApi.getState();
 
   switch (target.kind) {
-    case "dataSource": {
-      state.requestDataItemEdit({ kind: "dataSource", id: target.dataSourceId });
-      return;
-    }
-
-    case "variable": {
-      state.requestDataItemEdit({ kind: "variable", id: target.variableId });
+    case "dataEntry": {
+      state.requestDataEdit(target.entry);
       return;
     }
 

@@ -4,10 +4,9 @@ import type { DateGranularityField } from "../engine/schema/date-granularity";
 import type { DropTarget } from "../engine/schema/edit-ops";
 import type { DateGranularityScrubTarget } from "../engine/schema/reconcile";
 import type { ScopePath } from "../engine/schema/walk";
-import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSlot, FormField, FormSchema, FormVariable, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
+import type { Block, DateGranularity, FieldCreateResult, FieldDefinition, FlexSlot, FormDataSource, FormField, FormSchema, FormVariable, GapScale, PresentationDevice, PresentationLayer, StackSlot } from "../types";
 
 import { createComponentStore } from "@vef-framework-react/core";
-import { isDeepEqual } from "@vef-framework-react/shared";
 
 import { createId, idPrefixForType } from "../engine/ids";
 import { collectScopeKeys, collectSubtreeKeysByScope, generateUniqueKey, isKeyedNode, nextUniqueKey, sanitizeKey } from "../engine/keys";
@@ -84,26 +83,19 @@ export type FormSchemaPatch = Partial<Pick<FormSchema, "dataSources" | "id" | "l
   gap?: GapScale;
 };
 
-export interface PatchSchemaOptions {
-  /**
-   * Whether consecutive patches touching the same keys fold into one undo step.
-   * Defaults to `true` (so keystrokes on inline form metadata such as `id`
-   * collapse); pass `false` for discrete commits (e.g. closing a modal with
-   * "确定" or duplicating an entry) so each committed edit gets its own undo
-   * step.
-   */
-  coalesce?: boolean;
-}
-
 /**
- * One-shot navigation request from diagnostics to open a specific data-source
- * or variable edit modal once the left sidebar's `数据` tab is mounted.
- * Monotonic `seq` lets repeating a jump to the same entry re-trigger cleanly.
+ * One form-global entry of the left sidebar's `数据` tab.
  */
-export interface PendingDataEdit {
+export interface DataEntryRef {
   kind: "dataSource" | "variable";
   id: string;
-  seq: number;
+}
+
+export interface SaveDataEntryOptions {
+  /**
+   * Id of the entry a new one is placed right after; appended when omitted.
+   */
+  after?: string;
 }
 
 /**
@@ -161,10 +153,10 @@ export interface FormEditorStoreState {
    */
   propertiesDrawerOpen: boolean;
   /**
-   * One-shot request to open the edit modal for a specific data source or
-   * variable on the left `数据` tab (consumed and cleared once handled).
+   * One-shot request to open an entry's edit modal on the left `数据` tab,
+   * cleared by the panel that handles it.
    */
-  pendingDataEdit: PendingDataEdit | null;
+  pendingDataEdit: DataEntryRef | null;
   viewMode: EditorViewMode;
   device: EditorDeviceMode;
 
@@ -188,17 +180,17 @@ export interface FormEditorStoreState {
    * that).
    */
   clearSchema: () => void;
-  patchSchema: (patch: FormSchemaPatch, options?: PatchSchemaOptions) => void;
+  patchSchema: (patch: FormSchemaPatch) => void;
   selectNode: (id: string | null) => void;
   /**
    * Switch the left sidebar tab (no-op outside edit mode).
    */
   setSidebarTab: (tab: SidebarTabId) => void;
   /**
-   * Switch the left sidebar to `数据` and queue opening the target data source
-   * or variable's edit modal (no-op outside edit mode).
+   * Switch the left sidebar to `数据` and open the entry's edit modal (no-op
+   * outside edit mode).
    */
-  requestDataItemEdit: (target: { kind: "dataSource" | "variable"; id: string }) => void;
+  requestDataEdit: (entry: DataEntryRef) => void;
   /**
    * Clear a consumed {@link pendingDataEdit} request.
    */
@@ -314,27 +306,23 @@ export interface FormEditorStoreState {
   updateBlock: (args: { nodeId: string; updater: (node: Block) => Block }, options?: EditCoalesceOptions) => void;
 
   /**
-   * Rename a form variable declaration and rewrite every `set_variable` action
-   * targeting it (across both presentations and the form-level linkage). A
-   * no-op when `name` is not declared, `nextName` is not an identifier-shaped
-   * `$vars` name (see `isValidVariableName`), or `nextName` collides with an
-   * existing declaration.
+   * Insert a data source or replace the one with its id, in one undo step.
    */
-  renameVariable: (name: string, nextName: string) => void;
+  saveDataSource: (source: FormDataSource, options?: SaveDataEntryOptions) => void;
   /**
-   * Create or update a form variable declaration atomically in one undo step:
-   * when an existing named variable's `name` changes alongside its type or
-   * default value, every `$vars` / `set_variable` reference is rewritten in
-   * the same checkpoint as the declaration update.
+   * Insert a form variable or replace the one with its id, in one undo step.
+   * Changing the name rewrites every `$vars` / `set_variable` reference along
+   * with the declaration. No-ops on a name that is not an identifier or that
+   * another variable holds.
    */
-  saveVariable: (variable: FormVariable) => void;
+  saveVariable: (variable: FormVariable, options?: SaveDataEntryOptions) => void;
   /**
    * Remove a form variable declaration. The declaration only: a `set_variable`
    * action to an undeclared name remains semantically valid at runtime (the
    * `$vars` store accepts any name), so actions are deliberately left intact.
-   * A no-op when the name is not declared.
+   * A no-op when no variable has the id.
    */
-  removeVariable: (name: string) => void;
+  removeVariable: (id: string) => void;
   /**
    * Remove a form-global data source declaration and prune every reference to
    * it: field `ref` option sources lose their `dataSource`, and
@@ -382,6 +370,20 @@ function buildField(definition: FieldDefinition, layer: PresentationLayer, scope
   return base as Block;
 }
 
+/**
+ * Replace the entry holding `entry`'s id, or insert it — right after the entry
+ * with id `after`, else at the end.
+ */
+function upsertEntry<T extends { id: string }>(entries: readonly T[], entry: T, after: string | undefined): T[] {
+  if (entries.some(candidate => candidate.id === entry.id)) {
+    return entries.map(candidate => candidate.id === entry.id ? entry : candidate);
+  }
+
+  const index = entries.findIndex(candidate => candidate.id === after);
+
+  return index === -1 ? [...entries, entry] : entries.toSpliced(index + 1, 0, entry);
+}
+
 const CLEARED_SELECTION = {
   selectedId: null,
   propertiesTab: "form",
@@ -413,7 +415,6 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
      * switch, or undo/redo resets it so the next edit starts a fresh entry.
      */
     let coalesceKey: string | null = null;
-    let pendingDataEditSeq = 0;
 
     function pushHistory(): void {
       const {
@@ -493,7 +494,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         });
       },
 
-      patchSchema: (patch, options) => {
+      patchSchema: patch => {
         const { device, schema } = get();
         const {
           gap,
@@ -519,11 +520,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        if (options?.coalesce === false) {
-          checkpoint();
-        } else {
-          checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
-        }
+        checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
 
         const next: FormSchema = { ...schema, ...shared };
 
@@ -592,16 +589,14 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({ sidebarTab: tab });
       },
 
-      requestDataItemEdit: target => {
+      requestDataEdit: entry => {
         if (get().viewMode !== "edit") {
           return;
         }
 
-        pendingDataEditSeq += 1;
-        set({
-          sidebarTab: "data",
-          pendingDataEdit: { ...target, seq: pendingDataEditSeq }
-        });
+        // A fresh object each time, so repeating a jump to the same entry is a
+        // new request.
+        set({ sidebarTab: "data", pendingDataEdit: { ...entry } });
       },
 
       clearPendingDataEdit: () => {
@@ -1113,71 +1108,52 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({ schema: nextSchema });
       },
 
-      renameVariable: (name, nextName) => {
+      saveDataSource: (source, options) => {
         const { schema } = get();
-        const variables = schema.variables ?? [];
-
-        if (
-          nextName === name
-          || !isValidVariableName(nextName)
-          || variables.every(variable => variable.name !== name)
-          || variables.some(variable => variable.name === nextName)
-        ) {
-          return;
-        }
 
         checkpoint();
         set({
           schema: {
-            ...renameVariableReferences(schema, name, nextName),
-            variables: variables.map(variable => variable.name === name ? { ...variable, name: nextName } : variable)
+            ...schema,
+            dataSources: upsertEntry(schema.dataSources ?? [], source, options?.after)
           }
         });
       },
 
-      saveVariable: variable => {
+      saveVariable: (variable, options) => {
         const { schema } = get();
         const variables = schema.variables ?? [];
 
         if (
-          variable.id.length === 0
-          || !isValidVariableName(variable.name)
+          !isValidVariableName(variable.name)
           || variables.some(candidate => candidate.id !== variable.id && candidate.name === variable.name)
         ) {
           return;
         }
 
-        const existing = variables.find(candidate => candidate.id === variable.id);
-
-        if (existing !== undefined && isDeepEqual(existing, variable)) {
-          return;
-        }
-
-        const baseSchema = existing !== undefined && existing.name.length > 0 && existing.name !== variable.name
-          ? renameVariableReferences(schema, existing.name, variable.name)
-          : schema;
-        const nextVariables = existing === undefined
-          ? [...variables, variable]
-          : variables.map(candidate => candidate.id === variable.id ? variable : candidate);
+        const previousName = variables.find(candidate => candidate.id === variable.id)?.name;
+        const renamed = previousName === undefined || previousName.length === 0 || previousName === variable.name
+          ? schema
+          : renameVariableReferences(schema, previousName, variable.name);
 
         checkpoint();
         set({
           schema: {
-            ...baseSchema,
-            variables: nextVariables
+            ...renamed,
+            variables: upsertEntry(variables, variable, options?.after)
           }
         });
       },
 
-      removeVariable: name => {
+      removeVariable: id => {
         const { schema } = get();
         const variables = schema.variables ?? [];
 
-        if (variables.every(variable => variable.name !== name)) {
+        if (variables.every(variable => variable.id !== id)) {
           return;
         }
 
-        const remaining = variables.filter(variable => variable.name !== name);
+        const remaining = variables.filter(variable => variable.id !== id);
         const nextSchema: FormSchema = { ...schema, variables: remaining };
 
         // An emptied optional collection drops its key (the patchSchema

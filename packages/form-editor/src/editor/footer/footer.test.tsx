@@ -282,10 +282,7 @@ describe("EditorFooter", () => {
       await user.click(await screen.findByRole("button", { name: /请求尚未配置完整/ }));
 
       expect(storeApi.getState().sidebarTab).toBe("data");
-      expect(storeApi.getState().pendingDataEdit).toMatchObject({
-        kind: "dataSource",
-        id: "DataSource_1"
-      });
+      expect(storeApi.getState().pendingDataEdit).toEqual({ kind: "dataSource", id: "DataSource_1" });
     });
 
     it("locates the data source and opens its edit modal when SidebarPanel is mounted", async () => {

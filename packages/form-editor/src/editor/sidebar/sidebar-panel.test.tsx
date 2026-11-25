@@ -163,7 +163,7 @@ describe("SidebarPanel", () => {
     expect(storeApi.getState().schema.variables).toHaveLength(1);
   });
 
-  it("opens the target data source edit modal when navigated via requestDataItemEdit", async () => {
+  it("opens the target data source edit modal when navigated via requestDataEdit", async () => {
     const schema: FormSchema = {
       ...makeSchema(),
       dataSources: [
@@ -180,7 +180,7 @@ describe("SidebarPanel", () => {
     expect(storeApi.getState().sidebarTab).toBe("palette");
 
     act(() => {
-      storeApi.getState().requestDataItemEdit({ kind: "dataSource", id: "DataSource_1" });
+      storeApi.getState().requestDataEdit({ kind: "dataSource", id: "DataSource_1" });
     });
 
     expect(storeApi.getState().sidebarTab).toBe("data");
@@ -337,7 +337,7 @@ describe("SidebarPanel", () => {
       const storeApi = setupSidebar("drawer", schema);
 
       act(() => {
-        storeApi.getState().requestDataItemEdit({ kind: "dataSource", id: "DataSource_1" });
+        storeApi.getState().requestDataEdit({ kind: "dataSource", id: "DataSource_1" });
       });
 
       expect(screen.getByRole("region", { name: "数据" })).toBeInTheDocument();

@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
-import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
 import { FormVariablesPanel } from "./form-variables-panel";
 
 function makeSchema(variables: FormVariable[], linkage?: FieldLinkage): FormSchema {
@@ -27,22 +27,12 @@ interface HarnessProps {
 
 function Harness({ onReady }: HarnessProps): ReactElement {
   const api = useFormEditorStoreApi();
-  const variables = useFormEditorStore(state => state.schema.variables);
 
   useEffect(() => {
     onReady(api);
   }, [api, onReady]);
 
-  return (
-    <FormVariablesPanel
-      title="表单变量"
-      variables={variables ?? []}
-      onChange={next => api.getState().patchSchema(
-        { variables: next.length > 0 ? next : undefined },
-        { coalesce: false }
-      )}
-    />
-  );
+  return <FormVariablesPanel title="表单变量" />;
 }
 
 function setup(variables: FormVariable[] = [], linkage?: FieldLinkage): FormEditorStoreApi {
@@ -313,16 +303,16 @@ describe("form variables panel", () => {
       await user.type(within(dialog).getByLabelText("默认值"), "0.1");
       await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
-      expect(await screen.findByText("关闭后当前变量的修改将不会保存。")).toBeInTheDocument();
+      expect(await screen.findByText("关闭后本次修改将不会保存。")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "继续编辑" }));
       await waitFor(() => {
-        expect(screen.queryByText("关闭后当前变量的修改将不会保存。")).not.toBeInTheDocument();
+        expect(screen.queryByText("关闭后本次修改将不会保存。")).not.toBeInTheDocument();
       });
 
       expect(within(dialog).getByLabelText("默认值")).toHaveValue("0.1");
 
       await user.click(within(dialog).getByRole("button", { name: "取消" }));
-      expect(await screen.findByText("关闭后当前变量的修改将不会保存。")).toBeInTheDocument();
+      expect(await screen.findByText("关闭后本次修改将不会保存。")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "放弃修改" }));
 
       await waitFor(() => {
@@ -352,7 +342,7 @@ describe("form variables panel", () => {
       });
     });
 
-    it("dispatches removeVariable for a named variable and plain list patch for an unnamed one", async () => {
+    it("removes named and unnamed variables alike", async () => {
       const user = userEvent.setup();
       const api = setup([
         {
@@ -366,10 +356,9 @@ describe("form variables panel", () => {
           type: "string"
         }
       ]);
-      const removeSpy = vi.spyOn(api.getState(), "removeVariable");
 
       await user.click(screen.getByRole("button", { name: "删除变量 total" }));
-      expect(removeSpy).toHaveBeenCalledWith("total");
+      expect(storeVariables(api).map(variable => variable.id)).toEqual(["v2"]);
 
       await user.click(screen.getByRole("button", { name: "删除变量 未命名变量" }));
       expect(storeVariables(api)).toEqual([]);

@@ -1,7 +1,6 @@
-import type { DataSourceApi, FormDataSource, FormSchema } from "../../types";
+import type { DataSourceApi, FormSchema } from "../../types";
 
 import {
-  cloneDataSource,
   collectDataSourceUsages,
   formatDataSourceRemovalLines,
   nextCopyName,
@@ -285,38 +284,5 @@ describe("nextCopyName", () => {
     expect(nextCopyName("城市", new Set(["城市", "城市 副本"]))).toBe("城市 副本 2");
     expect(nextCopyName("城市", new Set(["城市", "城市 副本", "城市 副本 2"]))).toBe("城市 副本 3");
     expect(nextCopyName("  ", new Set())).toBe("数据源 副本");
-  });
-});
-
-describe("cloneDataSource", () => {
-  it("deep-clones options, request params, and mapping", () => {
-    const remote: FormDataSource = {
-      id: "ds1",
-      name: "部门",
-      kind: "remote",
-      request: {
-        resource: "sys/department",
-        action: "find_options",
-        params: { parentId: { kind: "literal", value: "root" } }
-      },
-      mapping: { labelKey: "name", valueKey: "id" }
-    };
-
-    const copy = cloneDataSource(remote, { id: "ds2", name: "部门 副本" });
-
-    expect(copy).toEqual({
-      ...remote,
-      id: "ds2",
-      name: "部门 副本"
-    });
-    expect(copy).not.toBe(remote);
-
-    if (copy.kind !== "remote") {
-      throw new Error("expected remote clone");
-    }
-
-    expect(copy.request).not.toBe(remote.request);
-    expect(copy.request.params).not.toBe(remote.request.params);
-    expect(copy.mapping).not.toBe(remote.mapping);
   });
 });

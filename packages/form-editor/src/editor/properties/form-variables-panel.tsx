@@ -1,18 +1,17 @@
 import type { ChangeEvent, ReactElement } from "react";
 
 import type { FormVariable } from "../../types";
+import type { DataEntrySession } from "./use-data-entry-editor";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, Modal, ScrollArea, Segmented } from "@vef-framework-react/components";
+import { globalCssVars, Input, Segmented } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { createId } from "../../engine/ids";
 import { nextUniqueKey } from "../../engine/keys";
 import { isValidVariableName } from "../../engine/schema/validate";
-import { EditorIcon } from "../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
-import { confirmDialog } from "../toolbar/notify";
 import {
   DataListEmpty,
   dataListItemsCss,
@@ -23,15 +22,10 @@ import {
   DataListSectionHeader,
   dataListSummaryCss,
   dataListUnnamedCss,
-  dataListWrapperCss,
-  MODAL_BODY_VIEWPORT_STYLE,
-  modalErrorCss,
-  modalFieldCss,
-  modalFormCss,
-  modalHintCss,
-  modalLabelCss,
-  modalRequiredMarkCss
+  dataListWrapperCss
 } from "./data-list";
+import { DraftField, DraftModal } from "./draft-modal";
+import { useDataEntryEditor } from "./use-data-entry-editor";
 
 type VariableType = FormVariable["type"];
 
@@ -56,11 +50,9 @@ const BOOLEAN_OPTIONS = [
 
 const MODAL_WIDTH = 480;
 
-const MODAL_BODY_STYLE = {
-  body: {
-    padding: 0
-  }
-} as const;
+// Stable empty fallback: a fresh array each render would re-run the editor's
+// jump effect on every edit of a form without variables.
+const NO_VARIABLES: FormVariable[] = [];
 
 const codeTextAreaStyle = {
   fontFamily: globalCssVars.fontFamilyCode,
@@ -117,14 +109,6 @@ function formatDefaultSummary(variable: FormVariable): string | null {
   const text = stringifyDefault(variable.defaultValue);
 
   return text.length > 0 ? text : "\"\"";
-}
-
-function cloneDefaultValue(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
-  }
-
-  return structuredClone(value);
 }
 
 function getVariableNameError(
@@ -191,140 +175,60 @@ function parseDefaultDraft(
   return { ok: true, value: rawText };
 }
 
-interface VariableModalSession {
-  mode: "create" | "edit";
-  key: number;
-  initial: FormVariable;
+function createBlankVariable(): FormVariable {
+  return {
+    id: createId("Var"),
+    name: "",
+    type: "string"
+  };
 }
 
 export interface FormVariablesPanelProps {
-  variables: FormVariable[];
-  onChange: (next: FormVariable[]) => void;
-  /**
-   * Optional section title rendered above the list with the count badge and
-   * top-right add trigger (used inside the sidebar's `数据` tab).
-   */
-  title?: string;
+  title: string;
   titleLevel?: "main" | "sub";
 }
 
 /**
  * Form-global variable manager. Renders each variable as a compact two-line
  * row (name + type badge, default value) matching the data-source list, and
- * edits it in a draft-buffered modal. Renaming an existing named variable
- * commits through the store's atomic `saveVariable` so `$vars` and
- * `set_variable` references follow in the same undo step.
+ * edits it in a draft-buffered modal. `saveVariable` carries a rename through
+ * every `$vars` and `set_variable` reference in the same undo step.
  */
-export function FormVariablesPanel({
-  onChange,
-  title,
-  titleLevel = "main",
-  variables
-}: FormVariablesPanelProps): ReactElement {
-  const pendingEdit = useFormEditorStore(s => s.pendingDataEdit?.kind === "variable" ? s.pendingDataEdit : null);
+export function FormVariablesPanel({ title, titleLevel = "main" }: FormVariablesPanelProps): ReactElement {
+  const variables = useFormEditorStore(s => s.schema.variables) ?? NO_VARIABLES;
   const storeApi = useFormEditorStoreApi();
-
-  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const sessionCounterRef = useRef(0);
-  const [session, setSession] = useState<VariableModalSession | null>(null);
-  const [renderedSession, setRenderedSession] = useState<VariableModalSession | null>(null);
-
-  if (session !== null && session !== renderedSession) {
-    setRenderedSession(session);
-  }
-
-  const openEditModal = useCallback((variable: FormVariable): void => {
-    sessionCounterRef.current += 1;
-    setSession({
-      mode: "edit",
-      key: sessionCounterRef.current,
-      initial: {
-        ...variable,
-        ...variable.defaultValue !== undefined && { defaultValue: cloneDefaultValue(variable.defaultValue) }
-      }
-    });
-  }, []);
-
-  const openCreateModal = (): void => {
-    sessionCounterRef.current += 1;
-    setSession({
-      mode: "create",
-      key: sessionCounterRef.current,
-      initial: {
-        id: createId("Var"),
-        name: "",
-        type: "string"
-      }
-    });
-  };
-
-  useEffect(() => {
-    if (pendingEdit === null) {
-      return;
-    }
-
-    storeApi.getState().clearPendingDataEdit();
-
-    const target = variables.find(variable => variable.id === pendingEdit.id);
-
-    if (target === undefined) {
-      return;
-    }
-
-    rowRefs.current.get(target.id)?.scrollIntoView?.({ block: "nearest" });
-    openEditModal(target);
-  }, [pendingEdit, variables, storeApi, openEditModal]);
+  const {
+    close,
+    editingId,
+    handleAfterClose,
+    openCreate,
+    openEdit,
+    rowRef,
+    session
+  } = useDataEntryEditor({
+    createBlank: createBlankVariable,
+    entries: variables,
+    kind: "variable"
+  });
 
   const handleSave = (next: FormVariable): void => {
-    if (session?.mode === "edit" && session.initial.name.length > 0 && session.initial.name !== next.name) {
-      // Atomic rename + declaration update: rewrites `$vars` / `set_variable`
-      // references and updates type/defaultValue in one undo step.
-      storeApi.getState().saveVariable(next);
-    } else if (session?.mode === "create") {
-      onChange([...variables, next]);
-    } else {
-      onChange(variables.map(variable => variable.id === next.id ? next : variable));
-    }
-
-    setSession(null);
+    storeApi.getState().saveVariable(next);
+    close();
   };
 
   const handleDuplicate = (variable: FormVariable): void => {
     const usedNames = new Set(variables.map(item => item.name).filter(name => name.length > 0));
     const base = isValidVariableName(variable.name) ? variable.name : "var";
-    const copy: FormVariable = {
-      id: createId("Var"),
-      name: nextUniqueKey(usedNames, base),
-      type: variable.type,
-      ...variable.defaultValue !== undefined && { defaultValue: cloneDefaultValue(variable.defaultValue) }
-    };
-    const index = variables.findIndex(item => item.id === variable.id);
-    const next = [...variables];
 
-    next.splice(index + 1, 0, copy);
-    onChange(next);
+    storeApi.getState().saveVariable(
+      {
+        ...structuredClone(variable),
+        id: createId("Var"),
+        name: nextUniqueKey(usedNames, base)
+      },
+      { after: variable.id }
+    );
   };
-
-  const handleDelete = (variable: FormVariable): void => {
-    if (variable.name.length === 0) {
-      // An unnamed variable cannot be referenced anywhere — a plain list
-      // update suffices (and a name-keyed store action could not address it).
-      onChange(variables.filter(candidate => candidate.id !== variable.id));
-      return;
-    }
-
-    storeApi.getState().removeVariable(variable.name);
-  };
-
-  const setRowRef = (id: string) => (node: HTMLDivElement | null): void => {
-    if (node === null) {
-      rowRefs.current.delete(id);
-    } else {
-      rowRefs.current.set(id, node);
-    }
-  };
-
-  const editingId = session?.mode === "edit" ? session.initial.id : null;
 
   return (
     <div css={dataListWrapperCss}>
@@ -333,7 +237,7 @@ export function FormVariablesPanel({
         count={variables.length}
         title={title}
         titleLevel={titleLevel}
-        onAdd={openCreateModal}
+        onAdd={openCreate}
       />
 
       {variables.length === 0
@@ -352,7 +256,7 @@ export function FormVariablesPanel({
                     deleteAriaLabel={`删除变量 ${displayName}`}
                     duplicateAriaLabel={`复制变量 ${displayName}`}
                     editAriaLabel={`编辑变量 ${displayName}`}
-                    rowRef={setRowRef(variable.id)}
+                    rowRef={rowRef(variable.id)}
                     primary={(
                       <span css={dataListPrimaryLineCss}>
                         <span css={[dataListNameCss, !unnamed && variableNameCss, unnamed && dataListUnnamedCss]}>
@@ -369,33 +273,24 @@ export function FormVariablesPanel({
                           : <span css={dataListSummaryCss}>{`默认：${defaultSummary}`}</span>}
                       </span>
                     )}
-                    onDelete={() => handleDelete(variable)}
+                    onDelete={() => storeApi.getState().removeVariable(variable.id)}
                     onDuplicate={() => handleDuplicate(variable)}
-                    onEdit={() => openEditModal(variable)}
+                    onEdit={() => openEdit(variable)}
                   />
                 );
               })}
             </div>
           )}
 
-      {title === undefined
-        ? <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={openCreateModal}>新增变量</Button>
-        : null}
-
-      {renderedSession === null
+      {session === null
         ? null
         : (
             <VariableModal
-              key={renderedSession.key}
-              open={session !== null}
-              session={renderedSession}
+              key={session.key}
+              session={session}
               variables={variables}
-              onAfterClose={() => {
-                if (session === null) {
-                  setRenderedSession(null);
-                }
-              }}
-              onClose={() => setSession(null)}
+              onAfterClose={handleAfterClose}
+              onClose={close}
               onSave={handleSave}
             />
           )}
@@ -404,8 +299,7 @@ export function FormVariablesPanel({
 }
 
 interface VariableModalProps {
-  open: boolean;
-  session: VariableModalSession;
+  session: DataEntrySession<FormVariable>;
   variables: readonly FormVariable[];
   onSave: (next: FormVariable) => void;
   onClose: () => void;
@@ -416,7 +310,6 @@ function VariableModal({
   onAfterClose,
   onClose,
   onSave,
-  open,
   session,
   variables
 }: VariableModalProps): ReactElement {
@@ -448,10 +341,10 @@ function VariableModal({
   const defaultError = !parsedDefault.ok && submitAttempted ? parsedDefault.error : null;
 
   useEffect(() => {
-    if (open && session.mode === "create") {
+    if (session.mode === "create") {
       nameInputRef.current?.focus();
     }
-  }, [open, session.mode]);
+  }, [session.mode]);
 
   const handleTypeChange = (nextType: VariableType): void => {
     if (nextType === type) {
@@ -468,20 +361,6 @@ function VariableModal({
     } else {
       setDefaultText("");
     }
-  };
-
-  const requestClose = (): void => {
-    if (!isDirty) {
-      onClose();
-      return;
-    }
-
-    confirmDialog("放弃未保存的修改？", "关闭后当前变量的修改将不会保存。", {
-      okType: "danger",
-      okText: "放弃修改",
-      cancelText: "继续编辑",
-      onOk: onClose
-    });
   };
 
   const handleConfirm = (): void => {
@@ -512,103 +391,83 @@ function VariableModal({
   };
 
   return (
-    <Modal
-      centered
-      destroyOnHidden
-      afterClose={onAfterClose}
-      open={open}
-      styles={MODAL_BODY_STYLE}
+    <DraftModal
+      dirty={isDirty}
+      open={session.open}
       title={session.mode === "create" ? "新增变量" : "编辑变量"}
       width={MODAL_WIDTH}
-      footer={(
-        <>
-          <Button autoInsertSpace={false} onClick={requestClose}>取消</Button>
-          <Button autoInsertSpace={false} type="primary" onClick={handleConfirm}>确定</Button>
-        </>
-      )}
-      onCancel={requestClose}
+      onAfterClose={onAfterClose}
+      onClose={onClose}
+      onSubmit={handleConfirm}
     >
-      <ScrollArea scrollbars="vertical" viewportStyle={MODAL_BODY_VIEWPORT_STYLE}>
-        <div css={modalFormCss}>
-          <div css={modalFieldCss}>
-            <label css={modalLabelCss} htmlFor={nameInputId}>
-              <span>变量名</span>
-              <span aria-hidden css={modalRequiredMarkCss}>*</span>
-            </label>
+      <DraftField
+        required
+        error={nameError}
+        hint={`在表达式中以 $vars.${trimmedName || "变量名"} 引用`}
+        htmlFor={nameInputId}
+        label="变量名"
+      >
+        <Input
+          ref={instance => {
+            nameInputRef.current = instance;
+          }}
+          id={nameInputId}
+          placeholder="例如：total、isVip"
+          status={nameError === null ? undefined : "error"}
+          value={name}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => {
+            setNameEdited(true);
+            setName(event.target.value);
+          }}
+        />
+      </DraftField>
 
-            <Input
-              ref={instance => {
-                nameInputRef.current = instance;
-              }}
-              id={nameInputId}
-              placeholder="例如：total、isVip"
-              status={nameError === null ? undefined : "error"}
-              value={name}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                setNameEdited(true);
-                setName(event.target.value);
-              }}
-            />
+      <DraftField label="类型">
+        <Segmented
+          block
+          options={VARIABLE_TYPE_OPTIONS}
+          value={type}
+          onChange={value => {
+            if (isVariableType(value)) {
+              handleTypeChange(value);
+            }
+          }}
+        />
+      </DraftField>
 
-            {nameError === null
-              ? <span css={modalHintCss}>{`在表达式中以 $vars.${trimmedName || "变量名"} 引用`}</span>
-              : <span css={modalErrorCss} role="alert">{nameError}</span>}
-          </div>
-
-          <div css={modalFieldCss}>
-            <span css={modalLabelCss}>类型</span>
-
-            <Segmented
-              block
-              options={VARIABLE_TYPE_OPTIONS}
-              value={type}
-              onChange={value => {
-                if (isVariableType(value)) {
-                  handleTypeChange(value);
-                }
-              }}
-            />
-          </div>
-
-          <div css={modalFieldCss}>
-            <label css={modalLabelCss} htmlFor={type === "boolean" ? undefined : defaultInputId}>默认值</label>
-
-            {type === "boolean"
-              ? (
-                  <Segmented
-                    block
-                    options={[...BOOLEAN_OPTIONS]}
-                    value={boolDefault ? "true" : "false"}
-                    onChange={value => setBoolDefault(value === "true")}
-                  />
-                )
-              : type === "json"
-                ? (
-                    <Input.TextArea
-                      autoSize={{ minRows: 3, maxRows: 8 }}
-                      id={defaultInputId}
-                      placeholder="可选，如 {&quot;a&quot;: 1}"
-                      spellCheck={false}
-                      status={defaultError === null ? undefined : "error"}
-                      style={codeTextAreaStyle}
-                      value={defaultText}
-                      onChange={event => setDefaultText(event.target.value)}
-                    />
-                  )
-                : (
-                    <Input
-                      id={defaultInputId}
-                      placeholder={type === "number" ? "可选，如 3.14" : "可选，留空表示未设置"}
-                      status={defaultError === null ? undefined : "error"}
-                      value={defaultText}
-                      onChange={event => setDefaultText(event.target.value)}
-                    />
-                  )}
-
-            {defaultError === null ? null : <span css={modalErrorCss} role="alert">{defaultError}</span>}
-          </div>
-        </div>
-      </ScrollArea>
-    </Modal>
+      <DraftField error={defaultError} htmlFor={type === "boolean" ? undefined : defaultInputId} label="默认值">
+        {type === "boolean"
+          ? (
+              <Segmented
+                block
+                options={[...BOOLEAN_OPTIONS]}
+                value={boolDefault ? "true" : "false"}
+                onChange={value => setBoolDefault(value === "true")}
+              />
+            )
+          : type === "json"
+            ? (
+                <Input.TextArea
+                  autoSize={{ minRows: 3, maxRows: 8 }}
+                  id={defaultInputId}
+                  placeholder="可选，如 {&quot;a&quot;: 1}"
+                  spellCheck={false}
+                  status={defaultError === null ? undefined : "error"}
+                  style={codeTextAreaStyle}
+                  value={defaultText}
+                  onChange={event => setDefaultText(event.target.value)}
+                />
+              )
+            : (
+                <Input
+                  id={defaultInputId}
+                  placeholder={type === "number" ? "可选，如 3.14" : "可选，留空表示未设置"}
+                  status={defaultError === null ? undefined : "error"}
+                  value={defaultText}
+                  onChange={event => setDefaultText(event.target.value)}
+                />
+              )}
+      </DraftField>
+    </DraftModal>
   );
 }

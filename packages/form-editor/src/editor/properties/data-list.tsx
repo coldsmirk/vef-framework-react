@@ -6,9 +6,9 @@ import { Button, globalCssVars } from "@vef-framework-react/components";
 import { EditorIcon } from "../../icons";
 
 /**
- * Shared compact-list chrome and modal body layout for the left sidebar's
- * `数据` tab (form data sources and form variables), so both lists share one
- * visual rhythm, hover/focus action reveal, keyboard model, and empty state.
+ * Shared compact-list chrome of the left sidebar's `数据` tab (form data sources
+ * and form variables), so both lists share one visual rhythm, hover/focus
+ * action reveal, keyboard model, and empty state.
  */
 
 export const dataListWrapperCss = css({
@@ -256,54 +256,8 @@ export const dataListUsageActiveCss = css({
   color: globalCssVars.colorTextSecondary
 });
 
-// Single scroll viewport inside the editor's data/variable modals: leaves room
-// for modal chrome (header, footer, outer margin) so buttons stay reachable on
-// short windows without ever nesting a second scroll region.
-export const MODAL_BODY_VIEWPORT_STYLE = {
-  maxHeight: "calc(100vh - 230px)"
-} as const;
-
-export const modalFormCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 16,
-  // Slight padding inside the scroll viewport keeps antd input focus rings
-  // unclipped on all sides and gives the vertical scrollbar breathing room.
-  padding: "4px 12px 8px 2px"
-});
-
-export const modalFieldCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 6,
-  minWidth: 0
-});
-
-export const modalLabelCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  fontWeight: 500,
-  color: globalCssVars.colorTextSecondary
-});
-
-export const modalRequiredMarkCss = css({
-  marginLeft: 2,
-  color: globalCssVars.colorError
-});
-
-export const modalHintCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  lineHeight: 1.5,
-  color: globalCssVars.colorTextTertiary
-});
-
-export const modalErrorCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  lineHeight: 1.5,
-  color: globalCssVars.colorErrorText
-});
-
 export interface DataListSectionHeaderProps {
-  title?: string;
+  title: string;
   titleLevel?: "main" | "sub";
   count: number;
   addLabel: string;
@@ -311,10 +265,8 @@ export interface DataListSectionHeaderProps {
 }
 
 /**
- * Header for a compact data list: when mounted inside `DataTab` (with `title`),
- * places the add button in the section heading so it stays at the top even for
- * long lists; when mounted standalone without a title, renders nothing here
- * (the standalone panel renders a full-width add button below the list).
+ * Header of a compact data list. The add button sits beside the title, so it
+ * stays in reach above a long list.
  */
 export function DataListSectionHeader({
   addLabel,
@@ -322,11 +274,7 @@ export function DataListSectionHeader({
   onAdd,
   title,
   titleLevel = "main"
-}: DataListSectionHeaderProps): ReactElement | null {
-  if (title === undefined) {
-    return null;
-  }
-
+}: DataListSectionHeaderProps): ReactElement {
   return (
     <div css={titleLevel === "main" ? dataListSectionHeaderCss : dataListSubHeaderCss}>
       <div css={dataListTitleGroupCss}>

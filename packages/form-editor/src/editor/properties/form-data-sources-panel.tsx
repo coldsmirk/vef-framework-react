@@ -1,11 +1,12 @@
 import type { ChangeEvent, ReactElement } from "react";
 
 import type { FormDataSource, RemoteDataSource, RemoteDataSourceRequest, RemoteOptionMapping } from "../../types";
+import type { DataEntrySession } from "./use-data-entry-editor";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, Modal, Popconfirm, ScrollArea, Segmented } from "@vef-framework-react/components";
+import { globalCssVars, Input, Popconfirm, Segmented } from "@vef-framework-react/components";
 import { isDeepEqual, omit } from "@vef-framework-react/shared";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { createId } from "../../engine/ids";
 import { EditorIcon } from "../../icons";
@@ -27,24 +28,19 @@ import {
   dataListUsageActiveCss,
   dataListUsageCss,
   dataListWarningCss,
-  dataListWrapperCss,
-  MODAL_BODY_VIEWPORT_STYLE,
-  modalErrorCss,
-  modalFieldCss,
-  modalFormCss,
-  modalLabelCss,
-  modalRequiredMarkCss
+  dataListWrapperCss
 } from "./data-list";
 import {
-  cloneDataSource,
   collectDataSourceUsages,
   formatDataSourceRemovalLines,
   nextCopyName,
   summarizeDataSource
 } from "./data-source-usage";
+import { DraftField, DraftModal } from "./draft-modal";
 import { OptionListEditor } from "./option-editors";
 import { RemoteOptionSourceEditor } from "./remote-option-source-editor";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
+import { useDataEntryEditor } from "./use-data-entry-editor";
 
 type DataSourceKind = FormDataSource["kind"];
 
@@ -55,17 +51,9 @@ const KIND_OPTIONS = [
 
 const MODAL_WIDTH = 680;
 
-const MODAL_BODY_STYLE = {
-  body: {
-    padding: 0
-  }
-} as const;
-
-const optionListSectionCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 8
-});
+// Stable empty fallback: a fresh array each render would re-run the editor's
+// jump effect on every edit of a form without data sources.
+const NO_DATA_SOURCES: FormDataSource[] = [];
 
 const incompleteIconCss = css({
   display: "inline-flex",
@@ -139,113 +127,58 @@ function withRemotePayload(
       };
 }
 
-interface DataSourceModalSession {
-  mode: "create" | "edit";
-  key: number;
-  initial: FormDataSource;
-}
-
-export interface FormDataSourcesPanelProps {
-  dataSources: FormDataSource[];
-  onChange: (next: FormDataSource[]) => void;
-  /**
-   * Optional section title rendered above the list with the count badge and
-   * top-right add trigger (used inside the sidebar's `数据` tab). When omitted
-   * the panel renders a standalone full-width add button below the list.
-   */
-  title?: string;
+function createBlankDataSource(): FormDataSource {
+  return {
+    id: createId("DataSource"),
+    name: "",
+    kind: "static",
+    options: []
+  };
 }
 
 /**
  * Form-global data-source manager. Lists each source as a compact two-line row
- * (name, one-line summary, reference count) and delegates creation and editing
- * to a draft-buffered modal so each confirmed edit writes back in one undo
- * step. Deletion goes through `removeDataSource` (after confirming affected
- * references when in use) so dangling refs are pruned with it.
+ * (name, one-line summary, reference count) and edits it in a draft-buffered
+ * modal, so each confirmed edit writes back in one undo step. Deletion goes
+ * through `removeDataSource` (after confirming affected references when in use)
+ * so dangling refs are pruned with it.
  */
-export function FormDataSourcesPanel({
-  dataSources,
-  onChange,
-  title
-}: FormDataSourcesPanelProps): ReactElement {
+export function FormDataSourcesPanel(): ReactElement {
   const schema = useFormEditorStore(s => s.schema);
-  const pendingEdit = useFormEditorStore(s => s.pendingDataEdit?.kind === "dataSource" ? s.pendingDataEdit : null);
   const storeApi = useFormEditorStoreApi();
   const apis = useDataSourceApis();
-
+  const dataSources = schema.dataSources ?? NO_DATA_SOURCES;
   const usages = collectDataSourceUsages(schema);
-  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const sessionCounterRef = useRef(0);
-  const [session, setSession] = useState<DataSourceModalSession | null>(null);
-  const [renderedSession, setRenderedSession] = useState<DataSourceModalSession | null>(null);
-
-  if (session !== null && session !== renderedSession) {
-    setRenderedSession(session);
-  }
-
-  const openEditModal = useCallback((source: FormDataSource): void => {
-    sessionCounterRef.current += 1;
-    setSession({
-      mode: "edit",
-      key: sessionCounterRef.current,
-      initial: cloneDataSource(source)
-    });
-  }, []);
-
-  const openCreateModal = (): void => {
-    sessionCounterRef.current += 1;
-    setSession({
-      mode: "create",
-      key: sessionCounterRef.current,
-      initial: {
-        id: createId("DataSource"),
-        name: "",
-        kind: "static",
-        options: []
-      }
-    });
-  };
-
-  // Honor diagnostic jumps (`issue-location.ts`): scroll the target row into
-  // view and open its edit modal immediately once the `数据` tab mounts.
-  useEffect(() => {
-    if (pendingEdit === null) {
-      return;
-    }
-
-    storeApi.getState().clearPendingDataEdit();
-
-    const target = dataSources.find(source => source.id === pendingEdit.id);
-
-    if (target === undefined) {
-      return;
-    }
-
-    rowRefs.current.get(target.id)?.scrollIntoView?.({ block: "nearest" });
-    openEditModal(target);
-  }, [pendingEdit, dataSources, storeApi, openEditModal]);
+  const {
+    close,
+    editingId,
+    handleAfterClose,
+    openCreate,
+    openEdit,
+    rowRef,
+    session
+  } = useDataEntryEditor({
+    createBlank: createBlankDataSource,
+    entries: dataSources,
+    kind: "dataSource"
+  });
 
   const handleSave = (next: FormDataSource): void => {
-    if (session?.mode === "create") {
-      onChange([...dataSources, next]);
-    } else {
-      onChange(dataSources.map(source => source.id === next.id ? next : source));
-    }
-
-    setSession(null);
+    storeApi.getState().saveDataSource(next);
+    close();
   };
 
   const handleDuplicate = (source: FormDataSource): void => {
     const existingNames = new Set(dataSources.map(item => item.name.trim()).filter(name => name.length > 0));
-    const copy = cloneDataSource(source, {
-      id: createId("DataSource"),
-      name: nextCopyName(source.name, existingNames)
-    });
-    const index = dataSources.findIndex(item => item.id === source.id);
-    const next = [...dataSources];
 
-    next.splice(index + 1, 0, copy);
-    onChange(next);
+    storeApi.getState().saveDataSource(
+      {
+        ...structuredClone(source),
+        id: createId("DataSource"),
+        name: nextCopyName(source.name, existingNames)
+      },
+      { after: source.id }
+    );
   };
 
   const handleDelete = (source: FormDataSource): void => {
@@ -263,29 +196,18 @@ export function FormDataSourcesPanel({
     confirmDialog(dialogTitle, <DialogLines footnote={UNDOABLE_FOOTNOTE} lines={lines} />, {
       okType: "danger",
       okText: "删除",
-      cancelText: "取消",
       detail: lines.join("\n"),
       onOk: () => storeApi.getState().removeDataSource(source.id)
     });
   };
-
-  const setRowRef = (id: string) => (node: HTMLDivElement | null): void => {
-    if (node === null) {
-      rowRefs.current.delete(id);
-    } else {
-      rowRefs.current.set(id, node);
-    }
-  };
-
-  const editingId = session?.mode === "edit" ? session.initial.id : null;
 
   return (
     <div css={dataListWrapperCss}>
       <DataListSectionHeader
         addLabel="新增数据源"
         count={dataSources.length}
-        title={title}
-        onAdd={openCreateModal}
+        title="数据源"
+        onAdd={openCreate}
       />
 
       {dataSources.length === 0
@@ -306,7 +228,7 @@ export function FormDataSourcesPanel({
                     deleteAriaLabel={`删除数据源 ${displayName}`}
                     duplicateAriaLabel={`复制数据源 ${displayName}`}
                     editAriaLabel={`编辑数据源 ${displayName}`}
-                    rowRef={setRowRef(source.id)}
+                    rowRef={rowRef(source.id)}
                     primary={(
                       <span css={dataListPrimaryLineCss}>
                         <span css={[dataListNameCss, unnamed && dataListUnnamedCss]}>{displayName}</span>
@@ -338,31 +260,22 @@ export function FormDataSourcesPanel({
                     )}
                     onDelete={() => handleDelete(source)}
                     onDuplicate={() => handleDuplicate(source)}
-                    onEdit={() => openEditModal(source)}
+                    onEdit={() => openEdit(source)}
                   />
                 );
               })}
             </div>
           )}
 
-      {title === undefined
-        ? <Button block icon={<EditorIcon name="plus" />} type="dashed" onClick={openCreateModal}>新增数据源</Button>
-        : null}
-
-      {renderedSession === null
+      {session === null
         ? null
         : (
             <DataSourceModal
-              key={renderedSession.key}
+              key={session.key}
               dataSources={dataSources}
-              open={session !== null}
-              session={renderedSession}
-              onAfterClose={() => {
-                if (session === null) {
-                  setRenderedSession(null);
-                }
-              }}
-              onClose={() => setSession(null)}
+              session={session}
+              onAfterClose={handleAfterClose}
+              onClose={close}
               onSave={handleSave}
             />
           )}
@@ -371,8 +284,7 @@ export function FormDataSourcesPanel({
 }
 
 interface DataSourceModalProps {
-  open: boolean;
-  session: DataSourceModalSession;
+  session: DataEntrySession<FormDataSource>;
   dataSources: readonly FormDataSource[];
   onSave: (next: FormDataSource) => void;
   onClose: () => void;
@@ -384,12 +296,11 @@ function DataSourceModal({
   onAfterClose,
   onClose,
   onSave,
-  open,
   session
 }: DataSourceModalProps): ReactElement {
   const nameInputId = useId();
   const nameInputRef = useRef<{ focus: () => void } | null>(null);
-  const [draft, setDraft] = useState<FormDataSource>(() => cloneDataSource(session.initial));
+  const [draft, setDraft] = useState(session.initial);
   const [nameEdited, setNameEdited] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
@@ -407,30 +318,16 @@ function DataSourceModal({
   // Focus the name input when creating a fresh source so the designer can
   // immediately type a name without an extra click.
   useEffect(() => {
-    if (open && session.mode === "create") {
+    if (session.mode === "create") {
       nameInputRef.current?.focus();
     }
-  }, [open, session.mode]);
+  }, [session.mode]);
 
   const kindSwitch = useConfirmableKindSwitch<DataSourceKind>({
     current: draft.kind,
     needsConfirm: sourceHasPayload(draft),
     commit: kind => setDraft(current => withKind(current, kind))
   });
-
-  const requestClose = (): void => {
-    if (!isDirty) {
-      onClose();
-      return;
-    }
-
-    confirmDialog("放弃未保存的修改？", "关闭后当前数据源的修改将不会保存。", {
-      okType: "danger",
-      okText: "放弃修改",
-      cancelText: "继续编辑",
-      onOk: onClose
-    });
-  };
 
   const handleConfirm = (): void => {
     setSubmitAttempted(true);
@@ -451,96 +348,74 @@ function DataSourceModal({
   };
 
   return (
-    <Modal
-      centered
-      destroyOnHidden
-      afterClose={onAfterClose}
-      open={open}
-      styles={MODAL_BODY_STYLE}
+    <DraftModal
+      dirty={isDirty}
+      open={session.open}
       title={session.mode === "create" ? "新增数据源" : "编辑数据源"}
       width={MODAL_WIDTH}
-      footer={(
-        <>
-          <Button autoInsertSpace={false} onClick={requestClose}>取消</Button>
-          <Button autoInsertSpace={false} type="primary" onClick={handleConfirm}>确定</Button>
-        </>
-      )}
-      onCancel={requestClose}
+      onAfterClose={onAfterClose}
+      onClose={onClose}
+      onSubmit={handleConfirm}
     >
-      <ScrollArea scrollbars="vertical" viewportStyle={MODAL_BODY_VIEWPORT_STYLE}>
-        <div css={modalFormCss}>
-          <div css={modalFieldCss}>
-            <label css={modalLabelCss} htmlFor={nameInputId}>
-              <span>名称</span>
-              <span aria-hidden css={modalRequiredMarkCss}>*</span>
-            </label>
+      <DraftField required error={nameError} htmlFor={nameInputId} label="名称">
+        <Input
+          ref={instance => {
+            nameInputRef.current = instance;
+          }}
+          id={nameInputId}
+          placeholder="例如：部门列表、审批状态"
+          status={nameError === null ? undefined : "error"}
+          value={draft.name}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => {
+            setNameEdited(true);
+            setDraft(current => {
+              return { ...current, name: event.target.value };
+            });
+          }}
+        />
+      </DraftField>
 
-            <Input
-              ref={instance => {
-                nameInputRef.current = instance;
-              }}
-              id={nameInputId}
-              placeholder="例如：部门列表、审批状态"
-              status={nameError === null ? undefined : "error"}
-              value={draft.name}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                setNameEdited(true);
-                setDraft(current => {
-                  return { ...current, name: event.target.value };
-                });
-              }}
-            />
+      <DraftField label="来源类型">
+        <Popconfirm
+          cancelText="取消"
+          okText="切换"
+          open={kindSwitch.pendingKind !== null}
+          title="切换类型将丢弃当前数据源配置"
+          onCancel={kindSwitch.cancel}
+          onConfirm={kindSwitch.confirm}
+        >
+          <Segmented
+            block
+            options={[...KIND_OPTIONS]}
+            value={draft.kind}
+            onChange={value => {
+              if (isDataSourceKind(value)) {
+                kindSwitch.requestKind(value);
+              }
+            }}
+          />
+        </Popconfirm>
+      </DraftField>
 
-            {nameError === null ? null : <span css={modalErrorCss} role="alert">{nameError}</span>}
-          </div>
-
-          <div css={modalFieldCss}>
-            <span css={modalLabelCss}>来源类型</span>
-
-            <Popconfirm
-              cancelText="取消"
-              okText="切换"
-              open={kindSwitch.pendingKind !== null}
-              title="切换类型将丢弃当前数据源配置"
-              onCancel={kindSwitch.cancel}
-              onConfirm={kindSwitch.confirm}
-            >
-              <Segmented
-                block
-                options={[...KIND_OPTIONS]}
-                value={draft.kind}
-                onChange={value => {
-                  if (isDataSourceKind(value)) {
-                    kindSwitch.requestKind(value);
-                  }
-                }}
+      {draft.kind === "static"
+        ? (
+            <DraftField label="选项列表">
+              <OptionListEditor
+                allowBulkPaste
+                options={draft.options}
+                onChange={options => setDraft(current => current.kind === "static" ? { ...current, options } : current)}
               />
-            </Popconfirm>
-          </div>
-
-          {draft.kind === "static"
-            ? (
-                <div css={optionListSectionCss}>
-                  <span css={modalLabelCss}>选项列表</span>
-
-                  <OptionListEditor
-                    allowBulkPaste
-                    options={draft.options}
-                    onChange={options => setDraft(current => current.kind === "static" ? { ...current, options } : current)}
-                  />
-                </div>
-              )
-            : (
-                <RemoteOptionSourceEditor
-                  mapping={draft.mapping}
-                  request={draft.request}
-                  onChange={(request, mapping) => setDraft(
-                    current => current.kind === "remote" ? withRemotePayload(current, request, mapping) : current
-                  )}
-                />
+            </DraftField>
+          )
+        : (
+            <RemoteOptionSourceEditor
+              mapping={draft.mapping}
+              request={draft.request}
+              onChange={(request, mapping) => setDraft(
+                current => current.kind === "remote" ? withRemotePayload(current, request, mapping) : current
               )}
-        </div>
-      </ScrollArea>
-    </Modal>
+            />
+          )}
+    </DraftModal>
   );
 }

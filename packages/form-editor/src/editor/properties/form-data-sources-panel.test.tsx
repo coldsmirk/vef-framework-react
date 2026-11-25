@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
-import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
 import { DataSourceApisProvider } from "../data-source-apis";
 import { FormDataSourcesPanel } from "./form-data-sources-panel";
 
@@ -46,29 +46,14 @@ interface HarnessProps {
   onReady: (api: FormEditorStoreApi) => void;
 }
 
-/**
- * Mirrors the sidebar `数据` tab wiring: data sources come from the store
- * schema and discrete modal commits write back with `coalesce: false`, so
- * store-backed deletion and undo history behave identically to the real editor.
- */
 function Harness({ onReady }: HarnessProps): ReactElement {
   const api = useFormEditorStoreApi();
-  const dataSources = useFormEditorStore(state => state.schema.dataSources);
 
   useEffect(() => {
     onReady(api);
   }, [api, onReady]);
 
-  return (
-    <FormDataSourcesPanel
-      dataSources={dataSources ?? []}
-      title="数据源"
-      onChange={next => api.getState().patchSchema(
-        { dataSources: next.length > 0 ? next : undefined },
-        { coalesce: false }
-      )}
-    />
-  );
+  return <FormDataSourcesPanel />;
 }
 
 function setup(
@@ -392,17 +377,17 @@ describe("form data sources panel", () => {
       await user.type(within(dialog).getByLabelText(/名称/), "列表");
       await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
-      expect(await screen.findByText("关闭后当前数据源的修改将不会保存。")).toBeInTheDocument();
+      expect(await screen.findByText("关闭后本次修改将不会保存。")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "继续编辑" }));
       await waitFor(() => {
-        expect(screen.queryByText("关闭后当前数据源的修改将不会保存。")).not.toBeInTheDocument();
+        expect(screen.queryByText("关闭后本次修改将不会保存。")).not.toBeInTheDocument();
       });
 
       expect(within(dialog).getByLabelText(/名称/)).toHaveValue("城市列表");
 
       // Dirty close accepted — modal closes and store stays untouched.
       await user.click(within(dialog).getByRole("button", { name: "取消" }));
-      expect(await screen.findByText("关闭后当前数据源的修改将不会保存。")).toBeInTheDocument();
+      expect(await screen.findByText("关闭后本次修改将不会保存。")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "放弃修改" }));
 
       await waitFor(() => {

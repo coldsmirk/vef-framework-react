@@ -1554,41 +1554,106 @@ describe("form store", () => {
     });
   });
 
-  describe("renameVariable", () => {
-    it("renames the declaration and rewrites set_variable actions", () => {
+  describe("saveVariable", () => {
+    it("renames the declaration and rewrites references in one undo step", () => {
       const api = setup();
       act(() => api.getState().setSchema(variablesSchema()));
 
-      act(() => api.getState().renameVariable("count", "total"));
+      act(() => api.getState().saveVariable({
+        id: "Var_1",
+        name: "total",
+        type: "number",
+        defaultValue: 9
+      }));
 
+      expect(api.getState().past).toHaveLength(1);
       expect(api.getState().schema.variables?.map(variable => variable.name)).toEqual(["total", "other"]);
+      expect(api.getState().schema.variables?.[0]).toMatchObject({ type: "number", defaultValue: 9 });
       const action = findField(api.getState().schema.presentations.pc, "fa")?.linkage?.rules?.[0]?.actions[0];
       expect(action).toMatchObject({ type: "set_variable", variable: "total" });
-    });
 
-    it("is a single undo step", () => {
-      const api = setup();
-      act(() => api.getState().setSchema(variablesSchema()));
-
-      act(() => api.getState().renameVariable("count", "total"));
       act(() => api.getState().undo());
 
       expect(api.getState().schema.variables?.[0]?.name).toBe("count");
-      const action = findField(api.getState().schema.presentations.pc, "fa")?.linkage?.rules?.[0]?.actions[0];
-      expect(action).toMatchObject({ variable: "count" });
+      const restored = findField(api.getState().schema.presentations.pc, "fa")?.linkage?.rules?.[0]?.actions[0];
+      expect(restored).toMatchObject({ variable: "count" });
     });
 
-    it("no-ops on an invalid identifier, a collision, or an unknown name", () => {
+    it("inserts a new variable after the given one, else at the end", () => {
+      const api = setup();
+      act(() => api.getState().setSchema(variablesSchema()));
+
+      act(() => api.getState().saveVariable({
+        id: "Var_3",
+        name: "copy",
+        type: "string"
+      }, { after: "Var_1" }));
+      act(() => api.getState().saveVariable({
+        id: "Var_4",
+        name: "last",
+        type: "string"
+      }));
+
+      expect(api.getState().schema.variables?.map(variable => variable.id)).toEqual(["Var_1", "Var_3", "Var_2", "Var_4"]);
+    });
+
+    it("no-ops on an invalid identifier or a collision", () => {
       const api = setup();
       act(() => api.getState().setSchema(variablesSchema()));
       const before = api.getState();
 
-      act(() => api.getState().renameVariable("count", "not valid"));
-      act(() => api.getState().renameVariable("count", "other"));
-      act(() => api.getState().renameVariable("ghost", "fresh"));
+      act(() => api.getState().saveVariable({
+        id: "Var_1",
+        name: "not valid",
+        type: "number"
+      }));
+      act(() => api.getState().saveVariable({
+        id: "Var_1",
+        name: "other",
+        type: "number"
+      }));
 
       expect(api.getState().schema).toBe(before.schema);
       expect(api.getState().past).toBe(before.past);
+    });
+  });
+
+  describe("saveDataSource", () => {
+    it("inserts and replaces sources, each save its own undo step", () => {
+      const api = setup();
+
+      act(() => api.getState().saveDataSource({
+        id: "ds1",
+        name: "一",
+        kind: "static",
+        options: []
+      }));
+      act(() => api.getState().saveDataSource({
+        id: "ds2",
+        name: "二",
+        kind: "static",
+        options: []
+      }));
+      act(() => api.getState().saveDataSource({
+        id: "ds1",
+        name: "一改",
+        kind: "static",
+        options: []
+      }));
+      act(() => api.getState().saveDataSource({
+        id: "ds3",
+        name: "三",
+        kind: "static",
+        options: []
+      }, { after: "ds1" }));
+
+      expect(api.getState().schema.dataSources?.map(source => source.name)).toEqual(["一改", "三", "二"]);
+      expect(api.getState().past).toHaveLength(4);
+
+      act(() => api.getState().undo());
+      act(() => api.getState().undo());
+
+      expect(api.getState().schema.dataSources?.map(source => source.name)).toEqual(["一", "二"]);
     });
   });
 
@@ -1626,7 +1691,7 @@ describe("form store", () => {
         }
       )));
 
-      act(() => api.getState().removeVariable("count"));
+      act(() => api.getState().removeVariable("Var_1"));
 
       // A set_variable to an undeclared name stays semantically valid at
       // runtime, so only the declaration goes; the emptied collection drops
@@ -1636,7 +1701,7 @@ describe("form store", () => {
       expect(action).toMatchObject({ type: "set_variable", variable: "count" });
     });
 
-    it("no-ops when the name is not declared", () => {
+    it("no-ops when no variable has the id", () => {
       const api = setup();
       const before = api.getState();
 
@@ -1809,107 +1874,25 @@ describe("form store", () => {
       expect(api.getState().schema).toBe(before.schema);
       expect(api.getState().past).toBe(before.past);
     });
-
-    it("keeps consecutive patches as separate undo steps when coalesce is false", () => {
-      const api = setup();
-
-      act(() => api.getState().patchSchema(
-        {
-          dataSources: [
-            {
-              id: "ds1",
-              name: "一",
-              kind: "static",
-              options: []
-            }
-          ]
-        },
-        { coalesce: false }
-      ));
-      act(() => api.getState().patchSchema(
-        {
-          dataSources: [
-            {
-              id: "ds1",
-              name: "二",
-              kind: "static",
-              options: []
-            }
-          ]
-        },
-        { coalesce: false }
-      ));
-
-      expect(api.getState().past).toHaveLength(2);
-
-      act(() => api.getState().undo());
-      expect(api.getState().schema.dataSources?.[0]?.name).toBe("一");
-
-      act(() => api.getState().undo());
-      expect(api.getState().schema.dataSources).toBeUndefined();
-    });
   });
 
-  describe("saveVariable", () => {
-    it("atomically renames references and updates variable fields in one undo step", () => {
+  describe("requestDataEdit", () => {
+    it("switches to the data tab and makes each request distinct until it is consumed", () => {
       const api = setup();
 
-      act(() => api.getState().setSchema(variablesSchema()));
-      act(() => api.getState().saveVariable({
-        id: "Var_1",
-        name: "total",
-        type: "number",
-        defaultValue: 9
-      }));
+      act(() => api.getState().requestDataEdit({ kind: "dataSource", id: "ds1" }));
+      const first = api.getState().pendingDataEdit;
 
-      expect(api.getState().past).toHaveLength(1);
-      expect(api.getState().schema.variables?.[0]).toEqual({
-        id: "Var_1",
-        name: "total",
-        type: "number",
-        defaultValue: 9
-      });
-      const field = findNode(api.getState().schema.presentations.pc, "fa");
-
-      expect(field?.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
-        type: "set_variable",
-        variable: "total"
-      });
-
-      act(() => api.getState().undo());
-      expect(api.getState().schema.variables?.[0]).toEqual({
-        id: "Var_1",
-        name: "count",
-        type: "number"
-      });
-      const restored = findNode(api.getState().schema.presentations.pc, "fa");
-
-      expect(restored?.linkage?.rules?.[0]?.actions?.[0]).toMatchObject({
-        type: "set_variable",
-        variable: "count"
-      });
-    });
-  });
-
-  describe("requestDataItemEdit", () => {
-    it("switches to the data tab, bumps seq on repeated calls, and clears on consume", () => {
-      const api = setup();
-
-      act(() => api.getState().requestDataItemEdit({ kind: "dataSource", id: "ds1" }));
       expect(api.getState().sidebarTab).toBe("data");
-      const firstSeq = api.getState().pendingDataEdit?.seq;
+      expect(first).toEqual({ kind: "dataSource", id: "ds1" });
 
-      expect(api.getState().pendingDataEdit).toEqual({
-        kind: "dataSource",
-        id: "ds1",
-        seq: firstSeq
-      });
+      act(() => api.getState().requestDataEdit({ kind: "dataSource", id: "ds1" }));
+
+      expect(api.getState().pendingDataEdit).not.toBe(first);
 
       act(() => api.getState().clearPendingDataEdit());
-      expect(api.getState().pendingDataEdit).toBeNull();
 
-      act(() => api.getState().requestDataItemEdit({ kind: "dataSource", id: "ds1" }));
-      expect(api.getState().pendingDataEdit?.seq).toBeGreaterThan(firstSeq ?? 0);
+      expect(api.getState().pendingDataEdit).toBeNull();
     });
   });
 

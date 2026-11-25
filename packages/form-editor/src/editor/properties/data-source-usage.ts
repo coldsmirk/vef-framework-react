@@ -7,8 +7,7 @@ import type {
   FormDataSource,
   FormSchema,
   PresentationDevice,
-  PresentationLayer,
-  RemoteDataSourceRequest
+  PresentationLayer
 } from "../../types";
 
 import { isKeyedNode } from "../../engine/keys";
@@ -326,67 +325,4 @@ export function nextCopyName(baseName: string, existingNames: ReadonlySet<string
   }
 
   return `${stem} 副本 ${seq}`;
-}
-
-function cloneDynamicValue(value: DynamicValue): DynamicValue {
-  switch (value.kind) {
-    case "literal": {
-      return { kind: "literal", value: value.value };
-    }
-
-    case "reference": {
-      return { kind: "reference", path: value.path };
-    }
-
-    case "expression": {
-      return { kind: "expression", source: value.source };
-    }
-  }
-}
-
-function cloneRemoteRequest(request: RemoteDataSourceRequest): RemoteDataSourceRequest {
-  const cloned: RemoteDataSourceRequest = {
-    resource: request.resource,
-    action: request.action,
-    ...request.version !== undefined && { version: request.version }
-  };
-
-  if (request.params !== undefined) {
-    const entries = Object.entries(request.params).map(([key, value]) => [key, cloneDynamicValue(value)] as const);
-
-    cloned.params = Object.fromEntries(entries);
-  }
-
-  return cloned;
-}
-
-/**
- * Deep-clone a data source for draft editing or row duplication so nested
- * options / request params / mappings never alias the live schema.
- */
-export function cloneDataSource(
-  source: FormDataSource,
-  overrides?: { id?: string; name?: string }
-): FormDataSource {
-  const id = overrides?.id ?? source.id;
-  const name = overrides?.name ?? source.name;
-
-  if (source.kind === "static") {
-    return {
-      id,
-      name,
-      kind: "static",
-      options: source.options.map(option => {
-        return { label: option.label, value: option.value };
-      })
-    };
-  }
-
-  return {
-    id,
-    name,
-    kind: "remote",
-    request: cloneRemoteRequest(source.request),
-    ...source.mapping !== undefined && { mapping: { ...source.mapping } }
-  };
 }

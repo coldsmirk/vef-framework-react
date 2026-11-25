@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
-import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useContextSources } from "../context-sources";
 import { FormDataSourcesPanel } from "../properties/form-data-sources-panel";
 import { FormVariablesPanel } from "../properties/form-variables-panel";
@@ -46,39 +45,18 @@ const followingSubSectionCss = css({
 });
 
 /**
- * The left sidebar's `数据` tab: compact list of form-global data sources
- * first, then variables (the form's own writable variables followed by
- * read-only host system variables when declared). Both data sources and form
- * variables commit discrete edits through modals (non-coalescing undo steps).
+ * The left sidebar's `数据` tab: form-global data sources first, then variables
+ * (the form's own writable variables followed by read-only host system
+ * variables when declared). Both lists edit through modals, so the tab stays a
+ * compact index.
  */
 export function DataTab(): ReactElement {
-  const dataSources = useFormEditorStore(s => s.schema.dataSources);
-  const variables = useFormEditorStore(s => s.schema.variables);
-  const storeApi = useFormEditorStoreApi();
   const hasSystemVariables = useContextSources().length > 0;
-
-  const handleDataSourcesChange = (next: NonNullable<typeof dataSources>): void => {
-    storeApi.getState().patchSchema(
-      { dataSources: next.length > 0 ? next : undefined },
-      { coalesce: false }
-    );
-  };
-
-  const handleVariablesChange = (next: NonNullable<typeof variables>): void => {
-    storeApi.getState().patchSchema(
-      { variables: next.length > 0 ? next : undefined },
-      { coalesce: false }
-    );
-  };
 
   return (
     <div css={bodyCss}>
       <section css={sectionCss}>
-        <FormDataSourcesPanel
-          dataSources={dataSources ?? []}
-          title="数据源"
-          onChange={handleDataSourcesChange}
-        />
+        <FormDataSourcesPanel />
       </section>
 
       <section css={sectionCss}>
@@ -86,13 +64,7 @@ export function DataTab(): ReactElement {
           ? (
               <>
                 <div css={sectionTitleCss}>变量</div>
-
-                <FormVariablesPanel
-                  title="表单变量"
-                  titleLevel="sub"
-                  variables={variables ?? []}
-                  onChange={handleVariablesChange}
-                />
+                <FormVariablesPanel title="表单变量" titleLevel="sub" />
 
                 <div css={followingSubSectionCss}>
                   <div css={subSectionTitleCss}>系统变量</div>
@@ -100,13 +72,7 @@ export function DataTab(): ReactElement {
                 </div>
               </>
             )
-          : (
-              <FormVariablesPanel
-                title="变量"
-                variables={variables ?? []}
-                onChange={handleVariablesChange}
-              />
-            )}
+          : <FormVariablesPanel title="变量" />}
       </section>
     </div>
   );
