@@ -86,8 +86,11 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
  * transport-only.
  *
  * A parameter resolving to `undefined` is omitted rather than sent — a
- * reference or expression reading an absent key. An empty value the form really
- * holds (`""`) is a value, not an absence, and is sent.
+ * reference or expression reading an absent key (or any expression when no
+ * evaluator is wired). Sending the key with an `undefined` value would put a
+ * hole on the wire the backend has to special-case; omitting it says the same
+ * thing in the vocabulary every transport already understands. An empty value
+ * the form really holds (`""`) is a value, not an absence, and is sent.
  */
 export function resolveRequestParams(
   request: RemoteDataSourceRequest,

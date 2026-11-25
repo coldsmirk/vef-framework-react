@@ -38,6 +38,13 @@ function renderStrict(ui: ReactNode): void {
   );
 }
 
+/**
+ * StrictMode smoke coverage. The runtime leans on render-phase ref writes
+ * (`stabilizeStateMap`'s prev map, the effect lane's edge trackers, the subform
+ * row-key list) and on effects that React 19 StrictMode double-invokes — these
+ * specs pin that a double-invoked mount neither fires condition effects nor
+ * duplicates lifecycle effects, and that the form still behaves.
+ */
 describe("FormRenderer under StrictMode", () => {
   it("does not fire a condition effect already true on mount", () => {
     const notify = vi.fn();
@@ -68,6 +75,10 @@ describe("FormRenderer under StrictMode", () => {
   });
 
   it("does not fire an always-retriggered expression rule on mount", () => {
+    // The opaque (expression) condition has no tracked source keys; the
+    // StrictMode double-invoked detection effect must read the unchanged
+    // `values` reference as "no value change" — before the value-diff fix the
+    // second run treated the null signature as always-changed and fired.
     const notify = vi.fn();
     const schema = stack(
       field("watcher", {
@@ -157,6 +168,7 @@ describe("FormRenderer under StrictMode", () => {
 
     renderStrict(<FormRenderer schema={schema} services={{ notify }} />);
 
+    // "a" raises the edge once; "b" keeps the condition true with no new edge.
     await user.type(screen.getByRole("textbox", { name: "trigger" }), "ab");
 
     expect(notify).toHaveBeenCalledTimes(1);

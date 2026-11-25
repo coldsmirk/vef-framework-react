@@ -236,6 +236,10 @@ const RuleCardBase: FC<RuleCardProps> = ({
   onRemove,
   onTriggerChange
 }) => {
+  // Leaving a `condition` trigger discards its condition tree and strips any
+  // state actions (see `reconcileRuleTrigger`), and leaving an edge trigger
+  // with an authored `when` guard discards that guard — confirm when that loses
+  // real work. Unconfigured triggers switch instantly.
   const confirmKindSwitch = (rule.trigger.kind === "condition"
     && (conditionHasAuthoredContent(rule.trigger.condition) || rule.actions.some(action => isStateAction(action))))
   || (rule.trigger.kind !== "condition" && rule.trigger.when !== undefined && conditionHasAuthoredContent(rule.trigger.when));

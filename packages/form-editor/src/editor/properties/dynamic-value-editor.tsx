@@ -45,8 +45,11 @@ export interface DynamicValueEditorProps {
 }
 
 /**
- * Literal / reference / expression switch plus the matching input — shared by
- * linkage action values and remote request parameters.
+ * Literal / reference / expression switch plus the matching input — the one
+ * control for every place the designer offers "a fixed value or a bound one":
+ * linkage action values and remote data-source request parameters. Sharing it
+ * is what keeps the two from drifting into different affordances for the same
+ * schema shape.
  */
 export function DynamicValueEditor({
   expressionPlaceholder,

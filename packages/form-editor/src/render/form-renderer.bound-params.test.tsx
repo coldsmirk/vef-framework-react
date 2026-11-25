@@ -35,6 +35,10 @@ const departmentField: TextfieldField = {
   label: "deptId"
 };
 
+/**
+ * The cascading shape: a select whose option request binds a parameter to the
+ * field above it.
+ */
 function teamSelect(source = "deptId"): SelectField {
   return {
     id: "Field_team",
@@ -55,6 +59,10 @@ function teamSelect(source = "deptId"): SelectField {
   };
 }
 
+/**
+ * Reads the bound parameter straight out of the form values, standing in for a
+ * host expression engine without pulling one into the test.
+ */
 const evaluators: LinkageEvaluators = {
   evaluateAssignExpression: (source, values) => values[source]
 };
@@ -72,6 +80,8 @@ describe("FormRenderer bound data-source params", () => {
       />
     );
 
+    // Initial resolve reads the bound field's current value (textfield defaults
+    // to "", not undefined); literal params pass through verbatim.
     await waitFor(() => expect(request).toHaveBeenCalled());
     expect(request.mock.calls[0]?.[0]).toEqual({
       resource: "org/team",
@@ -79,6 +89,7 @@ describe("FormRenderer bound data-source params", () => {
       params: { departmentId: "", active: true }
     });
 
+    // Bound value changes => resolved request changes => cache key changes => refetch (cascading).
     await user.type(screen.getByRole("textbox", { name: "deptId" }), "D1");
 
     await waitFor(() => {
@@ -139,6 +150,7 @@ describe("FormRenderer bound data-source params", () => {
     const user = userEvent.setup();
     const request = vi.fn().mockResolvedValue([{ label: "Team A", value: "t1" }]);
 
+    // Built-in evaluator runs JS with `$form` in scope, needing no host hook.
     renderRuntime(
       <FormRenderer
         schema={stack(departmentField, teamSelect("$form.deptId"))}
@@ -184,6 +196,9 @@ describe("FormRenderer bound data-source params", () => {
 
     await waitFor(() => expect(request).toHaveBeenCalled());
 
+    // Each row types a different department id. With row scoping, each row
+    // resolves its own request; evaluating against root values would omit
+    // `deptId` and collapse both rows onto one shared cache entry.
     const inputs = screen.getAllByRole("textbox", { name: "deptId" });
     await user.type(inputs[0] as HTMLElement, "D1");
     await user.type(inputs[1] as HTMLElement, "D2");
@@ -196,6 +211,10 @@ describe("FormRenderer bound data-source params", () => {
   });
 
   it("does not refetch in-flight fixed-param sources on unrelated keystrokes", async () => {
+    // `resolveRequestParams` allocates a fresh object on every call, and
+    // `paramScope` changes identity on every form-value write when the schema
+    // has any bound param. Keep the promise unsettled so cache misses expose
+    // any duplicate request on keystrokes.
     const user = userEvent.setup();
     const request = vi.fn().mockReturnValue(new Promise<never>(() => {
       // Deliberately never settles.

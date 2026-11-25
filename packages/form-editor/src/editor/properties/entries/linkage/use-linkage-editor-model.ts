@@ -89,6 +89,10 @@ export function useLinkageEditorModel(args: {
   ));
 
   const dataSourceOptions = useMemo(() => getDataSourceOptions(dataSources), [dataSources]);
+  // Bucket identities are reconciled against the previous run so an
+  // issue-carrying RuleCard's memo survives unrelated edits. The render-phase
+  // ref write is safe for the same reason as useStableOptions: stabilizing is
+  // idempotent under self-composition.
   const issuesByRuleRef = useRef<Map<string, ValidationIssue[]>>(undefined);
   const issuesByRule = useMemo(
     () => stabilizeIssueBuckets(

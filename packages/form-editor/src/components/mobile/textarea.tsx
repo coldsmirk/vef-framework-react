@@ -8,6 +8,15 @@ import { FieldShell } from "../../render/parts/field-shell";
 import { useEntryCommit } from "../use-entry-commit";
 import { InputCell } from "./input-cell";
 
+/**
+ * Mobile renderer for the multi-line textarea, mirroring the PC `TextareaInput`
+ * contract (`components/textarea-field/index.tsx`): same `FieldComponentProps<
+ * TextareaField, string>` shape and the same label / helperText / errors /
+ * required / labelPosition wiring through {@link FieldShell}. `rows` falls back
+ * to the same default (3) the PC control uses. The antd-mobile `TextArea`
+ * already hands `onChange` a string, so the field's string value maps over
+ * directly.
+ */
 const DEFAULT_ROWS = 3;
 
 export const MobileTextarea: FC<FieldComponentProps<TextareaField, string>> = ({

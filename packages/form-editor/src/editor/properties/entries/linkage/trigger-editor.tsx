@@ -20,6 +20,10 @@ import {
   triggerHintCss
 } from "./styles";
 
+/**
+ * Plain-language description of each edge trigger, shown in place of the
+ * condition builder when the trigger has no value to compare against.
+ */
 const TRIGGER_HINTS: Partial<Record<LinkageTriggerKind, string>> = {
   change: "当该字段的值发生变化时触发",
   commit: "回车或离开时触发",
@@ -33,18 +37,37 @@ const TRIGGER_HINTS: Partial<Record<LinkageTriggerKind, string>> = {
 
 export interface TriggerEditorProps {
   trigger: LinkageTrigger;
+  /**
+   * Trigger kinds offered, by scope (field vs form).
+   */
   triggerKinds: readonly LinkageTriggerKind[];
   sourceOptions: SourceFieldOption[];
+  /**
+   * The owning block's data-binding key, forwarded so the expression → visual
+   * switch seeds with a different field when one exists.
+   */
   selfKey?: string;
   /**
    * Whether the rule contains any effect actions (controls whether the
    * rule-level `retrigger` toggle shows for a `condition` trigger).
    */
   hasEffectActions?: boolean;
+  /**
+   * Whether switching away from the current trigger discards real work (an
+   * authored condition tree, or state actions the reconcile step would strip).
+   * When set, the kind switch is gated behind a confirmation; an unconfigured
+   * trigger switches instantly.
+   */
   confirmKindSwitch: boolean;
   onChange: (next: LinkageTrigger) => void;
 }
 
+/**
+ * The WHEN half of a rule: a trigger-kind picker plus, for a `condition`
+ * trigger, the visual condition builder (and rule-level `retrigger` toggle when
+ * the rule carries effect actions) — or a one-line hint for an edge (event)
+ * trigger, which needs no value to compare against.
+ */
 export const TriggerEditor: FC<TriggerEditorProps> = ({
   confirmKindSwitch,
   hasEffectActions = false,
@@ -54,9 +77,15 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
   selfKey,
   onChange
 }) => {
+  // Switching the trigger kind discards the authored condition / actions; the
+  // Select stays on the current trigger until the user confirms (gated only
+  // when there is real work to lose — `confirmKindSwitch`).
   const kindSwitch = useConfirmableKindSwitch<LinkageTriggerKind>({
     current: trigger.kind,
     needsConfirm: confirmKindSwitch,
+    // Prefer a source other than the rule's own field, mirroring how a freshly
+    // created rule and the visual-mode switch both seed: a self-referencing
+    // condition is almost always a mistake. Self stays selectable afterwards.
     commit: kind => onChange(createTrigger(kind, seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value))
   });
 
@@ -97,6 +126,9 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
               {hasEffectActions
                 ? (
                     <div css={actionRetriggerCss}>
+                      {/* Title + persistent hint, mirroring the DefaultsPanel toggle rows,
+                            so the consequential edge-vs-always behavior is explained inline
+                            instead of hidden in a native (touch-invisible) tooltip. */}
                       <div css={defaultTextCss}>
                         <span css={actionRetriggerLabelCss}>重复触发</span>
 
@@ -115,6 +147,8 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                             return;
                           }
 
+                          // Turning the toggle off removes the key entirely (the default is
+                          // "edge") so the persisted trigger stays minimal.
                           const next = { ...trigger };
                           delete next.retrigger;
                           onChange(next);

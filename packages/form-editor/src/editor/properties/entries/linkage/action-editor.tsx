@@ -46,9 +46,22 @@ const WHEN_NONE_OPTIONS: Array<OptionItem<SelectRecordWhenNone>> = [
 
 export interface ActionEditorProps {
   action: FieldLinkageAction;
+  /**
+   * Action types offered for this rule, already filtered by trigger family,
+   * keyed-ness, and wired host services (see `actionOptionsFor`).
+   */
   availableActions: Array<OptionItem<LinkageActionType>>;
+  /**
+   * Same-scope writable keyed fields, used as `set_fields` targets.
+   */
   targetOptions: SourceFieldOption[];
+  /**
+   * Form-global data sources by id, used as `refresh_data_source` targets.
+   */
   dataSourceOptions: SourceFieldOption[];
+  /**
+   * Whether the remove control is shown (a rule keeps at least one action).
+   */
   canRemove: boolean;
   onChange: (next: FieldLinkageAction) => void;
   onRemove: () => void;
@@ -88,6 +101,9 @@ export const ActionEditor: FC<ActionEditorProps> = ({
               return;
             }
 
+            // Swapping the type resets the payload to that type's defaults but
+            // keeps the action's client-stable id, so the list key (and thus
+            // this editor's DOM) survives the switch.
             const next = createActionFor(value);
             onChange(action.id === undefined ? next : { ...next, id: action.id });
           }}
@@ -124,6 +140,10 @@ interface ActionBodyProps {
   onChange: (next: FieldLinkageAction) => void;
 }
 
+/**
+ * The type-specific inputs for one action. Declarative atoms (`show` / `hide` /
+ * `submit` / ...) have no body.
+ */
 function ActionBody({
   action,
   dataSourceOptions,
@@ -277,6 +297,8 @@ function ActionBody({
     }
 
     case "api_call": {
+      // The full request — version and bound parameters included, which the
+      // runtime resolves before `FormServices.request` runs.
       return (
         <>
           <RemoteRequestEditor request={action.request} onChange={request => onChange({ ...action, request })} />
@@ -391,6 +413,7 @@ return { value: field.B + field.C };'
     }
 
     default: {
+      // show / hide / enable / disable / require / optional / submit / reset.
       return null;
     }
   }

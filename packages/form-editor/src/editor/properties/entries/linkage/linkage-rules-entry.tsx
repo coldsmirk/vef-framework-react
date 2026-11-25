@@ -54,8 +54,20 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
     nodeId: field.id,
     dataSources: schema.dataSources
   });
+  // Seed a new rule's condition off a SIBLING so it reads naturally; a field
+  // whose only in-scope source is itself falls back to an edge rule rather than
+  // a pre-filled self-condition (self stays selectable in the dropdown after).
+  // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
   const seedKey = seedSourceKey(fieldOptions, selfKey);
+  // Drop trigger kinds the target can't actually use, rather than letting an
+  // author configure a silently-inert (and validator-rejected) rule:
+  // - `change` and `commit` ride a keyed field's value edits, so a non-keyed
+  //   field (divider / alert / button) can never fire them.
+  // - `condition` with no keyed field in scope yields an empty group the
+  //   validator rejects and the visual builder can't repair.
+  // Memoized to a stable reference so it does not bust the rule cards' memo
+  // each keystroke (`fieldOptions` is itself identity-stable — see useStableOptions).
   const triggerKinds = useMemo(
     () => FIELD_TRIGGER_KINDS.filter(kind => {
       if (kind === "change" || kind === "commit") {

@@ -256,6 +256,10 @@ export function FormEditorProvider({
     };
   });
 
+  // Depend on the individual evaluator / service slots rather than wrapper
+  // object identity, so a host passing inline `evaluators={{...}}` or
+  // `services={{...}}` objects does not invalidate the preview runtime context
+  // on every render.
   const evaluateExpression = evaluators?.evaluateExpression;
   const evaluateScriptAction = evaluators?.evaluateScriptAction;
   const evaluateAssignExpression = evaluators?.evaluateAssignExpression;

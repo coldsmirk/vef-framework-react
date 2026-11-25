@@ -31,9 +31,12 @@ export interface ValidateSchemaResult {
 const KEY_CHARSET = /^\w+$/;
 
 /**
- * Whether a string is a legal `$vars` access name (identifier-shaped, no digit
- * lead). Delegates to {@link isValidIdentifier} so variable names and step
- * outputs share one grammar.
+ * Variable names are identifier-shaped (no digit lead): expressions address
+ * them as `$vars.<name>`, and `$vars.123` is unparseable. Field keys stay on
+ * the looser {@link KEY_CHARSET} — they are record-accessed, never dotted
+ * from a literal. Delegates to {@link isValidIdentifier} so variable names and
+ * step outputs share one grammar; the store's rename guard imports this so a
+ * rename can never mint a declaration the import boundary would reject.
  */
 export function isValidVariableName(name: string): boolean {
   return isValidIdentifier(name);
