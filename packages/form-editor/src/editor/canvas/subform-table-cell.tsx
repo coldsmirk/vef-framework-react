@@ -11,24 +11,18 @@ import type {
 } from "../../types";
 
 import { css } from "@emotion/react";
-import { Checkbox, DatePicker, globalCssVars, Input, InputNumber, Radio, Select, Switch, TreeSelect } from "@vef-framework-react/components";
+import { Checkbox, DatePicker, globalCssVars, Input, InputNumber, Radio, Select, Switch } from "@vef-framework-react/components";
 import { DEFAULT_DATETIME_FORMAT, getDateGranularityFormat } from "@vef-framework-react/shared";
-import { useMemo } from "react";
 
-import { toTopLevelOptions } from "../../engine/options";
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
-import { useFieldOptions } from "../../render/data-source-context";
-import { toAntdTreeData } from "../../render/parts/option-content";
+import { useFieldOptions, useTopLevelFieldOptions } from "../../render/data-source-context";
+import { OptionTreeSelect } from "../../render/parts/option-tree-select";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { resolveDateRangePlaceholderPair, resolveFieldPlaceholder } from "../../render/parts/placeholder";
 
-type SampleSelectionField
-  = | SelectField
-    | MultiSelectField
-    | TreeSelectField
-    | TreeMultiSelectField
-    | RadioField
-    | CheckboxGroupField;
+type SampleFlatSelectionField = SelectField | MultiSelectField | RadioField | CheckboxGroupField;
+
+type SampleTreeSelectionField = TreeSelectField | TreeMultiSelectField;
 
 const fullWidthStyle = { width: "100%" } as const;
 
@@ -38,24 +32,17 @@ const unsupportedCss = css({
 });
 
 /**
- * Sample cell for selection columns (`select` / `multi-select` / `radio` /
- * `checkbox-group`), reading options through the shared `useFieldOptions` hook
- * so `static`, `ref`, `codeSet`, and `remote` sources all behave identically
- * to top-level canvas fields without coercing option values to strings.
+ * Sample cell for flat selection columns (`select` / `multi-select` / `radio` /
+ * `checkbox-group`), reading top-level options through the shared
+ * {@link useTopLevelFieldOptions} hook so `static`, `ref`, `codeSet`, and
+ * `remote` sources all behave identically to top-level canvas fields.
  */
-function SampleSelectionCell({ field }: { field: SampleSelectionField }): ReactElement {
+function SampleFlatSelectionCell({ field }: { field: SampleFlatSelectionField }): ReactElement {
   const {
     error,
     loading,
-    options: rawOptions
-  } = useFieldOptions(field.dataSource);
-  const flatOptions = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
-  const treeData = useMemo(
-    () => field.type === "tree-select" || field.type === "tree-multi-select"
-      ? toAntdTreeData(rawOptions, { leafOnly: field.leafOnly === true, checkable: field.type === "tree-multi-select" })
-      : [],
-    [field, rawOptions]
-  );
+    options
+  } = useTopLevelFieldOptions(field.dataSource);
 
   switch (field.type) {
     case "select": {
@@ -63,7 +50,7 @@ function SampleSelectionCell({ field }: { field: SampleSelectionField }): ReactE
         <Select
           disabled
           loading={loading}
-          options={flatOptions}
+          options={options}
           placeholder={resolveFieldPlaceholder(field)}
           style={fullWidthStyle}
         />
@@ -76,51 +63,44 @@ function SampleSelectionCell({ field }: { field: SampleSelectionField }): ReactE
           disabled
           loading={loading}
           mode="multiple"
-          options={flatOptions}
+          options={options}
           placeholder={resolveFieldPlaceholder(field)}
           style={fullWidthStyle}
-        />
-      );
-    }
-
-    case "tree-select": {
-      return (
-        <TreeSelect
-          disabled
-          loading={loading}
-          placeholder={resolveFieldPlaceholder(field)}
-          style={fullWidthStyle}
-          treeData={treeData}
-        />
-      );
-    }
-
-    case "tree-multi-select": {
-      return (
-        <TreeSelect
-          disabled
-          treeCheckable
-          treeCheckStrictly
-          loading={loading}
-          placeholder={resolveFieldPlaceholder(field)}
-          style={fullWidthStyle}
-          treeData={treeData}
         />
       );
     }
 
     case "radio": {
-      return flatOptions.length > 0
-        ? <Radio.Group disabled options={flatOptions} />
+      return options.length > 0
+        ? <Radio.Group disabled options={options} />
         : <OptionsStatus error={error} loading={loading} />;
     }
 
     case "checkbox-group": {
-      return flatOptions.length > 0
-        ? <Checkbox.Group disabled options={flatOptions} />
+      return options.length > 0
+        ? <Checkbox.Group disabled options={options} />
         : <OptionsStatus error={error} loading={loading} />;
     }
   }
+}
+
+/**
+ * Sample cell for hierarchical tree selection columns (`tree-select` /
+ * `tree-multi-select`), reusing {@link OptionTreeSelect}.
+ */
+function SampleTreeSelectionCell({ field }: { field: SampleTreeSelectionField }): ReactElement {
+  const { loading, options } = useFieldOptions(field.dataSource);
+
+  return (
+    <OptionTreeSelect
+      disabled
+      leafOnly={field.leafOnly === true}
+      loading={loading}
+      multiple={field.type === "tree-multi-select"}
+      options={options}
+      placeholder={resolveFieldPlaceholder(field)}
+    />
+  );
 }
 
 /**
@@ -145,27 +125,27 @@ export function SampleCell({ field }: { field: KeyedFormField }): ReactElement {
     }
 
     case "select": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleFlatSelectionCell field={field} />;
     }
 
     case "multi-select": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleFlatSelectionCell field={field} />;
     }
 
     case "tree-select": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleTreeSelectionCell field={field} />;
     }
 
     case "tree-multi-select": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleTreeSelectionCell field={field} />;
     }
 
     case "radio": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleFlatSelectionCell field={field} />;
     }
 
     case "checkbox-group": {
-      return <SampleSelectionCell field={field} />;
+      return <SampleFlatSelectionCell field={field} />;
     }
 
     case "switch": {

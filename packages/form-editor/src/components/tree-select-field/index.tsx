@@ -8,23 +8,12 @@ import type {
   TreeSelectField
 } from "../../types";
 
-import { TreeSelect } from "@vef-framework-react/components";
-import { useMemo } from "react";
-
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
-import {
-  filterOptionByLabelOrDescription,
-  toAntdTreeData,
-  useTreeSelectExpansion
-} from "../../render/parts/option-content";
+import { OptionTreeSelect } from "../../render/parts/option-tree-select";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
-import { allowClearEntry, columnTypeEntry, requiredEntry, sizeEntry } from "../field-entries";
-
-const treeSelectStyle = { width: "100%" } as const;
-const TREE_LINE = { showLeafIcon: false } as const;
-const EMPTY_SELECTED: Array<string | number> = [];
+import { allowClearEntry, columnTypeEntry, leafOnlyEntry, requiredEntry, sizeEntry } from "../field-entries";
 
 const TreeSelectInput: FC<FieldComponentProps<TreeSelectField, string | number | undefined>> = ({
   disabled,
@@ -44,21 +33,6 @@ const TreeSelectInput: FC<FieldComponentProps<TreeSelectField, string | number |
   } = useFieldOptions(field.dataSource);
 
   const normalizedValue = value === "" || value === null || value === undefined ? undefined : value;
-  const selectedValues = useMemo<Array<string | number>>(
-    () => normalizedValue === undefined ? EMPTY_SELECTED : [normalizedValue],
-    [normalizedValue]
-  );
-  const treeData = useMemo(
-    () => toAntdTreeData(options, { leafOnly: field.leafOnly === true, checkable: false }),
-    [field.leafOnly, options]
-  );
-  const {
-    expandedKeys,
-    onOpenChange,
-    onSearch,
-    onTreeExpand,
-    searchValue
-  } = useTreeSelectExpansion(options, selectedValues);
 
   return (
     <FieldShell
@@ -69,30 +43,22 @@ const TreeSelectInput: FC<FieldComponentProps<TreeSelectField, string | number |
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >
-      <TreeSelect
+      <OptionTreeSelect
         allowClear={field.allowClear}
         aria-labelledby={cell?.labelId}
         disabled={disabled}
-        filterTreeNode={filterOptionByLabelOrDescription}
         id={domId}
+        leafOnly={field.leafOnly === true}
         loading={loading}
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
+        options={options}
         placeholder={resolveFieldPlaceholder(field)}
         popupMatchSelectWidth={cell ? false : undefined}
-        searchValue={searchValue}
         showSearch={field.showSearch === true}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}
-        style={treeSelectStyle}
-        treeData={treeData}
-        treeExpandedKeys={expandedKeys}
-        treeLine={TREE_LINE}
-        treeNodeLabelProp="label"
         value={normalizedValue}
-        onChange={(next: string | number | undefined) => onChange(next ?? "")}
-        onOpenChange={onOpenChange}
-        onSearch={onSearch}
-        onTreeExpand={onTreeExpand}
+        onChange={next => onChange(next ?? "")}
       />
     </FieldShell>
   );
@@ -140,22 +106,7 @@ const treeSelectProperties: PropertiesDescriptor = [
         read: field => field.dataSource,
         write: (field, dataSource) => { return { ...field, dataSource }; }
       }),
-      definePropertyEntry<TreeSelectField, boolean | undefined>({
-        id: "leafOnly",
-        label: "仅可选末级",
-        type: "checkbox",
-        description: "开启后仅允许选择没有子项的末级节点",
-        read: field => field.leafOnly === true,
-        write: (field, leafOnly) => {
-          if (leafOnly === true) {
-            return { ...field, leafOnly: true };
-          }
-
-          const next = { ...field };
-          delete next.leafOnly;
-          return next;
-        }
-      }),
+      leafOnlyEntry<TreeSelectField>(),
       allowClearEntry<TreeSelectField>(),
       definePropertyEntry<TreeSelectField, boolean | undefined>({
         id: "showSearch",

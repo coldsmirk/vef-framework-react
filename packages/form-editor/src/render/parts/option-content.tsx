@@ -4,13 +4,13 @@ import type { FieldOption } from "../../types";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   collectOptionAncestorValues,
   filterOptionTree,
-  hasOptionChildren,
-  matchesOptionQuery
+  matchesOptionQuery,
+  walkOptionTree
 } from "../../engine/options";
 
 const stackCss = css({
@@ -107,9 +107,9 @@ export function renderSelectOption(option: {
 }
 
 /**
- * Search filter shared by `Select`, `MultiSelect`, `TreeSelect`, and
- * `TreeMultiSelect`: matches the typed query case-insensitively against the
- * option's visible `label` or `description` (never its storage `value`).
+ * Search filter shared by flat `Select` and `MultiSelect` controls: matches the
+ * typed query case-insensitively against the option's visible `label` or
+ * `description` (never its storage `value`).
  */
 export function filterOptionByLabelOrDescription(
   input: string,
@@ -118,141 +118,128 @@ export function filterOptionByLabelOrDescription(
   return matchesOptionQuery(input, option as { label?: unknown; description?: unknown } | undefined);
 }
 
-export interface AntdTreeOptionNode {
-  key: string | number;
-  value: string | number;
-  label: string;
-  title: ReactNode;
-  description?: string;
-  disabled?: boolean;
-  selectable?: boolean;
-  checkable?: boolean;
-  children?: AntdTreeOptionNode[];
-}
+function buildOptionsTopologyKey(options: readonly FieldOption[]): string {
+  const parts: string[] = [];
 
-/**
- * Convert {@link FieldOption} hierarchy into antd `TreeSelect` `treeData`:
- * - keeps `label` as plain text (read by `treeNodeLabelProp="label"` so the
- * selected trigger / tags never leak description markup);
- * - renders `description` inside `title` as secondary muted text;
- * - honors `disabled` (unselectable / uncheckable while children stay reachable)
- * and `leafOnly` (non-leaf nodes cannot be selected or checked).
- */
-export function toAntdTreeData(
-  options: readonly FieldOption[],
-  config: { leafOnly: boolean; checkable: boolean }
-): AntdTreeOptionNode[] {
-  const { checkable, leafOnly } = config;
-
-  return options.map(option => {
-    const hasChildren = hasOptionChildren(option);
-    const blockedByLeafOnly = leafOnly && hasChildren;
-    const isDisabled = option.disabled === true;
-    const node: AntdTreeOptionNode = {
-      key: option.value,
-      value: option.value,
-      label: option.label,
-      title: option.description !== undefined && option.description.length > 0
-        ? <OptionItemContent description={option.description} label={option.label} />
-        : option.label
-    };
-
-    if (option.description !== undefined && option.description.length > 0) {
-      node.description = option.description;
-    }
-
-    if (isDisabled) {
-      node.disabled = true;
-    }
-
-    if (blockedByLeafOnly) {
-      node.selectable = false;
-
-      if (checkable) {
-        node.checkable = false;
-      }
-    }
-
-    if (hasChildren) {
-      node.children = toAntdTreeData(option.children!, config);
-    }
-
-    return node;
+  walkOptionTree(options, (option, { depth }) => {
+    parts.push(`${depth}:${String(option.value)}`);
   });
+
+  return parts.join("\u{0}");
+}
+
+export interface OptionTreeExpansionState {
+  visibleOptions: readonly FieldOption[];
+  expandedKeys: Array<string | number>;
+  expandedKeySet: ReadonlySet<string | number>;
+  searchValue: string;
+  isSearching: boolean;
+  setSearchValue: (next: string) => void;
+  setExpandedKeys: (keys: ReadonlyArray<string | number | bigint>) => void;
+  toggleExpandedKey: (key: string | number) => void;
+  onOpenChange: (open: boolean) => void;
 }
 
 /**
- * Manage `treeExpandedKeys` for PC `TreeSelect` / `TreeMultiSelect`:
- * - automatically expands ancestors of the currently selected value(s) on open
- * (including when options arrive asynchronously);
- * - while searching, expands every ancestor of matching descendants so deep
- * hits surface immediately;
- * - preserves manual expand/collapse actions while the dropdown is open.
+ * Shared search-filtering and tree-expansion state for both PC (`OptionTreeSelect`)
+ * and mobile (`MobileTreePicker`) tree selection controls:
+ * - computes initial expansion on open, when options arrive asynchronously
+ * (topology changes), and whenever the search query changes (empty query →
+ * ancestors of currently selected values; non-empty query → ancestors of
+ * matching descendants);
+ * - keeps search-mode and browse-mode expansion separate so clicking expand or
+ * collapse while searching works freely (e.g. expanding a matched parent to
+ * pick its children) without overwriting non-search expansion;
+ * - never resets expansion when the selected/checked values change.
  */
-export function useTreeSelectExpansion(
+export function useOptionTreeExpansion(
   options: readonly FieldOption[],
   selectedValues: ReadonlyArray<string | number>
-): {
-  expandedKeys: Array<string | number>;
-  searchValue: string;
-  onOpenChange: (open: boolean) => void;
-  onSearch: (next: string) => void;
-  onTreeExpand: (keys: ReadonlyArray<string | number | bigint>) => void;
-} {
-  const [manualKeys, setManualKeys] = useState<Array<string | number> | null>(null);
-  const [searchValue, setSearchValue] = useState("");
+): OptionTreeExpansionState {
+  const [searchValue, setSearchValueState] = useState("");
+  const trimmedQuery = searchValue.trim();
+  const isSearching = trimmedQuery.length > 0;
 
-  const selectedAncestors = useMemo(
-    () => collectOptionAncestorValues(options, new Set(selectedValues)),
-    [options, selectedValues]
+  const filtered = useMemo(
+    () => isSearching ? filterOptionTree(options, trimmedQuery) : null,
+    [isSearching, options, trimmedQuery]
   );
+  const visibleOptions = filtered === null ? options : filtered.options;
 
-  const searchExpandedKeys = useMemo(
-    () => searchValue.trim().length > 0 ? filterOptionTree(options, searchValue).expandedKeys : [],
-    [options, searchValue]
+  const topologyKey = useMemo(() => buildOptionsTopologyKey(options), [options]);
+  const [prevTopologyKey, setPrevTopologyKey] = useState(topologyKey);
+  const [browseExpandedKeys, setBrowseExpandedKeys] = useState<Array<string | number>>(
+    () => collectOptionAncestorValues(options, new Set(selectedValues))
   );
+  const [searchExpandedKeys, setSearchExpandedKeys] = useState<Array<string | number>>([]);
+
+  // Recompute initial expansion synchronously when options arrive or change
+  // structure (e.g. remote fetch resolves while the popup is open), without
+  // reacting to selection changes on the same option tree.
+  if (prevTopologyKey !== topologyKey) {
+    setPrevTopologyKey(topologyKey);
+    setBrowseExpandedKeys(collectOptionAncestorValues(options, new Set(selectedValues)));
+    setSearchExpandedKeys(filtered === null ? [] : filtered.expandedKeys);
+  }
+
+  const trimmedQueryRef = useRef(trimmedQuery);
+  trimmedQueryRef.current = trimmedQuery;
+
+  const setSearchValue = useCallback((next: string) => {
+    setSearchValueState(next);
+
+    const nextTrimmed = next.trim();
+
+    if (trimmedQueryRef.current !== nextTrimmed) {
+      trimmedQueryRef.current = nextTrimmed;
+      setSearchExpandedKeys(nextTrimmed.length > 0 ? filterOptionTree(options, nextTrimmed).expandedKeys : []);
+    }
+  }, [options]);
+
+  const setExpandedKeys = useCallback((keys: ReadonlyArray<string | number | bigint>) => {
+    const normalized = keys.filter(
+      (key): key is string | number => typeof key === "string" || typeof key === "number"
+    );
+
+    if (isSearching) {
+      setSearchExpandedKeys(normalized);
+    } else {
+      setBrowseExpandedKeys(normalized);
+    }
+  }, [isSearching]);
+
+  const toggleExpandedKey = useCallback((key: string | number) => {
+    const toggle = (prev: Array<string | number>): Array<string | number> => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key];
+
+    if (isSearching) {
+      setSearchExpandedKeys(toggle);
+    } else {
+      setBrowseExpandedKeys(toggle);
+    }
+  }, [isSearching]);
 
   const onOpenChange = useCallback((open: boolean) => {
+    trimmedQueryRef.current = "";
+    setSearchValueState("");
+    setSearchExpandedKeys([]);
+
     if (open) {
-      setManualKeys(prev => {
-        if (prev === null) {
-          return selectedAncestors;
-        }
-
-        if (selectedAncestors.length === 0) {
-          return prev;
-        }
-
-        const merged = new Set<string | number>(prev);
-
-        for (const key of selectedAncestors) {
-          merged.add(key);
-        }
-
-        return merged.size === prev.length ? prev : [...merged];
-      });
-    } else {
-      setSearchValue("");
+      setBrowseExpandedKeys(collectOptionAncestorValues(options, new Set(selectedValues)));
     }
-  }, [selectedAncestors]);
+  }, [options, selectedValues]);
 
-  const onTreeExpand = useCallback((keys: ReadonlyArray<string | number | bigint>) => {
-    setManualKeys(keys.filter((key): key is string | number => typeof key === "string" || typeof key === "number"));
-  }, []);
-
-  const expandedKeys = useMemo(() => {
-    if (searchValue.trim().length > 0) {
-      return searchExpandedKeys;
-    }
-
-    return manualKeys ?? selectedAncestors;
-  }, [manualKeys, searchExpandedKeys, searchValue, selectedAncestors]);
+  const expandedKeys = isSearching ? searchExpandedKeys : browseExpandedKeys;
+  const expandedKeySet = useMemo<ReadonlySet<string | number>>(() => new Set(expandedKeys), [expandedKeys]);
 
   return {
+    visibleOptions,
     expandedKeys,
+    expandedKeySet,
     searchValue,
-    onOpenChange,
-    onSearch: setSearchValue,
-    onTreeExpand
+    isSearching,
+    setSearchValue,
+    setExpandedKeys,
+    toggleExpandedKey,
+    onOpenChange
   };
 }

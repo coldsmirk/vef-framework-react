@@ -1,5 +1,7 @@
 import type { ColumnDataType, DateField, DateGranularity, DateRangeField, FormField, PropertyEntry, PropertyEntryOption, Validatable } from "../types";
 
+import { omit } from "@vef-framework-react/shared";
+
 import { DATE_GRANULARITY_OPTIONS, withFieldGranularity } from "../engine/schema/date-granularity";
 import { definePropertyEntry } from "../types";
 
@@ -236,6 +238,26 @@ export function columnTypeEntry<F extends ColumnTypedField>(options: PropertyEnt
     options: [{ value: "", label: "自动(按控件推断)" }, ...options],
     read: field => field.columnType ?? "",
     write: (field, value) => { return { ...field, columnType: value === "" ? undefined : (value as ColumnDataType) }; }
+  });
+}
+
+/**
+ * Fields carrying a `leafOnly` flag (hierarchical tree selection controls).
+ */
+type LeafOnlyField = FormField & { leafOnly?: boolean };
+
+/**
+ * The "仅可选末级" entry — toggles `leafOnly` on tree selection controls,
+ * omitting the flag when disabled so omitted and false share one schema shape.
+ */
+export function leafOnlyEntry<F extends LeafOnlyField>(): PropertyEntry {
+  return definePropertyEntry<F, boolean | undefined>({
+    id: "leafOnly",
+    label: "仅可选末级",
+    type: "checkbox",
+    description: "开启后仅允许选择没有子项的末级节点",
+    read: field => field.leafOnly === true,
+    write: (field, leafOnly) => leafOnly === true ? { ...field, leafOnly: true } : (omit(field, ["leafOnly"]) as F)
   });
 }
 

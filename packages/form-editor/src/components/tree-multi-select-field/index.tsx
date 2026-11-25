@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from "react";
+import type { FC } from "react";
 
 import type {
   FieldComponentProps,
@@ -8,47 +8,14 @@ import type {
   TreeMultiSelectField
 } from "../../types";
 
-import { TreeSelect } from "@vef-framework-react/components";
-import { useMemo } from "react";
-
-import { indexOptionsByValue } from "../../engine/options";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
-import {
-  filterOptionByLabelOrDescription,
-  toAntdTreeData,
-  useTreeSelectExpansion
-} from "../../render/parts/option-content";
+import { OptionTreeSelect } from "../../render/parts/option-tree-select";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
-import { allowClearEntry, requiredEntry, sizeEntry } from "../field-entries";
+import { allowClearEntry, leafOnlyEntry, requiredEntry, sizeEntry } from "../field-entries";
 
-const treeSelectStyle = { width: "100%" } as const;
-const TREE_LINE = { showLeafIcon: false } as const;
 const EMPTY_VALUE: Array<string | number> = [];
-
-interface LabeledTreeValue {
-  value: string | number;
-  label?: ReactNode;
-}
-
-function unwrapTreeValues(next: Array<string | number | LabeledTreeValue> | undefined): Array<string | number> {
-  if (!Array.isArray(next)) {
-    return [];
-  }
-
-  const out: Array<string | number> = [];
-
-  for (const item of next) {
-    if (typeof item === "string" || typeof item === "number") {
-      out.push(item);
-    } else if (typeof item === "object" && item !== null && "value" in item) {
-      out.push(item.value);
-    }
-  }
-
-  return out;
-}
 
 const TreeMultiSelectInput: FC<FieldComponentProps<TreeMultiSelectField, Array<string | number>>> = ({
   disabled,
@@ -68,30 +35,6 @@ const TreeMultiSelectInput: FC<FieldComponentProps<TreeMultiSelectField, Array<s
   } = useFieldOptions(field.dataSource);
 
   const current = Array.isArray(value) ? value : EMPTY_VALUE;
-  const optionByValue = useMemo(() => indexOptionsByValue(options), [options]);
-  // `treeCheckStrictly` requires labeled values so parent and child checks stay
-  // strictly independent without cascading. Falling back to `String(item)` keeps
-  // values absent from the current option tree visible and removable as tags.
-  const labeledValue = useMemo<LabeledTreeValue[]>(
-    () => current.map(item => {
-      return {
-        value: item,
-        label: optionByValue.get(item)?.label ?? String(item)
-      };
-    }),
-    [current, optionByValue]
-  );
-  const treeData = useMemo(
-    () => toAntdTreeData(options, { leafOnly: field.leafOnly === true, checkable: true }),
-    [field.leafOnly, options]
-  );
-  const {
-    expandedKeys,
-    onOpenChange,
-    onSearch,
-    onTreeExpand,
-    searchValue
-  } = useTreeSelectExpansion(options, current);
 
   return (
     <FieldShell
@@ -102,32 +45,23 @@ const TreeMultiSelectInput: FC<FieldComponentProps<TreeMultiSelectField, Array<s
       labelPosition={field.labelPosition ?? labelPosition}
       required={required ?? field.validate?.required}
     >
-      <TreeSelect
-        treeCheckable
-        treeCheckStrictly
+      <OptionTreeSelect
+        multiple
         allowClear={field.allowClear}
         aria-labelledby={cell?.labelId}
         disabled={disabled}
-        filterTreeNode={filterOptionByLabelOrDescription}
         id={domId}
+        leafOnly={field.leafOnly === true}
         loading={loading}
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
+        options={options}
         placeholder={resolveFieldPlaceholder(field)}
         popupMatchSelectWidth={cell ? false : undefined}
-        searchValue={searchValue}
         showSearch={field.showSearch === true}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}
-        style={treeSelectStyle}
-        treeData={treeData}
-        treeExpandedKeys={expandedKeys}
-        treeLine={TREE_LINE}
-        treeNodeLabelProp="label"
-        value={labeledValue}
-        onChange={next => onChange(unwrapTreeValues(next as Array<string | number | LabeledTreeValue> | undefined))}
-        onOpenChange={onOpenChange}
-        onSearch={onSearch}
-        onTreeExpand={onTreeExpand}
+        value={current}
+        onChange={onChange}
       />
     </FieldShell>
   );
@@ -175,22 +109,7 @@ const treeMultiSelectProperties: PropertiesDescriptor = [
         read: field => field.dataSource,
         write: (field, dataSource) => { return { ...field, dataSource }; }
       }),
-      definePropertyEntry<TreeMultiSelectField, boolean | undefined>({
-        id: "leafOnly",
-        label: "仅可选末级",
-        type: "checkbox",
-        description: "开启后仅允许选择没有子项的末级节点",
-        read: field => field.leafOnly === true,
-        write: (field, leafOnly) => {
-          if (leafOnly === true) {
-            return { ...field, leafOnly: true };
-          }
-
-          const next = { ...field };
-          delete next.leafOnly;
-          return next;
-        }
-      }),
+      leafOnlyEntry<TreeMultiSelectField>(),
       allowClearEntry<TreeMultiSelectField>(),
       definePropertyEntry<TreeMultiSelectField, boolean | undefined>({
         id: "showSearch",

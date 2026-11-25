@@ -1,6 +1,6 @@
 import type { FormDataSource, TreeSelectField } from "../../types";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -95,19 +95,21 @@ describe("tree-select field", () => {
     expect(onChange).toHaveBeenLastCalledWith("sh");
   });
 
-  it("blocks selecting branch nodes when leafOnly is true while allowing leaf selection", async () => {
+  it("expands branch nodes on click under leafOnly without selecting them, while allowing leaf selection", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const Component = treeSelectFieldDefinition.Component!;
 
-    render(<Component domId="field-ts" field={makeField({ leafOnly: true })} value="hz" onChange={onChange} />);
+    render(<Component domId="field-ts" field={makeField({ leafOnly: true })} value="" onChange={onChange} />);
 
     await user.click(screen.getByRole("combobox"));
     expect(await screen.findByText("华东大区")).toBeInTheDocument();
+    expect(screen.queryByText("上海市")).not.toBeInTheDocument();
 
-    // Clicking a non-leaf branch does not commit a value.
+    // Clicking a non-leaf branch under leafOnly expands it instead of committing a value.
     await user.click(screen.getByText("华东大区"));
     expect(onChange).not.toHaveBeenCalled();
+    expect(await screen.findByText("上海市")).toBeInTheDocument();
 
     // Clicking a leaf commits its value.
     await user.click(screen.getByText("华北大区"));
@@ -127,6 +129,144 @@ describe("tree-select field", () => {
     expect(await screen.findByText("杭州市")).toBeInTheDocument();
     expect(screen.getByText("华东大区")).toBeInTheDocument();
     expect(screen.queryByText("华北大区")).not.toBeInTheDocument();
+  });
+
+  it("lets the user expand a matched parent during search to pick a child without corrupting browse expansion", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const Component = treeSelectFieldDefinition.Component!;
+
+    render(<Component domId="field-ts" field={makeField({ showSearch: true })} value="" onChange={onChange} />);
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+
+    // Manually expand 华东大区 in browse mode.
+    const browseSwitcher = document.querySelector(".ant-select-tree-switcher_close");
+
+    if (!browseSwitcher) {
+      throw new Error("expected closed switcher in browse mode");
+    }
+
+    await user.click(browseSwitcher);
+    expect(await screen.findByText("上海市")).toBeInTheDocument();
+
+    // Search for the parent label alone: parent matches, children do not match.
+    await user.type(combobox, "华东大区");
+    expect(await screen.findByText("华东大区")).toBeInTheDocument();
+    expect(screen.queryByText("上海市")).not.toBeInTheDocument();
+
+    // Clicking the switcher during search must expand the matched parent so its children are reachable.
+    const searchSwitcher = document.querySelector(".ant-select-tree-switcher_close");
+
+    if (!searchSwitcher) {
+      throw new Error("expected closed switcher on matched parent during search");
+    }
+
+    await user.click(searchSwitcher);
+    expect(await screen.findByText("上海市")).toBeInTheDocument();
+
+    // Collapsing during search and clearing search must preserve pre-search browse expansion.
+    const openSearchSwitcher = document.querySelector(".ant-select-tree-switcher_open");
+
+    if (!openSearchSwitcher) {
+      throw new Error("expected open switcher during search");
+    }
+
+    await user.click(openSearchSwitcher);
+    expect(screen.queryByText("上海市")).not.toBeInTheDocument();
+
+    await user.clear(combobox);
+    expect(await screen.findByText("上海市")).toBeInTheDocument();
+
+    // Re-search, expand matched parent, and pick child.
+    await user.type(combobox, "华东大区");
+    const switcherAgain = document.querySelector(".ant-select-tree-switcher_close");
+
+    if (!switcherAgain) {
+      throw new Error("expected closed switcher on matched parent");
+    }
+
+    await user.click(switcherAgain);
+    await user.click(await screen.findByText("上海市"));
+    expect(onChange).toHaveBeenLastCalledWith("sh");
+  });
+
+  it("retains the full subtree when both a parent and a subset of its children match the search query", async () => {
+    const user = userEvent.setup();
+    const Component = treeSelectFieldDefinition.Component!;
+    const field = makeField({
+      showSearch: true,
+      dataSource: {
+        kind: "static",
+        options: [
+          {
+            label: "华东大区",
+            value: "east",
+            children: [
+              { label: "华东一区", value: "east-1" },
+              { label: "上海市", value: "sh" }
+            ]
+          },
+          { label: "华北大区", value: "north" }
+        ]
+      }
+    });
+
+    render(<Component domId="field-ts" field={field} value="" onChange={vi.fn()} />);
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+    await user.type(combobox, "华东");
+
+    expect(await screen.findByText("华东一区")).toBeInTheDocument();
+    expect(screen.getByText("上海市")).toBeInTheDocument();
+    expect(screen.queryByText("华北大区")).not.toBeInTheDocument();
+  });
+
+  it("auto-expands selected ancestors when remote options arrive after the dropdown is already open", async () => {
+    const user = userEvent.setup();
+    const Component = treeSelectFieldDefinition.Component!;
+    const { promise, resolve } = Promise.withResolvers<unknown[]>();
+    const request = vi.fn().mockImplementation(() => promise);
+
+    render(
+      <DataSourceProvider request={request}>
+        <Component
+          domId="field-ts"
+          value="d2"
+          field={makeField({
+            dataSource: {
+              kind: "remote",
+              request: { resource: "md/department", action: "find_flat_options" },
+              mapping: {
+                labelKey: "name",
+                valueKey: "id",
+                parentKey: "parentId"
+              }
+            }
+          })}
+          onChange={vi.fn()}
+        />
+      </DataSourceProvider>
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    resolve([
+      {
+        id: "d1",
+        parentId: null,
+        name: "总办"
+      },
+      {
+        id: "d2",
+        parentId: "d1",
+        name: "档案室"
+      }
+    ]);
+
+    const tree = await screen.findByRole("tree");
+    expect(await within(tree).findByText("档案室")).toBeInTheDocument();
   });
 
   it("commits an empty string when cleared", async () => {

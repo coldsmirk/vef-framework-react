@@ -1,9 +1,10 @@
 import type { TreeMultiSelectField, TreeSelectField } from "../../types";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { PointerEventsCheckLevel } from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { DataSourceProvider } from "../../render/data-source-context";
 import { MobileTreeMultiSelectInput, MobileTreeSelectInput } from "./tree-select";
 
 // antd-mobile's Popup drives pointer-events through a @react-spring animation
@@ -148,6 +149,99 @@ describe("MobileTreeSelectInput", () => {
     expect(screen.getByText("杭州市")).toBeInTheDocument();
     expect(screen.getByText("华东大区")).toBeInTheDocument();
     expect(screen.queryByText("华北大区")).not.toBeInTheDocument();
+  });
+
+  it("keeps the full subtree when a parent and partial child both match, allows collapsing during search, and preserves browse expansion", async () => {
+    const user = setupUser();
+    const field = makeSingleField({
+      showSearch: true,
+      dataSource: {
+        kind: "static",
+        options: [
+          {
+            label: "华东大区",
+            value: "east",
+            children: [
+              { label: "华东一区", value: "east-1" },
+              { label: "上海市", value: "sh" }
+            ]
+          },
+          {
+            label: "华北大区",
+            value: "north",
+            children: [{ label: "北京市", value: "bj" }]
+          }
+        ]
+      }
+    });
+
+    render(<MobileTreeSelectInput domId="field-mts" field={field} value={undefined} onChange={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "区域" }));
+    // Expand 华北大区 in browse mode before searching.
+    await user.click(await screen.findByRole("button", { name: "展开 华北大区" }));
+    expect(screen.getByText("北京市")).toBeInTheDocument();
+
+    const searchInput = screen.getByRole("textbox", { name: "搜索选项" });
+    await user.type(searchInput, "华东");
+
+    // Both matching child (华东一区) and non-matching sibling (上海市) stay visible.
+    expect(screen.getByText("华东一区")).toBeInTheDocument();
+    expect(screen.getByText("上海市")).toBeInTheDocument();
+    expect(screen.queryByText("华北大区")).not.toBeInTheDocument();
+
+    // User can collapse the search-expanded parent while still searching.
+    await user.click(screen.getByRole("button", { name: "收起 华东大区" }));
+    expect(screen.queryByText("华东一区")).not.toBeInTheDocument();
+
+    // Clearing search restores pre-search browse expansion (华北大区 still expanded, 华东大区 still collapsed).
+    await user.click(screen.getByRole("button", { name: "清空搜索" }));
+    expect(screen.getByText("北京市")).toBeInTheDocument();
+    expect(screen.queryByText("上海市")).not.toBeInTheDocument();
+  });
+
+  it("auto-expands selected ancestors when remote options arrive while the popup is open", async () => {
+    const user = setupUser();
+    const { promise, resolve } = Promise.withResolvers<unknown[]>();
+    const request = vi.fn().mockImplementation(() => promise);
+
+    render(
+      <DataSourceProvider request={request}>
+        <MobileTreeSelectInput
+          domId="field-mts"
+          value="d2"
+          field={makeSingleField({
+            dataSource: {
+              kind: "remote",
+              request: { resource: "md/department", action: "find_flat_options" },
+              mapping: {
+                labelKey: "name",
+                valueKey: "id",
+                parentKey: "parentId"
+              }
+            }
+          })}
+          onChange={vi.fn()}
+        />
+      </DataSourceProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "区域" }));
+    resolve([
+      {
+        id: "d1",
+        parentId: null,
+        name: "总办"
+      },
+      {
+        id: "d2",
+        parentId: "d1",
+        name: "档案室"
+      }
+    ]);
+
+    const tree = await screen.findByRole("tree");
+    expect(await within(tree).findByText("档案室")).toBeInTheDocument();
   });
 });
 

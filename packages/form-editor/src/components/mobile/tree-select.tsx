@@ -13,14 +13,13 @@ import Popup from "antd-mobile/es/components/popup";
 import { useMemo, useState } from "react";
 
 import {
-  collectOptionAncestorValues,
-  filterOptionTree,
   hasOptionChildren,
   indexOptionsByValue
 } from "../../engine/options";
 import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { useOptionTreeExpansion } from "../../render/parts/option-content";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { PickerTrigger } from "./picker-trigger";
@@ -366,9 +365,17 @@ function MobileTreePicker({
 }: MobileTreePickerProps): ReactElement {
   const getContainer = useMobileScopeContainer();
   const [visible, setVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedKeys, setExpandedKeys] = useState<Set<string | number>>(() => new Set());
   const [draft, setDraft] = useState<Array<string | number>>(EMPTY_VALUES);
+
+  const {
+    expandedKeySet,
+    isSearching,
+    onOpenChange,
+    searchValue,
+    setSearchValue,
+    toggleExpandedKey,
+    visibleOptions
+  } = useOptionTreeExpansion(options, selectedValues);
 
   const optionByValue = useMemo(() => indexOptionsByValue(options), [options]);
 
@@ -388,30 +395,9 @@ function MobileTreePicker({
     triggerPlaceholder = "选项加载失败";
   }
 
-  const trimmedQuery = searchQuery.trim();
-  const filtered = useMemo(
-    () => trimmedQuery.length > 0 ? filterOptionTree(options, trimmedQuery) : null,
-    [options, trimmedQuery]
-  );
-
-  const activeOptions = filtered === null ? options : filtered.options;
-  const activeExpandedKeys = useMemo(() => {
-    if (filtered === null) {
-      return expandedKeys;
-    }
-
-    const merged = new Set<string | number>(expandedKeys);
-
-    for (const key of filtered.expandedKeys) {
-      merged.add(key);
-    }
-
-    return merged;
-  }, [expandedKeys, filtered]);
-
   const visibleRows = useMemo(
-    () => flattenVisibleTreeRows(activeOptions, activeExpandedKeys),
-    [activeExpandedKeys, activeOptions]
+    () => flattenVisibleTreeRows(visibleOptions, expandedKeySet),
+    [expandedKeySet, visibleOptions]
   );
 
   const selectedSet = useMemo(
@@ -420,10 +406,7 @@ function MobileTreePicker({
   );
 
   const handleOpen = (): void => {
-    const ancestors = collectOptionAncestorValues(options, new Set(selectedValues));
-
-    setSearchQuery("");
-    setExpandedKeys(new Set(ancestors));
+    onOpenChange(true);
 
     if (multiple) {
       setDraft([...selectedValues]);
@@ -434,28 +417,14 @@ function MobileTreePicker({
 
   const handleClose = (): void => {
     setVisible(false);
-    setSearchQuery("");
-  };
-
-  const toggleExpand = (key: string | number): void => {
-    setExpandedKeys(prev => {
-      const next = new Set(prev);
-
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-
-      return next;
-    });
+    onOpenChange(false);
   };
 
   const handleRowSelect = (row: VisibleTreeRow): void => {
     const { hasChildren, option } = row;
 
     if (leafOnly && hasChildren) {
-      toggleExpand(option.value);
+      toggleExpandedKey(option.value);
       return;
     }
 
@@ -538,17 +507,17 @@ function MobileTreePicker({
                       css={searchInputCss}
                       placeholder="搜索选项"
                       type="text"
-                      value={searchQuery}
-                      onChange={event => setSearchQuery(event.target.value)}
+                      value={searchValue}
+                      onChange={event => setSearchValue(event.target.value)}
                     />
 
-                    {searchQuery.length > 0
+                    {searchValue.length > 0
                       ? (
                           <button
                             aria-label="清空搜索"
                             css={searchClearCss}
                             type="button"
-                            onClick={() => setSearchQuery("")}
+                            onClick={() => setSearchValue("")}
                           >
                             <EditorIcon name="circle-x" />
                           </button>
@@ -588,7 +557,7 @@ function MobileTreePicker({
                                   aria-label={expanded ? `收起 ${option.label}` : `展开 ${option.label}`}
                                   css={expandButtonCss}
                                   type="button"
-                                  onClick={() => toggleExpand(option.value)}
+                                  onClick={() => toggleExpandedKey(option.value)}
                                 >
                                   <EditorIcon name={expanded ? "chevron-down" : "chevron-right"} />
                                 </button>
@@ -636,7 +605,7 @@ function MobileTreePicker({
                     })}
                   </div>
                 )
-              : trimmedQuery.length > 0 && options.length > 0
+              : isSearching && options.length > 0
                 ? <div css={popupStatusCss}>无匹配项</div>
                 : (
                     <div css={popupStatusCss}>

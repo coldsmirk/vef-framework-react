@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import type { FieldOption, FieldOptionSource, FormDataSource, FormField } from "../../types";
 
 import { css } from "@emotion/react";
-import { DatePicker, Input, InputNumber, Segmented, Select, TreeSelect } from "@vef-framework-react/components";
+import { DatePicker, Input, InputNumber, Segmented, Select } from "@vef-framework-react/components";
 import {
   DEFAULT_DATETIME_FORMAT,
   formatDateByGranularity,
@@ -20,9 +20,9 @@ import {
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
 import {
   filterOptionByLabelOrDescription,
-  renderSelectOption,
-  toAntdTreeData
+  renderSelectOption
 } from "../../render/parts/option-content";
+import { OptionTreeSelect } from "../../render/parts/option-tree-select";
 import { coerceToString } from "./entries/coerce";
 
 const fullWidth = { width: "100%" } as const;
@@ -370,26 +370,19 @@ function renderSingleTreeLiteral(
 
   if (staticOptions !== undefined) {
     const hasCurrent = (typeof value === "string" && value.length > 0) || typeof value === "number";
-    const byString = new Map<string, string | number>();
-
-    for (const [key] of indexOptionsByValue(staticOptions)) {
-      byString.set(String(key), key);
-    }
-
-    const matchedValue = hasCurrent ? byString.get(String(value)) : undefined;
+    const matchedValue = hasCurrent
+      ? indexOptionsByValue(staticOptions).keys().find(key => String(key) === String(value))
+      : undefined;
 
     return (
-      <TreeSelect
+      <OptionTreeSelect
         allowClear
         showSearch
-        treeDefaultExpandAll
-        filterTreeNode={filterOptionByLabelOrDescription}
+        leafOnly={leafOnly}
+        options={staticOptions}
         placeholder="选择选项值"
-        style={fullWidth}
-        treeData={toAntdTreeData(staticOptions, { leafOnly, checkable: false })}
-        treeNodeLabelProp="label"
         value={hasCurrent ? (matchedValue ?? value) : undefined}
-        onChange={(next: string | number | undefined) => onChange(next ?? "")}
+        onChange={next => onChange(next ?? "")}
       />
     );
   }
@@ -417,41 +410,16 @@ function renderMultiTreeLiteral(
     : [];
 
   if (staticOptions !== undefined) {
-    const optionByValue = indexOptionsByValue(staticOptions);
-    const labeled = arrayValue.map(item => {
-      return {
-        value: item,
-        label: optionByValue.get(item)?.label ?? String(item)
-      };
-    });
-
     return (
-      <TreeSelect
+      <OptionTreeSelect
         allowClear
+        multiple
         showSearch
-        treeCheckable
-        treeCheckStrictly
-        treeDefaultExpandAll
-        filterTreeNode={filterOptionByLabelOrDescription}
+        leafOnly={leafOnly}
+        options={staticOptions}
         placeholder="选择选项值"
-        style={fullWidth}
-        treeData={toAntdTreeData(staticOptions, { leafOnly, checkable: true })}
-        treeNodeLabelProp="label"
-        value={labeled}
-        onChange={(next: unknown) => {
-          if (!Array.isArray(next)) {
-            onChange([]);
-            return;
-          }
-
-          onChange(
-            next
-              .map(item => (typeof item === "object" && item !== null && "value" in item)
-                ? (item as { value: string | number }).value
-                : item)
-              .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
-          );
-        }}
+        value={arrayValue}
+        onChange={onChange}
       />
     );
   }

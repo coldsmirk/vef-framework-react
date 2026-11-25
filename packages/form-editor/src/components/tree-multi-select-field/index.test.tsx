@@ -2,6 +2,7 @@ import type { TreeMultiSelectField } from "../../types";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { treeMultiSelectFieldDefinition } from "./index";
@@ -84,13 +85,16 @@ describe("tree-multi-select field", () => {
     render(<Component domId="field-tms" field={makeField({ leafOnly: true })} value={["platform"]} onChange={onChange} />);
 
     await user.click(screen.getByRole("combobox"));
-    expect(await screen.findByText("研发中心")).toBeInTheDocument();
+    expect(await screen.findByText("归档组")).toBeInTheDocument();
 
-    await user.click(screen.getByText("研发中心"));
-    expect(onChange).not.toHaveBeenCalled();
-
+    // Disabled leaf cannot be checked.
     await user.click(screen.getByText("归档组"));
     expect(onChange).not.toHaveBeenCalled();
+
+    // Clicking an expanded branch under leafOnly toggles collapse instead of checking it.
+    await user.click(screen.getByText("研发中心"));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByText("归档组")).not.toBeInTheDocument();
 
     await user.click(screen.getByText("运营中心"));
     expect(onChange).toHaveBeenLastCalledWith(["platform", "ops"]);
@@ -136,5 +140,55 @@ describe("tree-multi-select field", () => {
     expect(await screen.findByText("平台组")).toBeInTheDocument();
     expect(screen.getByText("研发中心")).toBeInTheDocument();
     expect(screen.queryByText("运营中心")).not.toBeInTheDocument();
+  });
+
+  it("expands a collapsed branch on click under leafOnly without checking it", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const Component = treeMultiSelectFieldDefinition.Component!;
+
+    render(<Component domId="field-tms" field={makeField({ leafOnly: true })} value={[]} onChange={onChange} />);
+
+    await user.click(screen.getByRole("combobox"));
+    expect(await screen.findByText("研发中心")).toBeInTheDocument();
+    expect(screen.queryByText("平台组")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("研发中心"));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(await screen.findByText("平台组")).toBeInTheDocument();
+  });
+
+  it("does not reset manual expand/collapse state when checking items updates the controlled value", async () => {
+    const user = userEvent.setup();
+    const Component = treeMultiSelectFieldDefinition.Component!;
+
+    function StatefulHarness() {
+      const [val, setVal] = useState<Array<string | number>>([]);
+
+      return (
+        <Component
+          domId="field-tms"
+          field={makeField()}
+          value={val}
+          onChange={next => setVal(next as Array<string | number>)}
+        />
+      );
+    }
+
+    render(<StatefulHarness />);
+
+    await user.click(screen.getByRole("combobox"));
+    const switcher = document.querySelector(".ant-select-tree-switcher_close");
+
+    if (!switcher) {
+      throw new Error("expected closed switcher");
+    }
+
+    await user.click(switcher);
+    expect(await screen.findByText("平台组")).toBeInTheDocument();
+
+    // Checking a sibling updates `value` prop; manual expansion of 研发中心 must stay open.
+    await user.click(screen.getByText("运营中心"));
+    expect(screen.getByText("平台组")).toBeInTheDocument();
   });
 });
