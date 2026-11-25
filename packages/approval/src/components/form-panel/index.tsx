@@ -44,11 +44,12 @@ export interface InstanceFormPanelProps {
   device?: PresentationDevice;
   /**
    * Imperative handle: `submit()` runs the renderer's validation + submit
-   * pipeline, `getSubmitValues()` reads the writable subset without
-   * validating (the reject path).
+   * pipeline, `waitForPendingSequences()` awaits in-flight lookup/backfill
+   * sequences, and `getSubmitValues()` reads the writable subset synchronously
+   * without validating (the reject path).
    */
   apiRef?: RefObject<FormRendererApi | null>;
-  onSubmit?: (values: Record<string, unknown>) => void;
+  onSubmit?: (values: Record<string, unknown>) => void | Promise<void>;
 }
 
 /**

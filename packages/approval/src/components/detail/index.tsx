@@ -230,11 +230,12 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
   const [modal, setModal] = useState<DetailModal | null>(null);
   const [opinion, setOpinion] = useState("");
   const [actingOnTask, setActing] = useState(false);
+  const [settlingForm, setSettlingForm] = useState(false);
   // The same instance can return for editing again without this panel ever observing its running state.
   const submission = useSubmissionSession<ResubmitInstanceParams>(detail?.availableActions.includes("resubmit")
     ? JSON.stringify([instanceId, detail.instance.status, detail.timeline.length])
     : undefined);
-  const acting = actingOnTask || submission.pending;
+  const acting = actingOnTask || settlingForm || submission.pending;
   const reasonId = useId();
   const formApiRef = useRef<FormRendererApi | null>(null);
   const submitModeRef = useRef<FormSubmitMode | null>(null);
@@ -339,7 +340,8 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
 
   /**
    * Route approve / handle / resubmit through the renderer's validation +
-   * submit pipeline: a failed required check blocks inline and `onFormSubmit`
+   * submit pipeline: pending lookup/backfill sequences settle before
+   * validation, and a failed required check blocks inline so `onFormSubmit`
    * never fires. Flows without a form dispatch directly.
    */
   async function submitViaForm(mode: FormSubmitMode): Promise<void> {
@@ -354,22 +356,24 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
     }
 
     submitModeRef.current = mode;
+    setSettlingForm(true);
 
     try {
       await formApiRef.current?.submit();
     } finally {
       submitModeRef.current = null;
+      setSettlingForm(false);
     }
   }
 
-  function onFormSubmit(values: Record<string, unknown>): void {
+  function onFormSubmit(values: Record<string, unknown>): Promise<void> | void {
     const mode = submitModeRef.current;
 
     if (mode === null) {
       return;
     }
 
-    void dispatchFormSubmit(mode, values);
+    return dispatchFormSubmit(mode, values);
   }
 
   async function dispatchFormSubmit(mode: FormSubmitMode, values: Record<string, unknown> | undefined): Promise<void> {
@@ -403,18 +407,22 @@ export function InstanceDetailPanel({ instanceId, onActionCompleted }: InstanceD
       return;
     }
 
-    // Reject bypasses the required-field validation deliberately — the
-    // backend never blocks a reject on required fields. The writable subset
-    // still rides along.
-    const values = formApiRef.current?.getSubmitValues();
-
     await runAction(
-      async () => processTask.mutateAsync({
-        taskId: myTask.taskId,
-        action: "reject",
-        opinion: opinion.trim() || undefined,
-        formData: instance.businessKind ? await business.collect() : values
-      }),
+      async () => {
+        // Wait for any in-flight lookup/backfill sequence to settle before
+        // taking the synchronous writable-values snapshot. Reject still
+        // bypasses required-field validation deliberately — the backend never
+        // blocks a reject on required fields.
+        await formApiRef.current?.waitForPendingSequences();
+        const values = formApiRef.current?.getSubmitValues();
+
+        return processTask.mutateAsync({
+          taskId: myTask.taskId,
+          action: "reject",
+          opinion: opinion.trim() || undefined,
+          formData: instance.businessKind ? await business.collect() : values
+        });
+      },
       "已拒绝"
     );
   }
