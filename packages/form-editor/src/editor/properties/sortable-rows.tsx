@@ -80,7 +80,10 @@ export function DragHandle({ handleRef, label = "拖动排序" }: DragHandleProp
 
 let rowIdCounter = 0;
 
-function nextRowId(): string {
+/**
+ * A fresh ephemeral id for one editor row.
+ */
+export function nextRowId(): string {
   rowIdCounter += 1;
 
   return `sortable-row-${rowIdCounter}`;

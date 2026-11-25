@@ -386,6 +386,35 @@ describe("OptionListEditor", () => {
       ]);
     });
 
+    it("edits an already nested list as a hierarchy even where hierarchy is not offered", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(
+        <Harness
+          initial={[
+            {
+              label: "甲区",
+              value: "a",
+              children: [{ label: "甲子项", value: "a1" }]
+            }
+          ]}
+          onCommit={onCommit}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "折叠子项" })).toBeInTheDocument();
+
+      await user.type(screen.getByDisplayValue("甲子项"), "改");
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "甲区",
+          value: "a",
+          children: [{ label: "甲子项改", value: "a1" }]
+        }
+      ]);
+    });
+
     it("keeps open detail drawers, collapse state, and DOM inputs pinned to logical rows across delete, move, indent, and outdent", async () => {
       const user = userEvent.setup();
 

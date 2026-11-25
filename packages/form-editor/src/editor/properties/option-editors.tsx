@@ -15,7 +15,7 @@ import {
   walkOptionTree
 } from "../../engine/options";
 import { EditorIcon } from "../../icons";
-import { draggingRowCss, DragHandle, reorderRows } from "./sortable-rows";
+import { draggingRowCss, DragHandle, nextRowId, reorderRows } from "./sortable-rows";
 
 const rootCss = css({
   display: "flex",
@@ -157,26 +157,24 @@ export interface OptionListEditorProps {
    * Enable hierarchical editing (add child, indent/outdent, collapse/expand,
    * and indented bulk paste). Used in the form-global DataSource modal and on
    * `tree-select` / `tree-multi-select` fields; flat selection controls keep
-   * inline static lists single-level.
+   * inline static lists single-level. A list that already nests is always edited
+   * as a hierarchy, so no level is hidden or flattened by an edit.
    */
   allowHierarchy?: boolean;
 }
 
+/**
+ * An option's own data; its place in the tree is the row order and `depth`.
+ */
+type OptionData = Omit<FieldOption, "children">;
+
 interface PreorderOptionEntry {
   depth: number;
-  option: FieldOption;
+  option: OptionData;
 }
 
 interface OptionTreeRow extends PreorderOptionEntry {
   id: string;
-}
-
-let optionRowIdCounter = 0;
-
-function nextOptionRowId(): string {
-  optionRowIdCounter += 1;
-
-  return `option-row-${optionRowIdCounter}`;
 }
 
 function nextUniqueItemValue(used: Set<string>, seqRef: { current: number }): string {
@@ -275,8 +273,8 @@ export function parseIndentedOptionLines(
   return roots;
 }
 
-function patchOptionMetadata(option: FieldOption, patch: Partial<FieldOption>): FieldOption {
-  const next: FieldOption = { ...omit(option, ["children"]), ...patch };
+function patchOption(option: OptionData, patch: Partial<OptionData>): OptionData {
+  const next: OptionData = { ...option, ...patch };
 
   if (next.disabled !== true) {
     delete next.disabled;
@@ -285,8 +283,6 @@ function patchOptionMetadata(option: FieldOption, patch: Partial<FieldOption>): 
   if (next.description === undefined || next.description.length === 0) {
     delete next.description;
   }
-
-  delete next.children;
 
   return next;
 }
@@ -306,7 +302,7 @@ function rebuildOptionTree(rows: readonly PreorderOptionEntry[]): FieldOption[] 
   const stack: Array<{ depth: number; node: FieldOption }> = [];
 
   for (const row of rows) {
-    const node: FieldOption = { ...omit(row.option, ["children"]) };
+    const node: FieldOption = { ...row.option };
 
     while (stack.length > 0 && stack.at(-1)!.depth >= row.depth) {
       stack.pop();
@@ -382,8 +378,8 @@ function OptionDetailFields({
   onChange,
   option
 }: {
-  option: FieldOption;
-  onChange: (patch: Partial<FieldOption>) => void;
+  option: OptionData;
+  onChange: (patch: Partial<OptionData>) => void;
 }): ReactElement {
   return (
     <div css={detailSubRowCss}>
@@ -417,26 +413,19 @@ interface VisibleOptionRow {
   canMoveDown: boolean;
 }
 
-interface OptionRowProps {
-  allowHierarchy: boolean;
-  canIndent: boolean;
-  canMoveDown: boolean;
-  canMoveUp: boolean;
-  canOutdent: boolean;
-  collapsed: boolean;
+interface OptionRowProps extends VisibleOptionRow {
   containerRef?: (element: Element | null) => void;
   detailsOpen: boolean;
   dragHandle?: ReactElement;
   duplicated: boolean;
-  hasChildren: boolean;
+  hierarchical: boolean;
   isDragging?: boolean;
-  row: OptionTreeRow;
   onAddChild: () => void;
   onIndent: () => void;
   onMoveDown: () => void;
   onMoveUp: () => void;
   onOutdent: () => void;
-  onPatch: (patch: Partial<FieldOption>) => void;
+  onPatch: (patch: Partial<OptionData>) => void;
   onRemove: () => void;
   onToggleCollapsed: () => void;
   onToggleDetails: () => void;
@@ -449,7 +438,6 @@ interface OptionRowProps {
  * indent/outdent, and drag reordering.
  */
 function OptionRow({
-  allowHierarchy,
   canIndent,
   canMoveDown,
   canMoveUp,
@@ -460,6 +448,7 @@ function OptionRow({
   dragHandle,
   duplicated,
   hasChildren,
+  hierarchical,
   isDragging = false,
   onAddChild,
   onIndent,
@@ -474,19 +463,19 @@ function OptionRow({
 }: OptionRowProps): ReactElement {
   const { depth, option } = row;
   const hasDetailMeta = option.disabled === true || (option.description !== undefined && option.description.length > 0);
-  const indentPx = allowHierarchy ? Math.min(depth, 6) * 14 : 0;
+  const indentPx = Math.min(depth, 6) * 14;
 
   return (
     <div
       ref={containerRef}
       style={indentPx > 0 ? { marginLeft: indentPx } : undefined}
-      css={allowHierarchy
+      css={hierarchical
         ? [treeRowContainerCss, depth > 0 && treeRowNestedCss]
         : [flatItemCss, isDragging && draggingRowCss]}
     >
-      <div css={allowHierarchy ? treeRowHeaderCss : flatRowHeaderCss}>
+      <div css={hierarchical ? treeRowHeaderCss : flatRowHeaderCss}>
         <div css={inputsGroupCss}>
-          {allowHierarchy
+          {hierarchical
             ? hasChildren
               ? (
                   <Button
@@ -518,7 +507,7 @@ function OptionRow({
         </div>
 
         <div css={actionsCss}>
-          {allowHierarchy
+          {hierarchical
             ? (
                 <>
                   <Button
@@ -606,7 +595,7 @@ function OptionRow({
   );
 }
 
-function SortableOptionRow(props: Omit<OptionRowProps, "containerRef" | "dragHandle" | "isDragging"> & { index: number }): ReactElement {
+function SortableOptionRow(props: Omit<OptionRowProps, "containerRef" | "dragHandle" | "isDragging">): ReactElement {
   const { index, row } = props;
   const {
     handleRef,
@@ -646,7 +635,7 @@ export function OptionListEditor({
   const flatEntries = flattenOptionRows(options);
 
   if (rowIdsRef.current.length !== flatEntries.length) {
-    rowIdsRef.current = flatEntries.map(() => nextOptionRowId());
+    rowIdsRef.current = flatEntries.map(() => nextRowId());
   }
 
   const rows: OptionTreeRow[] = flatEntries.map((entry, index) => {
@@ -657,8 +646,9 @@ export function OptionListEditor({
     };
   });
 
+  const hierarchical = allowHierarchy || rows.some(row => row.depth > 0);
   const duplicated = findDuplicateOptionValues(options);
-  const bulkPasteEnabled = allowBulkPaste || allowHierarchy;
+  const bulkPasteEnabled = allowBulkPaste || hierarchical;
 
   const commitRows = (nextRows: readonly OptionTreeRow[]): void => {
     rowIdsRef.current = nextRows.map(row => row.id);
@@ -666,71 +656,28 @@ export function OptionListEditor({
   };
 
   const toggleInSet = (setter: Dispatch<SetStateAction<Set<string>>>, id: string): void => {
-    setter(prev => {
-      const next = new Set(prev);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
-      return next;
-    });
+    setter(prev => prev.symmetricDifference(new Set([id])));
   };
 
-  const uncollapseId = (id: string): void => {
-    setCollapsedIds(prev => {
-      if (!prev.has(id)) {
-        return prev;
-      }
-
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  const expand = (id: string): void => {
+    setCollapsedIds(prev => prev.difference(new Set([id])));
   };
 
-  const patchRow = (index: number, patch: Partial<FieldOption>): void => {
-    const current = rows[index];
+  const patchRow = (index: number, patch: Partial<OptionData>): void => {
+    const current = rows[index]!;
 
-    if (current === undefined) {
-      return;
-    }
-
-    commitRows(rows.with(index, { ...current, option: patchOptionMetadata(current.option, patch) }));
+    commitRows(rows.with(index, { ...current, option: patchOption(current.option, patch) }));
   };
 
   const removeRow = (index: number): void => {
-    const end = subtreeEnd(rows, index);
-    const removedIds = new Set(rows.slice(index, end).map(row => row.id));
-
-    setOpenDetails(prev => {
-      const next = new Set(prev);
-
-      for (const id of removedIds) {
-        next.delete(id);
-      }
-
-      return next.size === prev.size ? prev : next;
-    });
-    setCollapsedIds(prev => {
-      const next = new Set(prev);
-
-      for (const id of removedIds) {
-        next.delete(id);
-      }
-
-      return next.size === prev.size ? prev : next;
-    });
-    commitRows([...rows.slice(0, index), ...rows.slice(end)]);
+    commitRows(rows.toSpliced(index, subtreeEnd(rows, index) - index));
   };
 
   const addRootRow = (): void => {
     commitRows([
       ...rows,
       {
-        id: nextOptionRowId(),
+        id: nextRowId(),
         depth: 0,
         option: { label: "", value: "" }
       }
@@ -738,21 +685,15 @@ export function OptionListEditor({
   };
 
   const addChildRow = (index: number): void => {
-    const parent = rows[index];
-
-    if (parent === undefined) {
-      return;
-    }
-
-    const end = subtreeEnd(rows, index);
+    const parent = rows[index]!;
     const child: OptionTreeRow = {
-      id: nextOptionRowId(),
+      id: nextRowId(),
       depth: parent.depth + 1,
       option: { label: "", value: "" }
     };
 
-    uncollapseId(parent.id);
-    commitRows([...rows.slice(0, end), child, ...rows.slice(end)]);
+    expand(parent.id);
+    commitRows(rows.toSpliced(subtreeEnd(rows, index), 0, child));
   };
 
   const indentRow = (index: number): void => {
@@ -764,7 +705,7 @@ export function OptionListEditor({
 
     const end = subtreeEnd(rows, index);
 
-    uncollapseId(rows[prevSiblingIndex]!.id);
+    expand(rows[prevSiblingIndex]!.id);
     commitRows(rows.map((row, current) => current >= index && current < end
       ? { ...row, depth: row.depth + 1 }
       : row));
@@ -814,7 +755,7 @@ export function OptionListEditor({
 
   const applyBulkPaste = (mode: "append" | "replace"): void => {
     const existingValues = mode === "append" ? collectOptionValues(options) : new Set<string>();
-    const parsed = allowHierarchy
+    const parsed = hierarchical
       ? parseIndentedOptionLines(bulkText, existingValues)
       : parseBulkOptionLines(bulkText, existingValues);
 
@@ -826,7 +767,7 @@ export function OptionListEditor({
 
     const parsedRows: OptionTreeRow[] = flattenOptionRows(parsed).map(entry => {
       return {
-        id: nextOptionRowId(),
+        id: nextRowId(),
         depth: entry.depth,
         option: entry.option
       };
@@ -864,64 +805,48 @@ export function OptionListEditor({
       hiddenAboveDepth = null;
     }
 
-    const hasChildren = allowHierarchy && index + 1 < rows.length && rows[index + 1]!.depth > row.depth;
+    const hasChildren = index + 1 < rows.length && rows[index + 1]!.depth > row.depth;
     const collapsed = hasChildren && collapsedIds.has(row.id);
 
     if (collapsed) {
       hiddenAboveDepth = row.depth;
     }
 
-    const prevSiblingIndex = allowHierarchy ? findPrevSiblingIndex(rows, index) : -1;
-    const nextSiblingIndex = allowHierarchy ? findNextSiblingIndex(rows, index) : -1;
+    const hasPrevSibling = findPrevSiblingIndex(rows, index) !== -1;
 
     visibleRows.push({
       row,
       index,
       hasChildren,
       collapsed,
-      canIndent: prevSiblingIndex !== -1,
+      canIndent: hasPrevSibling,
       canOutdent: row.depth > 0,
-      canMoveUp: prevSiblingIndex !== -1,
-      canMoveDown: nextSiblingIndex !== -1
+      canMoveUp: hasPrevSibling,
+      canMoveDown: findNextSiblingIndex(rows, index) !== -1
     });
   }
 
   const renderRow = (item: VisibleOptionRow): ReactElement => {
-    const {
-      canIndent,
-      canMoveDown,
-      canMoveUp,
-      canOutdent,
-      collapsed,
-      hasChildren,
-      index,
-      row
-    } = item;
-    const sharedProps = {
-      allowHierarchy,
-      canIndent,
-      canMoveDown,
-      canMoveUp,
-      canOutdent,
-      collapsed,
+    const { index, row } = item;
+    const rowProps = {
+      ...item,
       detailsOpen: openDetails.has(row.id),
       duplicated: duplicated.includes(String(row.option.value)),
-      hasChildren,
-      row,
+      hierarchical,
       onAddChild: () => addChildRow(index),
       onIndent: () => indentRow(index),
       onMoveDown: () => moveSiblingRow(index, 1),
       onMoveUp: () => moveSiblingRow(index, -1),
       onOutdent: () => outdentRow(index),
-      onPatch: (patch: Partial<FieldOption>) => patchRow(index, patch),
+      onPatch: (patch: Partial<OptionData>) => patchRow(index, patch),
       onRemove: () => removeRow(index),
       onToggleCollapsed: () => toggleInSet(setCollapsedIds, row.id),
       onToggleDetails: () => toggleInSet(setOpenDetails, row.id)
     };
 
-    return allowHierarchy
-      ? <OptionRow key={row.id} {...sharedProps} />
-      : <SortableOptionRow key={row.id} index={index} {...sharedProps} />;
+    return hierarchical
+      ? <OptionRow key={row.id} {...rowProps} />
+      : <SortableOptionRow key={row.id} {...rowProps} />;
   };
 
   const renderedRows = visibleRows.map(item => renderRow(item));
@@ -930,7 +855,7 @@ export function OptionListEditor({
     <div css={rootCss}>
       {rows.length === 0 ? <span css={emptyCss}>暂无选项</span> : null}
 
-      {allowHierarchy
+      {hierarchical
         ? renderedRows
         : (
             // Scoped to its own DragDropProvider so an option-row drag never routes
@@ -950,7 +875,7 @@ export function OptionListEditor({
         ? (
             <div css={bulkPanelCss}>
               <span css={bulkHintCss}>
-                {allowHierarchy
+                {hierarchical
                   ? "每行一项，用空格或 Tab 缩进表示层级；空行自动忽略，系统将自动生成唯一值"
                   : "每行一项，空行自动忽略；系统将自动生成唯一值"}
               </span>
@@ -959,7 +884,7 @@ export function OptionListEditor({
                 aria-label="批量粘贴行项目"
                 autoSize={{ minRows: 4, maxRows: 10 }}
                 value={bulkText}
-                placeholder={allowHierarchy
+                placeholder={hierarchical
                   ? "例如：\n华东\n  上海\n  杭州\n华北\n  北京"
                   : "例如：\n第一项\n第二项\n第三项"}
                 onChange={event => setBulkText(event.target.value)}
