@@ -6,7 +6,8 @@ import { TreeSelect } from "@vef-framework-react/components";
 import { useMemo } from "react";
 
 import { hasOptionChildren, indexOptionsByValue } from "../../engine/options";
-import { OptionItemContent, useOptionTreeExpansion } from "./option-content";
+import { OptionItemContent } from "./option-content";
+import { useOptionTreeExpansion } from "./use-option-tree-expansion";
 
 const fullWidthStyle = { width: "100%" } as const;
 const TREE_LINE = { showLeafIcon: false } as const;
@@ -16,6 +17,7 @@ interface AntdTreeOptionNode {
   key: string | number;
   value: string | number;
   label: string;
+  searchText: string;
   title: ReactNode;
   disabled?: boolean;
   selectable?: boolean;
@@ -41,6 +43,7 @@ function toAntdTreeData(
       key: option.value,
       value: option.value,
       label: option.label,
+      searchText: [option.label, option.description].filter(text => text !== undefined).join("\n"),
       title: option.description !== undefined && option.description.length > 0
         ? <OptionItemContent description={option.description} label={option.label} />
         : option.label
@@ -103,7 +106,7 @@ interface OptionTreeSelectBaseProps {
 export type OptionTreeSelectProps
   = | (OptionTreeSelectBaseProps & {
     multiple?: false;
-    value?: string | number;
+    value?: string | number | null;
     onChange?: (value: string | number | undefined) => void;
   })
   | (OptionTreeSelectBaseProps & {
@@ -116,7 +119,8 @@ export type OptionTreeSelectProps
  * Shared desktop `TreeSelect` adapter used by `TreeSelectInput`,
  * `TreeMultiSelectInput`, `TypedLiteralInput`, and canvas `SampleCell`:
  * - filters through `filterOptionTree` (`showSearch.filterTreeNode: false`) so
- * PC and mobile produce identical search results;
+ * PC and mobile produce identical search results, while `treeNodeFilterProp`
+ * points antd at the same text, which is how it picks the row Enter commits;
  * - uses {@link useOptionTreeExpansion} for browse/search expansion;
  * - honors `leafOnly` with `treeExpandAction="click"` so clicking a branch
  * expands it instead of doing nothing;
@@ -142,9 +146,7 @@ export function OptionTreeSelect(props: OptionTreeSelectProps): ReactElement {
     status
   } = props;
 
-  const singleValue = !props.multiple && props.value !== "" && props.value !== undefined
-    ? props.value
-    : undefined;
+  const singleValue = props.multiple || props.value === "" ? undefined : props.value ?? undefined;
   const multiValues = props.multiple && Array.isArray(props.value)
     ? props.value
     : EMPTY_VALUES;
@@ -191,6 +193,7 @@ export function OptionTreeSelect(props: OptionTreeSelectProps): ReactElement {
       ? {
           filterTreeNode: false as const,
           searchValue,
+          treeNodeFilterProp: "searchText",
           onSearch: setSearchValue
         }
       : false,

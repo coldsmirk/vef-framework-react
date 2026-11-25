@@ -19,9 +19,9 @@ import {
 import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
-import { useOptionTreeExpansion } from "../../render/parts/option-content";
 import { OptionsStatus } from "../../render/parts/options-status";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
+import { useOptionTreeExpansion } from "../../render/parts/use-option-tree-expansion";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
 
@@ -368,7 +368,7 @@ function MobileTreePicker({
   const [draft, setDraft] = useState<Array<string | number>>(EMPTY_VALUES);
 
   const {
-    expandedKeySet,
+    expandedKeys,
     isSearching,
     onOpenChange,
     searchValue,
@@ -396,8 +396,8 @@ function MobileTreePicker({
   }
 
   const visibleRows = useMemo(
-    () => flattenVisibleTreeRows(visibleOptions, expandedKeySet),
-    [expandedKeySet, visibleOptions]
+    () => flattenVisibleTreeRows(visibleOptions, new Set(expandedKeys)),
+    [expandedKeys, visibleOptions]
   );
 
   const selectedSet = useMemo(

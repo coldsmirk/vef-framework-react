@@ -32,8 +32,6 @@ const TreeSelectInput: FC<FieldComponentProps<TreeSelectField, string | number |
     options
   } = useFieldOptions(field.dataSource);
 
-  const normalizedValue = value === "" || value === null || value === undefined ? undefined : value;
-
   return (
     <FieldShell
       domId={domId}
@@ -57,7 +55,7 @@ const TreeSelectInput: FC<FieldComponentProps<TreeSelectField, string | number |
         showSearch={field.showSearch === true}
         size={field.size}
         status={errors?.length || error ? "error" : undefined}
-        value={normalizedValue}
+        value={value}
         onChange={next => onChange(next ?? "")}
       />
     </FieldShell>

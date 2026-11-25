@@ -192,6 +192,35 @@ describe("tree-select field", () => {
     expect(onChange).toHaveBeenLastCalledWith("sh");
   });
 
+  it("searches from the first character when typing opens the dropdown", async () => {
+    const user = userEvent.setup();
+    const Component = treeSelectFieldDefinition.Component!;
+
+    render(<Component domId="field-ts" field={makeField({ showSearch: true })} value="" onChange={vi.fn()} />);
+
+    await user.tab();
+    await user.keyboard("华北");
+
+    expect(screen.getByRole("combobox")).toHaveValue("华北");
+    expect(await screen.findByText("华北大区")).toBeInTheDocument();
+    expect(screen.queryByText("华东大区")).not.toBeInTheDocument();
+  });
+
+  it("makes the first row matching by label or description the active one", async () => {
+    const user = userEvent.setup();
+    const Component = treeSelectFieldDefinition.Component!;
+
+    render(<Component domId="field-ts" field={makeField({ showSearch: true })} value="" onChange={vi.fn()} />);
+
+    await user.tab();
+    await user.keyboard("华北");
+    expect(await screen.findByRole("tree")).toHaveAttribute("aria-activedescendant", screen.getByRole("treeitem", { name: "华北大区" }).id);
+
+    await user.clear(screen.getByRole("combobox"));
+    await user.keyboard("省会");
+    expect(screen.getByRole("tree")).toHaveAttribute("aria-activedescendant", screen.getByRole("treeitem", { name: /杭州市/ }).id);
+  });
+
   it("retains the full subtree when both a parent and a subset of its children match the search query", async () => {
     const user = userEvent.setup();
     const Component = treeSelectFieldDefinition.Component!;
