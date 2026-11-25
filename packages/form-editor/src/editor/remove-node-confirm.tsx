@@ -1,32 +1,10 @@
-import type { ReactElement } from "react";
-
 import type { RemovalImpact } from "../engine/schema/removal-impact";
 import type { FormEditorStoreApi } from "../store/form-store";
 
-import { css } from "@emotion/react";
-import { globalCssVars } from "@vef-framework-react/components";
-
 import { currentLayer } from "../engine/schema/presentation";
 import { collectRemovalImpact, collectTabRemovalImpact, hasRemovalImpact } from "../engine/schema/removal-impact";
+import { DialogLines, UNDOABLE_FOOTNOTE } from "./dialog-lines";
 import { confirmDialog } from "./toolbar/notify";
-
-const summaryCss = css({
-  margin: 0,
-  paddingLeft: "1.2em",
-  display: "flex",
-  flexDirection: "column",
-  gap: globalCssVars.spacingXs,
-  fontSize: globalCssVars.fontSizeSm,
-  lineHeight: 1.6,
-  color: globalCssVars.colorTextSecondary,
-  textAlign: "left"
-});
-
-const undoHintCss = css({
-  listStyle: "none",
-  marginTop: globalCssVars.spacingXs,
-  color: globalCssVars.colorTextTertiary
-});
 
 /**
  * The impact rendered as one plain-text line per consequence — the single
@@ -53,15 +31,6 @@ function removalImpactLines(impact: RemovalImpact): string[] {
   }
 
   return lines;
-}
-
-function RemovalImpactSummary({ lines }: { lines: string[] }): ReactElement {
-  return (
-    <ul css={summaryCss}>
-      {lines.map(line => <li key={line}>{line}</li>)}
-      <li css={undoHintCss}>该操作可通过撤销恢复。</li>
-    </ul>
-  );
 }
 
 /**
@@ -100,7 +69,7 @@ function confirmRemoval(impact: RemovalImpact, title: string, commit: () => void
 
   const lines = removalImpactLines(impact);
 
-  confirmDialog(title, <RemovalImpactSummary lines={lines} />, {
+  confirmDialog(title, <DialogLines footnote={UNDOABLE_FOOTNOTE} lines={lines} />, {
     onOk: commit,
     detail: lines.join("\n")
   });

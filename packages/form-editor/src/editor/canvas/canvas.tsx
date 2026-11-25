@@ -40,6 +40,7 @@ import { usePreviewRuntime } from "../preview-runtime-context";
 import { ACTION_BAR_RISE, CanvasField, STACK_GAP_VAR, SubtreeDraggingContext } from "./canvas-field";
 import { DropIndicator } from "./drop-indicator";
 import { composeAccept, inlineSlots, stackGapDescriptor } from "./drop-zones";
+import { MobileActions } from "./mobile-actions";
 import { MobileSeedState } from "./mobile-seed-state";
 import { PhoneFrame, phoneViewportCss } from "./phone-frame";
 import { isTableColumnField, makeColumnAccept } from "./subform-column-eligibility";
@@ -304,7 +305,7 @@ export function Canvas(): ReactElement {
 
   return (
     <div ref={canvasRef} css={canvasCss}>
-      {inPhoneFrame ? <PhoneFrame>{surface}</PhoneFrame> : surface}
+      {inPhoneFrame ? <PhoneFrame actions={<MobileActions />}>{surface}</PhoneFrame> : surface}
     </div>
   );
 }

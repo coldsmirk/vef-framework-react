@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { FormEditorStoreApi } from "../../store/form-store";
 import type { Block, FormSchema, TextfieldField } from "../../types";
@@ -7,7 +7,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DragDropProvider } from "@vef-framework-react/core";
 import { useEffect } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultRegistry } from "../../engine/registry/defaults";
 import { createDefaultMobileRegistry } from "../../engine/registry/defaults-mobile";
@@ -17,6 +17,16 @@ import { Canvas } from "./canvas";
 import { SubtreeDraggingContext } from "./canvas-field";
 
 const FIELD_ID = "Field_1";
+
+interface VefMock {
+  message: {
+    success: ReturnType<typeof vi.fn>;
+    warning: ReturnType<typeof vi.fn>;
+  };
+  modal: {
+    confirm: ReturnType<typeof vi.fn>;
+  };
+}
 
 // The repo-wide idiom for a lint-clean no-op mock (see core/http/client.spec.ts).
 const silence = Function.prototype as () => void;
@@ -55,6 +65,51 @@ function makeMobileSchema(): FormSchema {
       }
     }
   };
+}
+
+/**
+ * A PC design and a mobile one that drifted apart: mobile still carries a field
+ * PC no longer has, and PC carries a type mobile cannot render.
+ */
+function makeDivergedSchema(): FormSchema {
+  return {
+    id: "Form_1",
+    version: 2,
+    presentations: {
+      pc: {
+        children: [
+          makeField(),
+          {
+            id: "Field_alien",
+            type: "alien",
+            key: "alien",
+            label: "外星组件"
+          } as unknown as TextfieldField
+        ]
+      },
+      mobile: {
+        children: [
+          {
+            id: "Field_m1",
+            type: "textfield",
+            key: "nickname",
+            label: "昵称"
+          }
+        ]
+      }
+    }
+  };
+}
+
+function installVefGlobal(): VefMock {
+  const vef: VefMock = {
+    message: { success: vi.fn(), warning: vi.fn() },
+    modal: { confirm: vi.fn() }
+  };
+
+  vi.stubGlobal("$vef", vef);
+
+  return vef;
 }
 
 function makeContainersSchema(): FormSchema {
@@ -523,7 +578,7 @@ describe("Canvas", () => {
   });
 
   describe("mobile seed state", () => {
-    it("offers conversion and blank start while mobile is undesigned", () => {
+    it("offers the PC sync and blank start while mobile is undesigned", () => {
       const storeApi = setupCanvas();
 
       act(() => {
@@ -531,7 +586,7 @@ describe("Canvas", () => {
       });
 
       expect(screen.getByText("移动端布局尚未设计")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /从 PC 转换/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /从 PC 同步/ })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "从空白开始" })).toBeInTheDocument();
     });
 
@@ -560,7 +615,7 @@ describe("Canvas", () => {
         storeApi.getState().setDevice("mobile");
       });
 
-      await user.click(screen.getByRole("button", { name: /从 PC 转换/ }));
+      await user.click(screen.getByRole("button", { name: /从 PC 同步/ }));
 
       const { children } = storeApi.getState().schema.presentations.mobile ?? { children: [] };
       expect(children).toHaveLength(1);
@@ -597,7 +652,7 @@ describe("Canvas", () => {
         storeApi.getState().setDevice("mobile");
       });
 
-      await user.click(screen.getByRole("button", { name: /从 PC 转换/ }));
+      await user.click(screen.getByRole("button", { name: /从 PC 同步/ }));
 
       expect(info).toHaveBeenCalledWith(
         "[form-editor]",
@@ -605,6 +660,124 @@ describe("Canvas", () => {
       );
 
       info.mockRestore();
+    });
+  });
+
+  describe("sync from PC on a designed mobile", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("is offered beside the phone only", () => {
+      const storeApi = setupCanvas({ schema: makeDivergedSchema() });
+
+      expect(screen.queryByRole("button", { name: "从 PC 同步" })).not.toBeInTheDocument();
+
+      act(() => {
+        storeApi.getState().setDevice("mobile");
+      });
+
+      expect(screen.getByRole("button", { name: "从 PC 同步" })).toBeInTheDocument();
+
+      act(() => {
+        storeApi.getState().setViewMode("json");
+      });
+
+      expect(screen.queryByRole("button", { name: "从 PC 同步" })).not.toBeInTheDocument();
+    });
+
+    it("names what the replacement loses before touching the mobile design", async () => {
+      const vef = installVefGlobal();
+      const user = userEvent.setup();
+      const storeApi = setupCanvas({ schema: makeDivergedSchema() });
+
+      act(() => {
+        storeApi.getState().setDevice("mobile");
+      });
+
+      await user.click(screen.getByRole("button", { name: "从 PC 同步" }));
+
+      const config = vef.modal.confirm.mock.calls[0]![0] as { content: ReactNode; title: string };
+
+      expect(config.title).toBe("用 PC 端覆盖移动端？");
+      expect(storeApi.getState().schema).toEqual(makeDivergedSchema());
+
+      render(config.content);
+
+      expect(screen.getByText(/「昵称」.*将从移动端删除/)).toBeInTheDocument();
+      expect(screen.getByText("「外星组件」：移动端无对应组件")).toBeInTheDocument();
+      expect(screen.getByText("该操作可通过撤销恢复。")).toBeInTheDocument();
+    });
+
+    it("replaces the mobile design once confirmed, as one undoable step", async () => {
+      const vef = installVefGlobal();
+      const user = userEvent.setup();
+      const storeApi = setupCanvas({ schema: makeDivergedSchema() });
+
+      act(() => {
+        storeApi.getState().setDevice("mobile");
+      });
+
+      await user.click(screen.getByRole("button", { name: "从 PC 同步" }));
+
+      const { onOk } = vef.modal.confirm.mock.calls[0]![0] as { onOk: () => void };
+
+      act(() => {
+        onOk();
+      });
+
+      const { mobile, pc } = storeApi.getState().schema.presentations;
+
+      expect(mobile?.children).toHaveLength(1);
+      expect(mobile?.children[0]).toMatchObject({ type: "textfield", key: "textfield" });
+      expect(pc).toEqual(makeDivergedSchema().presentations.pc);
+
+      act(() => {
+        storeApi.getState().undo();
+      });
+
+      expect(storeApi.getState().schema).toEqual(makeDivergedSchema());
+    });
+
+    it("fills a blank mobile design without asking", async () => {
+      const vef = installVefGlobal();
+      const user = userEvent.setup();
+      const storeApi = setupCanvas({
+        schema: {
+          ...makeSchema(),
+          presentations: { ...makeSchema().presentations, mobile: { children: [] } }
+        }
+      });
+
+      act(() => {
+        storeApi.getState().setDevice("mobile");
+      });
+
+      await user.click(screen.getByRole("button", { name: "从 PC 同步" }));
+
+      expect(vef.modal.confirm).not.toHaveBeenCalled();
+      expect(storeApi.getState().schema.presentations.mobile?.children).toHaveLength(1);
+      expect(vef.message.success).toHaveBeenCalledWith("已从 PC 同步 1 个组件");
+    });
+
+    it("keeps the mobile design when PC has nothing to sync", async () => {
+      const vef = installVefGlobal();
+      const user = userEvent.setup();
+      const schema: FormSchema = {
+        ...makeDivergedSchema(),
+        presentations: { ...makeDivergedSchema().presentations, pc: { children: [] } }
+      };
+      const storeApi = setupCanvas({ schema });
+
+      act(() => {
+        storeApi.getState().setDevice("mobile");
+      });
+
+      await user.click(screen.getByRole("button", { name: "从 PC 同步" }));
+
+      expect(vef.message.warning).toHaveBeenCalledWith("PC 端还没有内容可同步");
+      expect(vef.modal.confirm).not.toHaveBeenCalled();
+      expect(storeApi.getState().schema).toEqual(schema);
     });
   });
 

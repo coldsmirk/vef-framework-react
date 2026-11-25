@@ -182,13 +182,12 @@ export interface FormEditorStoreState {
   setViewMode: (mode: EditorViewMode) => void;
   setDevice: (device: EditorDeviceMode) => void;
   /**
-   * Seed the mobile presentation wholesale and switch editing to it. Used by
-   * the canvas seed state to start from a blank layer or a best-effort
-   * PC → mobile conversion (the caller builds the layer). An ordinary
-   * checkpointed mutation: a single undo removes the seeded presentation
-   * again, returning the canvas to the no-mobile seed screen.
+   * Replace the mobile presentation wholesale and switch editing to it: a blank
+   * start, or a sync from the PC design (the caller builds the layer). An
+   * ordinary checkpointed mutation: a single undo brings the previous mobile
+   * presentation back, or the no-mobile seed screen where there was none.
    */
-  initMobile: (layer: PresentationLayer) => void;
+  replaceMobile: (layer: PresentationLayer) => void;
 
   /**
    * Insert a new field built from a registry definition at a drop target.
@@ -599,7 +598,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         set({ device, selectedId: keep });
       },
 
-      initMobile: layer => {
+      replaceMobile: layer => {
         const { schema } = get();
 
         checkpoint();

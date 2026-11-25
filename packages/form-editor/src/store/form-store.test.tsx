@@ -1686,17 +1686,17 @@ describe("form store", () => {
   });
 
   describe("mobile seeding", () => {
-    it("returns to the no-mobile seed state when initMobile is undone", () => {
+    it("returns to the no-mobile seed state when replaceMobile is undone", () => {
       const api = setup();
       act(() => api.getState().setDevice("mobile"));
 
-      act(() => api.getState().initMobile({ children: [] }));
+      act(() => api.getState().replaceMobile({ children: [] }));
       expect(api.getState().schema.presentations.mobile).toBeDefined();
       expect(api.getState().device).toBe("mobile");
 
       act(() => api.getState().undo());
 
-      // initMobile is an ordinary checkpointed mutation: a single undo removes
+      // replaceMobile is an ordinary checkpointed mutation: a single undo removes
       // the seeded presentation, bringing the seed screen back.
       expect(api.getState().schema.presentations.mobile).toBeUndefined();
       expect(api.getState().device).toBe("mobile");
@@ -1788,7 +1788,7 @@ describe("form store", () => {
     it("routes gap to the mobile layer when editing mobile", () => {
       const api = setup();
       act(() => api.getState().setDevice("mobile"));
-      act(() => api.getState().initMobile({ children: [] }));
+      act(() => api.getState().replaceMobile({ children: [] }));
 
       act(() => api.getState().patchSchema({ gap: "small" }));
 

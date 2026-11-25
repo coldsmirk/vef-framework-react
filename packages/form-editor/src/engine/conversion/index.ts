@@ -1,9 +1,11 @@
-import type { Block, PresentationLayer, TextareaField } from "../../types";
+import type { Block, KeyedNodeUnion, PresentationLayer, TextareaField } from "../../types";
 import type { FormFieldRegistry } from "../registry/form-field-registry";
+import type { ScopePath } from "../schema/walk";
 
+import { isKeyedNode } from "../keys";
 import { cloneBlock } from "../schema/edit-ops";
 import { containerBodies, withContainerBodies } from "../schema/nodes";
-import { isContainerNode, nodeLabel } from "../schema/walk";
+import { findKeyedNodeByKeyInScope, isContainerNode, nodeLabel, scopeEquals, walkNodes } from "../schema/walk";
 
 /**
  * Best-effort conversion of a PC design into a mobile one. The rule set is the
@@ -193,6 +195,35 @@ export function convertPresentation(
 
 function freshenBlock(block: Block): Block {
   return cloneBlock(block, null);
+}
+
+/**
+ * The keyed nodes of `current` whose binding (value scope + key) has no
+ * counterpart in `replacement` — what replacing one layer with the other loses.
+ * A subform without a counterpart stands for its whole template: the fields
+ * inside it are not listed again.
+ */
+export function collectLostBindings(current: PresentationLayer, replacement: PresentationLayer): KeyedNodeUnion[] {
+  const lost: KeyedNodeUnion[] = [];
+  const lostScopes: ScopePath[] = [];
+
+  walkNodes(current, (node, scope) => {
+    if (!isKeyedNode(node) || lostScopes.some(lostScope => scopeEquals(lostScope, scope.slice(0, lostScope.length)))) {
+      return;
+    }
+
+    if (findKeyedNodeByKeyInScope(replacement, scope, node.key) !== undefined) {
+      return;
+    }
+
+    lost.push(node);
+
+    if (node.type === "subform") {
+      lostScopes.push([...scope, node.key]);
+    }
+  });
+
+  return lost;
 }
 
 /**

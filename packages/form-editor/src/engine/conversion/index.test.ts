@@ -14,7 +14,7 @@ import type {
   TextfieldField
 } from "../../types";
 
-import { ConversionRegistry, convertPresentation, createDefaultConversionRules } from ".";
+import { collectLostBindings, ConversionRegistry, convertPresentation, createDefaultConversionRules } from ".";
 import { sectionDefinition } from "../../components/containers";
 import { textareaFieldDefinition } from "../../components/textarea-field";
 import { textfieldDefinition } from "../../components/textfield";
@@ -65,6 +65,16 @@ function section(id: string, children: Block[]): SectionNode {
     variant: "card",
     title: "Card",
     children
+  };
+}
+
+function subform(id: string, key: string, template: Block[]): SubformNode {
+  return {
+    id,
+    type: "subform",
+    variant: "stack",
+    key,
+    template
   };
 }
 
@@ -453,5 +463,44 @@ describe("convertPresentation", () => {
       // The section unwrapped through ctx.convertBlocks; its inner field surfaced inline.
       expect(layer.children[0]).toMatchObject({ type: "textfield", key: "a" });
     });
+  });
+});
+
+describe("collectLostBindings", () => {
+  const emptyTarget: PresentationLayer = { children: [] };
+
+  it("lists the bindings the replacement has no counterpart for", () => {
+    const current = layerOf([textfield("m1", "name"), textfield("m2", "nickname")]);
+    const replacement = layerOf([textfield("p1", "name")]);
+
+    expect(collectLostBindings(current, replacement).map(node => node.key)).toEqual(["nickname"]);
+  });
+
+  it("matches a binding wherever the replacement lays it out", () => {
+    const current = layerOf([textfield("m1", "name")]);
+    const row = grid("g1", [textfield("p1", "name")]);
+    const replacement = layerOf([section("s1", [row])]);
+
+    expect(collectLostBindings(current, replacement)).toEqual([]);
+  });
+
+  it("does not match a binding of another value scope", () => {
+    const current = layerOf([subform("ms", "lines", [textfield("m1", "name")])]);
+    const replacement = layerOf([textfield("p1", "name"), subform("ps", "lines", [textfield("p2", "amount")])]);
+
+    expect(collectLostBindings(current, replacement).map(node => node.id)).toEqual(["m1"]);
+  });
+
+  it("lists a lost subform once, without the fields inside it", () => {
+    const nested = subform("mn", "parts", [textfield("m2", "code")]);
+    const current = layerOf([subform("ms", "lines", [textfield("m1", "name"), nested])]);
+
+    expect(collectLostBindings(current, emptyTarget).map(node => node.id)).toEqual(["ms"]);
+  });
+
+  it("ignores blocks that bind no value", () => {
+    const current = layerOf([section("s1", [])]);
+
+    expect(collectLostBindings(current, emptyTarget)).toEqual([]);
   });
 });

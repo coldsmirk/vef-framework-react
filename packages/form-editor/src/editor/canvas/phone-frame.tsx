@@ -35,13 +35,21 @@ const PHONE_FRAME_HEIGHT = PHONE_SCREEN_HEIGHT + PHONE_BEZEL * 2;
 const PHONE_SAFE_TOP = 52;
 const PHONE_SAFE_BOTTOM = 26;
 
+// Auto margins center the device in the canvas (a flex column) and, unlike
+// centered alignment, never push an oversized one past the scrollable start.
+const phoneStageCss = css({
+  display: "flex",
+  flexDirection: "column",
+  flexShrink: 0,
+  alignItems: "center",
+  gap: globalCssVars.spacingSm,
+  margin: "auto"
+});
+
 const phoneFrameCss = css({
   position: "relative",
   flexShrink: 0,
   boxSizing: "border-box",
-  // Auto margins center the device in the canvas (a flex column) and, unlike
-  // centered alignment, never push an oversized one past the scrollable start.
-  margin: "auto",
   width: PHONE_FRAME_WIDTH,
   height: PHONE_FRAME_HEIGHT,
   padding: PHONE_BEZEL,
@@ -156,6 +164,14 @@ const homeIndicatorCss = css({
   pointerEvents: "none"
 });
 
+export interface PhoneFrameProps {
+  /**
+   * Device-scoped actions shown above the phone.
+   */
+  actions?: ReactNode;
+  children: ReactNode;
+}
+
 /**
  * The simulated-iPhone shell around the mobile design / preview surface. Owns
  * the screen-node state it publishes to the mobile overlays (edit + preview) via
@@ -165,21 +181,25 @@ const homeIndicatorCss = css({
  * goes inside the screen. No transform anywhere on the chain, so the in-frame
  * drag ghost's fixed coordinates stay correct and edit-mode reordering works.
  */
-export function PhoneFrame({ children }: { children: ReactNode }): ReactElement {
+export function PhoneFrame({ actions, children }: PhoneFrameProps): ReactElement {
   const [screenNode, setScreenNode] = useState<HTMLElement | null>(null);
 
   return (
-    <div css={phoneFrameCss}>
-      <span css={dynamicIslandCss} />
+    <div css={phoneStageCss}>
+      {actions}
 
-      <div ref={setScreenNode} css={[phoneScreenCss, containedOverlayCss]}>
-        {/* Pen mobile pickers to the screen in BOTH edit and preview: the
-            overlay portals here and `containedOverlayCss` re-bases it to this
-            box — no transform, so edit-mode dragging stays intact. */}
-        <OverlayContainerProvider container={screenNode}>{children}</OverlayContainerProvider>
+      <div css={phoneFrameCss}>
+        <span css={dynamicIslandCss} />
+
+        <div ref={setScreenNode} css={[phoneScreenCss, containedOverlayCss]}>
+          {/* Pen mobile pickers to the screen in BOTH edit and preview: the
+              overlay portals here and `containedOverlayCss` re-bases it to this
+              box — no transform, so edit-mode dragging stays intact. */}
+          <OverlayContainerProvider container={screenNode}>{children}</OverlayContainerProvider>
+        </div>
+
+        <span css={homeIndicatorCss} />
       </div>
-
-      <span css={homeIndicatorCss} />
     </div>
   );
 }
