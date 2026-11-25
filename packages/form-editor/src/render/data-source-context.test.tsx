@@ -46,6 +46,212 @@ describe("mapRemoteResponseToOptions", () => {
       { label: "Bob", value: "E2" }
     ]);
   });
+
+  it("maps disabled, description, and nested children with default and custom keys", () => {
+    expect(
+      mapRemoteResponseToOptions([
+        {
+          label: "华东",
+          value: "east",
+          description: "华东片区",
+          children: [
+            {
+              label: "上海",
+              value: "sh",
+              disabled: true,
+              description: "直辖市",
+              children: []
+            }
+          ]
+        }
+      ])
+    ).toEqual([
+      {
+        label: "华东",
+        value: "east",
+        description: "华东片区",
+        children: [
+          {
+            label: "上海",
+            value: "sh",
+            disabled: true,
+            description: "直辖市"
+          }
+        ]
+      }
+    ]);
+
+    expect(
+      mapRemoteResponseToOptions(
+        [
+          {
+            title: "研发中心",
+            code: "rd",
+            note: "主研发",
+            sub: [
+              {
+                title: "归档组",
+                code: "legacy",
+                frozen: true,
+                note: "已停用"
+              }
+            ]
+          }
+        ],
+        {
+          labelKey: "title",
+          valueKey: "code",
+          disabledKey: "frozen",
+          descriptionKey: "note",
+          childrenKey: "sub"
+        }
+      )
+    ).toEqual([
+      {
+        label: "研发中心",
+        value: "rd",
+        description: "主研发",
+        children: [
+          {
+            label: "归档组",
+            value: "legacy",
+            disabled: true,
+            description: "已停用"
+          }
+        ]
+      }
+    ]);
+  });
+
+  it("builds a tree from flat records via parentKey and ignores childrenKey", () => {
+    expect(
+      mapRemoteResponseToOptions(
+        [
+          {
+            id: 1,
+            parentId: null,
+            name: "总部",
+            remark: "顶级",
+            sub: [{ id: 99, name: "应被忽略" }]
+          },
+          {
+            id: 2,
+            parentId: "1",
+            name: "研发部",
+            inactive: false
+          },
+          {
+            id: 3,
+            parentId: 2,
+            name: "平台组",
+            inactive: true,
+            remark: "已合并"
+          },
+          {
+            id: 4,
+            parentId: "",
+            name: "空父级根"
+          },
+          {
+            id: 5,
+            parentId: "missing",
+            name: "孤儿根"
+          },
+          {
+            id: 6,
+            parentId: 6,
+            name: "自引用根"
+          }
+        ],
+        {
+          labelKey: "name",
+          valueKey: "id",
+          parentKey: "parentId",
+          childrenKey: "sub",
+          disabledKey: "inactive",
+          descriptionKey: "remark"
+        }
+      )
+    ).toEqual([
+      {
+        label: "总部",
+        value: 1,
+        description: "顶级",
+        children: [
+          {
+            label: "研发部",
+            value: 2,
+            children: [
+              {
+                label: "平台组",
+                value: 3,
+                disabled: true,
+                description: "已合并"
+              }
+            ]
+          }
+        ]
+      },
+      { label: "空父级根", value: 4 },
+      { label: "孤儿根", value: 5 },
+      { label: "自引用根", value: 6 }
+    ]);
+  });
+
+  it("promotes cyclic flat records to roots without looping while preserving non-cycle descendants", () => {
+    // 2-cycle (a <-> b) with a non-cycle child d under b, plus a 3-cycle (x -> y -> z -> x).
+    const tree = mapRemoteResponseToOptions(
+      [
+        {
+          id: "a",
+          parentId: "b",
+          name: "节点 A"
+        },
+        {
+          id: "b",
+          parentId: "a",
+          name: "节点 B"
+        },
+        {
+          id: "d",
+          parentId: "b",
+          name: "正常子节点 D"
+        },
+        {
+          id: "x",
+          parentId: "z",
+          name: "环 X"
+        },
+        {
+          id: "y",
+          parentId: "x",
+          name: "环 Y"
+        },
+        {
+          id: "z",
+          parentId: "y",
+          name: "环 Z"
+        }
+      ],
+      {
+        labelKey: "name",
+        valueKey: "id",
+        parentKey: "parentId"
+      }
+    );
+
+    expect(tree).toEqual([
+      { label: "节点 A", value: "a" },
+      {
+        label: "节点 B",
+        value: "b",
+        children: [{ label: "正常子节点 D", value: "d" }]
+      },
+      { label: "环 X", value: "x" },
+      { label: "环 Y", value: "y" },
+      { label: "环 Z", value: "z" }
+    ]);
+  });
 });
 
 describe("useFieldOptions", () => {

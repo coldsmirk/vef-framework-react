@@ -13,6 +13,8 @@ import type {
   SwitchField,
   TextareaField,
   TextfieldField,
+  TreeMultiSelectField,
+  TreeSelectField,
   UploadField
 } from "../types";
 
@@ -163,6 +165,28 @@ const uploadField: UploadField = {
   id: "f19",
   type: "upload",
   key: "target"
+};
+const treeSelectField: TreeSelectField = {
+  id: "f20",
+  type: "tree-select",
+  key: "target"
+};
+const treeLeafOnlyField: TreeSelectField = {
+  id: "f21",
+  type: "tree-select",
+  key: "target",
+  leafOnly: true
+};
+const treeMultiField: TreeMultiSelectField = {
+  id: "f22",
+  type: "tree-multi-select",
+  key: "target"
+};
+const treeMultiLeafOnlyField: TreeMultiSelectField = {
+  id: "f23",
+  type: "tree-multi-select",
+  key: "target",
+  leafOnly: true
 };
 
 describe("normalizeFieldValue", () => {
@@ -332,6 +356,47 @@ describe("normalizeFieldValue", () => {
 
     it("deduplicates finite scalars when option list is unknown", () => {
       expect(normalizeFieldValue(checkboxGroupField, ["a", "b", "a", "", NaN, { x: 1 }])).toEqual(["a", "b"]);
+    });
+  });
+
+  describe("tree-select and hierarchical knownOptions", () => {
+    const hierarchicalOptions: FieldOption[] = [
+      {
+        label: "总部",
+        value: 1,
+        children: [
+          { label: "研发部", value: 101 },
+          {
+            label: "归档部",
+            value: 102,
+            disabled: true
+          }
+        ]
+      },
+      { label: "运营中心", value: "ops" }
+    ];
+
+    it("matches nested nodes for tree-select and enforces leafOnly when enabled", () => {
+      expect(normalizeFieldValue(treeSelectField, "1", hierarchicalOptions)).toBe(1);
+      expect(normalizeFieldValue(treeSelectField, "101", hierarchicalOptions)).toBe(101);
+      expect(normalizeFieldValue(treeSelectField, "missing", hierarchicalOptions)).toBe("");
+
+      // Branch value 1 is rejected when leafOnly is true; leaf 101 and root leaf ops pass.
+      expect(normalizeFieldValue(treeLeafOnlyField, 1, hierarchicalOptions)).toBe("");
+      expect(normalizeFieldValue(treeLeafOnlyField, "101", hierarchicalOptions)).toBe(101);
+      expect(normalizeFieldValue(treeLeafOnlyField, "ops", hierarchicalOptions)).toBe("ops");
+    });
+
+    it("matches and filters nested arrays for tree-multi-select with leafOnly", () => {
+      expect(normalizeFieldValue(treeMultiField, ["1", "101", "1", "missing"], hierarchicalOptions)).toEqual([1, 101]);
+      expect(normalizeFieldValue(treeMultiLeafOnlyField, [1, "101", "ops"], hierarchicalOptions)).toEqual([101, "ops"]);
+      expect(normalizeFieldValue(treeMultiField, "101", hierarchicalOptions)).toEqual([]);
+    });
+
+    it("restricts flat selection controls to top-level options even when knownOptions is a tree", () => {
+      expect(normalizeFieldValue(selectField, "1", hierarchicalOptions)).toBe(1);
+      expect(normalizeFieldValue(selectField, 101, hierarchicalOptions)).toBe("");
+      expect(normalizeFieldValue(multiSelectField, ["1", 101, "ops"], hierarchicalOptions)).toEqual([1, "ops"]);
     });
   });
 });

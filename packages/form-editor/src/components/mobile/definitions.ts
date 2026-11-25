@@ -19,7 +19,9 @@ import type {
   SelectField,
   SwitchField,
   TextareaField,
-  TextfieldField
+  TextfieldField,
+  TreeMultiSelectField,
+  TreeSelectField
 } from "../../types";
 
 import { defineFieldDefinition } from "../../types";
@@ -35,6 +37,8 @@ import { selectFieldDefinition } from "../select-field";
 import { switchFieldDefinition } from "../switch-field";
 import { textareaFieldDefinition } from "../textarea-field";
 import { textfieldDefinition } from "../textfield";
+import { treeMultiSelectFieldDefinition } from "../tree-multi-select-field";
+import { treeSelectFieldDefinition } from "../tree-select-field";
 import { uploadFieldDefinition } from "../upload-field";
 import { MobileAlertBlock } from "./alert-block";
 import { MobileButton } from "./button";
@@ -52,6 +56,7 @@ import { MobileSelectInput } from "./select";
 import { MobileSwitch } from "./switch";
 import { MobileTextarea } from "./textarea";
 import { MobileTextfield } from "./textfield";
+import { MobileTreeMultiSelectInput, MobileTreeSelectInput } from "./tree-select";
 
 /**
  * Build a mobile field definition from its PC counterpart: the `config`
@@ -84,6 +89,8 @@ export const mobileFieldDefinitions: FieldDefinition[] = [
   mobileDefinition<SwitchField, boolean>(switchFieldDefinition, MobileSwitch),
   mobileDefinition<SelectField, string | number | undefined>(selectFieldDefinition, MobileSelectInput),
   mobileDefinition<MultiSelectField, Array<string | number>>(multiSelectFieldDefinition, MobileMultiSelectInput),
+  mobileDefinition<TreeSelectField, string | number | undefined>(treeSelectFieldDefinition, MobileTreeSelectInput),
+  mobileDefinition<TreeMultiSelectField, Array<string | number>>(treeMultiSelectFieldDefinition, MobileTreeMultiSelectInput),
   mobileDefinition<RadioField, string | number | undefined>(radioFieldDefinition, MobileRadioInput),
   mobileDefinition<CheckboxGroupField, Array<string | number>>(checkboxGroupFieldDefinition, MobileCheckboxGroupInput),
   mobileDefinition<DateField, string>(dateFieldDefinition, MobileDateInput),

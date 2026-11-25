@@ -211,6 +211,26 @@ describe("summarizeDataSource", () => {
       kind: "static",
       options: []
     }, APIS)).toEqual({ text: "静态 · 0 项", incomplete: true });
+
+    expect(summarizeDataSource({
+      id: "ds3",
+      name: "树形目录",
+      kind: "static",
+      options: [
+        {
+          label: "华东",
+          value: "east",
+          children: [
+            {
+              label: "浙江",
+              value: "zj",
+              children: [{ label: "杭州", value: "hz" }]
+            },
+            { label: "上海", value: "sh" }
+          ]
+        }
+      ]
+    }, APIS)).toEqual({ text: "静态 · 4 项", incomplete: false });
   });
 
   it("summarizes catalog APIs and flags unbound required parameters", () => {

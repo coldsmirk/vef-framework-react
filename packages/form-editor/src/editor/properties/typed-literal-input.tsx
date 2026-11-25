@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import type { FieldOption, FieldOptionSource, FormDataSource, FormField } from "../../types";
 
 import { css } from "@emotion/react";
-import { DatePicker, Input, InputNumber, Segmented, Select } from "@vef-framework-react/components";
+import { DatePicker, Input, InputNumber, Segmented, Select, TreeSelect } from "@vef-framework-react/components";
 import {
   DEFAULT_DATETIME_FORMAT,
   formatDateByGranularity,
@@ -13,7 +13,16 @@ import {
   tryParseDateByGranularity
 } from "@vef-framework-react/shared";
 
+import {
+  indexOptionsByValue,
+  toTopLevelOptions
+} from "../../engine/options";
 import { antdPickerForGranularity } from "../../engine/schema/date-granularity";
+import {
+  filterOptionByLabelOrDescription,
+  renderSelectOption,
+  toAntdTreeData
+} from "../../render/parts/option-content";
 import { coerceToString } from "./entries/coerce";
 
 const fullWidth = { width: "100%" } as const;
@@ -66,7 +75,12 @@ export function defaultLiteralValueForField(field: FormField | undefined): unkno
     return false;
   }
 
-  if (field.type === "multi-select" || field.type === "checkbox-group" || field.type === "daterange") {
+  if (
+    field.type === "multi-select"
+    || field.type === "tree-multi-select"
+    || field.type === "checkbox-group"
+    || field.type === "daterange"
+  ) {
     return [];
   }
 
@@ -236,6 +250,14 @@ export function TypedLiteralInput({
       return renderMultiOptionLiteral(field.dataSource, dataSources, value, onChange);
     }
 
+    case "tree-select": {
+      return renderSingleTreeLiteral(field.dataSource, dataSources, field.leafOnly === true, value, onChange);
+    }
+
+    case "tree-multi-select": {
+      return renderMultiTreeLiteral(field.dataSource, dataSources, field.leafOnly === true, value, onChange);
+    }
+
     case "checkbox-group": {
       return renderMultiOptionLiteral(field.dataSource, dataSources, value, onChange);
     }
@@ -259,7 +281,8 @@ function renderSingleOptionLiteral(
   value: unknown,
   onChange: (next: unknown) => void
 ): ReactElement {
-  const staticOptions = resolveStaticFieldOptions(source, dataSources);
+  const rawStaticOptions = resolveStaticFieldOptions(source, dataSources);
+  const staticOptions = rawStaticOptions === undefined ? undefined : toTopLevelOptions(rawStaticOptions);
 
   if (staticOptions !== undefined) {
     const hasCurrent = (typeof value === "string" && value.length > 0) || typeof value === "number";
@@ -273,12 +296,13 @@ function renderSingleOptionLiteral(
     return (
       <Select
         allowClear
+        showSearch
+        filterOption={filterOptionByLabelOrDescription}
+        optionRender={renderSelectOption}
+        options={selectOptions}
         placeholder="选择选项值"
         style={fullWidth}
         value={hasCurrent ? (matched?.value ?? value) : undefined}
-        options={selectOptions.map(option => {
-          return { label: option.label, value: option.value };
-        })}
         onChange={next => onChange(next ?? "")}
       />
     );
@@ -300,7 +324,8 @@ function renderMultiOptionLiteral(
   value: unknown,
   onChange: (next: unknown) => void
 ): ReactElement {
-  const staticOptions = resolveStaticFieldOptions(source, dataSources);
+  const rawStaticOptions = resolveStaticFieldOptions(source, dataSources);
+  const staticOptions = rawStaticOptions === undefined ? undefined : toTopLevelOptions(rawStaticOptions);
   const arrayValue = Array.isArray(value)
     ? value.filter((item): item is string | number => typeof item === "string" || typeof item === "number")
     : [];
@@ -309,14 +334,124 @@ function renderMultiOptionLiteral(
     return (
       <Select
         allowClear
+        showSearch
+        filterOption={filterOptionByLabelOrDescription}
         mode="multiple"
+        optionRender={renderSelectOption}
+        options={staticOptions}
         placeholder="选择选项值"
         style={fullWidth}
         value={arrayValue}
-        options={staticOptions.map(option => {
-          return { label: option.label, value: option.value };
-        })}
         onChange={next => onChange(Array.isArray(next) ? next : [])}
+      />
+    );
+  }
+
+  return (
+    <Select
+      allowClear
+      mode="tags"
+      placeholder="输入选项值并回车"
+      style={fullWidth}
+      value={arrayValue.map(String)}
+      onChange={next => onChange(Array.isArray(next) ? next : [])}
+    />
+  );
+}
+
+function renderSingleTreeLiteral(
+  source: FieldOptionSource | undefined,
+  dataSources: readonly FormDataSource[] | undefined,
+  leafOnly: boolean,
+  value: unknown,
+  onChange: (next: unknown) => void
+): ReactElement {
+  const staticOptions = resolveStaticFieldOptions(source, dataSources);
+
+  if (staticOptions !== undefined) {
+    const hasCurrent = (typeof value === "string" && value.length > 0) || typeof value === "number";
+    const byString = new Map<string, string | number>();
+
+    for (const [key] of indexOptionsByValue(staticOptions)) {
+      byString.set(String(key), key);
+    }
+
+    const matchedValue = hasCurrent ? byString.get(String(value)) : undefined;
+
+    return (
+      <TreeSelect
+        allowClear
+        showSearch
+        treeDefaultExpandAll
+        filterTreeNode={filterOptionByLabelOrDescription}
+        placeholder="选择选项值"
+        style={fullWidth}
+        treeData={toAntdTreeData(staticOptions, { leafOnly, checkable: false })}
+        treeNodeLabelProp="label"
+        value={hasCurrent ? (matchedValue ?? value) : undefined}
+        onChange={(next: string | number | undefined) => onChange(next ?? "")}
+      />
+    );
+  }
+
+  return (
+    <Input
+      placeholder="输入选项值"
+      style={fullWidth}
+      value={coerceToString(value)}
+      onChange={event => onChange(event.target.value)}
+    />
+  );
+}
+
+function renderMultiTreeLiteral(
+  source: FieldOptionSource | undefined,
+  dataSources: readonly FormDataSource[] | undefined,
+  leafOnly: boolean,
+  value: unknown,
+  onChange: (next: unknown) => void
+): ReactElement {
+  const staticOptions = resolveStaticFieldOptions(source, dataSources);
+  const arrayValue = Array.isArray(value)
+    ? value.filter((item): item is string | number => typeof item === "string" || typeof item === "number")
+    : [];
+
+  if (staticOptions !== undefined) {
+    const optionByValue = indexOptionsByValue(staticOptions);
+    const labeled = arrayValue.map(item => {
+      return {
+        value: item,
+        label: optionByValue.get(item)?.label ?? String(item)
+      };
+    });
+
+    return (
+      <TreeSelect
+        allowClear
+        showSearch
+        treeCheckable
+        treeCheckStrictly
+        treeDefaultExpandAll
+        filterTreeNode={filterOptionByLabelOrDescription}
+        placeholder="选择选项值"
+        style={fullWidth}
+        treeData={toAntdTreeData(staticOptions, { leafOnly, checkable: true })}
+        treeNodeLabelProp="label"
+        value={labeled}
+        onChange={(next: unknown) => {
+          if (!Array.isArray(next)) {
+            onChange([]);
+            return;
+          }
+
+          onChange(
+            next
+              .map(item => (typeof item === "object" && item !== null && "value" in item)
+                ? (item as { value: string | number }).value
+                : item)
+              .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
+          );
+        }}
       />
     );
   }

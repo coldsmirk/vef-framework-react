@@ -618,6 +618,10 @@ export function getFieldDefaultValue(field: KeyedFormField): unknown {
       return [];
     }
 
+    case "tree-multi-select": {
+      return [];
+    }
+
     case "daterange": {
       return [];
     }

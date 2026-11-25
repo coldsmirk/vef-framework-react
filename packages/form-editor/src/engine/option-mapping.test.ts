@@ -9,8 +9,27 @@ describe("normalizeOptionMapping", () => {
     })).toEqual({ valueKey: "id" });
   });
 
-  it("trims the keys it keeps", () => {
-    expect(normalizeOptionMapping({ labelKey: " name " })).toEqual({ labelKey: "name" });
+  it("trims the keys it keeps, including tree hierarchy keys", () => {
+    expect(normalizeOptionMapping({
+      labelKey: " name ",
+      childrenKey: " sub ",
+      parentKey: " parentId ",
+      descriptionKey: " remark ",
+      disabledKey: " frozen "
+    })).toEqual({
+      labelKey: "name",
+      childrenKey: "sub",
+      parentKey: "parentId",
+      descriptionKey: "remark",
+      disabledKey: "frozen"
+    });
+  });
+
+  it("drops blank hierarchy keys", () => {
+    expect(normalizeOptionMapping({
+      childrenKey: "  ",
+      parentKey: "parentId"
+    })).toEqual({ parentKey: "parentId" });
   });
 
   it("returns undefined when every key is blank", () => {

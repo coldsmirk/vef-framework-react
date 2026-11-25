@@ -1,4 +1,13 @@
-import type { DateField, DateRangeField, DatetimeField, MultiSelectField, SelectField, TextfieldField } from "../../types";
+import type {
+  DateField,
+  DateRangeField,
+  DatetimeField,
+  MultiSelectField,
+  SelectField,
+  TextfieldField,
+  TreeMultiSelectField,
+  TreeSelectField
+} from "../../types";
 
 import { describe, expect, it } from "vitest";
 
@@ -53,7 +62,7 @@ describe("field placeholder helpers", () => {
     expect(resolveDateRangePlaceholderPair("year")).toEqual(["开始年份", "结束年份"]);
   });
 
-  it("returns 请选择 for select and multi-select fields", () => {
+  it("returns 请选择 for select, multi-select, tree-select, and tree-multi-select fields", () => {
     const select: SelectField = {
       id: "S",
       type: "select",
@@ -64,9 +73,21 @@ describe("field placeholder helpers", () => {
       type: "multi-select",
       key: "m"
     };
+    const tree: TreeSelectField = {
+      id: "T",
+      type: "tree-select",
+      key: "t"
+    };
+    const treeMulti: TreeMultiSelectField = {
+      id: "TM",
+      type: "tree-multi-select",
+      key: "tm"
+    };
 
     expect(defaultFieldPlaceholder(select)).toBe("请选择");
     expect(defaultFieldPlaceholder(multi)).toBe("请选择");
+    expect(defaultFieldPlaceholder(tree)).toBe("请选择");
+    expect(defaultFieldPlaceholder(treeMulti)).toBe("请选择");
   });
 
   it("prefers an explicit non-empty placeholder and falls back on empty or absent values", () => {

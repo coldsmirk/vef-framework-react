@@ -112,6 +112,18 @@ describe("deriveDefaultValues", () => {
             label: "skills"
           },
           {
+            id: "Field_dept",
+            type: "tree-select",
+            key: "dept",
+            label: "dept"
+          },
+          {
+            id: "Field_depts",
+            type: "tree-multi-select",
+            key: "depts",
+            label: "depts"
+          },
+          {
             id: "Field_period",
             type: "daterange",
             key: "period",
@@ -130,6 +142,8 @@ describe("deriveDefaultValues", () => {
           active: false,
           tags: [],
           skills: [],
+          dept: "",
+          depts: [],
           period: []
         }
       ]);

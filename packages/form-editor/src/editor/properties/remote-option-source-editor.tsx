@@ -21,7 +21,9 @@ function describeMapping(mapping: RemoteOptionMapping | undefined): string | und
     mapping.labelKey === undefined ? undefined : `显示 ${mapping.labelKey}`,
     mapping.valueKey === undefined ? undefined : `取值 ${mapping.valueKey}`,
     mapping.disabledKey === undefined ? undefined : `禁用 ${mapping.disabledKey}`,
-    mapping.descriptionKey === undefined ? undefined : `描述 ${mapping.descriptionKey}`
+    mapping.descriptionKey === undefined ? undefined : `描述 ${mapping.descriptionKey}`,
+    mapping.childrenKey === undefined ? undefined : `子级 ${mapping.childrenKey}`,
+    mapping.parentKey === undefined ? undefined : `父级 ${mapping.parentKey}`
   ].filter(part => part !== undefined);
 
   return parts.length > 0 ? `字段映射：${parts.join("，")}` : undefined;
@@ -63,9 +65,10 @@ interface OptionMappingFieldsProps {
 }
 
 /**
- * The four record → option keys. A cleared key is dropped rather than stored
- * blank, so it falls back to its default instead of reading a property named
- * `""` (see {@link normalizeOptionMapping}).
+ * The six record → option keys (`label`, `value`, `disabled`, `description`,
+ * `children`, `parent`). A cleared key is dropped rather than stored blank, so
+ * it falls back to its default instead of reading a property named `""` (see
+ * {@link normalizeOptionMapping}).
  */
 function OptionMappingFields({ mapping, onChange }: OptionMappingFieldsProps): ReactElement {
   const patch = (next: Partial<RemoteOptionMapping>): void => {
@@ -73,7 +76,7 @@ function OptionMappingFields({ mapping, onChange }: OptionMappingFieldsProps): R
   };
 
   return (
-    <RequestSection hint="留空时读取记录的 label / value" title="字段映射">
+    <RequestSection hint="留空时读取 label / value / children；填写父级字段后按平铺记录建树" title="字段映射">
       <div css={requestGridCss}>
         <LabeledControl label="显示字段">
           <Input placeholder="label" value={mapping?.labelKey ?? ""} onChange={event => patch({ labelKey: event.target.value })} />
@@ -89,6 +92,14 @@ function OptionMappingFields({ mapping, onChange }: OptionMappingFieldsProps): R
 
         <LabeledControl label="描述字段">
           <Input placeholder="可选" value={mapping?.descriptionKey ?? ""} onChange={event => patch({ descriptionKey: event.target.value })} />
+        </LabeledControl>
+
+        <LabeledControl label="子级字段">
+          <Input placeholder="children" value={mapping?.childrenKey ?? ""} onChange={event => patch({ childrenKey: event.target.value })} />
+        </LabeledControl>
+
+        <LabeledControl label="父级字段">
+          <Input placeholder="可选（平铺建树）" value={mapping?.parentKey ?? ""} onChange={event => patch({ parentKey: event.target.value })} />
         </LabeledControl>
       </div>
     </RequestSection>

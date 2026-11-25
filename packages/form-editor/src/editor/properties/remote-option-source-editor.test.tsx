@@ -89,6 +89,23 @@ describe("RemoteOptionSourceEditor", () => {
 
       expect(onCommit).toHaveBeenLastCalledWith(expect.objectContaining({ mapping: { valueKey: "id" } }));
     });
+
+    it("edits childrenKey and parentKey hierarchy mapping fields", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(<Harness initial={{ request: { resource: "md/department", action: "find_flat_options" } }} onCommit={onCommit} />);
+
+      await user.type(screen.getByPlaceholderText("可选（平铺建树）"), "parentId");
+      expect(onCommit).toHaveBeenLastCalledWith(expect.objectContaining({
+        mapping: { parentKey: "parentId" }
+      }));
+
+      await user.type(screen.getByPlaceholderText("children"), "sub");
+      expect(onCommit).toHaveBeenLastCalledWith(expect.objectContaining({
+        mapping: { parentKey: "parentId", childrenKey: "sub" }
+      }));
+    });
   });
 
   describe("with an API catalog", () => {

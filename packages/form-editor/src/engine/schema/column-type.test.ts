@@ -67,6 +67,11 @@ describe("inferColumnType", () => {
     } as FormField)).toBe("json");
     expect(inferColumnType({
       id: "1",
+      type: "tree-multi-select",
+      key: "a"
+    } as FormField)).toBe("json");
+    expect(inferColumnType({
+      id: "1",
       type: "daterange",
       key: "a"
     } as FormField)).toBe("json");
@@ -115,6 +120,17 @@ describe("inferColumnType", () => {
       type: "radio",
       key: "a"
     } as FormField)).toBe("text");
+    expect(inferColumnType({
+      id: "1",
+      type: "tree-select",
+      key: "a"
+    } as FormField)).toBe("text");
+    expect(inferColumnType({
+      id: "1",
+      type: "tree-select",
+      key: "a",
+      columnType: "integer"
+    } as FormField)).toBe("integer");
   });
 
   it("infers an upload field by its file count, not by maxLength", () => {

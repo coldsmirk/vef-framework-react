@@ -278,10 +278,11 @@ function validateDataSourcePayload(entry: Record<string, unknown>, where: string
 }
 
 /**
- * A static option list: an array of plain `{ label, value }` objects with a
- * string label and a string / number value. Shared by the form-global static
- * data source and a field's inline static source (which differ only in the
- * issue code they report under).
+ * A static option list (optionally hierarchical): an array of plain
+ * `{ label, value, disabled?, description?, children? }` objects with a string
+ * label and a string / number value. Shared by the form-global static data
+ * source and a field's inline static source (which differ only in the issue
+ * code they report under).
  */
 function validateOptionList(
   options: unknown,
@@ -297,10 +298,25 @@ function validateOptionList(
   const entries: unknown[] = options;
 
   for (const [index, option] of entries.entries()) {
+    const itemWhere = `${where}[${index}]`;
+
     if (!isRecord(option)
       || typeof option.label !== "string"
       || (typeof option.value !== "string" && typeof option.value !== "number")) {
-      issues.push(createIssue(`${where}[${index}]`, code));
+      issues.push(createIssue(itemWhere, code));
+      continue;
+    }
+
+    if (option.disabled !== undefined && typeof option.disabled !== "boolean") {
+      issues.push(createIssue(`${itemWhere}.disabled`, code));
+    }
+
+    if (option.description !== undefined && typeof option.description !== "string") {
+      issues.push(createIssue(`${itemWhere}.description`, code));
+    }
+
+    if (option.children !== undefined) {
+      validateOptionList(option.children, `${itemWhere}.children`, code, issues);
     }
   }
 }
@@ -356,7 +372,7 @@ function validateOptionMapping(
     return;
   }
 
-  for (const key of ["labelKey", "valueKey", "disabledKey", "descriptionKey"]) {
+  for (const key of ["labelKey", "valueKey", "disabledKey", "descriptionKey", "childrenKey", "parentKey"]) {
     if (mapping[key] !== undefined && typeof mapping[key] !== "string") {
       issues.push(createIssue(`${where}.${key}`, code));
     }

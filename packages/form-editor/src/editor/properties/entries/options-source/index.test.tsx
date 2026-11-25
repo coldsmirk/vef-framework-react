@@ -1,4 +1,4 @@
-import type { FieldOptionSource, FormSchema, SelectField } from "../../../../types";
+import type { FieldOptionSource, FormSchema, SelectField, TreeSelectField } from "../../../../types";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -72,6 +72,52 @@ describe("options source entry", () => {
       await user.type(screen.getByDisplayValue("北京"), "市");
 
       expect(onChange).toHaveBeenLastCalledWith({ kind: "static", options: [{ label: "北京市", value: "bj" }] });
+    });
+
+    it("keeps flat select inline options single-level and enables hierarchy controls on tree-select", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      const { rerender } = render(
+        <OptionsSourceEntry
+          entry={entry}
+          field={makeField({ kind: "static", options: [{ label: "华东", value: "east" }] })}
+          schema={schemaWith()}
+          onChange={onChange}
+        />
+      );
+
+      expect(screen.queryByRole("button", { name: "添加子项" })).not.toBeInTheDocument();
+
+      const treeField: TreeSelectField = {
+        id: "Field_ts",
+        type: "tree-select",
+        key: "region",
+        label: "区域",
+        dataSource: { kind: "static", options: [{ label: "华东", value: "east" }] }
+      };
+
+      rerender(
+        <OptionsSourceEntry
+          entry={entry}
+          field={treeField}
+          schema={schemaWith()}
+          onChange={onChange}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: "添加子项" }));
+
+      expect(onChange).toHaveBeenLastCalledWith({
+        kind: "static",
+        options: [
+          {
+            label: "华东",
+            value: "east",
+            children: [{ label: "", value: "" }]
+          }
+        ]
+      });
     });
   });
 

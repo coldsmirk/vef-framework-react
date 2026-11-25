@@ -8,6 +8,7 @@ import { css } from "@emotion/react";
 import { globalCssVars, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
 import { useMemo } from "react";
 
+import { isTreeSelectFieldType } from "../../../../engine/options";
 import { findScope } from "../../../../engine/schema/walk";
 import { useContextSources } from "../../../context-sources";
 import { OptionListEditor } from "../../option-editors";
@@ -54,6 +55,7 @@ function readSource(value: unknown): FieldOptionSource {
 
 export interface OptionSourceEditorProps {
   allowBulkPaste?: boolean;
+  allowHierarchy?: boolean;
   confirmTitle?: string;
   dataSources: FormDataSource[];
   description?: string;
@@ -71,6 +73,7 @@ export interface OptionSourceEditorProps {
  */
 export function OptionSourceEditor({
   allowBulkPaste = false,
+  allowHierarchy = false,
   confirmTitle = "切换选项来源将丢弃当前配置",
   dataSources,
   description,
@@ -111,7 +114,8 @@ export function OptionSourceEditor({
       {source.kind === "static"
         ? (
             <OptionListEditor
-              allowBulkPaste={allowBulkPaste}
+              allowBulkPaste={allowBulkPaste || allowHierarchy}
+              allowHierarchy={allowHierarchy}
               options={source.options}
               onChange={next => onChange({ kind: "static", options: next })}
             />
@@ -175,6 +179,7 @@ export const OptionsSourceEntry: FC<EntryComponentProps> = ({
   return (
     <ReferenceScopeProvider value={referenceScope}>
       <OptionSourceEditor
+        allowHierarchy={isTreeSelectFieldType(field.type)}
         dataSources={schema.dataSources ?? []}
         description={entry.description}
         label={entry.label}

@@ -894,4 +894,78 @@ describe("subform table runtime behavior", () => {
     expect(screen.queryByRole("button", { name: /新增问题/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "删除此行" })).not.toBeInTheDocument();
   });
+
+  it("renders tree-select and tree-multi-select cells inside a table subform and submits their values", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const regionOptions = [
+      {
+        label: "华东",
+        value: "east",
+        description: "片区",
+        children: [
+          { label: "上海", value: "sh" },
+          { label: "杭州", value: "hz" }
+        ]
+      }
+    ];
+    const schema: FormSchema = {
+      id: "Form_tree_cells",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Sub_tree",
+              type: "subform",
+              variant: "table",
+              key: "routes",
+              label: "路由",
+              rows: { mode: "dynamic", min: 1 },
+              template: [
+                {
+                  id: "C_primary",
+                  type: "tree-select",
+                  key: "primaryRegion",
+                  label: "主区域",
+                  leafOnly: true,
+                  dataSource: { kind: "static", options: regionOptions }
+                },
+                {
+                  id: "C_backup",
+                  type: "tree-multi-select",
+                  key: "backupRegions",
+                  label: "备选区域",
+                  dataSource: { kind: "static", options: regionOptions }
+                }
+              ]
+            },
+            {
+              id: "Btn_submit",
+              type: "button",
+              label: "提交",
+              action: "submit"
+            }
+          ]
+        }
+      }
+    };
+
+    renderForm(schema, {
+      defaultValues: { routes: [{ primaryRegion: "sh", backupRegions: ["east", "hz"] }] },
+      onSubmit
+    });
+
+    expect(screen.getByText("上海")).toBeInTheDocument();
+    expect(screen.getByText("华东")).toBeInTheDocument();
+    expect(screen.getByText("杭州")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "提交" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        routes: [{ primaryRegion: "sh", backupRegions: ["east", "hz"] }]
+      });
+    });
+  });
 });

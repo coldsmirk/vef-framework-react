@@ -173,4 +173,60 @@ describe("select field", () => {
 
     expect(screen.getByText("请选择城市")).toBeInTheDocument();
   });
+
+  it("shows only top-level options, renders descriptions, searches descriptions, and blocks disabled options", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const Component = selectFieldDefinition.Component!;
+
+    render(
+      <Component
+        domId="field-s"
+        value="legacy"
+        field={makeField({
+          showSearch: true,
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "华东大区",
+                value: "east",
+                description: "华东片区说明",
+                children: [{ label: "上海市", value: "sh" }]
+              },
+              {
+                label: "归档大区",
+                value: "legacy",
+                disabled: true,
+                description: "已停用片区"
+              }
+            ]
+          }
+        })}
+        onChange={onChange}
+      />
+    );
+
+    // Already-stored disabled value still renders its label.
+    expect(screen.getByText("归档大区")).toBeInTheDocument();
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+
+    // Child options are hidden from flat select, while descriptions render.
+    expect(await screen.findByText("华东片区说明")).toBeInTheDocument();
+    expect(screen.queryByText("上海市")).not.toBeInTheDocument();
+
+    // Disabled option cannot be selected.
+    const disabledLabel = screen.getByText("已停用片区");
+    const disabledItem = disabledLabel.closest(".ant-select-item-option");
+    expect(disabledItem).toHaveAttribute("aria-disabled", "true");
+    await user.click(disabledItem!);
+    expect(onChange).not.toHaveBeenCalled();
+
+    // Search matches description text too.
+    await user.type(combobox, "片区说明");
+    expect(await screen.findByText("华东片区说明")).toBeInTheDocument();
+    expect(screen.queryByText("已停用片区")).not.toBeInTheDocument();
+  });
 });

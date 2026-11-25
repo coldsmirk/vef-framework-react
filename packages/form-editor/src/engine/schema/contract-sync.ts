@@ -12,6 +12,7 @@ import type {
 import { isDeepEqual } from "@vef-framework-react/shared";
 
 import { isKeyedNode } from "../keys";
+import { isTreeSelectFieldType } from "../options";
 import { getDynamicSubformRows, isFixedSubform } from "./subform";
 import { isLeafField } from "./walk";
 
@@ -43,7 +44,12 @@ type ValidationRules = NonNullable<Validatable["validate"]>;
  * Distinct widget types that bind the same runtime value shape and share
  * data-contract properties (e.g. `code-editor` degrades to `textarea` during
  * PC → mobile conversion, and `select`/`radio` or `multi-select`/`checkbox-group`
- * are alternate controls over the same option source).
+ * are alternate controls over the same flat option source).
+ *
+ * `tree-select` and `tree-multi-select` are deliberately excluded from the flat
+ * choice families: flat controls project top-level options only, whereas tree
+ * controls project the full hierarchy and carry `leafOnly`, so each tree type
+ * only syncs with an identical tree twin (`aType === bType`).
  */
 const CONTRACT_EQUIVALENT_FAMILIES: Readonly<Record<string, string>> = {
   "code-editor": "multiline-text",
@@ -60,6 +66,8 @@ const CONTRACT_EQUIVALENT_FAMILIES: Readonly<Record<string, string>> = {
 const OPTION_SOURCE_FIELD_TYPES: ReadonlySet<string> = new Set([
   "select",
   "multi-select",
+  "tree-select",
+  "tree-multi-select",
   "radio",
   "checkbox-group"
 ]);
@@ -114,6 +122,12 @@ function readUploadMaxCount(field: FormField): number | undefined {
   return field.type === "upload" ? field.maxCount : undefined;
 }
 
+function readLeafOnly(field: FormField): boolean | undefined {
+  return (field.type === "tree-select" || field.type === "tree-multi-select") && field.leafOnly === true
+    ? true
+    : undefined;
+}
+
 function subformRowsContractChanged(before: SubformNode, after: SubformNode): boolean {
   if (before.rows === after.rows) {
     return false;
@@ -162,6 +176,10 @@ function leafContractChanged(before: FormField, after: FormField): boolean {
   }
 
   if (before.type === "number" && readPrecision(before) !== readPrecision(after)) {
+    return true;
+  }
+
+  if (isTreeSelectFieldType(before.type) && readLeafOnly(before) !== readLeafOnly(after)) {
     return true;
   }
 
@@ -326,6 +344,15 @@ function syncLeafContractToTwin(before: FormField, after: FormField, twin: FormF
 
     if (beforeMaxCount !== afterMaxCount && next.maxCount !== afterMaxCount) {
       setOrDeleteProperty(mutable(), "maxCount", afterMaxCount);
+    }
+  }
+
+  if (isTreeSelectFieldType(before.type) && isTreeSelectFieldType(after.type) && isTreeSelectFieldType(next.type)) {
+    const beforeLeafOnly = readLeafOnly(before);
+    const afterLeafOnly = readLeafOnly(after);
+
+    if (beforeLeafOnly !== afterLeafOnly && readLeafOnly(next) !== afterLeafOnly) {
+      setOrDeleteProperty(mutable(), "leafOnly", afterLeafOnly);
     }
   }
 

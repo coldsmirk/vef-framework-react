@@ -94,17 +94,38 @@ function CodeSetLoader({
   return null;
 }
 
+function mapDataOption(entry: DataOption): FieldOption {
+  const option: FieldOption = {
+    label: entry.label,
+    value: entry.value
+  };
+
+  if (entry.disabled === true) {
+    option.disabled = true;
+  }
+
+  if (typeof entry.description === "string" && entry.description.length > 0) {
+    option.description = entry.description;
+  }
+
+  if (Array.isArray(entry.children) && entry.children.length > 0) {
+    option.children = entry.children.map(child => mapDataOption(child));
+  }
+
+  return option;
+}
+
 /**
- * Reduce each dictionary to the options a selection field offers: its
- * top-level entries' labels and values. A tree dictionary's children are not
- * flattened in — a select would otherwise list every node of, say, an
- * administrative-division tree.
+ * Convert each loaded dictionary into `FieldOption[]`, preserving hierarchy,
+ * `disabled`, and `description`. Flat selection controls strip `children` to
+ * top-level entries at consumption time, while tree controls consume the full
+ * hierarchy.
  */
 function toFieldOptions(data: Record<string, DataOption[]>): Record<string, FieldOption[]> {
   return Object.fromEntries(
     Object.entries(data).map(([codeSet, entries]) => [
       codeSet,
-      entries.map(entry => { return { label: entry.label, value: entry.value }; })
+      entries.map(entry => mapDataOption(entry))
     ])
   );
 }

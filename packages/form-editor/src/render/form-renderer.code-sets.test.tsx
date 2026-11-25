@@ -1,7 +1,7 @@
 import type { ApiClient, AppContext, DataOption } from "@vef-framework-react/core";
 import type { ReactNode } from "react";
 
-import type { Block, CodeSetQueryFn, FormSchema, RadioField, SubformNode } from "../types";
+import type { Block, CodeSetQueryFn, FormSchema, RadioField, SubformNode, TreeSelectField } from "../types";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -22,7 +22,19 @@ const DICTIONARIES: Record<string, DataOption[]> = {
     {
       label: "华东",
       value: "east",
-      children: [{ label: "上海", value: "sh" }]
+      description: "华东片区",
+      children: [
+        {
+          label: "上海",
+          value: "sh",
+          description: "直辖市"
+        },
+        {
+          label: "归档区",
+          value: "legacy",
+          disabled: true
+        }
+      ]
     }
   ]
 };
@@ -107,7 +119,7 @@ describe("FormRenderer code sets", () => {
     expect(load.mock.calls[0]?.[0]).toEqual(["sys.gender", "sys.level", "sys.region"]);
   });
 
-  it("offers only a tree dictionary's top-level entries", async () => {
+  it("offers only a tree dictionary's top-level entries to flat controls", async () => {
     const apiClient = createTestApiClient();
     const { queryFn } = createCodeSetQueryFn(apiClient);
 
@@ -115,6 +127,32 @@ describe("FormRenderer code sets", () => {
 
     expect(await screen.findByRole("radio", { name: "华东" })).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: "上海" })).not.toBeInTheDocument();
+  });
+
+  it("preserves nested children, description, and disabled entries for tree-select code sets", async () => {
+    const user = userEvent.setup();
+    const apiClient = createTestApiClient();
+    const { queryFn } = createCodeSetQueryFn(apiClient);
+    const treeField: TreeSelectField = {
+      id: "Field_tree_region",
+      type: "tree-select",
+      key: "treeRegion",
+      label: "树形区域",
+      dataSource: { kind: "codeSet", codeSet: "sys.region" }
+    };
+
+    renderForm(
+      <FormRenderer defaultValues={{ treeRegion: "sh" }} schema={stack(treeField)} />,
+      { apiClient, appContext: { codeSetQueryFn: queryFn } }
+    );
+
+    expect(await screen.findByText("上海")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox"));
+
+    expect(await screen.findByText("华东片区")).toBeInTheDocument();
+    expect(screen.getByText("直辖市")).toBeInTheDocument();
+    expect(screen.getByText("归档区")).toBeInTheDocument();
   });
 
   it("prefers its own codeSetQueryFn over the application's", async () => {

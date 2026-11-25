@@ -43,15 +43,20 @@ export interface ResolvedDataSourceRequest {
 }
 
 /**
- * How to read `{ label, value }` out of each raw remote record. Mirrors the
- * field-mapping of `@vef-framework-react/hooks` `useDataOptionsQuery`.
- * Defaults: `label` / `value`.
+ * How to read option fields and hierarchy out of each raw remote record.
+ * Mirrors the field-mapping of `@vef-framework-react/hooks`
+ * `useDataOptionsQuery`, plus flat-to-tree assembly via `parentKey`.
+ * Defaults: `label` / `value` / `disabled` / `description` / `children`.
+ * When `parentKey` is set, records are assembled into a tree by parent value
+ * and `childrenKey` is ignored.
  */
 export interface RemoteOptionMapping {
   labelKey?: string;
   valueKey?: string;
   disabledKey?: string;
   descriptionKey?: string;
+  childrenKey?: string;
+  parentKey?: string;
 }
 
 /**

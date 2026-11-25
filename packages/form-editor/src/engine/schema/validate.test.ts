@@ -1559,4 +1559,105 @@ describe("validateSchema", () => {
       expect(codesOf(result.issues)).not.toContain("subform_table_column");
     });
   });
+
+  describe("option hierarchy and tree remote mapping", () => {
+    it("accepts nested static options with disabled/description and remote childrenKey/parentKey mappings", () => {
+      const validTree = validate(schema([
+        {
+          id: "Field_tree",
+          type: "tree-select",
+          key: "region",
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "华东",
+                value: "east",
+                description: "华东片区",
+                children: [
+                  {
+                    label: "上海",
+                    value: "sh",
+                    disabled: true
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          id: "Field_remote_tree",
+          type: "tree-multi-select",
+          key: "depts",
+          dataSource: {
+            kind: "remote",
+            request: { resource: "md/department", action: "find_flat_options" },
+            mapping: {
+              labelKey: "name",
+              valueKey: "id",
+              childrenKey: "sub",
+              parentKey: "parentId"
+            }
+          }
+        }
+      ]));
+
+      expect(validTree.valid).toBe(true);
+      expect(validTree.issues).toEqual([]);
+    });
+
+    it("rejects malformed nested option metadata and non-string childrenKey/parentKey", () => {
+      const badMeta = validate(schema([
+        {
+          id: "Field_tree",
+          type: "tree-select",
+          key: "region",
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "华东",
+                value: "east",
+                children: [
+                  {
+                    label: "上海",
+                    value: "sh",
+                    disabled: "yes",
+                    description: 123,
+                    children: "bad"
+                  } as never
+                ]
+              }
+            ]
+          }
+        }
+      ]));
+
+      expect(badMeta.valid).toBe(false);
+      expect(badMeta.issues.map(i => i.path)).toEqual(expect.arrayContaining([
+        "presentations.pc.children[0].dataSource.options[0].children[0].disabled",
+        "presentations.pc.children[0].dataSource.options[0].children[0].description",
+        "presentations.pc.children[0].dataSource.options[0].children[0].children"
+      ]));
+
+      const badMapping = validate(schema([
+        {
+          id: "Field_remote",
+          type: "tree-multi-select",
+          key: "depts",
+          dataSource: {
+            kind: "remote",
+            request: { resource: "md/department", action: "find_flat_options" },
+            mapping: { childrenKey: 1 as never, parentKey: false as never }
+          }
+        }
+      ]));
+
+      expect(badMapping.valid).toBe(false);
+      expect(badMapping.issues.map(i => i.path)).toEqual(expect.arrayContaining([
+        "presentations.pc.children[0].dataSource.mapping.childrenKey",
+        "presentations.pc.children[0].dataSource.mapping.parentKey"
+      ]));
+    });
+  });
 });

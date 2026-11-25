@@ -1,6 +1,6 @@
 import type { RemoteOptionMapping } from "../types";
 
-const MAPPING_KEYS = ["labelKey", "valueKey", "disabledKey", "descriptionKey"] as const;
+const MAPPING_KEYS = ["labelKey", "valueKey", "disabledKey", "descriptionKey", "childrenKey", "parentKey"] as const;
 
 /**
  * A remote option mapping with its blank entries dropped, or `undefined` when

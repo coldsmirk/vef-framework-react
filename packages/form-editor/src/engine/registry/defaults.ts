@@ -11,6 +11,8 @@ import { selectFieldDefinition } from "../../components/select-field";
 import { switchFieldDefinition } from "../../components/switch-field";
 import { textareaFieldDefinition } from "../../components/textarea-field";
 import { textfieldDefinition } from "../../components/textfield";
+import { treeMultiSelectFieldDefinition } from "../../components/tree-multi-select-field";
+import { treeSelectFieldDefinition } from "../../components/tree-select-field";
 import { uploadFieldDefinition } from "../../components/upload-field";
 import { pcContainerChrome } from "../../render/chrome/pc-chrome";
 import { FormFieldRegistry } from "./form-field-registry";
@@ -33,6 +35,8 @@ export function registerDefaults(registry: FormFieldRegistry): void {
   registry.register(switchFieldDefinition);
   registry.register(selectFieldDefinition);
   registry.register(multiSelectFieldDefinition);
+  registry.register(treeSelectFieldDefinition);
+  registry.register(treeMultiSelectFieldDefinition);
   registry.register(radioFieldDefinition);
   registry.register(checkboxGroupFieldDefinition);
   registry.register(textareaFieldDefinition);

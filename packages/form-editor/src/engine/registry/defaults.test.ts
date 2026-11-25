@@ -17,6 +17,8 @@ describe("createDefaultRegistry", () => {
 
     expect(registry.has("select")).toBe(true);
     expect(registry.has("multi-select")).toBe(true);
+    expect(registry.has("tree-select")).toBe(true);
+    expect(registry.has("tree-multi-select")).toBe(true);
     expect(registry.has("radio")).toBe(true);
     expect(registry.has("checkbox-group")).toBe(true);
   });

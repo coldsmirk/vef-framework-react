@@ -213,12 +213,18 @@ export interface Validatable {
 
 /**
  * A selectable option for a selection field. `value` is the data-binding value
- * submitted for the field; `label` is the display text. Mirrors the Go
- * backend's `FieldOption` (`approval/form_definition.go`).
+ * submitted for the field; `label` is the display text. Optional `disabled`,
+ * `description`, and nested `children` carry hierarchy and per-option metadata
+ * at runtime — flat selection controls read top-level options only, while tree
+ * controls consume the full tree. Approval projection flattens options to plain
+ * `{ label, value }` pairs mirroring Go's `approval.FieldOption`.
  */
 export interface FieldOption {
   label: string;
   value: string | number;
+  disabled?: boolean;
+  description?: string;
+  children?: FieldOption[];
 }
 
 /**
@@ -512,6 +518,72 @@ export interface MultiSelectField extends FormFieldBase, KeyedNode, Validatable 
 }
 
 /**
+ * Single-select tree dropdown. Keyed: contributes the chosen node's scalar
+ * option value via `key` (`""` when empty). Consumes the full option hierarchy
+ * across all four source kinds (`static`, `ref`, `remote`, `codeSet`).
+ */
+export interface TreeSelectField extends FormFieldBase, KeyedNode, Validatable {
+  type: "tree-select";
+  placeholder?: string;
+  helperText?: string;
+  /**
+   * Control size. Maps to antd `TreeSelect` `size`; PC-only.
+   */
+  size?: "small" | "middle" | "large";
+  /**
+   * Show a one-click clear affordance. Clearing commits `""`.
+   */
+  allowClear?: boolean;
+  /**
+   * Enable type-to-filter search by option label or description.
+   */
+  showSearch?: boolean;
+  /**
+   * Restrict selection to leaf nodes (nodes without children). Data-contract
+   * property synced across devices alongside `dataSource` and respected by
+   * static option projection. Defaults to false (any node selectable).
+   */
+  leafOnly?: boolean;
+  /**
+   * Option source. Defaults to an empty static list when omitted.
+   */
+  dataSource?: FieldOptionSource;
+}
+
+/**
+ * Multi-select tree dropdown with independent (strict, non-cascading) node
+ * selection. Keyed: contributes an array of chosen option values (`[]` when
+ * empty).
+ */
+export interface TreeMultiSelectField extends FormFieldBase, KeyedNode, Validatable {
+  type: "tree-multi-select";
+  placeholder?: string;
+  helperText?: string;
+  /**
+   * Control size. Maps to antd `TreeSelect` `size`; PC-only.
+   */
+  size?: "small" | "middle" | "large";
+  /**
+   * Show a one-click clear affordance. Clearing commits `[]`.
+   */
+  allowClear?: boolean;
+  /**
+   * Enable type-to-filter search by option label or description.
+   */
+  showSearch?: boolean;
+  /**
+   * Restrict selection to leaf nodes (nodes without children). Data-contract
+   * property synced across devices alongside `dataSource` and respected by
+   * static option projection. Defaults to false (any node selectable).
+   */
+  leafOnly?: boolean;
+  /**
+   * Option source. Defaults to an empty static list when omitted.
+   */
+  dataSource?: FieldOptionSource;
+}
+
+/**
  * Single-select radio group. Keyed: contributes the chosen option value.
  */
 export interface RadioField extends FormFieldBase, KeyedNode, Validatable {
@@ -792,6 +864,8 @@ export interface FormFieldTypeMap {
   button: ButtonField;
   select: SelectField;
   "multi-select": MultiSelectField;
+  "tree-select": TreeSelectField;
+  "tree-multi-select": TreeMultiSelectField;
   radio: RadioField;
   "checkbox-group": CheckboxGroupField;
   textarea: TextareaField;

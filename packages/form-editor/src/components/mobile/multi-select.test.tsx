@@ -175,4 +175,47 @@ describe("MobileMultiSelectInput", () => {
     expect(screen.getByRole("button", { name: "城市" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "清除" })).not.toBeInTheDocument();
   });
+
+  it("renders descriptions, hides child options, and blocks selecting disabled items", async () => {
+    const user = setupUser();
+    const onChange = vi.fn();
+
+    render(
+      <MobileMultiSelectInput
+        domId="field-ms"
+        value={["old"]}
+        field={makeField({
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "北京",
+                value: "bj",
+                description: "首都城市",
+                children: [{ label: "海淀区", value: "hd" }]
+              },
+              {
+                label: "归档城市",
+                value: "old",
+                disabled: true,
+                description: "已停用"
+              }
+            ]
+          }
+        })}
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.getByText("归档城市")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "城市" }));
+    expect(await screen.findByText("首都城市")).toBeInTheDocument();
+    expect(screen.getByText("已停用")).toBeInTheDocument();
+    expect(screen.queryByText("海淀区")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("北京"));
+    await user.click(screen.getByRole("button", { name: "确定" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(["old", "bj"]));
+  });
 });

@@ -7,11 +7,17 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { OptionListEditor, parseBulkOptionLines, reorderOptionRows } from "./option-editors";
+import {
+  OptionListEditor,
+  parseBulkOptionLines,
+  parseIndentedOptionLines,
+  reorderOptionRows
+} from "./option-editors";
 
 interface HarnessProps {
   initial: FieldOption[];
   allowBulkPaste?: boolean;
+  allowHierarchy?: boolean;
   onCommit?: (next: FieldOption[]) => void;
 }
 
@@ -21,6 +27,7 @@ interface HarnessProps {
  */
 function Harness({
   allowBulkPaste,
+  allowHierarchy,
   initial,
   onCommit
 }: HarnessProps): ReactElement {
@@ -29,6 +36,7 @@ function Harness({
   return (
     <OptionListEditor
       allowBulkPaste={allowBulkPaste}
+      allowHierarchy={allowHierarchy}
       options={options}
       onChange={next => {
         onCommit?.(next);
@@ -206,6 +214,176 @@ describe("OptionListEditor", () => {
       await user.click(screen.getByRole("button", { name: "替换全部" }));
 
       expect(onCommit).toHaveBeenLastCalledWith([{ label: "全新条款", value: "item_1" }]);
+    });
+  });
+
+  describe("metadata details (description and disabled)", () => {
+    it("toggles option detail fields and persists description and disabled state", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(<Harness initial={[{ label: "上海", value: "sh" }]} onCommit={onCommit} />);
+
+      await user.click(screen.getByRole("button", { name: "选项详情" }));
+      await user.type(screen.getByRole("textbox", { name: "选项描述" }), "直辖市");
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "上海",
+          value: "sh",
+          description: "直辖市"
+        }
+      ]);
+
+      await user.click(screen.getByRole("checkbox", { name: "禁用" }));
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "上海",
+          value: "sh",
+          description: "直辖市",
+          disabled: true
+        }
+      ]);
+
+      await user.click(screen.getByRole("checkbox", { name: "禁用" }));
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "上海",
+          value: "sh",
+          description: "直辖市"
+        }
+      ]);
+    });
+  });
+
+  describe("hierarchy editing", () => {
+    it("parses indented lines (spaces and tabs) into nested FieldOption trees with unique values", () => {
+      const tree = parseIndentedOptionLines(
+        "华东\n  浙江省\n    杭州市\n\t\t宁波市\n  上海市\n\n华北",
+        new Set(["item_1"])
+      );
+
+      expect(tree).toEqual([
+        {
+          label: "华东",
+          value: "item_2",
+          children: [
+            {
+              label: "浙江省",
+              value: "item_3",
+              children: [
+                { label: "杭州市", value: "item_4" },
+                { label: "宁波市", value: "item_5" }
+              ]
+            },
+            { label: "上海市", value: "item_6" }
+          ]
+        },
+        { label: "华北", value: "item_7" }
+      ]);
+    });
+
+    it("adds children, indents/outdents, moves siblings, collapses subtrees, and flags tree-wide duplicates", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(
+        <Harness
+          allowHierarchy
+          initial={[
+            { label: "华东", value: "east" },
+            { label: "上海", value: "sh" }
+          ]}
+          onCommit={onCommit}
+        />
+      );
+
+      // Indent "上海" under "华东".
+      const indentButtons = screen.getAllByRole("button", { name: "降级" });
+      await user.click(indentButtons[1]!);
+
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "华东",
+          value: "east",
+          children: [{ label: "上海", value: "sh" }]
+        }
+      ]);
+
+      // Collapse hides child; expand reveals it again.
+      await user.click(screen.getByRole("button", { name: "折叠子项" }));
+      expect(screen.queryByDisplayValue("上海")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "展开子项" }));
+      expect(screen.getByDisplayValue("上海")).toBeInTheDocument();
+
+      // Add a second child under "华东" and reorder it above "上海".
+      const addChildButtons = screen.getAllByRole("button", { name: "添加子项" });
+      await user.click(addChildButtons[0]!);
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "华东",
+          value: "east",
+          children: [
+            { label: "上海", value: "sh" },
+            { label: "", value: "" }
+          ]
+        }
+      ]);
+
+      const moveUpButtons = screen.getAllByRole("button", { name: "上移" });
+      await user.click(moveUpButtons[2]!);
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "华东",
+          value: "east",
+          children: [
+            { label: "", value: "" },
+            { label: "上海", value: "sh" }
+          ]
+        }
+      ]);
+
+      // Outdent "上海" back to root level.
+      const outdentButtons = screen.getAllByRole("button", { name: "升级" });
+      await user.click(outdentButtons[2]!);
+      expect(onCommit).toHaveBeenLastCalledWith([
+        {
+          label: "华东",
+          value: "east",
+          children: [{ label: "", value: "" }]
+        },
+        { label: "上海", value: "sh" }
+      ]);
+
+      // Duplicate value across tree levels surfaces the inline warning.
+      await user.type(screen.getAllByPlaceholderText("值")[1]!, "east");
+      expect(screen.getByText("选项值重复：east")).toBeInTheDocument();
+    });
+
+    it("supports indented bulk paste append and replace in hierarchy mode", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
+
+      render(
+        <Harness
+          allowHierarchy
+          initial={[{ label: "原根节点", value: "item_1" }]}
+          onCommit={onCommit}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /批量粘贴/ }));
+      await user.type(screen.getByRole("textbox", { name: "批量粘贴行项目" }), "华东\n  上海");
+      await user.click(screen.getByRole("button", { name: /追\s*加/ }));
+
+      expect(onCommit).toHaveBeenLastCalledWith([
+        { label: "原根节点", value: "item_1" },
+        {
+          label: "华东",
+          value: "item_2",
+          children: [{ label: "上海", value: "item_3" }]
+        }
+      ]);
     });
   });
 });

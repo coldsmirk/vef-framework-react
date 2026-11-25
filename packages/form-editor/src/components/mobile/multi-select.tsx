@@ -9,6 +9,7 @@ import CheckList from "antd-mobile/es/components/check-list";
 import Popup from "antd-mobile/es/components/popup";
 import { useMemo, useState } from "react";
 
+import { toTopLevelOptions } from "../../engine/options";
 import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
@@ -85,8 +86,9 @@ export const MobileMultiSelectInput: FC<FieldComponentProps<MultiSelectField, Ar
   const {
     error,
     loading,
-    options
+    options: rawOptions
   } = useFieldOptions(field.dataSource);
+  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
   const getContainer = useMobileScopeContainer();
   const [visible, setVisible] = useState(false);
   const [draft, setDraft] = useState<CheckListValue[]>(EMPTY_VALUE);
@@ -180,7 +182,8 @@ export const MobileMultiSelectInput: FC<FieldComponentProps<MultiSelectField, Ar
                   {options.map(option => (
                     <CheckList.Item
                       key={option.value}
-                      disabled={limitReached && !draftSet.has(option.value)}
+                      description={option.description}
+                      disabled={option.disabled === true || (limitReached && !draftSet.has(option.value))}
                       value={option.value}
                     >
                       {option.label}

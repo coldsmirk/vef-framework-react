@@ -104,6 +104,100 @@ describe("toFormFieldDefinitions", () => {
     ]);
   });
 
+  it("flattens tree-select and tree-multi-select options (honoring leafOnly) while keeping flat select top-level only", () => {
+    const nestedOptions = [
+      {
+        label: "华东",
+        value: "east",
+        description: "片区",
+        children: [
+          {
+            label: "上海",
+            value: "sh",
+            disabled: true
+          },
+          { label: "杭州", value: "hz" }
+        ]
+      },
+      { label: "华北", value: "north" }
+    ];
+
+    const result = toFormFieldDefinitions({
+      id: "Form_tree",
+      version: 2,
+      dataSources: [
+        {
+          id: "DS_TREE",
+          name: "区域树",
+          kind: "static",
+          options: nestedOptions
+        }
+      ],
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "F1",
+              type: "tree-select",
+              key: "regionAny",
+              label: "任意区域",
+              dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+            },
+            {
+              id: "F2",
+              type: "tree-multi-select",
+              key: "regionLeaves",
+              label: "末级区域",
+              leafOnly: true,
+              dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+            },
+            {
+              id: "F3",
+              type: "select",
+              key: "flatRegion",
+              label: "顶层片区",
+              dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+            }
+          ]
+        }
+      }
+    });
+
+    expect(result).toEqual([
+      {
+        key: "regionAny",
+        kind: "select",
+        label: "任意区域",
+        options: [
+          { label: "华东", value: "east" },
+          { label: "上海", value: "sh" },
+          { label: "杭州", value: "hz" },
+          { label: "华北", value: "north" }
+        ]
+      },
+      {
+        key: "regionLeaves",
+        kind: "select",
+        label: "末级区域",
+        isMultiple: true,
+        options: [
+          { label: "上海", value: "sh" },
+          { label: "杭州", value: "hz" },
+          { label: "华北", value: "north" }
+        ]
+      },
+      {
+        key: "flatRegion",
+        kind: "select",
+        label: "顶层片区",
+        options: [
+          { label: "华东", value: "east" },
+          { label: "华北", value: "north" }
+        ]
+      }
+    ]);
+  });
+
   it("projects an upload field as the upload kind", () => {
     // `upload` is a built-in registered type AND a declared FieldKind member,
     // so folding it into "input" made the union member unreachable and told the

@@ -167,10 +167,218 @@ function buildOptionCacheKey(
   return `${refreshVersion}\u{0}${JSON.stringify(request)}\u{0}${JSON.stringify(mapping ?? null)}`;
 }
 
+function isOptionValue(value: unknown): value is string | number {
+  return typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
+}
+
+function isNonEmptyParentValue(value: unknown): value is string | number {
+  return (typeof value === "string" && value.length > 0)
+    || (typeof value === "number" && Number.isFinite(value));
+}
+
+interface ParsedOptionMapping {
+  labelSegments: string[];
+  valueSegments: string[];
+  disabledSegments: string[];
+  descriptionSegments: string[];
+  childrenSegments: string[];
+  parentSegments: string[] | undefined;
+}
+
+function parseOptionMapping(mapping: RemoteOptionMapping | undefined): ParsedOptionMapping {
+  const normalized = normalizeOptionMapping(mapping);
+
+  return {
+    labelSegments: (normalized?.labelKey ?? "label").split("."),
+    valueSegments: (normalized?.valueKey ?? "value").split("."),
+    disabledSegments: (normalized?.disabledKey ?? "disabled").split("."),
+    descriptionSegments: (normalized?.descriptionKey ?? "description").split("."),
+    childrenSegments: (normalized?.childrenKey ?? "children").split("."),
+    parentSegments: normalized?.parentKey === undefined ? undefined : normalized.parentKey.split(".")
+  };
+}
+
+function buildOptionNode(row: Record<string, unknown>, parsed: ParsedOptionMapping): FieldOption | undefined {
+  const rawValue = walkOwnPath(row, parsed.valueSegments);
+
+  if (!isOptionValue(rawValue)) {
+    return undefined;
+  }
+
+  const rawLabel = walkOwnPath(row, parsed.labelSegments);
+  const rawDisabled = walkOwnPath(row, parsed.disabledSegments);
+  const rawDescription = walkOwnPath(row, parsed.descriptionSegments);
+
+  const option: FieldOption = {
+    label: String(rawLabel ?? rawValue),
+    value: rawValue
+  };
+
+  if (rawDisabled === true) {
+    option.disabled = true;
+  }
+
+  if (typeof rawDescription === "string" && rawDescription.length > 0) {
+    option.description = rawDescription;
+  }
+
+  return option;
+}
+
+function mapNestedRows(
+  rows: readonly unknown[],
+  parsed: ParsedOptionMapping,
+  visited: WeakSet<object>
+): FieldOption[] {
+  const options: FieldOption[] = [];
+
+  for (const row of rows) {
+    if (!isRecord(row) || visited.has(row)) {
+      continue;
+    }
+
+    const option = buildOptionNode(row, parsed);
+
+    if (option === undefined) {
+      continue;
+    }
+
+    visited.add(row);
+
+    const rawChildren = walkOwnPath(row, parsed.childrenSegments);
+
+    if (Array.isArray(rawChildren) && rawChildren.length > 0) {
+      const children = mapNestedRows(rawChildren, parsed, visited);
+
+      if (children.length > 0) {
+        option.children = children;
+      }
+    }
+
+    visited.delete(row);
+    options.push(option);
+  }
+
+  return options;
+}
+
+interface FlatOptionEntry {
+  option: FieldOption;
+  key: string;
+  parentKey: string | null;
+}
+
+function traceFlatParentCycle(
+  start: FlatOptionEntry,
+  byKey: ReadonlyMap<string, FlatOptionEntry>,
+  resolved: Set<FlatOptionEntry>,
+  inCycle: Set<FlatOptionEntry>
+): void {
+  const path: FlatOptionEntry[] = [];
+  const pathIndex = new Map<FlatOptionEntry, number>();
+  let current: FlatOptionEntry | undefined = start;
+
+  while (current !== undefined && !resolved.has(current)) {
+    const cycleStart = pathIndex.get(current);
+
+    if (cycleStart !== undefined) {
+      for (let index = cycleStart; index < path.length; index++) {
+        const cycleEntry = path[index];
+
+        if (cycleEntry !== undefined) {
+          inCycle.add(cycleEntry);
+        }
+      }
+
+      break;
+    }
+
+    pathIndex.set(current, path.length);
+    path.push(current);
+    current = current.parentKey === null ? undefined : byKey.get(current.parentKey);
+  }
+
+  for (const visitedEntry of path) {
+    resolved.add(visitedEntry);
+  }
+}
+
+/**
+ * Assemble flat remote records into an option tree using `parentKey`:
+ * - records whose parent is absent, empty, unknown, or self-referencing become roots;
+ * - records participating in a parent cycle are promoted to roots (never looping),
+ * while non-cycle descendants pointing at a cycle member stay attached beneath it.
+ */
+function buildFlatOptionTree(
+  rows: readonly unknown[],
+  parsed: ParsedOptionMapping,
+  parentSegments: string[]
+): FieldOption[] {
+  const entries: FlatOptionEntry[] = [];
+  const byKey = new Map<string, FlatOptionEntry>();
+
+  for (const row of rows) {
+    if (!isRecord(row)) {
+      continue;
+    }
+
+    const option = buildOptionNode(row, parsed);
+
+    if (option === undefined) {
+      continue;
+    }
+
+    const key = String(option.value);
+    const rawParent = walkOwnPath(row, parentSegments);
+    const candidateParent = isNonEmptyParentValue(rawParent) ? String(rawParent) : null;
+    const parentKey = candidateParent === key ? null : candidateParent;
+    const entry: FlatOptionEntry = {
+      option,
+      key,
+      parentKey
+    };
+
+    entries.push(entry);
+
+    if (!byKey.has(key)) {
+      byKey.set(key, entry);
+    }
+  }
+
+  const resolved = new Set<FlatOptionEntry>();
+  const inCycle = new Set<FlatOptionEntry>();
+
+  for (const entry of entries) {
+    if (!resolved.has(entry)) {
+      traceFlatParentCycle(entry, byKey, resolved, inCycle);
+    }
+  }
+
+  const roots: FieldOption[] = [];
+
+  for (const entry of entries) {
+    const parent = !inCycle.has(entry) && entry.parentKey !== null
+      ? byKey.get(entry.parentKey)
+      : undefined;
+
+    if (parent !== undefined && parent !== entry) {
+      parent.option.children ??= [];
+      parent.option.children.push(entry.option);
+    } else {
+      roots.push(entry.option);
+    }
+  }
+
+  return roots;
+}
+
 /**
  * Map a raw remote response (an array of records or a framework paginated
  * `{ items: [...] }` object) into `FieldOption[]` using the source's mapping
- * (`labelKey` defaults to `"label"`, `valueKey` defaults to `"value"`).
+ * (`labelKey` / `valueKey` / `disabledKey` / `descriptionKey` / `childrenKey` /
+ * `parentKey`). When `parentKey` is set, flat records are assembled into a tree
+ * and `childrenKey` is ignored; otherwise nested records recurse through
+ * `childrenKey` (defaulting to `"children"`).
  */
 export function mapRemoteResponseToOptions(raw: unknown, mapping?: RemoteOptionMapping): FieldOption[] {
   let rows: unknown[];
@@ -183,30 +391,11 @@ export function mapRemoteResponseToOptions(raw: unknown, mapping?: RemoteOptionM
     return [];
   }
 
-  const labelSegments = (mapping?.labelKey ?? "label").split(".");
-  const valueSegments = (mapping?.valueKey ?? "value").split(".");
-  const options: FieldOption[] = [];
+  const parsed = parseOptionMapping(mapping);
 
-  for (const row of rows) {
-    if (!isRecord(row)) {
-      continue;
-    }
-
-    const rawValue = walkOwnPath(row, valueSegments);
-
-    if (typeof rawValue !== "string" && (typeof rawValue !== "number" || !Number.isFinite(rawValue))) {
-      continue;
-    }
-
-    const rawLabel = walkOwnPath(row, labelSegments);
-
-    options.push({
-      label: String(rawLabel ?? rawValue),
-      value: rawValue
-    });
-  }
-
-  return options;
+  return parsed.parentSegments === undefined
+    ? mapNestedRows(rows, parsed, new WeakSet())
+    : buildFlatOptionTree(rows, parsed, parsed.parentSegments);
 }
 
 const STATIC_RESULT = { loading: false, error: false } as const;
@@ -478,6 +667,8 @@ export function useKnownOptionsLookup(): KnownOptionsLookup {
       && field.type !== "radio"
       && field.type !== "multi-select"
       && field.type !== "checkbox-group"
+      && field.type !== "tree-select"
+      && field.type !== "tree-multi-select"
     ) {
       return;
     }

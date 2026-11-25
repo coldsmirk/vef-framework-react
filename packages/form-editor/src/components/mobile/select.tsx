@@ -6,9 +6,11 @@ import type { FieldComponentProps, SelectField } from "../../types";
 import Picker from "antd-mobile/es/components/picker";
 import { useMemo, useState } from "react";
 
+import { toTopLevelOptions } from "../../engine/options";
 import { EditorIcon } from "../../icons";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
+import { OptionItemContent } from "../../render/parts/option-content";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { PickerTrigger } from "./picker-trigger";
 import { useMobileScopeContainer } from "./scope";
@@ -35,17 +37,31 @@ export const MobileSelectInput: FC<FieldComponentProps<SelectField, string | num
   const {
     error,
     loading,
-    options
+    options: rawOptions
   } = useFieldOptions(field.dataSource);
+  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
   const getContainer = useMobileScopeContainer();
   const [visible, setVisible] = useState(false);
 
   const hasValue = value !== "" && value !== undefined;
+  // Look up against all top-level options (including disabled ones) so an
+  // already-stored disabled option still displays its label in the trigger.
   const selected = hasValue ? options.find(option => option.value === value) : undefined;
-  // Stable references so the controlled Picker isn't fed fresh column/value
-  // arrays on every parent form re-render (which can thrash its open wheel).
+  // antd-mobile's wheel Picker has no per-item disabled flag, so exclude
+  // disabled options from the wheel while keeping stored values readable above.
   const columns = useMemo<PickerColumn[]>(
-    () => [options.map(option => { return { label: option.label, value: option.value }; })],
+    () => [
+      options
+        .filter(option => option.disabled !== true)
+        .map(option => {
+          return {
+            label: option.description !== undefined && option.description.length > 0
+              ? <OptionItemContent inline description={option.description} label={option.label} />
+              : option.label,
+            value: option.value
+          };
+        })
+    ],
     [options]
   );
   const pickerValue = useMemo<PickerValue[]>(() => hasValue ? [value] : [], [hasValue, value]);

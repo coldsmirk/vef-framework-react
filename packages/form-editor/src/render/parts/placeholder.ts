@@ -5,7 +5,9 @@ import type {
   DatetimeField,
   FormField,
   MultiSelectField,
-  SelectField
+  SelectField,
+  TreeMultiSelectField,
+  TreeSelectField
 } from "../../types";
 
 /**
@@ -14,7 +16,14 @@ import type {
  * and mobile; picker and dropdown controls carry an explicit prompt shared by
  * PC, mobile, table columns, and canvas sample cells.
  */
-export type DefaultPlaceholderField = DateField | DatetimeField | DateRangeField | SelectField | MultiSelectField;
+export type DefaultPlaceholderField
+  = | DateField
+    | DatetimeField
+    | DateRangeField
+    | SelectField
+    | MultiSelectField
+    | TreeSelectField
+    | TreeMultiSelectField;
 
 const GRANULARITY_UNIT: Record<DateGranularity, string> = {
   year: "年份",
@@ -38,6 +47,14 @@ export function defaultFieldPlaceholder(field: FormField): string | undefined {
     }
 
     case "multi-select": {
+      return "请选择";
+    }
+
+    case "tree-select": {
+      return "请选择";
+    }
+
+    case "tree-multi-select": {
       return "请选择";
     }
 

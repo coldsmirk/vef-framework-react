@@ -163,4 +163,47 @@ describe("MobileSelectInput", () => {
 
     expect(screen.queryByRole("button", { name: "清除" })).not.toBeInTheDocument();
   });
+
+  it("keeps a stored disabled option label visible while excluding disabled items from wheel picks", async () => {
+    const user = setupUser();
+    const onChange = vi.fn();
+
+    render(
+      <MobileSelectInput
+        domId="field-s"
+        value="old"
+        field={makeField({
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "已停用城市",
+                value: "old",
+                disabled: true,
+                description: "历史"
+              },
+              {
+                label: "北京",
+                value: "bj",
+                description: "首都",
+                children: [{ label: "朝阳区", value: "cy" }]
+              }
+            ]
+          }
+        })}
+        onChange={onChange}
+      />
+    );
+
+    // Stored disabled value still renders its label on the trigger.
+    expect(screen.getByText("已停用城市")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "城市" }));
+    expect(await screen.findByText("首都")).toBeInTheDocument();
+    expect(screen.queryByText("朝阳区")).not.toBeInTheDocument();
+
+    // Confirming picks the enabled wheel option ("bj"), not the disabled one.
+    await user.click(screen.getByRole("button", { name: "确定" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("bj"));
+  });
 });

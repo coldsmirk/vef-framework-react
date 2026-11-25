@@ -1,6 +1,7 @@
 import type { DateGranularity, FieldOption, FormDataSource, FormField, FormSchema } from "../../types";
 
 import { walkUniqueRootKeyedFields } from "../keys";
+import { flattenSelectableOptions } from "../options";
 
 /**
  * Coarse field kind understood by the approval flow editor and the Go backend
@@ -40,6 +41,8 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   switch: "input",
   select: "select",
   "multi-select": "select",
+  "tree-select": "select",
+  "tree-multi-select": "select",
   radio: "select",
   "checkbox-group": "select",
   date: "date",
@@ -48,7 +51,11 @@ const KIND_BY_TYPE: Record<string, FieldKind> = {
   upload: "upload"
 };
 
-const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group", "multi-select"]);
+const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set([
+  "checkbox-group",
+  "multi-select",
+  "tree-multi-select"
+]);
 
 function fieldKind(type: string): FieldKind {
   // Own-property guarded: a consumer-registered widget named like an Object
@@ -68,18 +75,29 @@ function fieldKind(type: string): FieldKind {
  */
 function staticOptions(field: FormField, dataSources: Map<string, FormDataSource>): FieldOption[] | undefined {
   const source = "dataSource" in field ? field.dataSource : undefined;
+  let rawOptions: FieldOption[] | undefined;
 
   if (source?.kind === "static") {
-    return source.options;
-  }
-
-  if (source?.kind === "ref") {
+    rawOptions = source.options;
+  } else if (source?.kind === "ref") {
     const referenced = dataSources.get(source.dataSourceId);
 
-    return referenced?.kind === "static" ? referenced.options : undefined;
+    rawOptions = referenced?.kind === "static" ? referenced.options : undefined;
   }
 
-  return undefined;
+  if (rawOptions === undefined) {
+    return undefined;
+  }
+
+  if (field.type === "tree-select" || field.type === "tree-multi-select") {
+    return flattenSelectableOptions(rawOptions, { leafOnly: field.leafOnly === true }).map(option => {
+      return { label: option.label, value: option.value };
+    });
+  }
+
+  return rawOptions.map(option => {
+    return { label: option.label, value: option.value };
+  });
 }
 
 /**

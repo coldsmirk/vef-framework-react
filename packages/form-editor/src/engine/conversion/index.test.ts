@@ -413,6 +413,53 @@ describe("convertPresentation", () => {
       expect(mobileOptions).not.toBe(pcOptions);
       expect(mobileOptions).toHaveLength(1);
     });
+
+    it("preserves tree-select and tree-multi-select with leafOnly and clones nested options", () => {
+      const pc = layerOf([
+        {
+          id: "ts1",
+          type: "tree-select",
+          key: "dept",
+          label: "部门",
+          leafOnly: true,
+          span: 12,
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "总部",
+                value: "hq",
+                children: [{ label: "研发", value: "rd" }]
+              }
+            ]
+          }
+        },
+        {
+          id: "tms1",
+          type: "tree-multi-select",
+          key: "depts",
+          label: "关联部门",
+          leafOnly: true,
+          dataSource: { kind: "codeSet", codeSet: "common.region" }
+        }
+      ]);
+
+      const { layer, report } = convertPresentation(pc, rules, createDefaultRegistry());
+
+      expect(report.dropped).toEqual([]);
+      expect(report.convertedCount).toBe(2);
+      expect(layer.children[0]).toMatchObject({
+        type: "tree-select",
+        key: "dept",
+        leafOnly: true,
+        span: undefined
+      });
+      expect(layer.children[1]).toMatchObject({
+        type: "tree-multi-select",
+        key: "depts",
+        leafOnly: true
+      });
+    });
   });
 
   // Proves the public extension seam (ConversionRegistry + BlockConversionRule +

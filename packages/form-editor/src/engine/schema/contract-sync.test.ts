@@ -9,6 +9,8 @@ import type {
   SubformNode,
   TextareaField,
   TextfieldField,
+  TreeMultiSelectField,
+  TreeSelectField,
   UploadField
 } from "../../types";
 
@@ -235,6 +237,69 @@ describe("contract-sync", () => {
       };
 
       expect(syncNodeContractToTwin(before, after, twin)).toBe(twin);
+    });
+
+    it("syncs dataSource and leafOnly across tree twins while isolating tree controls from flat selection types", () => {
+      const beforeTree: TreeSelectField = {
+        id: "P1",
+        type: "tree-select",
+        key: "region",
+        dataSource: { kind: "codeSet", codeSet: "common.region" }
+      };
+      const afterTree: TreeSelectField = {
+        ...beforeTree,
+        leafOnly: true,
+        columnType: "string"
+      };
+      const mobileTree: TreeSelectField = {
+        id: "M1",
+        type: "tree-select",
+        key: "region",
+        label: "移动端区域",
+        dataSource: { kind: "codeSet", codeSet: "common.region" }
+      };
+
+      expect(hasNodeContractChange(beforeTree, afterTree)).toBe(true);
+      const syncedTree = syncNodeContractToTwin(beforeTree, afterTree, mobileTree) as TreeSelectField;
+      expect(syncedTree.label).toBe("移动端区域");
+      expect(syncedTree.leafOnly).toBe(true);
+      expect(syncedTree.columnType).toBe("string");
+
+      const afterClearedLeafOnly: TreeSelectField = { ...beforeTree };
+      const clearedTwin = syncNodeContractToTwin(afterTree, afterClearedLeafOnly, syncedTree) as TreeSelectField;
+      expect(clearedTwin.leafOnly).toBeUndefined();
+
+      // Tree multi-select syncs with tree-multi-select twin.
+      const beforeTreeMulti: TreeMultiSelectField = {
+        id: "P2",
+        type: "tree-multi-select",
+        key: "regions",
+        dataSource: { kind: "static", options: [] }
+      };
+      const afterTreeMulti: TreeMultiSelectField = {
+        ...beforeTreeMulti,
+        leafOnly: true,
+        dataSource: { kind: "codeSet", codeSet: "common.region" }
+      };
+      const mobileTreeMulti: TreeMultiSelectField = {
+        id: "M2",
+        type: "tree-multi-select",
+        key: "regions",
+        dataSource: { kind: "static", options: [] }
+      };
+
+      const syncedMulti = syncNodeContractToTwin(beforeTreeMulti, afterTreeMulti, mobileTreeMulti) as TreeMultiSelectField;
+      expect(syncedMulti.leafOnly).toBe(true);
+      expect(syncedMulti.dataSource).toEqual({ kind: "codeSet", codeSet: "common.region" });
+
+      // Flat select is NOT in the same sync family as tree-select.
+      const flatTwin: SelectField = {
+        id: "M3",
+        type: "select",
+        key: "region",
+        dataSource: { kind: "codeSet", codeSet: "common.region" }
+      };
+      expect(syncNodeContractToTwin(beforeTree, afterTree, flatTwin)).toBe(flatTwin);
     });
   });
 

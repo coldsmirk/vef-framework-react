@@ -142,4 +142,53 @@ describe("multi-select field", () => {
 
     expect(screen.getByText("请选择多个城市")).toBeInTheDocument();
   });
+
+  it("renders only top-level options, shows descriptions, and blocks disabled options", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const Component = multiSelectFieldDefinition.Component!;
+
+    render(
+      <Component
+        domId="field-ms"
+        value={[]}
+        field={makeField({
+          showSearch: true,
+          dataSource: {
+            kind: "static",
+            options: [
+              {
+                label: "研发部",
+                value: "rd",
+                description: "核心研发",
+                children: [{ label: "平台组", value: "platform" }]
+              },
+              {
+                label: "归档部",
+                value: "legacy",
+                disabled: true,
+                description: "已停用"
+              }
+            ]
+          }
+        })}
+        onChange={onChange}
+      />
+    );
+
+    const combobox = screen.getByRole<HTMLInputElement>("combobox");
+    await user.click(combobox);
+
+    expect(await screen.findByText("核心研发")).toBeInTheDocument();
+    expect(screen.queryByText("平台组")).not.toBeInTheDocument();
+
+    const disabledItem = screen.getByText("已停用").closest(".ant-select-item-option");
+    expect(disabledItem).toHaveAttribute("aria-disabled", "true");
+    await user.click(disabledItem!);
+    expect(onChange).not.toHaveBeenCalled();
+
+    await user.type(combobox, "核心");
+    expect(await screen.findByText("核心研发")).toBeInTheDocument();
+    expect(screen.queryByText("已停用")).not.toBeInTheDocument();
+  });
 });

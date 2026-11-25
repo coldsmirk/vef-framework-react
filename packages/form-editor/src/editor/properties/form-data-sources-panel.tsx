@@ -402,6 +402,7 @@ function DataSourceModal({
             <DraftField label="选项列表">
               <OptionListEditor
                 allowBulkPaste
+                allowHierarchy
                 options={draft.options}
                 onChange={options => setDraft(current => current.kind === "static" ? { ...current, options } : current)}
               />

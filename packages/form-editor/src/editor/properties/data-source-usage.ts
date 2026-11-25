@@ -12,6 +12,7 @@ import type {
 
 import { isKeyedNode } from "../../engine/keys";
 import { getActionDataSourceId } from "../../engine/linkage/action-descriptors";
+import { countOptionNodes } from "../../engine/options";
 import { isLeafField, nodeLabel, walkNodes } from "../../engine/schema/walk";
 import { findDataSourceApi } from "../data-source-apis";
 
@@ -270,9 +271,11 @@ function isDynamicValueUnbound(value: DynamicValue | undefined): boolean {
  */
 export function summarizeDataSource(source: FormDataSource, apis: readonly DataSourceApi[]): DataSourceSummary {
   if (source.kind === "static") {
+    const count = countOptionNodes(source.options);
+
     return {
-      text: `静态 · ${source.options.length} 项`,
-      incomplete: source.options.length === 0
+      text: `静态 · ${count} 项`,
+      incomplete: count === 0
     };
   }
 

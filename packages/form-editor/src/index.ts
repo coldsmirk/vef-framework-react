@@ -13,6 +13,8 @@ export { selectFieldDefinition } from "./components/select-field";
 export { switchFieldDefinition } from "./components/switch-field";
 export { textareaFieldDefinition } from "./components/textarea-field";
 export { textfieldDefinition } from "./components/textfield";
+export { treeMultiSelectFieldDefinition } from "./components/tree-multi-select-field";
+export { treeSelectFieldDefinition } from "./components/tree-select-field";
 export { uploadFieldDefinition } from "./components/upload-field";
 export {
   FormEditor,
@@ -77,7 +79,12 @@ export {
   type LinkageValidationResult
 } from "./engine/linkage";
 export { normalizeOptionMapping } from "./engine/option-mapping";
-export { findDuplicateOptionValues } from "./engine/options";
+export {
+  findDuplicateOptionValues,
+  flattenSelectableOptions,
+  isTreeSelectFieldType,
+  toTopLevelOptions
+} from "./engine/options";
 export {
   createDefaultRegistry,
   registerDefaults

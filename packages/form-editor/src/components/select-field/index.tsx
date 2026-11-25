@@ -2,10 +2,13 @@ import type { FC } from "react";
 
 import type { FieldComponentProps, FieldDefinition, FieldOptionSource, PropertiesDescriptor, SelectField } from "../../types";
 
-import { filterOptionByLabel, Select } from "@vef-framework-react/components";
+import { Select } from "@vef-framework-react/components";
+import { useMemo } from "react";
 
+import { toTopLevelOptions } from "../../engine/options";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
+import { filterOptionByLabelOrDescription, renderSelectOption } from "../../render/parts/option-content";
 import { resolveFieldPlaceholder } from "../../render/parts/placeholder";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { allowClearEntry, columnTypeEntry, requiredEntry, sizeEntry } from "../field-entries";
@@ -26,8 +29,11 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
   const {
     error,
     loading,
-    options
+    options: rawOptions
   } = useFieldOptions(field.dataSource);
+  // Flat controls read top-level options only even when bound to a hierarchical
+  // data source or code set.
+  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
 
   return (
     <FieldShell
@@ -42,10 +48,11 @@ const SelectInput: FC<FieldComponentProps<SelectField, string | number | undefin
         allowClear={field.allowClear}
         aria-labelledby={cell?.labelId}
         disabled={disabled}
-        filterOption={filterOptionByLabel}
+        filterOption={filterOptionByLabelOrDescription}
         id={domId}
         loading={loading}
         notFoundContent={error && options.length === 0 ? "选项加载失败" : undefined}
+        optionRender={renderSelectOption}
         options={options}
         placeholder={resolveFieldPlaceholder(field)}
         popupMatchSelectWidth={cell ? false : undefined}

@@ -3,7 +3,9 @@ import type { FC } from "react";
 import type { FieldComponentProps, RadioField } from "../../types";
 
 import Radio from "antd-mobile/es/components/radio";
+import { useMemo } from "react";
 
+import { toTopLevelOptions } from "../../engine/options";
 import { useFieldOptions } from "../../render/data-source-context";
 import { FieldShell } from "../../render/parts/field-shell";
 import { MobileOptionGroup } from "./option-group";
@@ -30,8 +32,9 @@ export const MobileRadioInput: FC<FieldComponentProps<RadioField, string | numbe
   const {
     error,
     loading,
-    options
+    options: rawOptions
   } = useFieldOptions(field.dataSource);
+  const options = useMemo(() => toTopLevelOptions(rawOptions), [rawOptions]);
 
   return (
     <FieldShell
@@ -50,7 +53,7 @@ export const MobileRadioInput: FC<FieldComponentProps<RadioField, string | numbe
       >
         <MobileOptionGroup direction={field.direction} error={error} isEmpty={options.length === 0} loading={loading}>
           {options.map(option => (
-            <Radio key={option.value} value={option.value}>
+            <Radio key={option.value} disabled={option.disabled === true} value={option.value}>
               {option.label}
             </Radio>
           ))}
