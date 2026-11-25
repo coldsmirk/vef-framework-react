@@ -1,4 +1,5 @@
 import type {
+  ConditionRetrigger,
   EffectAction,
   EvaluationContext,
   FieldLinkageRule,
@@ -10,65 +11,72 @@ import type {
 
 import { isRootScope, walkNodes } from "../schema/walk";
 import { matchCondition } from "./evaluator";
-import { ruleActions, ruleCondition, ruleTriggerKind } from "./shape";
+import { ruleActions, ruleCondition, ruleConditionRetrigger, ruleTriggerKind, ruleWhen } from "./shape";
 import { describeConditionSources } from "./source-tracking";
 import { isEffectAction, isFieldEventTriggerKind } from "./taxonomy";
 
 /**
  * The side-effect lane (pure half).
  *
- * Effect actions fire on a *trigger edge*, never on the continuous state fold.
- * The two edge sources are:
+ * Effect actions run sequentially per rule on a *trigger edge*, never on the
+ * continuous state fold. The two edge sources are:
  *
- * - **Condition rising edge** — a `condition`-triggered rule whose effect
- * actions run once when the condition transitions false→true. The runtime
- * tracks each rule's previous truth; this module supplies the rule inventory
- * ({@link collectConditionEffectRules}) and the per-evaluation truth vector
- * ({@link evaluateConditionEffectTruths}).
- * - **Field event** — a `change` / `focus` / `blur` / `click`-triggered rule
- * whose effect actions the renderer dispatches imperatively from the field's
- * own DOM events ({@link getTriggerEffectActions},
- * {@link getFieldEventTriggerKinds}).
+ * - **Condition trigger** — a `condition`-triggered rule whose effect sequence
+ * runs on false→true rising edge (or whenever tracked sources change while
+ * holding when `trigger.retrigger === "always"`).
+ * - **Event trigger** — a field event (`change` / `commit` / `focus` / `blur` /
+ * `click`) or form lifecycle moment (`load` / `beforeSubmit` / `afterSubmit`),
+ * optionally guarded by `trigger.when`.
  *
- * Everything here is pure; the form api, host `dispatchEffect`, and React wiring
- * live in `runtime/effects.tsx`.
+ * Everything here is pure; sequence control, action execution, and React wiring
+ * live under `runtime/`.
  */
 
 /**
  * A `condition`-triggered rule that carries at least one effect action, reduced
- * to just the pieces the edge tracker needs.
+ * to just the pieces the edge tracker and sequence controller need.
  */
 export interface ConditionEffectRule {
   ruleId: string;
+  /**
+   * Owning block id for field-scoped rules (used to drive busy indicators on
+   * that field); `undefined` for form-scoped rules (`schema.linkage`).
+   */
+  ownerId?: string;
   condition: LinkageCondition;
+  /**
+   * Rule-level retrigger policy (`"edge"` by default, or `"always"`).
+   */
+  retrigger: ConditionRetrigger;
   /**
    * The FORM-VALUE fields this condition reads. The `"always"` tracker diffs
    * these between evaluations so an unrelated field change does not re-fire
-   * {@link alwaysActions}. Empty is a real answer — a condition on a `$`-rooted
-   * context path depends on nothing in the form — and must not be confused with
+   * this rule. Empty is a real answer — a condition on a `$`-rooted context
+   * path depends on nothing in the form — and must not be confused with
    * {@link opaque}.
    */
   sourceKeys: string[];
   /**
    * Whether the condition reads inputs that cannot be enumerated (an
    * `expression` condition). Only then does the tracker fall back to diffing
-   * the whole values object; treating an empty {@link sourceKeys} as opaque
-   * turned a context-only condition's `"always"` actions into one dispatch per
-   * keystroke anywhere on the form.
+   * the whole values object.
    */
   opaque: boolean;
   /**
-   * The rule's effect actions, in declaration order — every one fires on the
-   * condition's false→true rising edge. State actions (if any) are excluded;
-   * they are handled by the state lane.
+   * The rule's effect actions, in declaration order. State actions (if any)
+   * are excluded; they are handled by the state lane.
    */
   actions: EffectAction[];
-  /**
-   * The subset of {@link actions} whose `retrigger` is `"always"`. These repeat
-   * (in declaration order) whenever the condition keeps holding and a source
-   * field changes — past the rising edge that already fired every action.
-   */
-  alwaysActions: EffectAction[];
+}
+
+/**
+ * One event-triggered rule's effect sequence (keeping rule identity for
+ * single-flight cancellation and its optional `when` guard).
+ */
+export interface TriggerEffectSequence {
+  ruleId: string;
+  when?: LinkageCondition;
+  actions: EffectAction[];
 }
 
 /**
@@ -87,23 +95,27 @@ export function collectConditionEffectRules(schema: RuntimeSchema): ConditionEff
   // root-scope field rule, so they join the root scope's edge tracking. A
   // subform template is passed as its own schema (no `linkage`), so this is a
   // no-op there.
-  pushConditionEffectRules(schema.linkage?.rules, result);
+  pushConditionEffectRules(schema.linkage?.rules, undefined, result);
 
   walkNodes(schema, (node, scope) => {
     if (!isRootScope(scope)) {
       return;
     }
 
-    pushConditionEffectRules(node.linkage?.rules, result);
+    pushConditionEffectRules(node.linkage?.rules, node.id, result);
   });
 
   return result;
 }
 
-function pushConditionEffectRules(rules: FieldLinkageRule[] | undefined, out: ConditionEffectRule[]): void {
+function pushConditionEffectRules(
+  rules: FieldLinkageRule[] | undefined,
+  ownerId: string | undefined,
+  out: ConditionEffectRule[]
+): void {
   const linkageRules = Array.isArray(rules) ? rules : [];
 
-  for (const rule of linkageRules) {
+  for (const [index, rule] of linkageRules.entries()) {
     const condition = ruleCondition(rule);
 
     if (condition === undefined) {
@@ -114,14 +126,16 @@ function pushConditionEffectRules(rules: FieldLinkageRule[] | undefined, out: Co
 
     if (actions.length > 0) {
       const sources = describeConditionSources(condition);
+      const ruleId = typeof rule.id === "string" && rule.id.length > 0 ? rule.id : `${ownerId ?? "form"}#${index}`;
 
       out.push({
-        ruleId: rule.id,
+        ruleId,
+        ...ownerId !== undefined && { ownerId },
         condition,
+        retrigger: ruleConditionRetrigger(rule),
         sourceKeys: sources.keys,
         opaque: sources.opaque,
-        actions,
-        alwaysActions: actions.filter(action => action.retrigger === "always")
+        actions
       });
     }
   }
@@ -142,29 +156,50 @@ export function evaluateConditionEffectTruths(
 }
 
 /**
- * The effect actions to run when a given edge trigger fires. Returns the
- * flattened effect actions of every rule whose trigger matches `kind` (state
- * actions are excluded — they have no meaning on an edge and the validator
- * rejects them there). Used for both field events (`change` / `focus` / `blur` /
- * `click`) and form lifecycle moments (`load` / `beforeSubmit` / `afterSubmit`).
+ * The per-rule effect sequences to run when an edge trigger fires. Preserves
+ * each rule's `id` (single-flight identity) and optional `when` guard rather
+ * than flattening actions across rules. Used for both field events (`change` /
+ * `commit` / `focus` / `blur` / `click`) and form lifecycle moments (`load` /
+ * `beforeSubmit` / `afterSubmit`).
  */
-export function getTriggerEffectActions(
+export function getTriggerEffectSequences(
   rules: FieldLinkageRule[] | undefined,
   kind: LinkageTriggerKind
-): EffectAction[] {
+): TriggerEffectSequence[] {
   if (!Array.isArray(rules)) {
     return [];
   }
 
-  return rules
-    .filter(rule => ruleTriggerKind(rule) === kind)
-    .flatMap(rule => ruleActions(rule).filter(action => isEffectAction(action)));
+  const sequences: TriggerEffectSequence[] = [];
+
+  for (const [index, rule] of rules.entries()) {
+    if (ruleTriggerKind(rule) !== kind) {
+      continue;
+    }
+
+    const actions = ruleActions(rule).filter(action => isEffectAction(action));
+
+    if (actions.length === 0) {
+      continue;
+    }
+
+    const when = ruleWhen(rule);
+    const ruleId = typeof rule.id === "string" && rule.id.length > 0 ? rule.id : `${kind}#${index}`;
+
+    sequences.push({
+      ruleId,
+      ...when !== undefined && { when },
+      actions
+    });
+  }
+
+  return sequences;
 }
 
 /**
- * The set of field-event edge kinds (`change` / `focus` / `blur` / `click`) a
- * field listens for — drives which DOM handlers the renderer attaches, so a
- * field with no event rules pays nothing.
+ * The set of field-event edge kinds (`change` / `commit` / `focus` / `blur` /
+ * `click`) a field listens for — drives which DOM handlers the renderer
+ * attaches, so a field with no event rules pays nothing.
  */
 export function getFieldEventTriggerKinds(
   rules: FieldLinkageRule[] | undefined

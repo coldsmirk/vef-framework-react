@@ -6,6 +6,7 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
 import { isKeyedField } from "../engine/keys";
+import { FieldIdProvider } from "../runtime/effects";
 import { useFieldRegistry } from "../store/engine-provider";
 
 // A field whose `type` has no registered renderer: render a quiet dashed
@@ -39,6 +40,11 @@ export interface FormFieldRendererProps {
    */
   domId?: string;
   onChange?: (value: unknown) => void;
+  /**
+   * Commit callback for `"entry"` controls (single-line Enter / dirty blur).
+   * Only wired by the runtime when the field owns a `commit` trigger rule.
+   */
+  onCommit?: () => void;
 }
 
 /**
@@ -57,7 +63,8 @@ export function FormFieldRenderer({
   labelPosition,
   required,
   value,
-  onChange
+  onChange,
+  onCommit
 }: FormFieldRendererProps): ReactElement {
   const registry = useFieldRegistry();
   const definition = registry.get(field.type);
@@ -73,8 +80,6 @@ export function FormFieldRenderer({
 
   const { Component } = definition;
   const resolvedDomId = domId ?? `field-${field.id}`;
-  // Only keyed fields (non-empty data-binding key) carry a value; a non-keyed
-  // field (e.g. Button) shows no value and its changes go nowhere.
   const keyed = isKeyedField(field);
   const fieldValue = keyed ? value : undefined;
 
@@ -85,15 +90,18 @@ export function FormFieldRenderer({
   };
 
   return (
-    <Component
-      disabled={disabled}
-      domId={resolvedDomId}
-      errors={errors}
-      field={field}
-      labelPosition={labelPosition}
-      required={required}
-      value={fieldValue}
-      onChange={handleChange}
-    />
+    <FieldIdProvider fieldId={field.id}>
+      <Component
+        disabled={disabled}
+        domId={resolvedDomId}
+        errors={errors}
+        field={field}
+        labelPosition={labelPosition}
+        required={required}
+        value={fieldValue}
+        onChange={handleChange}
+        onCommit={keyed ? onCommit : undefined}
+      />
+    </FieldIdProvider>
   );
 }

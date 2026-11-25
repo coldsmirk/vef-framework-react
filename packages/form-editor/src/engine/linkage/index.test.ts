@@ -22,7 +22,7 @@ import {
   evaluateRuntimeStates,
   getFieldEventTriggerKinds,
   getLinkageSourceKeys,
-  getTriggerEffectActions,
+  getTriggerEffectSequences,
   isEmptyRuntimeValue,
   resolveLinkageEvaluators,
   validateLinkageSchema
@@ -95,16 +95,41 @@ function fieldWithRule(key: string, sourceKey: string, actions: FieldLinkageRule
 }
 
 /**
- * A `set_field` effect that re-fires on every tracked source change — the
- * variant that registers cycle edges.
+ * A `set_fields` effect writing to `targetKey` — paired with a rule-level
+ * `retrigger: "always"` condition trigger to register cycle edges.
  */
-function setFieldAlways(targetKey: string): FieldLinkageRule["actions"][number] {
+function setFieldAction(targetKey: string): FieldLinkageRule["actions"][number] {
   return {
-    type: "set_field",
-    targetKey,
-    retrigger: "always",
-    value: { kind: "literal", value: 1 }
+    type: "set_fields",
+    assignments: [{ targetKey, value: { kind: "literal", value: 1 } }]
   };
+}
+
+/**
+ * A field whose single condition rule sources `sourceKey`, retriggers on every
+ * tracked change (`retrigger: "always"`), and runs `actions`.
+ */
+function fieldWithAlwaysRule(key: string, sourceKey: string, actions: FieldLinkageRule["actions"]): TextfieldField {
+  return makeField(key, {
+    linkage: {
+      rules: [
+        {
+          id: `Rule_${key}`,
+          trigger: {
+            kind: "condition",
+            retrigger: "always",
+            condition: {
+              kind: "leaf",
+              sourceKey,
+              operator: "eq",
+              value: "1"
+            }
+          },
+          actions
+        }
+      ]
+    }
+  });
 }
 
 /**
@@ -389,9 +414,8 @@ describe("linkage engine", () => {
               },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "other",
-                  value: { kind: "literal", value: 1 }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "other", value: { kind: "literal", value: 1 } }]
                 }
               ]
             }
@@ -1273,10 +1297,11 @@ describe("linkage engine", () => {
 
       // Only Rule_effect: state-only and edge-triggered rules are excluded; the
       // collected entry carries the effect actions, the condition's source keys,
-      // and an empty alwaysActions (no effect opted into "always" retrigger).
+      // and default `retrigger: "edge"`.
       expect(collected).toEqual([
         {
           ruleId: "Rule_effect",
+          ownerId: "Field_a",
           condition: {
             kind: "leaf",
             sourceKey: "b",
@@ -1287,16 +1312,15 @@ describe("linkage engine", () => {
           // A leaf condition is enumerable, so the `always` tracker diffs its
           // keys rather than the whole values object.
           opaque: false,
-          actions: [{ type: "alert", message: { kind: "literal", value: "hey" } }],
-          alwaysActions: []
+          retrigger: "edge",
+          actions: [{ type: "alert", message: { kind: "literal", value: "hey" } }]
         }
       ]);
     });
 
-    it("collects an 'always' effect into alwaysActions with the group's source keys", () => {
+    it("collects an 'always' condition rule with the group's source keys", () => {
       const alert = {
         type: "alert",
-        retrigger: "always",
         message: { kind: "literal", value: "hey" }
       } as const;
       const rules = collectConditionEffectRules(makeSchema([
@@ -1307,6 +1331,7 @@ describe("linkage engine", () => {
                 id: "Rule_always",
                 trigger: {
                   kind: "condition",
+                  retrigger: "always",
                   condition: {
                     kind: "group",
                     logic: "all",
@@ -1334,7 +1359,8 @@ describe("linkage engine", () => {
       ]));
 
       expect(rules[0]?.sourceKeys).toEqual(["b", "c"]);
-      expect(rules[0]?.alwaysActions).toEqual([alert]);
+      expect(rules[0]?.retrigger).toBe("always");
+      expect(rules[0]?.actions).toEqual([alert]);
     });
 
     it("collects a form-scope expression rule with the empty sourceKeys contract", () => {
@@ -1389,16 +1415,15 @@ describe("linkage engine", () => {
       expect(evaluateConditionEffectTruths(rules, { b: 5 }, evaluators)).toEqual([false]);
     });
 
-    it("flattens a field's effect actions for a given event kind", () => {
+    it("collects a field's effect sequences for a given event kind", () => {
       const rules: FieldLinkageRule[] = [
         {
           id: "R1",
           trigger: { kind: "change" },
           actions: [
             {
-              type: "set_field",
-              targetKey: "x",
-              value: { kind: "literal", value: 1 }
+              type: "set_fields",
+              assignments: [{ targetKey: "x", value: { kind: "literal", value: 1 } }]
             },
             { type: "submit" }
           ]
@@ -1410,16 +1435,25 @@ describe("linkage engine", () => {
         }
       ];
 
-      expect(getTriggerEffectActions(rules, "change")).toEqual([
+      expect(getTriggerEffectSequences(rules, "change")).toEqual([
         {
-          type: "set_field",
-          targetKey: "x",
-          value: { kind: "literal", value: 1 }
-        },
-        { type: "submit" }
+          ruleId: "R1",
+          actions: [
+            {
+              type: "set_fields",
+              assignments: [{ targetKey: "x", value: { kind: "literal", value: 1 } }]
+            },
+            { type: "submit" }
+          ]
+        }
       ]);
-      expect(getTriggerEffectActions(rules, "blur")).toEqual([{ type: "reset" }]);
-      expect(getTriggerEffectActions(rules, "focus")).toEqual([]);
+      expect(getTriggerEffectSequences(rules, "blur")).toEqual([
+        {
+          ruleId: "R2",
+          actions: [{ type: "reset" }]
+        }
+      ]);
+      expect(getTriggerEffectSequences(rules, "focus")).toEqual([]);
     });
 
     it("reports the field-event kinds a field listens for", () => {
@@ -2062,12 +2096,20 @@ describe("linkage engine", () => {
               rules: [
                 {
                   id: "Rule_1",
-                  trigger: leafTrigger("b"),
+                  trigger: {
+                    kind: "condition",
+                    // @ts-expect-error — exercising the runtime validator
+                    retrigger: "sometimes",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "b",
+                      operator: "eq",
+                      value: "1"
+                    }
+                  },
                   actions: [
                     {
                       type: "alert",
-                      // @ts-expect-error — exercising the runtime validator
-                      retrigger: "sometimes",
                       message: { kind: "literal", value: "x" }
                     }
                   ]
@@ -2079,7 +2121,7 @@ describe("linkage engine", () => {
 
         expect(validateLinkageSchema(schema).issues).toContainEqual(expect.objectContaining({
           code: "retrigger_invalid",
-          path: "node[Field_a].linkage.rules[0].actions[0].retrigger",
+          path: "node[Field_a].linkage.rules[0].trigger.retrigger",
           severity: "error"
         }));
       });
@@ -2185,7 +2227,7 @@ describe("linkage engine", () => {
         }));
       });
 
-      it("warns on a set_field targeting an unknown key and carries the rule id", () => {
+      it("warns on a set_fields targeting an unknown key and carries the rule id", () => {
         // Deleting a field after a rule referenced it is legitimate
         // mid-authoring state — it must survive export → import.
         const schema = makeSchema([
@@ -2197,9 +2239,8 @@ describe("linkage engine", () => {
                   trigger: { kind: "change" },
                   actions: [
                     {
-                      type: "set_field",
-                      targetKey: "ghost",
-                      value: { kind: "literal", value: 1 }
+                      type: "set_fields",
+                      assignments: [{ targetKey: "ghost", value: { kind: "literal", value: 1 } }]
                     }
                   ]
                 }
@@ -2215,7 +2256,7 @@ describe("linkage engine", () => {
         }));
       });
 
-      it("warns on an empty set_field target", () => {
+      it("warns on an empty set_fields target", () => {
         const schema = makeSchema([
           makeField("a", {
             linkage: {
@@ -2225,9 +2266,8 @@ describe("linkage engine", () => {
                   trigger: { kind: "change" },
                   actions: [
                     {
-                      type: "set_field",
-                      targetKey: "",
-                      value: { kind: "literal", value: "" }
+                      type: "set_fields",
+                      assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
                     }
                   ]
                 }
@@ -2337,11 +2377,10 @@ describe("linkage engine", () => {
               rules: [
                 {
                   id: "Rule_1",
-                  trigger: { kind: "change" },
+                  trigger: { kind: "change", retrigger: "always" } as unknown as FieldLinkageRule["trigger"],
                   actions: [
                     {
                       type: "alert",
-                      retrigger: "always",
                       message: { kind: "literal", value: "x" }
                     }
                   ]
@@ -2365,11 +2404,19 @@ describe("linkage engine", () => {
               rules: [
                 {
                   id: "Rule_1",
-                  trigger: leafTrigger("b"),
+                  trigger: {
+                    kind: "condition",
+                    retrigger: "always",
+                    condition: {
+                      kind: "leaf",
+                      sourceKey: "b",
+                      operator: "eq",
+                      value: "1"
+                    }
+                  },
                   actions: [
                     {
                       type: "alert",
-                      retrigger: "always",
                       message: { kind: "literal", value: "x" }
                     }
                   ]
@@ -2464,28 +2511,19 @@ describe("linkage engine", () => {
         expect(codesOf(validateLinkageSchema(schema).issues)).toContain("self_reference");
       });
 
-      it("rejects a set_field that always-retriggers into its own condition source", () => {
+      it("rejects a set_fields that always-retriggers into its own condition source", () => {
         // Reads `a`, writes `a`, re-fires on every `a` change while the
         // condition holds — the same unbounded loop as a self-assign, with a
         // statically known target.
-        const schema = makeSchema([
-          fieldWithRule("a", "a", [
-            {
-              type: "set_field",
-              targetKey: "a",
-              retrigger: "always",
-              value: { kind: "literal", value: 1 }
-            }
-          ])
-        ]);
+        const schema = makeSchema([fieldWithAlwaysRule("a", "a", [setFieldAction("a")])]);
 
         expect(codesOf(validateLinkageSchema(schema).issues)).toContain("self_reference");
       });
 
-      it("reports a cycle between mutually always-retriggering set_field rules", () => {
+      it("reports a cycle between mutually always-retriggering set_fields rules", () => {
         const schema = makeSchema([
-          fieldWithRule("a", "b", [setFieldAlways("a")]),
-          fieldWithRule("b", "a", [setFieldAlways("b")])
+          fieldWithAlwaysRule("a", "b", [setFieldAction("a")]),
+          fieldWithAlwaysRule("b", "a", [setFieldAction("b")])
         ]);
 
         expect(validateLinkageSchema(schema).issues).toContainEqual(expect.objectContaining({
@@ -2494,18 +2532,10 @@ describe("linkage engine", () => {
         }));
       });
 
-      it("allows a rising-edge set_field back into its own condition source", () => {
+      it("allows a rising-edge set_fields back into its own condition source", () => {
         // The default retrigger fires once per false→true transition and
         // settles — no edge, no error.
-        const schema = makeSchema([
-          fieldWithRule("a", "a", [
-            {
-              type: "set_field",
-              targetKey: "a",
-              value: { kind: "literal", value: 1 }
-            }
-          ])
-        ]);
+        const schema = makeSchema([fieldWithRule("a", "a", [setFieldAction("a")])]);
 
         expect(validateLinkageSchema(schema).issues).toEqual([]);
       });
@@ -2609,8 +2639,8 @@ describe("linkage engine", () => {
       });
     });
 
-    describe("set_field targeting", () => {
-      it("accepts a set_field targeting an existing same-scope key", () => {
+    describe("set_fields targeting and action sequence validation", () => {
+      it("accepts a set_fields targeting an existing writable same-scope key", () => {
         const schema = makeSchema([
           makeField("a", {
             linkage: {
@@ -2618,13 +2648,7 @@ describe("linkage engine", () => {
                 {
                   id: "Rule_1",
                   trigger: { kind: "change" },
-                  actions: [
-                    {
-                      type: "set_field",
-                      targetKey: "b",
-                      value: { kind: "literal", value: 1 }
-                    }
-                  ]
+                  actions: [setFieldAction("b")]
                 }
               ]
             }
@@ -2635,9 +2659,7 @@ describe("linkage engine", () => {
         expect(validateLinkageSchema(schema).issues).toEqual([]);
       });
 
-      it("accepts a set_field targeting a subform key (wholesale row reset)", () => {
-        // Assigning an array value to a subform key is the documented way to
-        // reset its rows; the runtime applies it like any other key.
+      it("rejects set_fields targeting a subform or upload field", () => {
         const schema: RuntimeSchema = {
           id: "Form_1",
           children: [
@@ -2646,12 +2668,14 @@ describe("linkage engine", () => {
                 rules: [
                   {
                     id: "Rule_1",
-                    trigger: { kind: "change" },
+                    trigger: { kind: "commit" },
                     actions: [
                       {
-                        type: "set_field",
-                        targetKey: "lines",
-                        value: { kind: "literal", value: [] }
+                        type: "set_fields",
+                        assignments: [
+                          { targetKey: "lines", value: { kind: "literal", value: [] } },
+                          { targetKey: "files", value: { kind: "literal", value: [] } }
+                        ]
                       }
                     ]
                   }
@@ -2664,11 +2688,166 @@ describe("linkage engine", () => {
               variant: "stack",
               key: "lines",
               template: [makeField("amount", { id: "Field_row_amount" })]
+            },
+            {
+              id: "Upload_1",
+              type: "upload",
+              key: "files",
+              label: "附件"
             }
           ]
         };
 
-        expect(validateLinkageSchema(schema).issues).toEqual([]);
+        const { issues } = validateLinkageSchema(schema);
+        expect(issues.filter(issue => issue.code === "target_not_writable")).toHaveLength(2);
+      });
+
+      it("warns on duplicate targetKey inside set_fields and rejects empty assignments", () => {
+        const schema = makeSchema([
+          makeField("a", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_dup",
+                  trigger: { kind: "commit" },
+                  actions: [
+                    {
+                      type: "set_fields",
+                      assignments: [
+                        { targetKey: "b", value: { kind: "literal", value: "1" } },
+                        { targetKey: "b", value: { kind: "literal", value: "2" } }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  id: "Rule_empty",
+                  trigger: { kind: "commit" },
+                  actions: [{ type: "set_fields", assignments: [] }]
+                }
+              ]
+            }
+          }),
+          makeField("b")
+        ]);
+
+        const { issues } = validateLinkageSchema(schema);
+        expect(issues).toContainEqual(expect.objectContaining({ code: "target_key_duplicate", ruleId: "Rule_dup" }));
+        expect(issues).toContainEqual(expect.objectContaining({ code: "assignments_empty", ruleId: "Rule_empty" }));
+      });
+
+      it("validates commit trigger, event when guard, step outputs, and $steps references", () => {
+        const validSchema = makeSchema([
+          makeField("empNo", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_lookup",
+                  trigger: {
+                    kind: "commit",
+                    when: {
+                      kind: "leaf",
+                      sourceKey: "empNo",
+                      operator: "notEmpty"
+                    }
+                  },
+                  actions: [
+                    {
+                      type: "api_call",
+                      request: {
+                        resource: "hr/staff",
+                        action: "find",
+                        params: { code: { kind: "reference", path: "$form.empNo" } }
+                      },
+                      output: "res",
+                      onError: "stop"
+                    },
+                    {
+                      type: "select_record",
+                      source: { kind: "reference", path: "$steps.res" },
+                      output: "picked",
+                      whenNone: "continue",
+                      columns: [{ path: "name", label: "姓名" }]
+                    },
+                    {
+                      type: "set_fields",
+                      assignments: [{ targetKey: "staffName", value: { kind: "reference", path: "$steps.picked.name" } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          }),
+          makeField("staffName")
+        ]);
+
+        expect(validateLinkageSchema(validSchema).issues).toEqual([]);
+
+        const invalidSchema = makeSchema([
+          makeField("empNo", {
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_bad_steps",
+                  trigger: { kind: "commit" },
+                  actions: [
+                    {
+                      type: "api_call",
+                      request: {
+                        resource: "hr/staff",
+                        action: "find",
+                        // Forward/self reference must fail.
+                        params: { selfRef: { kind: "reference", path: "$steps.res.id" } }
+                      },
+                      output: "res",
+                      onError: "bad" as unknown as "stop"
+                    },
+                    {
+                      type: "select_record",
+                      source: { kind: "reference", path: "$steps.missing" },
+                      output: "res",
+                      whenNone: "bad" as unknown as "stop"
+                    },
+                    {
+                      type: "api_call",
+                      request: { resource: "hr/staff", action: "extra" },
+                      output: "1bad-name"
+                    }
+                  ]
+                },
+                {
+                  id: "Rule_state_steps",
+                  trigger: leafTrigger("empNo"),
+                  actions: [{ type: "assign", value: { kind: "reference", path: "$steps.res.name" } }]
+                }
+              ]
+            }
+          }),
+          {
+            id: "Btn_1",
+            type: "button",
+            label: "Run",
+            action: "button",
+            linkage: {
+              rules: [
+                {
+                  id: "Rule_btn_commit",
+                  trigger: { kind: "commit" },
+                  actions: [{ type: "submit" }]
+                }
+              ]
+            }
+          } as ButtonField
+        ]);
+
+        const codes = codesOf(validateLinkageSchema(invalidSchema).issues);
+        expect(codes).toContain("step_output_unresolved");
+        expect(codes).toContain("output_duplicate");
+        expect(codes).toContain("output_invalid");
+        expect(codes).toContain("on_error_invalid");
+        expect(codes).toContain("when_none_invalid");
+        expect(codes).toContain("source_scope_unknown");
+        expect(codes).toContain("trigger_requires_keyed_leaf");
       });
     });
 

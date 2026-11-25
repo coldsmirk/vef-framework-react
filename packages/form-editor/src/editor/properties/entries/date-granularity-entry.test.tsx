@@ -103,9 +103,13 @@ describe("DateGranularityEntry", () => {
             trigger: { kind: "load" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "period",
-                value: { kind: "literal", value: "2026-04-15" }
+                type: "set_fields",
+                assignments: [
+                  {
+                    targetKey: "period",
+                    value: { kind: "literal", value: "2026-04-15" }
+                  }
+                ]
               }
             ]
           }
@@ -185,9 +189,13 @@ describe("DateGranularityEntry", () => {
       value: { kind: "literal", value: "" }
     });
     expect(updated?.linkage?.rules?.[0]?.actions[0]).toEqual({
-      type: "set_field",
-      targetKey: "period",
-      value: { kind: "literal", value: "" }
+      type: "set_fields",
+      assignments: [
+        {
+          targetKey: "period",
+          value: { kind: "literal", value: "" }
+        }
+      ]
     });
     expect(controls?.getPastLength()).toBe(1);
 

@@ -6,7 +6,7 @@ import { useDeferredValue, useMemo, useRef } from "react";
 
 import { validateLinkageSchema } from "../../../../engine/linkage";
 import { findScope } from "../../../../engine/schema/walk";
-import { collectSourceCandidates, getDataSourceOptions, getSourceFieldOptions } from "./options";
+import { collectSourceCandidates, getDataSourceOptions, getSourceFieldOptions, getTargetFieldOptions } from "./options";
 import { groupIssuesByRule, stabilizeIssueBuckets } from "./rule-diagnostics";
 import { useStableOptions } from "./use-stable-options";
 
@@ -14,10 +14,14 @@ const ROOT_SCOPE_KEY = "";
 
 export interface LinkageEditorModel {
   /**
-   * Same-scope keyed-field options — the condition source and `set_field` target
-   * picker share this list. Stable identity (see {@link useStableOptions}).
+   * Same-scope keyed-field options for condition sources.
    */
   fieldOptions: SourceFieldOption[];
+  /**
+   * Same-scope writable keyed-field options for `set_fields` targets (excludes
+   * non-writable field types such as `upload`).
+   */
+  targetOptions: SourceFieldOption[];
   /**
    * The form's named data sources, for a `refresh_data_source` action.
    */
@@ -69,18 +73,22 @@ export function useLinkageEditorModel(args: {
     [deferredLayer, nodeId]
   );
 
-  const fieldOptions = useStableOptions(useMemo(
-    () => getSourceFieldOptions({
-      components: collectSourceCandidates(deferredLayer, candidateScope => candidateScope.join("/") === scopeKey)
-    }),
+  const candidates = useMemo(
+    () => collectSourceCandidates(deferredLayer, candidateScope => candidateScope.join("/") === scopeKey),
     [deferredLayer, scopeKey]
+  );
+
+  const fieldOptions = useStableOptions(useMemo(
+    () => getSourceFieldOptions({ components: candidates }),
+    [candidates]
+  ));
+
+  const targetOptions = useStableOptions(useMemo(
+    () => getTargetFieldOptions({ components: candidates }),
+    [candidates]
   ));
 
   const dataSourceOptions = useMemo(() => getDataSourceOptions(dataSources), [dataSources]);
-  // Bucket identities are reconciled against the previous run so an
-  // issue-carrying RuleCard's memo survives unrelated edits. The render-phase
-  // ref write is safe for the same reason as useStableOptions: stabilizing is
-  // idempotent under self-composition.
   const issuesByRuleRef = useRef<Map<string, ValidationIssue[]>>(undefined);
   const issuesByRule = useMemo(
     () => stabilizeIssueBuckets(
@@ -94,6 +102,7 @@ export function useLinkageEditorModel(args: {
 
   return {
     fieldOptions,
+    targetOptions,
     dataSourceOptions,
     issuesByRule
   };

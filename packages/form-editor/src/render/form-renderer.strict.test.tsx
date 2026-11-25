@@ -10,14 +10,6 @@ import { createDefaultRegistry } from "../engine/registry/defaults";
 import { RegistryProvider } from "../store/engine-provider";
 import { FormRenderer } from "./form-renderer";
 
-/**
- * StrictMode smoke coverage. The runtime leans on render-phase ref writes
- * (`stabilizeStateMap`'s prev map, the effect lane's edge trackers, the subform
- * row-key list) and on effects that React 19 StrictMode double-invokes — these
- * specs pin that a double-invoked mount neither fires condition effects nor
- * duplicates lifecycle effects, and that the form still behaves.
- */
-
 function field(key: string, overrides: Partial<TextfieldField> = {}): TextfieldField {
   return {
     id: `Field_${key}`,
@@ -48,7 +40,7 @@ function renderStrict(ui: ReactNode): void {
 
 describe("FormRenderer under StrictMode", () => {
   it("does not fire a condition effect already true on mount", () => {
-    const dispatchEffect = vi.fn();
+    const notify = vi.fn();
     const schema = stack(
       field("watcher", {
         linkage: {
@@ -70,28 +62,27 @@ describe("FormRenderer under StrictMode", () => {
       })
     );
 
-    renderStrict(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+    renderStrict(<FormRenderer schema={schema} services={{ notify }} />);
 
-    expect(dispatchEffect).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("does not fire an always-retriggered expression rule on mount", () => {
-    // The opaque (expression) condition has no tracked source keys; the
-    // StrictMode double-invoked detection effect must read the unchanged
-    // `values` reference as "no value change" — before the value-diff fix the
-    // second run treated the null signature as always-changed and fired.
-    const dispatchEffect = vi.fn();
+    const notify = vi.fn();
     const schema = stack(
       field("watcher", {
         linkage: {
           rules: [
             {
               id: "R1",
-              trigger: { kind: "condition", condition: { kind: "expression", source: "true" } },
+              trigger: {
+                kind: "condition",
+                retrigger: "always",
+                condition: { kind: "expression", source: "true" }
+              },
               actions: [
                 {
                   type: "alert",
-                  retrigger: "always",
                   message: { kind: "literal", value: "hi" }
                 }
               ]
@@ -101,13 +92,13 @@ describe("FormRenderer under StrictMode", () => {
       })
     );
 
-    renderStrict(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+    renderStrict(<FormRenderer schema={schema} services={{ notify }} />);
 
-    expect(dispatchEffect).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("fires the load lifecycle effect exactly once", async () => {
-    const dispatchEffect = vi.fn();
+    const notify = vi.fn();
     const schema: FormSchema = {
       ...stack(field("name")),
       linkage: {
@@ -121,10 +112,10 @@ describe("FormRenderer under StrictMode", () => {
       }
     };
 
-    renderStrict(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+    renderStrict(<FormRenderer schema={schema} services={{ notify }} />);
 
     await waitFor(() => {
-      expect(dispatchEffect).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -141,7 +132,7 @@ describe("FormRenderer under StrictMode", () => {
 
   it("fires an edge effect exactly once per rising transition", async () => {
     const user = userEvent.setup();
-    const dispatchEffect = vi.fn();
+    const notify = vi.fn();
     const schema = stack(
       field("trigger"),
       field("watcher", {
@@ -164,11 +155,10 @@ describe("FormRenderer under StrictMode", () => {
       })
     );
 
-    renderStrict(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+    renderStrict(<FormRenderer schema={schema} services={{ notify }} />);
 
-    // "a" raises the edge once; "b" keeps the condition true with no new edge.
     await user.type(screen.getByRole("textbox", { name: "trigger" }), "ab");
 
-    expect(dispatchEffect).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
   });
 });

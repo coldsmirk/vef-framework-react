@@ -354,11 +354,11 @@ function renderSurface(viewMode: EditorViewMode, schema: FormSchema, device: Pre
             // screen; a bare mobile preview elsewhere keeps native behavior.
             <FormRenderer
               codeSetQueryFn={runtime.codeSetQueryFn}
-              dataSourceResolver={runtime.dataSourceResolver}
               device={device}
               evaluationContext={runtime.evaluationContext}
               evaluators={runtime.evaluators}
               schema={schema}
+              services={runtime.services}
             />
           )
         : null}

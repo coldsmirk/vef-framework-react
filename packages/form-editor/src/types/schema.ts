@@ -265,7 +265,7 @@ export interface CodeSetOptionSource {
  * reference to a form-global data source, an inline remote request, or a host
  * data dictionary. Static and `ref`-to-static resolve synchronously from the
  * schema; `remote` (and `ref`-to-remote) resolve through the host-injected
- * {@link DataSourceResolver}; `codeSet` through the host's
+ * `FormServices.request`; `codeSet` through the host's
  * {@link CodeSetQueryFn}.
  */
 export type FieldOptionSource = StaticOptionSource | RefOptionSource | RemoteOptionSource | CodeSetOptionSource;

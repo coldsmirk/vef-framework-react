@@ -1414,8 +1414,8 @@ describe("validateSchema", () => {
   });
 
   describe("when a half-configured rule round-trips through export → import", () => {
-    it("stays valid with warnings only for an empty set_field target", () => {
-      // The editor seeds `set_field` with targetKey "" — exporting that state
+    it("stays valid with warnings only for an empty set_fields target", () => {
+      // The editor seeds `set_fields` with targetKey "" — exporting that state
       // and importing it back must succeed, surfacing the gap as a warning.
       const candidate = schema([
         {
@@ -1429,9 +1429,8 @@ describe("validateSchema", () => {
                 trigger: { kind: "change" },
                 actions: [
                   {
-                    type: "set_field",
-                    targetKey: "",
-                    value: { kind: "literal", value: "" }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
                   }
                 ]
               }

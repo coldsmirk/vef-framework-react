@@ -15,10 +15,28 @@ import type { Block, FormField, LabelPosition } from "./schema";
  * Keyed fields receive the current value and a setter; non-keyed fields
  * receive `undefined` and a no-op setter.
  */
+/**
+ * How a keyed field confirms user input for the `commit` trigger:
+ *
+ * - `"change"` (default) — every user value change confirms immediately
+ * (selects, radios, checkboxes, dates, switches, uploads).
+ * - `"entry"` — text / numeric inputs confirm on Enter (single-line, outside
+ * IME composition) or on blur when the value differs from the last confirmed
+ * value (single-line and multi-line).
+ */
+export type FieldCommitMode = "entry" | "change";
+
 export interface FieldComponentProps<TField extends FormField = FormField, TValue = unknown> {
   field: TField;
   value: TValue;
   onChange: (value: TValue) => void;
+  /**
+   * Fired when the user confirms input on a field whose {@link FieldDefinitionConfig.commit}
+   * is `"entry"` (Enter outside IME composition for single-line inputs, or blur
+   * when the value changed since the last confirmation). Provided by the runtime
+   * when the field listens to the `commit` trigger.
+   */
+  onCommit?: () => void;
   errors?: string[];
   /**
    * Stable DOM id derived from `field.id`, used for label `htmlFor`.
@@ -83,6 +101,11 @@ export interface FieldDefinitionConfig {
    * Whether the field needs a unique data-binding `key`.
    */
   keyed: boolean;
+  /**
+   * How user edits confirm for the `commit` linkage trigger. Defaults to
+   * `"change"`; set `"entry"` on text and numeric inputs.
+   */
+  commit?: FieldCommitMode;
   /**
    * Lucide icon name rendered in the palette card and properties header. Typed
    * against the components package's icon union so call sites stay cast-free.

@@ -8,27 +8,28 @@ import type { DynamicValue } from "./dynamic-value";
  * is a single {@link LinkageTrigger} paired with an ordered list of
  * {@link FieldLinkageAction}s — one uniform shape that subsumes both classic
  * "linkage" (a value condition drives a state change) and "events" (a field /
- * form moment drives a side effect). An event is simply a rule whose trigger is
- * an edge instead of a value condition.
+ * form moment drives an ordered action sequence).
  *
  * The model is intentionally recursive and orthogonal:
  *
  * - **Condition** is a discriminated union of three kinds — `leaf`, `group`,
  * `expression` — that compose freely. A leaf evaluates a single operator
- * against one source field; a group joins children with `all` / `any`
+ * against one source path; a group joins children with `all` / `any`
  * logic; an expression is plain JavaScript run through the default
  * `new Function` evaluator or a host-supplied evaluator override.
- * - **Trigger** wraps a condition (a *level* signal) or names an *edge* — a
- * field event (`change` / `focus` / `blur` / `click`) or a form lifecycle
- * moment (`load` / `beforeSubmit` / `afterSubmit`).
+ * - **Trigger** wraps a condition (a *level* signal, with rule-level
+ * {@link ConditionRetrigger}) or names an *edge* — a field event
+ * (`change` / `commit` / `focus` / `blur` / `click`) or a form lifecycle moment
+ * (`load` / `beforeSubmit` / `afterSubmit`), optionally guarded by `when`.
  * - **Action** is one of two families: **state** actions (`show` / `hide` /
  * ... / `assign` / `script`) that derive a field's runtime state, and
- * **effect** actions (`alert` / `set_field` / ...) that fire side effects.
+ * **effect** actions (`api_call` / `select_record` / `set_fields` / ...) that
+ * run sequentially in a rule's action sequence, passing results forward through
+ * `$steps.<output>`.
  *
- * The framework ships the JSON shape, recursion, and default runtime
- * evaluators. Expression evaluation, script evaluation, and side-effect
- * dispatch are still pluggable via {@link LinkageEvaluators} so hosts can swap
- * in their own expression engine, script sandbox, or effect runtime.
+ * Expression and script evaluation remain pluggable via
+ * {@link LinkageEvaluators}; external I/O (`request`, `navigate`, `notify`) is
+ * injected through {@link FormServices}.
  */
 
 /**
@@ -103,49 +104,44 @@ export type LinkageCondition
     | LinkageConditionExpression;
 
 /**
+ * Field-scoped edge triggers dispatched from a field's own interactions.
+ */
+export type FieldEventKind = "change" | "commit" | "focus" | "blur" | "click";
+
+/**
+ * Form-scoped lifecycle edge triggers.
+ */
+export type FormEventKind = "load" | "beforeSubmit" | "afterSubmit";
+
+/**
+ * How a `condition`-triggered rule's effect sequence re-fires as values change.
+ * Configured on the trigger (one rule is one trigger unit; use two rules when
+ * different retrigger policies are needed).
+ *
+ * - `"edge"` (default) — run once on the condition's false→true rising edge.
+ * - `"always"` — re-run whenever the condition keeps holding and a field the
+ * condition depends on changes (or any value changes for opaque expression
+ * conditions).
+ */
+export type ConditionRetrigger = "edge" | "always";
+
+/**
  * What makes a rule fire.
  *
  * - `condition` is a **level** signal: it is continuously true or false as
  * values change. It is the only trigger that feeds the pure state lane
- * ({@link "../engine/linkage/evaluator"!evaluateLinkage}); its false→true rising
- * edge also drives effect actions, each of which tunes its own re-firing via
- * {@link ConditionRetrigger}.
+ * ({@link "../engine/linkage/evaluator"!evaluateLinkage}); its rising edge (or
+ * tracked source changes when `retrigger: "always"`) runs the rule's effect
+ * sequence.
  * - The remaining kinds are **edges** that pulse once when they happen — field
- * events (`change` / `focus` / `blur` / `click`) and form lifecycle moments
- * (`load` / `beforeSubmit` / `afterSubmit`). They never derive durable state;
- * they drive the side-effect lane only.
- *
- * This single dimension is what unifies "linkage" and "events": an event is a
- * rule with an edge trigger and no value to compare against.
+ * events ({@link FieldEventKind}) and form lifecycle moments
+ * ({@link FormEventKind}). An optional `when` guard is evaluated at trigger
+ * time against the rule's value scope and evaluation context; if false, the
+ * sequence does not run.
  */
 export type LinkageTrigger
-  = | { kind: "condition"; condition: LinkageCondition }
-    | { kind: "change" }
-    | { kind: "focus" }
-    | { kind: "blur" }
-    | { kind: "click" }
-    | { kind: "load" }
-    | { kind: "beforeSubmit" }
-    | { kind: "afterSubmit" };
-
-/**
- * How a single **effect** action re-fires under a `condition` trigger as values
- * change. Configured per effect action (not on the trigger) so one rule can mix
- * a re-firing `alert` with a once-only `api_call`. Ignored under an edge trigger
- * (`change` / `click` / ...), which already pulses on every event, and on state
- * actions, which are level-derived every render regardless.
- *
- * - `"edge"` (default) — fire once on the condition's false→true rising edge.
- * Entering the condition triggers the effect; it then stays quiet while the
- * condition keeps holding. This is the standard side-effect semantic and
- * prevents `api_call` / `navigate` / `submit` spam on every keystroke.
- * - `"always"` — fire every time the condition is true *and* a field the
- * condition depends on changes (e.g. "re-warn on each edit while the value is
- * out of range"). An unrelated field changing does not re-fire it. Expression
- * conditions have opaque dependencies, so they fall back to firing on any
- * value change while the condition holds.
- */
-export type ConditionRetrigger = "edge" | "always";
+  = | { kind: "condition"; condition: LinkageCondition; retrigger?: ConditionRetrigger }
+    | { kind: FieldEventKind | FormEventKind; when?: LinkageCondition };
 
 /**
  * Discriminator extracted from {@link LinkageTrigger}.
@@ -163,9 +159,8 @@ export interface FieldLinkageDefaults {
 }
 
 /**
- * Value used by an action that writes data (`assign`, `set_field`, `alert`,
- * `navigate`). A literal carries the value verbatim; an expression is computed
- * at runtime via the injected evaluator.
+ * Value used by an action that reads or writes dynamic data (`assign`,
+ * `set_fields`, `set_variable`, `select_record`, `alert`, `navigate`).
  */
 export type LinkageActionValue = DynamicValue;
 
@@ -173,6 +168,40 @@ export type LinkageActionValue = DynamicValue;
  * Severity passed to an `alert` effect, mirroring antd's alert/message levels.
  */
 export type LinkageAlertLevel = "info" | "success" | "warning" | "error";
+
+/**
+ * Failure policy for a single step in an effect sequence.
+ *
+ * - `"stop"` (default) — abort the rest of the sequence when the step fails.
+ * - `"continue"` — record `undefined` as the step's output (if named) and
+ * continue to the next step.
+ */
+export type ActionErrorPolicy = "stop" | "continue";
+
+/**
+ * One target-field write inside a `set_fields` action.
+ */
+export interface FieldAssignment {
+  targetKey: string;
+  value: DynamicValue;
+}
+
+/**
+ * One column displayed in the `select_record` picker when multiple records are
+ * returned. `path` walks own properties of each candidate record.
+ */
+export interface SelectRecordColumn {
+  path: string;
+  label: string;
+}
+
+/**
+ * What `select_record` does when zero records match or the user cancels the
+ * picker: `"stop"` (default) terminates the sequence; `"continue"` stores
+ * `undefined` under `$steps.<output>` and moves on (letting subsequent
+ * `set_fields` clear target fields).
+ */
+export type SelectRecordWhenNone = "continue" | "stop";
 
 /**
  * **State actions** derive a field's runtime state and are *level / continuous*:
@@ -190,34 +219,31 @@ export type StateAction
     | { type: "script"; source: string };
 
 /**
- * **Effect actions** are *edge-fired side effects*: they run once when a trigger
- * fires (a condition's false→true rising edge, a field event, or a form
- * lifecycle moment). They never derive durable state — state must stay
- * reconstructible from values — so writing another field is `set_field` (an
- * imperative one-shot write), distinct from the continuous self-`assign`.
- *
- * `set_field` / `set_variable` / `refresh_data_source` / `submit` / `reset` are
- * handled natively by the runtime (it owns the form api, the `$vars` store, and
- * the data-source refresh versions); `alert` / `api_call` / `navigate` are
- * delegated to the host's {@link LinkageEvaluators.dispatchEffect} (a no-op by
- * default), mirroring the `DataSourceResolver` injection seam.
- *
- * Every effect carries an optional {@link ConditionRetrigger} (`retrigger`)
- * controlling how it re-fires under a `condition` trigger; it defaults to
- * `"edge"` and is ignored under edge triggers. Intersecting it onto the union
- * (rather than repeating it per member) keeps the `type` discriminant — and thus
- * narrowing — intact.
+ * **Effect actions** run sequentially within a rule when its trigger fires.
+ * Synchronous sequences finish in the same tick; async steps (`api_call`,
+ * multi-record `select_record`, `submit`) await completion before advancing.
+ * Named outputs (`output`) publish into `$steps.<output>` for later steps in
+ * the same rule.
  */
 export type EffectAction = (
-  | { type: "alert"; level?: LinkageAlertLevel; message: LinkageActionValue }
-  | { type: "set_field"; targetKey: string; value: LinkageActionValue }
-  | { type: "set_variable"; variable: string; value: LinkageActionValue }
+  | { type: "set_fields"; assignments: FieldAssignment[] }
+  | { type: "set_variable"; variable: string; value: DynamicValue }
+  | { type: "api_call"; request: RemoteDataSourceRequest; output?: string }
+  | {
+    type: "select_record";
+    source: DynamicValue;
+    output: string;
+    title?: string;
+    columns?: SelectRecordColumn[];
+    emptyMessage?: string;
+    whenNone?: SelectRecordWhenNone;
+  }
   | { type: "refresh_data_source"; dataSourceId: string }
-  | { type: "api_call"; request: RemoteDataSourceRequest }
-  | { type: "navigate"; to: LinkageActionValue }
+  | { type: "alert"; level?: LinkageAlertLevel; message: DynamicValue }
+  | { type: "navigate"; to: DynamicValue }
   | { type: "submit" }
   | { type: "reset" }
-) & { retrigger?: ConditionRetrigger };
+) & { onError?: ActionErrorPolicy };
 
 /**
  * The unified action vocabulary shared by conditions and events. A rule carries
@@ -270,26 +296,21 @@ export interface FieldLinkage {
 }
 
 /**
- * Context handed to the host's {@link LinkageEvaluators.dispatchEffect} so it
- * can render an alert, fire an API call, or navigate using the values present
- * when the effect fired.
+ * Host capabilities injected into `FormRenderer` and `FormEditor` (and through
+ * `ApprovalPlugins.services`), unifying transport, navigation, and notice
+ * handling:
+ *
+ * - `request` serves both remote option sources (the framework maps returned
+ * arrays or paginated `.items` using `RemoteOptionMapping`) and `api_call`
+ * actions, with cooperative cancellation via `options.signal`.
+ * - `navigate` performs route navigation for `navigate` actions.
+ * - `notify` displays `alert` actions and `select_record.emptyMessage`; when
+ * omitted, the runtime falls back to the framework message API.
  */
-export interface EffectDispatchContext {
-  /**
-   * The form values in the firing rule's value scope at the moment the effect
-   * ran (a subform row's effect sees that row's record, not the root form).
-   */
-  values: Record<string, unknown>;
-  /**
-   * Resolve a literal / expression action value against {@link values}.
-   */
-  resolveValue: (value: LinkageActionValue) => unknown;
-  /**
-   * Resolve an `api_call` request's bound parameters against {@link values},
-   * the same way the option resolver's request is resolved — so a handler
-   * receives plain data and never has to evaluate an expression itself.
-   */
-  resolveRequest: (request: RemoteDataSourceRequest) => ResolvedDataSourceRequest;
+export interface FormServices {
+  request?: (request: ResolvedDataSourceRequest, options: { signal: AbortSignal }) => Promise<unknown>;
+  navigate?: (to: string) => void;
+  notify?: (level: LinkageAlertLevel, text: string) => void;
 }
 
 /**
@@ -344,6 +365,12 @@ export interface EvaluationContext {
    * variables.
    */
   globals?: Record<string, unknown>;
+  /**
+   * Outputs produced by earlier steps of the currently running effect sequence
+   * (`$steps`). Populated only while an action sequence executes; absent in
+   * conditions, guards, state actions, and remote option-source params.
+   */
+  steps?: Record<string, unknown>;
 }
 
 /**
@@ -370,14 +397,14 @@ export interface LinkageContextSource {
 }
 
 /**
- * Pluggable evaluators for the dynamic parts of the model. Expression and
- * script slots default to plain-JavaScript `new Function` compilation, and
- * `dispatchEffect` defaults to a no-op. Hosts override any slot to swap in
- * their own expression engine, script sandbox, or effect runtime.
+ * Pluggable pure evaluators for the dynamic parts of the model. Expression and
+ * script slots default to plain-JavaScript `new Function` compilation; hosts
+ * override any slot to swap in their own expression engine or script sandbox.
+ * Side-effect capabilities live in {@link FormServices}, not here.
  *
  * The optional `context` argument carries the {@link EvaluationContext}
- * (`$vars` / `$user` / `$node` / `$applicant` / `$globals`); a host evaluator
- * may ignore it.
+ * (`$vars` / `$user` / `$node` / `$applicant` / `$globals` / `$steps`); a host
+ * evaluator may ignore it.
  */
 export interface LinkageEvaluators {
   /**
@@ -396,13 +423,4 @@ export interface LinkageEvaluators {
    * computed value. Used by every action value with `{ kind: "expression" }`.
    */
   evaluateAssignExpression?: (source: string, values: Record<string, unknown>, context?: EvaluationContext) => unknown;
-  /**
-   * Handles the host-delegated effect actions (`alert` / `api_call` /
-   * `navigate`). The runtime handles `set_field` / `set_variable` /
-   * `refresh_data_source` / `submit` / `reset` itself and never routes them
-   * here. Defaults to a no-op so a form with effect actions
-   * degrades gracefully when the host wires none — exactly as a `remote` data
-   * source resolves to an empty list without a resolver.
-   */
-  dispatchEffect?: (action: EffectAction, context: EffectDispatchContext) => void | Promise<void>;
 }

@@ -8,7 +8,7 @@ import { Button } from "@vef-framework-react/components";
 import { useLatest } from "@vef-framework-react/hooks";
 import { memo, useCallback } from "react";
 
-import { isStateAction } from "../../../../engine/linkage";
+import { isEffectAction, isStateAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { ActionsEditor } from "./actions-editor";
 import { conditionHasAuthoredContent, reconcileRuleTrigger } from "./mutators";
@@ -60,7 +60,7 @@ export interface RuleListEditorProps {
    */
   selfKey?: string;
   /**
-   * Keyed fields offered as a `set_field` target — includes the rule's own
+   * Keyed fields offered as `set_fields` targets — includes the rule's own
    * field (writing one's own value, e.g. normalising on blur, is legitimate).
    */
   targetOptions: SourceFieldOption[];
@@ -236,11 +236,10 @@ const RuleCardBase: FC<RuleCardProps> = ({
   onRemove,
   onTriggerChange
 }) => {
-  // Leaving a `condition` trigger discards its condition tree and strips any
-  // state actions (see `reconcileRuleTrigger`) — confirm when that loses real
-  // work. Edge triggers carry no payload, so switching between them is instant.
-  const confirmKindSwitch = rule.trigger.kind === "condition"
-    && (conditionHasAuthoredContent(rule.trigger.condition) || rule.actions.some(action => isStateAction(action)));
+  const confirmKindSwitch = (rule.trigger.kind === "condition"
+    && (conditionHasAuthoredContent(rule.trigger.condition) || rule.actions.some(action => isStateAction(action))))
+  || (rule.trigger.kind !== "condition" && rule.trigger.when !== undefined && conditionHasAuthoredContent(rule.trigger.when));
+  const hasEffectActions = rule.actions.some(action => isEffectAction(action));
 
   return (
     // A rule card is a composite of related controls (trigger + actions +
@@ -268,6 +267,7 @@ const RuleCardBase: FC<RuleCardProps> = ({
       <div css={ruleBodyCss}>
         <TriggerEditor
           confirmKindSwitch={confirmKindSwitch}
+          hasEffectActions={hasEffectActions}
           selfKey={selfKey}
           sourceOptions={sourceOptions}
           trigger={rule.trigger}

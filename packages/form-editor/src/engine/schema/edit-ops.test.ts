@@ -948,7 +948,7 @@ describe("edit-ops", () => {
   });
 
   describe("cloneBlock linkage key remap", () => {
-    it("remaps a set_field action's targetKey to the reallocated key", () => {
+    it("remaps a set_fields action's targetKey, reference path, and event when guard to the reallocated key", () => {
       const a = tf("fa", "a");
       const b = tf("fb", "b");
 
@@ -956,12 +956,18 @@ describe("edit-ops", () => {
         rules: [
           {
             id: "Rule_1",
-            trigger: { kind: "change" },
+            trigger: {
+              kind: "commit",
+              when: {
+                kind: "leaf",
+                sourceKey: "a",
+                operator: "notEmpty"
+              }
+            },
             actions: [
               {
-                type: "set_field",
-                targetKey: "a",
-                value: { kind: "literal", value: 1 }
+                type: "set_fields",
+                assignments: [{ targetKey: "a", value: { kind: "reference", path: "$form.a" } }]
               }
             ]
           }
@@ -978,7 +984,14 @@ describe("edit-ops", () => {
       const clone = cloneBlock(section, base => `${base}_2`) as SectionNode;
       const clonedB = clone.children[1] as TextfieldField;
 
-      expect(clonedB.linkage?.rules?.[0]?.actions[0]).toMatchObject({ type: "set_field", targetKey: "a_2" });
+      expect(clonedB.linkage?.rules?.[0]?.trigger).toMatchObject({
+        kind: "commit",
+        when: { sourceKey: "a_2" }
+      });
+      expect(clonedB.linkage?.rules?.[0]?.actions[0]).toMatchObject({
+        type: "set_fields",
+        assignments: [{ targetKey: "a_2", value: { kind: "reference", path: "$form.a_2" } }]
+      });
     });
   });
 

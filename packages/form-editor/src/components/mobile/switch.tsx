@@ -5,6 +5,7 @@ import type { FieldComponentProps, SwitchField } from "../../types";
 import { css } from "@emotion/react";
 import Switch from "antd-mobile/es/components/switch";
 
+import { FieldBusyIndicator } from "../../render/parts/field-busy-indicator";
 import { FieldFooter } from "../../render/parts/field-shell";
 import { Label } from "../../render/parts/label";
 
@@ -62,6 +63,8 @@ export const MobileSwitch: FC<FieldComponentProps<SwitchField, boolean>> = ({
       <Label aria-hidden position="right" required={required}>
         {switchLabel(field)}
       </Label>
+
+      <FieldBusyIndicator inline />
     </div>
 
     <FieldFooter errors={errors} helperText={field.helperText} />

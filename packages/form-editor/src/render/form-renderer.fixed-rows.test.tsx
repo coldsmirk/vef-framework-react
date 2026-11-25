@@ -5,10 +5,10 @@ import type {
   Block,
   ButtonField,
   CodeSetQueryFn,
-  DataSourceResolver,
   FieldOption,
   FormDataSource,
   FormSchema,
+  FormServices,
   LinkageEvaluators,
   SubformNode,
   TextfieldField
@@ -278,7 +278,7 @@ describe("FormRenderer fixed-row subform", () => {
     it("rebuilds rows on bound-parameter change while keeping filled cells of surviving items", async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
-      const resolve = vi.fn((req: { params?: Record<string, unknown> }): Promise<FieldOption[]> => Promise.resolve(
+      const request = vi.fn((req: { params?: Record<string, unknown> }): Promise<FieldOption[]> => Promise.resolve(
         req.params?.deptId === "B"
           ? [
               { label: "条款二（B科版）", value: "c2" },
@@ -289,14 +289,14 @@ describe("FormRenderer fixed-row subform", () => {
               { label: "条款二", value: "c2" }
             ]
       ));
-      const resolver: DataSourceResolver = { resolve };
+      const services: FormServices = { request };
 
       renderRuntime(
         <FormRenderer
-          dataSourceResolver={resolver}
           defaultValues={{ deptId: "A" }}
           evaluators={evaluators}
           schema={schemaOf([makeField("deptId", { label: "科室" }), boundRemoteSubform(), submitButton()])}
+          services={services}
           onSubmit={onSubmit}
         />
       );
@@ -328,17 +328,17 @@ describe("FormRenderer fixed-row subform", () => {
       });
     });
 
-    it("locks onto stored non-empty defaultValues without calling the resolver even when bound params change", async () => {
+    it("locks onto stored non-empty defaultValues without calling the request service even when bound params change", async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
-      const resolve = vi.fn().mockResolvedValue([{ label: "线上新条款", value: "live" }]);
-      const resolver: DataSourceResolver = { resolve };
+      const request = vi.fn().mockResolvedValue([{ label: "线上新条款", value: "live" }]);
+      const services: FormServices = { request };
 
       renderRuntime(
         <FormRenderer
-          dataSourceResolver={resolver}
           evaluators={evaluators}
           schema={schemaOf([makeField("deptId", { label: "科室" }), boundRemoteSubform(), submitButton()])}
+          services={services}
           defaultValues={{
             deptId: "A",
             checks: [{ item: { value: "old_1", label: "历史快照条款" }, note: "原记录" }]
@@ -349,13 +349,13 @@ describe("FormRenderer fixed-row subform", () => {
 
       expect(screen.getByText("历史快照条款")).toBeInTheDocument();
       expect(screen.getByDisplayValue("原记录")).toBeInTheDocument();
-      expect(resolve).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
 
       const deptInput = screen.getByRole("textbox", { name: "科室" });
       await user.clear(deptInput);
       await user.type(deptInput, "B");
 
-      expect(resolve).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
       expect(screen.getByText("历史快照条款")).toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "提交" }));
@@ -371,13 +371,13 @@ describe("FormRenderer fixed-row subform", () => {
       const onSubmit = vi.fn();
       const deferred = Promise.withResolvers<FieldOption[]>();
       const warn = vi.spyOn(console, "warn").mockImplementation(silence);
-      const resolve = vi.fn(() => deferred.promise);
+      const request = vi.fn(() => deferred.promise);
 
       renderRuntime(
         <FormRenderer
-          dataSourceResolver={{ resolve }}
           evaluators={evaluators}
           schema={schemaOf([boundRemoteSubform(true), submitButton()])}
+          services={{ request }}
           onSubmit={onSubmit}
         />
       );
@@ -401,13 +401,13 @@ describe("FormRenderer fixed-row subform", () => {
     it("blocks submission when required is true and the resolved source is empty, and allows submission when optional", async () => {
       const user = userEvent.setup();
       const onRequiredSubmit = vi.fn();
-      const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([]) };
+      const services: FormServices = { request: vi.fn().mockResolvedValue([]) };
 
       const { unmount } = renderRuntimeWithUnmount(
         <FormRenderer
-          dataSourceResolver={resolver}
           evaluators={evaluators}
           schema={schemaOf([boundRemoteSubform(true), submitButton()])}
+          services={services}
           onSubmit={onRequiredSubmit}
         />
       );
@@ -425,9 +425,9 @@ describe("FormRenderer fixed-row subform", () => {
       const onOptionalSubmit = vi.fn();
       renderRuntime(
         <FormRenderer
-          dataSourceResolver={resolver}
           evaluators={evaluators}
           schema={schemaOf([boundRemoteSubform(false), submitButton()])}
+          services={services}
           onSubmit={onOptionalSubmit}
         />
       );

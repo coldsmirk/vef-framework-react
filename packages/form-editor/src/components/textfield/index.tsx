@@ -18,6 +18,7 @@ import {
   requiredEntry,
   sizeEntry
 } from "../field-entries";
+import { useEntryCommit } from "../use-entry-commit";
 
 /**
  * Renderer for the textfield. Reads `placeholder` and the optional
@@ -34,12 +35,21 @@ export const Textfield: FC<FieldComponentProps<TextfieldField, string>> = ({
   labelPosition,
   required,
   value = "",
-  onChange
+  onChange,
+  onCommit
 }) => {
   const cell = useFieldCell();
+  const entryCommit = useEntryCommit({
+    value,
+    onCommit,
+    commitOnEnter: true
+  });
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    onChange(event.target.value);
+    const next = event.target.value;
+
+    entryCommit.notifyUserChange(next);
+    onChange(next);
   };
 
   // Password mode masks the value via antd's `Input.Password`; both controls
@@ -66,7 +76,11 @@ export const Textfield: FC<FieldComponentProps<TextfieldField, string>> = ({
         size={field.size}
         status={errors?.length ? "error" : undefined}
         value={value}
+        onBlur={() => entryCommit.handleBlur(value)}
         onChange={handleChange}
+        onCompositionEnd={entryCommit.handleCompositionEnd}
+        onCompositionStart={entryCommit.handleCompositionStart}
+        onKeyDown={event => entryCommit.handleKeyDown(event, value)}
       />
     </FieldShell>
   );
@@ -158,6 +172,7 @@ export const textfieldDefinition: FieldDefinition = defineFieldDefinition<Textfi
     name: "文本框",
     group: "basic-input",
     keyed: true,
+    commit: "entry",
     icon: "type",
     // Returns type-specific defaults only. The store fills `id` / `key`
     // (`generateUniqueKey` gives each new textfield a unique data-binding key).

@@ -44,13 +44,14 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   const rules = linkage.rules ?? [];
 
   // Same-scope keyed leaf fields feed both the condition source and the
-  // `set_field` target — a container references the scope it RESIDES in (a
+  // `set_fields` target — a container references the scope it RESIDES in (a
   // subform node references its outer siblings; its template children open
   // their own scope), mirroring the validator's resolution.
   const {
     dataSourceOptions,
     fieldOptions,
-    issuesByRule
+    issuesByRule,
+    targetOptions
   } = useLinkageEditorModel({
     layer,
     nodeId: node.id,
@@ -96,7 +97,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
         noun="联动"
         rules={rules}
         sourceOptions={fieldOptions}
-        targetOptions={fieldOptions}
+        targetOptions={targetOptions}
         triggerKinds={triggerKinds}
         onChange={next => commit({ ...linkage, rules: next })}
       />

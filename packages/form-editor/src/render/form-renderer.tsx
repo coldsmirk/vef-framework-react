@@ -1,13 +1,12 @@
 import type { ReactElement, ReactNode, Ref, RefObject } from "react";
 
 import type { RuntimeFieldState } from "../engine/linkage";
-import type { EffectSinks, RefreshDataSource, RunEffects, SetVariable } from "../runtime/effects";
+import type { EffectSinks, KnownOptionsLookup, RefreshDataSource, ResetForm, RunSequences, SetVariable, SubmitForm } from "../runtime/effects";
 import type { RuntimeForm, RuntimeFormValues } from "../runtime/types";
 import type {
   Block,
   ChromeTabItem,
   CodeSetQueryFn,
-  DataSourceResolver,
   EvaluationContext,
   FieldLinkageRule,
   FieldPermission,
@@ -15,6 +14,7 @@ import type {
   FlexNode,
   FormField,
   FormSchema,
+  FormServices,
   GapScale,
   GridNode,
   KeyedFormField,
@@ -42,7 +42,7 @@ import {
   getFieldEventTriggerKinds,
   getFieldPermission,
   getLinkageSourceKeys,
-  getTriggerEffectActions,
+  getTriggerEffectSequences,
   isWritableFieldPermission
 } from "../engine/linkage";
 import { toRuntimeSchema } from "../engine/schema/presentation";
@@ -54,13 +54,15 @@ import {
   isTableColumnField
 } from "../engine/schema/subform";
 import { EditorIcon } from "../icons";
-import { dispatchFormEffects, useEffectDispatch } from "../runtime/effects";
+import { dispatchFormSequences, SequenceControllerProvider, useEffectDispatch } from "../runtime/effects";
+import { RecordSelectorController, RecordSelectorHost } from "../runtime/record-selector";
 import { resolveScopeValues } from "../runtime/resolve-scope-values";
 import { useRuntimeFieldState } from "../runtime/runtime-context";
 import { RuntimeStateController, SubformRowController } from "../runtime/runtime-state-controller";
-import { DeviceProvider, useContainerChrome, useDevice } from "../store/engine-provider";
+import { SequenceController } from "../runtime/sequence-controller";
+import { DeviceProvider, useContainerChrome, useDevice, useFieldRegistry } from "../store/engine-provider";
 import { CodeSetProvider } from "./code-set-context";
-import { DataSourceProvider } from "./data-source-context";
+import { DataSourceProvider, useKnownOptionsLookup } from "./data-source-context";
 import { FLEX_ALIGN_MAP, FLEX_JUSTIFY_MAP, flexSlotStyle } from "./flex-style";
 import { FormFieldRenderer } from "./form-field";
 import { gridCellStyle, gridColumnCount, gridContainerStyle } from "./grid-style";
@@ -121,10 +123,11 @@ export interface FormRendererProps {
    */
   evaluators?: LinkageEvaluators;
   /**
-   * Host-injected resolver for `remote` option sources. Falls back to a no-op
-   * (empty options) when omitted — static / ref-to-static sources never need it.
+   * Host-injected runtime services (`request`, `navigate`, `notify`). `request`
+   * backs both remote option sources and `api_call` actions; `notify` defaults
+   * to the framework message helpers when omitted.
    */
-  dataSourceResolver?: DataSourceResolver;
+  services?: FormServices;
   /**
    * Loads the data dictionaries `codeSet` option sources read — every one the
    * form references, in one call. Defaults to the application's
@@ -218,6 +221,11 @@ interface RenderCtx {
    * a bound parameter inside a repeated row must resolve against THAT row.
    */
   boundParams: boolean;
+  /**
+   * Per-form sequence coordinator, shared by the root scope and every subform
+   * row scope.
+   */
+  controller: SequenceController;
   disabled: boolean;
   /**
    * Renderer-instance prefix (React `useId`) for every field's DOM id. Two
@@ -246,6 +254,11 @@ interface RenderCtx {
   fieldPermissions: Record<string, FieldPermission> | undefined;
   form: RuntimeFormApi;
   /**
+   * Stable lookup for a selection field's already-known options, used when
+   * normalizing programmatic `set_fields` / `assign` writes.
+   */
+  getKnownOptions: KnownOptionsLookup;
+  /**
    * The form-level stack gap in pixels (from the schema's `gap`), used as the
    * gap a container body inherits when it sets no `gap`, and as the default gap
    * for flex / grid containers.
@@ -262,10 +275,36 @@ interface RenderCtx {
    */
   namePrefix: string;
   /**
-   * Renderer-owned effect sinks (`$vars` writes, data-source refreshes) the
-   * effect lane dispatches into, in every value scope.
+   * Stable ref to the host-injected {@link FormServices}, keeping `ctx`
+   * identity stable even when a host passes an inline `services={{...}}` literal.
+   */
+  servicesRef: RefObject<FormServices | undefined>;
+  /**
+   * Renderer-owned effect sinks (`$vars` writes, data-source refreshes, submit
+   * / reset gates, record picker) the effect lane dispatches into.
    */
   sinks: EffectSinks;
+}
+
+const FORM_LIFECYCLE_SCOPE_ID = "__form_lifecycle__";
+
+interface FormGateEntry {
+  rawHandleSubmit: RuntimeForm["handleSubmit"];
+  rawReset: RuntimeForm["reset"];
+  submitForm: SubmitForm;
+  submitFormWithArgs?: (submitArgs: Parameters<RuntimeForm["handleSubmit"]>) => Promise<void>;
+  resetForm: ResetForm;
+  abortAll: () => void;
+}
+
+const formGateRegistry = new WeakMap<object, FormGateEntry>();
+
+function KnownOptionsBridge({ lookupRef }: { lookupRef: RefObject<KnownOptionsLookup> }): null {
+  const lookup = useKnownOptionsLookup();
+
+  lookupRef.current = lookup;
+
+  return null;
 }
 
 /**
@@ -278,10 +317,12 @@ interface RuntimeArrayFieldApi {
 }
 
 function useRuntimeForm(
-  args: Pick<FormRendererProps, "defaultValues" | "disabled" | "evaluators" | "fieldPermissions" | "onSubmit"> & {
+  args: Pick<FormRendererProps, "defaultValues" | "disabled" | "evaluators" | "fieldPermissions" | "onSubmit" | "services"> & {
+    controller: SequenceController;
     runtimeSchema: RuntimeSchema;
     evaluationContext: EvaluationContext | undefined;
     formRef: RefObject<RuntimeForm | null>;
+    getKnownOptions: KnownOptionsLookup;
     sinks: EffectSinks;
   }
 ) {
@@ -294,23 +335,8 @@ function useRuntimeForm(
   return useForm({
     formId,
     defaultValues,
-    // The schema-driven submit gate (`validators.onSubmit` below) writes errors
-    // into fields that may never mount, and those errors can become stale when
-    // linkage later hides the field — nothing re-validates an unmounted field.
-    // TanStack's default `canSubmit` gate would then dead-lock the form (it
-    // bails BEFORE any validator re-runs). Letting the attempt through means
-    // every submit re-runs the full validation pipeline, which recomputes (and
-    // clears) the schema-driven errors; actual invalidity still blocks at the
-    // post-validation gates. Nothing in the runtime consumes `state.canSubmit`.
     canSubmitWhenInvalid: true,
     validators: {
-      // Submit-time validation must be schema-driven, not mount-driven: antd
-      // Tabs / Collapse mount panes lazily, so a required field in a
-      // never-activated pane has no mounted field validator. This form-level
-      // pass runs the same checks over every keyed field (root + subform rows)
-      // and maps failures into TanStack's per-field `fields` error channel —
-      // blocking submission now and surfacing on the field when its pane is
-      // visited. See `collectSubmitErrors` for the two-layer design.
       onSubmit: ({ value }) => {
         const fields = collectSubmitErrors({
           blocks: args.runtimeSchema.children,
@@ -327,32 +353,29 @@ function useRuntimeForm(
     },
     onSubmit: async ({ value }) => {
       const formRules = args.runtimeSchema.linkage?.rules;
-      // `formRef` holds the live form once mounted; the lifecycle effects need
-      // the React-augmented instance, not the bare TanStack submit `formApi`.
       const form = args.formRef.current;
 
-      // Form-scope lifecycle effects bracket the submission: `beforeSubmit`
-      // completes (including async host effects) before the host handler;
-      // `afterSubmit` runs only after the handler resolves.
+      // Form-scope lifecycle sequences bracket submission: `beforeSubmit`
+      // completes before the host handler and propagates step errors to block
+      // submission; `afterSubmit` runs only after the handler resolves.
       if (form) {
-        await dispatchFormEffects({
-          actions: getTriggerEffectActions(formRules, "beforeSubmit"),
+        await dispatchFormSequences({
+          controller: args.controller,
+          disabled: args.disabled ?? false,
           evaluators: args.evaluators,
           evaluationContext: args.evaluationContext,
           fieldPermissions: args.fieldPermissions,
           form,
+          getKnownOptions: args.getKnownOptions,
+          propagateErrors: true,
           schema: args.runtimeSchema,
+          scopeId: FORM_LIFECYCLE_SCOPE_ID,
+          sequences: getTriggerEffectSequences(formRules, "beforeSubmit"),
+          services: args.services,
           sinks: args.sinks
         });
       }
 
-      // Read the values AFTER the beforeSubmit effects, not the snapshot
-      // form-core captured for validation: `writeFieldValue` allocates a new
-      // values object, so a `set_field` at this trigger would otherwise land in
-      // the UI and never on the wire — and `getSubmitValues`, which reads the
-      // store live, would disagree with the pipeline it documents itself as
-      // mirroring. `value` stays the validation snapshot, which is correct:
-      // validation genuinely runs before these effects.
       const submitted = args.formRef.current?.store.state.values ?? value;
 
       await args.onSubmit?.(filterSubmitValues({
@@ -364,13 +387,19 @@ function useRuntimeForm(
       }));
 
       if (form) {
-        await dispatchFormEffects({
-          actions: getTriggerEffectActions(formRules, "afterSubmit"),
+        await dispatchFormSequences({
+          controller: args.controller,
+          disabled: args.disabled ?? false,
           evaluators: args.evaluators,
           evaluationContext: args.evaluationContext,
           fieldPermissions: args.fieldPermissions,
           form,
+          getKnownOptions: args.getKnownOptions,
+          propagateErrors: false,
           schema: args.runtimeSchema,
+          scopeId: FORM_LIFECYCLE_SCOPE_ID,
+          sequences: getTriggerEffectSequences(formRules, "afterSubmit"),
+          services: args.services,
           sinks: args.sinks
         });
       }
@@ -442,7 +471,7 @@ interface FormRendererInnerProps {
   disabled?: boolean;
   fieldPermissions?: Record<string, FieldPermission>;
   evaluators?: LinkageEvaluators;
-  dataSourceResolver?: DataSourceResolver;
+  services?: FormServices;
   codeSetQueryFn?: CodeSetQueryFn;
   evaluationContext?: EvaluationContext;
   onSubmit?: (values: RuntimeFormValues) => void | Promise<void>;
@@ -460,7 +489,6 @@ interface FormRendererInnerProps {
 function FormRendererInner({
   apiRef,
   codeSetQueryFn,
-  dataSourceResolver,
   defaultValues,
   disabled = false,
   evaluators,
@@ -468,30 +496,20 @@ function FormRendererInner({
   fieldPermissions,
   onSubmit,
   renderFieldExtra,
-  runtimeSchema
+  runtimeSchema,
+  services
 }: FormRendererInnerProps): ReactElement {
-  // Depend on the host context's individual slots, not the wrapper object: a host
-  // passing an inline `evaluationContext` would otherwise mint a new object every
-  // render, re-seeding `$vars` (clobbering `set_variable` writes) and churning
-  // `ctx` (a full field re-render) on every keystroke.
   const hostVariables = hostContext?.variables;
   const hostUser = hostContext?.user;
   const hostNode = hostContext?.node;
   const hostApplicant = hostContext?.applicant;
   const hostGlobals = hostContext?.globals;
 
-  // `$vars` is a reactive store seeded from the schema's variable defaults (with
-  // host overrides on top); a `set_variable` effect mutates it, and re-seeds
-  // whenever the seed changes (a new schema / host variables).
   const seededVariables = useMemo(
     () => { return { ...deriveEvaluationVariables(runtimeSchema), ...hostVariables }; },
     [runtimeSchema, hostVariables]
   );
   const [variables, setVariables] = useState(seededVariables);
-  // Re-seed only on an actual content change: a host passing an inline
-  // `evaluationContext.variables` object mints a new (deeply equal) seed every
-  // render, and an identity-keyed re-seed would clobber `set_variable` writes
-  // on each host re-render.
   const appliedSeedRef = useRef(seededVariables);
   useEffect(() => {
     if (isDeepEqual(appliedSeedRef.current, seededVariables)) {
@@ -501,23 +519,14 @@ function FormRendererInner({
     appliedSeedRef.current = seededVariables;
     setVariables(seededVariables);
   }, [seededVariables]);
+
   const setVariable = useCallback<SetVariable>(
     (name, value) => {
-      // Writing the value a variable already holds must keep the previous
-      // object: the `$vars` identity feeds the condition-effect detector's
-      // deps, so an unconditional spread would re-run it after every
-      // `set_variable` — with an opaque `always` rule, an infinite loop.
-      // Deep-equal (mirroring `set_field`'s no-op bail): an expression-
-      // resolved value may be a fresh but content-equal object, and treating
-      // that as a change would cascade a form-wide re-evaluation for nothing.
       setVariables(prev => isDeepEqual(prev[name], value) ? prev : { ...prev, [name]: value });
     },
     []
   );
 
-  // Data-source refresh nonce: a `refresh_data_source` effect bumps the version
-  // for a source id, and `useFieldOptions` folds it into its fetch deps, so every
-  // field referencing that source re-resolves through the resolver on demand.
   const [dataSourceVersions, setDataSourceVersions] = useState<Record<string, number>>({});
   const refreshDataSource = useCallback<RefreshDataSource>(
     id => {
@@ -528,9 +537,14 @@ function FormRendererInner({
     []
   );
 
-  // Whether any data-source parameter is bound to the form. Computed once per
-  // schema so a form that binds nothing keeps the scope provider's values
-  // subscription closed and its selects out of the keystroke re-render path.
+  const [sequenceController] = useState(() => new SequenceController());
+  const [recordSelector] = useState(() => new RecordSelectorController());
+  const knownOptionsRef = useRef<KnownOptionsLookup>(() => undefined);
+  const getKnownOptions = useCallback<KnownOptionsLookup>(
+    (...lookupArgs) => knownOptionsRef.current(...lookupArgs),
+    []
+  );
+
   const boundParams = useMemo(() => schemaHasBoundParams(runtimeSchema), [runtimeSchema]);
 
   const evaluationContext = useMemo<EvaluationContext>(
@@ -546,45 +560,146 @@ function FormRendererInner({
     [variables, hostUser, hostNode, hostApplicant, hostGlobals]
   );
 
-  // A stable ref to the live evaluation scope. Field validators read `.current`
-  // at change/submit time, so `ctx` can stay stable (and cells keep their memo)
-  // across `$vars` changes instead of re-rendering the whole field tree.
   const evaluationContextRef = useRef(evaluationContext);
   evaluationContextRef.current = evaluationContext;
 
-  // The effect lane's renderer-owned sinks, bundled once so a new native effect
-  // adds a field to `EffectSinks`, not another prop threaded through every scope.
-  const sinks = useMemo<EffectSinks>(
-    () => { return { setVariable, refreshDataSource }; },
-    [setVariable, refreshDataSource]
+  const servicesRef = useRef(services);
+  servicesRef.current = services;
+
+  // Placeholder refs wired to the live form's submit/reset gate below so
+  // `sinks` keeps a constant identity across renders.
+  const gateEntryRef = useRef<FormGateEntry | null>(null);
+  const submitForm = useCallback<SubmitForm>(
+    options => gateEntryRef.current ? gateEntryRef.current.submitForm(options) : Promise.resolve(),
+    []
+  );
+  const resetForm = useCallback<ResetForm>(
+    () => {
+      gateEntryRef.current?.resetForm();
+    },
+    []
   );
 
-  // `formRef` keeps the live form available to the submit handler (which is
-  // configured before `form` exists); `loadedFormRef` guards the one-shot
-  // `load` effect so it fires once per form instance, not on re-renders.
+  const sinks = useMemo<EffectSinks>(
+    () => {
+      return {
+        setVariable,
+        refreshDataSource,
+        submitForm,
+        resetForm,
+        pickRecord: recordSelector.pickRecord
+      };
+    },
+    [setVariable, refreshDataSource, submitForm, resetForm, recordSelector]
+  );
+
   const formRef = useRef<RuntimeForm | null>(null);
   const loadedFormRef = useRef<RuntimeForm | null>(null);
   const form = useRuntimeForm({
+    controller: sequenceController,
     defaultValues,
     disabled,
     evaluators,
     evaluationContext,
     fieldPermissions,
     formRef,
+    getKnownOptions,
     onSubmit,
     runtimeSchema,
+    services,
     sinks
   });
+
+  // Intercept `form.handleSubmit` and `form.reset` once per form instance so
+  // native form buttons, `FormRendererApi`, and `submit`/`reset` actions all
+  // share the pending-request submit gate and the abort-on-reset boundary.
+  let gateEntry = formGateRegistry.get(form);
+
+  if (gateEntry === undefined) {
+    const rawHandleSubmit = form.handleSubmit.bind(form);
+    const rawReset = form.reset.bind(form);
+
+    gateEntry = {
+      rawHandleSubmit,
+      rawReset,
+      submitForm: () => rawHandleSubmit(),
+      resetForm: () => rawReset(),
+      abortAll: () => sequenceController.abortAll()
+    };
+
+    formGateRegistry.set(form, gateEntry);
+
+    form.handleSubmit = ((...submitArgs: unknown[]) => {
+      const current = formGateRegistry.get(form);
+
+      if (current === undefined) {
+        return rawHandleSubmit(...(submitArgs as Parameters<RuntimeForm["handleSubmit"]>));
+      }
+
+      if (submitArgs.length === 0) {
+        return current.submitForm();
+      }
+
+      return current.submitFormWithArgs
+        ? current.submitFormWithArgs(submitArgs as Parameters<RuntimeForm["handleSubmit"]>)
+        : rawHandleSubmit(...(submitArgs as Parameters<RuntimeForm["handleSubmit"]>));
+    }) as RuntimeForm["handleSubmit"];
+
+    form.reset = ((...resetArgs: unknown[]) => {
+      const current = formGateRegistry.get(form);
+
+      if (current !== undefined && resetArgs.length === 0) {
+        current.resetForm();
+        return;
+      }
+
+      current?.abortAll();
+      rawReset(...(resetArgs as Parameters<RuntimeForm["reset"]>));
+    }) as RuntimeForm["reset"];
+  }
+
+  const activeGateEntry = gateEntry;
+
+  activeGateEntry.abortAll = () => {
+    sequenceController.abortAll();
+  };
+
+  activeGateEntry.submitForm = options => {
+    if (!sequenceController.hasPendingRequests(options?.excludeRunId)) {
+      return activeGateEntry.rawHandleSubmit();
+    }
+
+    return sequenceController
+      .waitForPendingRequests(options?.excludeRunId)
+      .then(() => activeGateEntry.rawHandleSubmit());
+  };
+
+  activeGateEntry.submitFormWithArgs = submitArgs => {
+    if (!sequenceController.hasPendingRequests()) {
+      return activeGateEntry.rawHandleSubmit(...submitArgs);
+    }
+
+    return sequenceController
+      .waitForPendingRequests()
+      .then(() => activeGateEntry.rawHandleSubmit(...submitArgs));
+  };
+
+  activeGateEntry.resetForm = () => {
+    sequenceController.abortAll();
+    activeGateEntry.rawReset();
+  };
+
+  gateEntryRef.current = activeGateEntry;
+
   const { AppForm, Form } = form;
 
   useImperativeHandle(apiRef, () => {
     return {
-      submit: () => form.handleSubmit(),
-      reset: () => form.reset(),
+      submit: () => submitForm(),
+      reset: () => resetForm(),
       getValues: () => form.state.values,
-      // The submit pipeline's own filtering, verbatim (see `useRuntimeForm`'s
-      // onSubmit) — reading the evaluation scope through the ref keeps the
-      // handle identity stable across `$vars` writes, like the validators.
+      // `getSubmitValues` reads the live store synchronously without awaiting
+      // in-flight requests (Rule 4).
       getSubmitValues: () => filterSubmitValues({
         blocks: runtimeSchema.children,
         evaluators,
@@ -593,78 +708,128 @@ function FormRendererInner({
         values: form.state.values
       })
     };
-  }, [evaluators, fieldPermissions, form, runtimeSchema]);
+  }, [evaluators, fieldPermissions, form, resetForm, runtimeSchema, submitForm]);
 
+  const loadDepsRef = useRef({
+    disabled,
+    evaluators,
+    evaluationContext,
+    fieldPermissions,
+    getKnownOptions,
+    runtimeSchema,
+    services,
+    sinks
+  });
+  loadDepsRef.current = {
+    disabled,
+    evaluators,
+    evaluationContext,
+    fieldPermissions,
+    getKnownOptions,
+    runtimeSchema,
+    services,
+    sinks
+  };
+
+  // Run `load` once per form instance and abort all in-flight sequences when
+  // the form unmounts or swaps instance. Reading deps from a ref keeps `load`
+  // from re-firing on re-renders while letting StrictMode cleanup + re-run
+  // execute cleanly.
   useEffect(() => {
     formRef.current = form;
 
-    if (loadedFormRef.current === form) {
-      return;
+    if (loadedFormRef.current !== form) {
+      loadedFormRef.current = form;
+      const deps = loadDepsRef.current;
+
+      dispatchFormSequences({
+        controller: sequenceController,
+        disabled: deps.disabled,
+        evaluators: deps.evaluators,
+        evaluationContext: deps.evaluationContext,
+        fieldPermissions: deps.fieldPermissions,
+        form,
+        getKnownOptions: deps.getKnownOptions,
+        propagateErrors: false,
+        schema: deps.runtimeSchema,
+        scopeId: FORM_LIFECYCLE_SCOPE_ID,
+        sequences: getTriggerEffectSequences(deps.runtimeSchema.linkage?.rules, "load"),
+        services: deps.services,
+        sinks: deps.sinks
+      }).catch((error: unknown) => {
+        console.error("[form-editor] load effect failed:", error);
+      });
     }
 
-    loadedFormRef.current = form;
-    // `load` is fire-and-forget — nothing downstream waits on it; a rejected host
-    // effect is contained so it does not surface as an unhandled rejection.
-    dispatchFormEffects({
-      actions: getTriggerEffectActions(runtimeSchema.linkage?.rules, "load"),
-      evaluators,
-      evaluationContext,
-      fieldPermissions,
-      form,
-      schema: runtimeSchema,
-      sinks
-    }).catch((error: unknown) => {
-      console.error("[form-editor] load effect failed:", error);
-    });
-  }, [evaluators, evaluationContext, fieldPermissions, form, runtimeSchema, sinks]);
+    return () => {
+      // If cleanup aborts an in-flight async `load` sequence (e.g. StrictMode
+      // simulated unmount), clear the latch so the remount dispatches it again;
+      // a synchronous `load` that already completed stays latched and fires once.
+      if (sequenceController.hasActiveRuns(FORM_LIFECYCLE_SCOPE_ID)) {
+        loadedFormRef.current = null;
+      }
+
+      sequenceController.abortAll();
+    };
+  }, [form, sequenceController]);
 
   const domIdPrefix = useId();
   const codeSets = useMemo(() => collectCodeSets(runtimeSchema), [runtimeSchema]);
 
-  // Memoized so the field tree's props are stable across the controller's
-  // per-keystroke re-renders — a precondition for `React.memo(BlockCell)` to
-  // actually bail. The form instance is stable; only schema/disabled drive it.
   const ctx = useMemo<RenderCtx>(
     () => {
       return {
+        boundParams,
+        controller: sequenceController,
         disabled,
         domIdPrefix,
         evaluators,
         evaluationContextRef,
         fieldPermissions,
         form,
+        getKnownOptions,
         gutter: resolveStackGap(runtimeSchema.gap, DEFAULT_STACK_GAP),
         initialValues: defaultValues,
         namePrefix: "",
         renderFieldExtra,
-        sinks,
-        boundParams
+        servicesRef,
+        sinks
       };
     },
-    [boundParams, defaultValues, disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, renderFieldExtra, runtimeSchema.gap, sinks]
+    [boundParams, defaultValues, disabled, domIdPrefix, evaluators, evaluationContextRef, fieldPermissions, form, getKnownOptions, renderFieldExtra, runtimeSchema.gap, sequenceController, sinks]
   );
 
   return (
     <AppForm>
-      <EvaluationScopeContext value={evaluationContext}>
-        <DataSourceProvider dataSources={runtimeSchema.dataSources} resolver={dataSourceResolver} versions={dataSourceVersions}>
-          <CodeSetProvider codeSets={codeSets} queryFn={codeSetQueryFn}>
-            <RuntimeStateController
-              boundParams={boundParams}
-              evaluationContext={evaluationContext}
-              evaluators={evaluators}
-              fieldPermissions={fieldPermissions}
-              form={form}
-              schema={runtimeSchema}
-              sinks={sinks}
-            >
-              <Form css={rootCss} disabled={disabled}>
-                <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
-              </Form>
-            </RuntimeStateController>
-          </CodeSetProvider>
-        </DataSourceProvider>
-      </EvaluationScopeContext>
+      <SequenceControllerProvider controller={sequenceController}>
+        <EvaluationScopeContext value={evaluationContext}>
+          <DataSourceProvider dataSources={runtimeSchema.dataSources} request={services?.request} versions={dataSourceVersions}>
+            <CodeSetProvider codeSets={codeSets} queryFn={codeSetQueryFn}>
+              <KnownOptionsBridge lookupRef={knownOptionsRef} />
+
+              <RuntimeStateController
+                boundParams={boundParams}
+                controller={sequenceController}
+                disabled={disabled}
+                evaluationContext={evaluationContext}
+                evaluators={evaluators}
+                fieldPermissions={fieldPermissions}
+                form={form}
+                getKnownOptions={getKnownOptions}
+                schema={runtimeSchema}
+                services={services}
+                sinks={sinks}
+              >
+                <Form css={rootCss} disabled={disabled}>
+                  <BlockStack blocks={runtimeSchema.children} ctx={ctx} />
+                </Form>
+              </RuntimeStateController>
+
+              <RecordSelectorHost controller={recordSelector} />
+            </CodeSetProvider>
+          </DataSourceProvider>
+        </EvaluationScopeContext>
+      </SequenceControllerProvider>
     </AppForm>
   );
 }
@@ -886,7 +1051,7 @@ function TabsFlow({ ctx, tabs }: { ctx: RenderCtx; tabs: TabsNode }): ReactEleme
  * Reconcile the parallel row-key list against the array field's current length
  * (the antd `Form.List` pattern). The wrapped add / remove handlers keep the
  * list aligned for their own mutations; this covers an EXTERNAL array
- * replacement — a `set_field` writing the subform key, or a form `reset`:
+ * replacement — a `set_fields` writing the subform key, or a form `reset`:
  * growth appends fresh keys, shrinkage truncates. Identity is therefore
  * positional under wholesale replacement (surviving positions keep their key);
  * only push / splice mutations carry per-row identity exactly. Mutates the
@@ -1297,10 +1462,14 @@ function SubformRowScope({
   return (
     <SubformRowController
       boundParams={ctx.boundParams}
+      controller={ctx.controller}
+      disabled={ctx.disabled}
       evaluationContext={evaluationContext}
       evaluators={ctx.evaluators}
       form={ctx.form}
+      getKnownOptions={ctx.getKnownOptions}
       prefix={prefix}
+      services={ctx.servicesRef.current}
       sinks={ctx.sinks}
       templateSchema={templateSchema}
     >
@@ -1318,39 +1487,22 @@ function FieldSlot({
   field: FormField;
   runtimeState: RuntimeFieldState;
 }): ReactElement {
-  // The nearest value scope's effect dispatcher (root form or subform row), so a
-  // field event fires its effects against the right record.
-  const runEffects = useEffectDispatch();
+  const runSequences = useEffectDispatch();
+  const registry = useFieldRegistry();
   const eventKinds = useMemo(() => getFieldEventTriggerKinds(field.linkage?.rules), [field.linkage]);
-  // Schema-stable, so memoized: re-walking the linkage rules to build the
-  // cross-field validation dependency list on every state-flip re-render is waste.
   const listenToKeys = useMemo(
     () => getLinkageSourceKeys(field).map(key => `${ctx.namePrefix}${key}`),
     [field, ctx.namePrefix]
   );
   const labelPosition = field.labelPosition ?? "top";
-  // Globally-unique DOM id: the renderer-instance prefix separates co-mounted
-  // renderers of the same schema, and the row name-prefix separates a subform
-  // template's per-row instances — without both, duplicate ids cross-wire
-  // label associations.
   const domId = `${ctx.domIdPrefix}field-${ctx.namePrefix}${field.id}`;
+  const commitMode = registry.get(field.type)?.config.commit ?? "change";
+  const hasCommit = eventKinds.has("commit");
 
   let content: ReactElement;
 
   if (isKeyedField(field)) {
-    // Display-only clamp on the required marker: a non-writable-clamped field
-    // is read-only, validation-exempt, and never submits, so it must not
-    // advertise "required". The verdict comes from the permission map (the
-    // same lookup as `filterSubmitValues`), NOT from `disabled` — a linkage
-    // `disable` outcome keeps its marker. Validation semantics live in
-    // `validateRuntimeField` / `collectSubmitErrors`, untouched here.
     const writable = isWritableFieldPermission(getFieldPermission(ctx.fieldPermissions, field.key));
-    // Registered on the change lane only: TanStack Form's submit event runs the
-    // change validator too (defaultValidationLogic), so submit-time coverage is
-    // free — while a second registration under `onSubmit` would store the same
-    // message in both errorMap lanes and render it twice after a failed submit.
-    // `field` is narrowed to keyed in this branch, so the callback stays
-    // type-safe without re-checking.
     const runValidation = ({ fieldApi, value }: { fieldApi: RuntimeFieldApi; value: unknown }): string | undefined => validateRuntimeField({
       disabled: ctx.disabled,
       evaluators: ctx.evaluators,
@@ -1361,6 +1513,10 @@ function FieldSlot({
       value,
       values: fieldApi.form.state.values
     });
+
+    const handleCommit = hasCommit && commitMode === "entry"
+      ? () => runSequences(getTriggerEffectSequences(field.linkage?.rules, "commit"), field.id)
+      : undefined;
 
     content = (
       <ctx.form.AppField
@@ -1382,12 +1538,18 @@ function FieldSlot({
             onChange={value => {
               fieldApi.handleChange(value);
 
-              // The `change` edge fires off the framework onChange, not a DOM
-              // event, so it is dispatched here rather than via the boundary.
               if (eventKinds.has("change")) {
-                runEffects(getTriggerEffectActions(field.linkage?.rules, "change"));
+                runSequences(getTriggerEffectSequences(field.linkage?.rules, "change"), field.id);
+              }
+
+              // Controls with `commit: "change"` (select, date, switch, etc.)
+              // confirm on every user change; programmatic writes bypass this
+              // callback entirely via `dontRunListeners: true`.
+              if (hasCommit && commitMode === "change") {
+                runSequences(getTriggerEffectSequences(field.linkage?.rules, "commit"), field.id);
               }
             }}
+            onCommit={handleCommit}
           />
         )}
       </ctx.form.AppField>
@@ -1405,7 +1567,12 @@ function FieldSlot({
 
   return needsDomEventBoundary(eventKinds)
     ? (
-        <FieldEventBoundary eventKinds={eventKinds} rules={field.linkage?.rules} runEffects={runEffects}>
+        <FieldEventBoundary
+          eventKinds={eventKinds}
+          ownerFieldId={field.id}
+          rules={field.linkage?.rules}
+          runSequences={runSequences}
+        >
           {content}
         </FieldEventBoundary>
       )
@@ -1414,38 +1581,29 @@ function FieldSlot({
 
 const eventBoundaryCss = css({ display: "contents" });
 
-/**
- * Whether a field needs a DOM boundary to catch `focus` / `blur` / `click`
- * edges. The `change` edge rides the framework onChange and never needs one, so
- * a field with only `change` (or no) event rules renders with no wrapper.
- */
 function needsDomEventBoundary(eventKinds: Set<LinkageTriggerKind>): boolean {
   return eventKinds.has("focus") || eventKinds.has("blur") || eventKinds.has("click");
 }
 
-/**
- * A `display: contents` wrapper that catches a field's `focus` / `blur` /
- * `click` edges by bubbling — no per-component prop threading and no layout box,
- * so it is transparent to antd's grid. Only the handlers a field actually
- * listens for are attached.
- */
 function FieldEventBoundary({
   children,
   eventKinds,
+  ownerFieldId,
   rules,
-  runEffects
+  runSequences
 }: {
   children: ReactNode;
   eventKinds: Set<LinkageTriggerKind>;
+  ownerFieldId: string;
   rules: FieldLinkageRule[] | undefined;
-  runEffects: RunEffects;
+  runSequences: RunSequences;
 }): ReactElement {
   return (
     <div
       css={eventBoundaryCss}
-      onBlur={eventKinds.has("blur") ? () => runEffects(getTriggerEffectActions(rules, "blur")) : undefined}
-      onClick={eventKinds.has("click") ? () => runEffects(getTriggerEffectActions(rules, "click")) : undefined}
-      onFocus={eventKinds.has("focus") ? () => runEffects(getTriggerEffectActions(rules, "focus")) : undefined}
+      onBlur={eventKinds.has("blur") ? () => runSequences(getTriggerEffectSequences(rules, "blur"), ownerFieldId) : undefined}
+      onClick={eventKinds.has("click") ? () => runSequences(getTriggerEffectSequences(rules, "click"), ownerFieldId) : undefined}
+      onFocus={eventKinds.has("focus") ? () => runSequences(getTriggerEffectSequences(rules, "focus"), ownerFieldId) : undefined}
     >
       {children}
     </div>

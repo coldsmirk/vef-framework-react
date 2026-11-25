@@ -7,6 +7,7 @@ import { Button } from "@vef-framework-react/components";
 import { useMemo } from "react";
 
 import { EditorIcon } from "../../../../icons";
+import { usePreviewRuntime } from "../../../preview-runtime-context";
 import { ActionEditor } from "./action-editor";
 import { createActionFor } from "./mutators";
 import { actionOptionsFor } from "./options";
@@ -14,39 +15,15 @@ import { actionsListCss, addInlineButtonCss, sectionCss, sectionLabelCss } from 
 
 export interface ActionsEditorProps {
   actions: FieldLinkageAction[];
-  /**
-   * The rule's trigger kind — selects the action palette (state actions are
-   * offered only under a `condition` trigger).
-   */
   triggerKind: LinkageTriggerKind;
   isTargetKeyed: boolean;
-  /**
-   * Whether this scope permits state actions at all (field scope yes, form
-   * scope no — the form has no self field whose state could be derived).
-   */
   allowStateActions: boolean;
-  /**
-   * Whether the rule's target is a container — narrows the state palette to
-   * the actions a container supports (`show` / `hide` / `enable` / `disable`).
-   */
   isContainerTarget?: boolean;
-  /**
-   * Keyed fields offered as a `set_field` target.
-   */
   targetOptions: SourceFieldOption[];
-  /**
-   * Form-global data sources offered as a `refresh_data_source` target.
-   */
   dataSourceOptions: SourceFieldOption[];
   onChange: (next: FieldLinkageAction[]) => void;
 }
 
-/**
- * The THEN half of a rule: an ordered, add/remove list of actions. The palette
- * is derived from the trigger kind and the target's keyed-ness, so an edge
- * trigger can only add effect actions and a non-keyed target hides keyed-only
- * state actions.
- */
 export const ActionsEditor: FC<ActionsEditorProps> = ({
   actions,
   allowStateActions,
@@ -57,14 +34,20 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   triggerKind,
   onChange
 }) => {
+  const { serviceCapabilities } = usePreviewRuntime();
+  const hasRequest = serviceCapabilities?.hasRequest;
+  const hasNavigate = serviceCapabilities?.hasNavigate;
+
   const availableActions = useMemo(
     () => actionOptionsFor({
       triggerKind,
       isTargetKeyed,
       allowStateActions,
-      isContainerTarget
+      isContainerTarget,
+      hasRequest,
+      hasNavigate
     }),
-    [triggerKind, isTargetKeyed, allowStateActions, isContainerTarget]
+    [triggerKind, isTargetKeyed, allowStateActions, isContainerTarget, hasRequest, hasNavigate]
   );
 
   const updateAt = (index: number, next: FieldLinkageAction): void => {
@@ -90,15 +73,11 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
       <div css={actionsListCss}>
         {actions.map((action, index) => (
           <ActionEditor
-            // Keyed by the action's client-stable id so removing a middle action
-            // keeps each editor pinned to its logical action; index is a fallback
-            // for legacy actions authored before ids existed.
             key={action.id ?? index}
             action={action}
             availableActions={availableActions}
             canRemove={actions.length > 1}
             dataSourceOptions={dataSourceOptions}
-            isConditionTrigger={triggerKind === "condition"}
             targetOptions={targetOptions}
             onChange={next => updateAt(index, next)}
             onRemove={() => removeAt(index)}

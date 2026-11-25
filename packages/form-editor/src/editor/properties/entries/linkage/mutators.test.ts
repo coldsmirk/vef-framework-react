@@ -46,11 +46,16 @@ describe("createActionFor", () => {
       type: "assign",
       value: { kind: "literal", value: "" }
     });
-    expect(createActionFor("set_field")).toEqual({
+    expect(createActionFor("set_fields")).toEqual({
       id: expect.any(String),
-      type: "set_field",
-      targetKey: "",
-      value: { kind: "literal", value: "" }
+      type: "set_fields",
+      assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
+    });
+    expect(createActionFor("select_record")).toEqual({
+      id: expect.any(String),
+      type: "select_record",
+      source: { kind: "reference", path: "" },
+      output: "selected"
     });
     expect(createActionFor("set_variable")).toEqual({
       id: expect.any(String),
@@ -130,34 +135,6 @@ describe("reconcileRuleTrigger", () => {
         message: { kind: "literal", value: "" }
       }
     ]);
-  });
-
-  it("strips retrigger when moving to an edge trigger", () => {
-    const rule = conditionRule({
-      type: "alert",
-      message: { kind: "literal", value: "hi" },
-      retrigger: "always"
-    });
-
-    const next = reconcileRuleTrigger(rule, { kind: "change" }, true);
-
-    // An edge already pulses per event — a kept retrigger would be dead
-    // configuration the validator flags as `retrigger_ignored`.
-    expect(next.actions).toEqual([{ type: "alert", message: { kind: "literal", value: "hi" } }]);
-    expect(next.actions[0]).not.toHaveProperty("retrigger");
-  });
-
-  it("keeps retrigger when the new trigger is still a condition", () => {
-    const action = {
-      type: "alert",
-      message: { kind: "literal", value: "hi" },
-      retrigger: "always"
-    } as const;
-    const rule = conditionRule(action);
-
-    const next = reconcileRuleTrigger(rule, createTrigger("condition", "a"), true);
-
-    expect(next.actions).toEqual([action]);
   });
 });
 

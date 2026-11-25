@@ -38,15 +38,16 @@ export const STATE_ACTION_TYPES: readonly StateActionType[]
   = Object.keys(STATE_ACTION_TYPE_TABLE) as StateActionType[];
 
 /**
- * Effect action discriminators, in editor display order. Effect actions fire
- * side effects on a trigger edge and run only on the side-effect lane.
+ * Effect action discriminators, in editor display order. Effect actions run
+ * sequentially on a trigger edge on the side-effect lane.
  */
 const EFFECT_ACTION_TYPE_TABLE: Record<EffectActionType, true> = {
-  set_field: true,
+  set_fields: true,
   set_variable: true,
+  api_call: true,
+  select_record: true,
   refresh_data_source: true,
   alert: true,
-  api_call: true,
   navigate: true,
   submit: true,
   reset: true
@@ -107,6 +108,7 @@ export const KEYED_ONLY_ACTIONS: ReadonlySet<LinkageActionType> = new Set<Linkag
 const TRIGGER_KIND_SCOPE_TABLE: Record<LinkageTriggerKind, "both" | "field" | "form"> = {
   condition: "both",
   change: "field",
+  commit: "field",
   focus: "field",
   blur: "field",
   click: "field",

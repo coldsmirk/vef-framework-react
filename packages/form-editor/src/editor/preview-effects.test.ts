@@ -1,6 +1,4 @@
-import type { EffectAction, EffectDispatchContext } from "../types";
-
-import { previewDispatchEffect } from "./preview-effects";
+import { createPreviewServices } from "./preview-effects";
 
 interface MessageMock {
   info: ReturnType<typeof vi.fn>;
@@ -9,11 +7,6 @@ interface MessageMock {
   error: ReturnType<typeof vi.fn>;
 }
 
-/**
- * The `show*Message` helpers dispatch through `globalThis.$vef.message` (set by
- * `<ConfigProvider>` in a real app). Install a mock so the dispatcher can run
- * without mounting the provider.
- */
 function installVefMessage(): MessageMock {
   const message: MessageMock = {
     info: vi.fn(),
@@ -27,72 +20,41 @@ function installVefMessage(): MessageMock {
   return message;
 }
 
-function contextResolving(resolved?: unknown): EffectDispatchContext {
-  return {
-    values: {},
-    resolveValue: () => resolved,
-    resolveRequest: request => request
-  };
-}
-
-describe("previewDispatchEffect", () => {
+describe("createPreviewServices", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  describe("alert", () => {
-    it("shows the resolved message at the action's level", () => {
-      const message = installVefMessage();
+  it("replaces navigate with an informational preview toast", () => {
+    const message = installVefMessage();
+    const hostNavigate = vi.fn();
+    const preview = createPreviewServices({ navigate: hostNavigate });
 
-      previewDispatchEffect(
-        {
-          type: "alert",
-          level: "warning",
-          message: { kind: "literal", value: "x" }
-        },
-        contextResolving("年龄太小")
-      );
+    preview.navigate?.("/orders/42");
 
-      expect(message.warning).toHaveBeenCalledWith("年龄太小", expect.anything());
-      expect(message.info).not.toHaveBeenCalled();
-    });
-
-    it("defaults to info when the level is omitted", () => {
-      const message = installVefMessage();
-
-      previewDispatchEffect(
-        { type: "alert", message: { kind: "literal", value: "hi" } },
-        contextResolving("hello")
-      );
-
-      expect(message.info).toHaveBeenCalledWith("hello", expect.anything());
-    });
+    expect(hostNavigate).not.toHaveBeenCalled();
+    expect(message.info).toHaveBeenCalledWith(expect.stringContaining("/orders/42"), expect.anything());
   });
 
-  describe("navigate", () => {
-    it("surfaces the destination as an info toast", () => {
-      const message = installVefMessage();
+  it("routes the preview navigate toast through a custom notify service when provided", () => {
+    const notify = vi.fn();
+    const preview = createPreviewServices({ notify });
 
-      previewDispatchEffect(
-        { type: "navigate", to: { kind: "literal", value: "/next" } },
-        contextResolving("/next")
-      );
+    preview.navigate?.("/orders/42");
 
-      expect(message.info).toHaveBeenCalledWith(expect.stringContaining("/next"), expect.anything());
-    });
+    expect(notify).toHaveBeenCalledWith("info", expect.stringContaining("/orders/42"));
   });
 
-  describe("api_call", () => {
-    it("surfaces the resource and action as an info toast", () => {
-      const message = installVefMessage();
-      const action: EffectAction = {
-        type: "api_call",
-        request: { resource: "user", action: "list" }
-      };
+  it("preserves the host request service for live execution in preview", () => {
+    const request = vi.fn().mockResolvedValue([]);
+    const preview = createPreviewServices({ request });
 
-      previewDispatchEffect(action, contextResolving());
+    expect(preview.request).toBe(request);
+  });
 
-      expect(message.info).toHaveBeenCalledWith(expect.stringContaining("user"), expect.anything());
-    });
+  it("leaves request undefined when the host did not wire one", () => {
+    const preview = createPreviewServices();
+
+    expect(preview.request).toBeUndefined();
   });
 });

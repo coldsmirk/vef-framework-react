@@ -1,6 +1,7 @@
 /**
- * A value the schema carries either verbatim or as an expression evaluated at
- * runtime against the current form values and evaluation context.
+ * A value the schema carries either verbatim, as a scope-path reference, or as
+ * an expression evaluated at runtime against the current form values and
+ * evaluation context.
  *
  * One declaration serves every place the designer offers a "fixed value or
  * bound value" choice — linkage action values and remote data-source request
@@ -9,6 +10,7 @@
  */
 export type DynamicValue
   = | { kind: "literal"; value: unknown }
+    | { kind: "reference"; path: string }
     | { kind: "expression"; source: string };
 
 /**
@@ -23,5 +25,6 @@ export function isDynamicValue(value: unknown): value is DynamicValue {
   const candidate = value as Partial<DynamicValue>;
 
   return candidate.kind === "literal"
+    || (candidate.kind === "reference" && typeof (candidate as { path?: unknown }).path === "string")
     || (candidate.kind === "expression" && typeof (candidate as { source?: unknown }).source === "string");
 }

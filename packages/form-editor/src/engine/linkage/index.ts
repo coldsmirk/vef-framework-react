@@ -5,6 +5,30 @@ export {
   type ValidationSeverity
 } from "../validation";
 export {
+  ACTION_DESCRIPTORS,
+  getActionConditions,
+  getActionDataSourceId,
+  getActionDescriptor,
+  getActionDynamicValues,
+  getActionOutput,
+  getActionRequests,
+  getActionTargetKeys,
+  getActionVariable,
+  mapActionConditions,
+  mapActionDynamicValues,
+  mapActionTargetKeys,
+  mapRemoteRequestDynamicValues,
+  rewriteActionVariable,
+  type ActionDescriptor,
+  type ConditionSlot,
+  type DataSourceIdSlot,
+  type DynamicValueSlot,
+  type OutputSlot,
+  type RequestSlot,
+  type TargetKeySlot,
+  type VariableSlot
+} from "./action-descriptors";
+export {
   defaultEvaluateAssignExpression,
   defaultEvaluateExpression,
   defaultEvaluateScriptAction,
@@ -14,8 +38,9 @@ export {
   collectConditionEffectRules,
   evaluateConditionEffectTruths,
   getFieldEventTriggerKinds,
-  getTriggerEffectActions,
-  type ConditionEffectRule
+  getTriggerEffectSequences,
+  type ConditionEffectRule,
+  type TriggerEffectSequence
 } from "./effects";
 export {
   deriveDefaultValues,
@@ -23,8 +48,10 @@ export {
   emptyRuntimeState,
   evaluateLinkage,
   evaluateRuntimeStates,
+  getFieldDefaultValue,
   getFieldPermission,
   isWritableFieldPermission,
+  matchCondition,
   resolveActionValue,
   type EvaluateLinkageOptions,
   type RuntimeFieldState
@@ -50,6 +77,9 @@ export {
   STATE_ACTION_TYPES
 } from "./taxonomy";
 export {
+  isWritableTargetField,
+  validateDynamicValue,
   validateLinkageSchema,
+  validateScopePath,
   type LinkageValidationResult
 } from "./validator";

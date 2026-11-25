@@ -6,6 +6,7 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 import { createContext, use } from "react";
 
+import { FieldBusyIndicator } from "./field-busy-indicator";
 import { Label } from "./label";
 
 /**
@@ -83,8 +84,14 @@ const sideLabelCss = css({
 const sideLabelRightCss = css({ textAlign: "right" });
 
 const controlCss = css({
+  position: "relative",
   flex: 1,
   minWidth: 0
+});
+
+const controlWrapCss = css({
+  position: "relative",
+  width: "100%"
 });
 
 /**
@@ -184,17 +191,21 @@ export function CellFieldFrame({
 
   return (
     <div css={cellFieldCss}>
-      {outlined || groupProps
-        ? (
-            <div
-              {...groupProps}
-              css={[cellOutlinedCss, hasError && cellOutlinedErrorCss]}
-              role={groupProps ? "group" : undefined}
-            >
-              {children}
-            </div>
-          )
-        : children}
+      <div css={controlWrapCss}>
+        {outlined || groupProps
+          ? (
+              <div
+                {...groupProps}
+                css={[cellOutlinedCss, hasError && cellOutlinedErrorCss]}
+                role={groupProps ? "group" : undefined}
+              >
+                {children}
+              </div>
+            )
+          : children}
+
+        <FieldBusyIndicator />
+      </div>
 
       {errorMessage
         ? (
@@ -326,7 +337,10 @@ export function FieldShell({
             {labelNode}
           </div>
 
-          <div css={controlCss}>{body}</div>
+          <div css={controlCss}>
+            {body}
+            <FieldBusyIndicator />
+          </div>
         </div>
 
         <FieldFooter errors={errors} helperText={helperText} />
@@ -337,7 +351,12 @@ export function FieldShell({
   return (
     <div css={stackCss}>
       {labelNode}
-      {body}
+
+      <div css={controlWrapCss}>
+        {body}
+        <FieldBusyIndicator />
+      </div>
+
       <FieldFooter errors={errors} helperText={helperText} />
     </div>
   );

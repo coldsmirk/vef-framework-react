@@ -29,13 +29,14 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
   // fields only — matching how `validateSchema` validates the shared form
   // linkage. `formLinkage` is threaded so the deferred diagnostics validate the
   // shared linkage too (rule ids are unique, so field-scope issues never leak
-  // in). One option list feeds both the condition source and `set_field` target.
+  // in). Condition sources and `set_fields` targets resolve from the pc root scope.
   const pcLayer = useFormEditorStore(state => state.schema.presentations.pc);
   const rules = schema.linkage?.rules ?? [];
   const {
     dataSourceOptions,
     fieldOptions: sourceOptions,
-    issuesByRule
+    issuesByRule,
+    targetOptions
   } = useLinkageEditorModel({
     layer: pcLayer,
     nodeId: null,
@@ -61,9 +62,7 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
       noun="事件"
       rules={rules}
       sourceOptions={sourceOptions}
-      // Form scope has no "self" field, so condition sources and set_field
-      // targets are the same root-scope keyed-field list.
-      targetOptions={sourceOptions}
+      targetOptions={targetOptions}
       triggerKinds={triggerKinds}
       onChange={commit}
     />

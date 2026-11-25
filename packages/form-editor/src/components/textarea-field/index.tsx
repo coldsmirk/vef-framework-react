@@ -15,6 +15,7 @@ import {
   requiredEntry,
   sizeEntry
 } from "../field-entries";
+import { useEntryCommit } from "../use-entry-commit";
 
 const DEFAULT_ROWS = 3;
 // Inside table cells, default to a single-line auto-sizing textarea when the
@@ -30,12 +31,21 @@ const TextareaInput: FC<FieldComponentProps<TextareaField, string>> = ({
   labelPosition,
   required,
   value = "",
-  onChange
+  onChange,
+  onCommit
 }) => {
   const cell = useFieldCell();
+  const entryCommit = useEntryCommit({
+    value,
+    onCommit,
+    commitOnEnter: false
+  });
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
-    onChange(event.target.value);
+    const next = event.target.value;
+
+    entryCommit.notifyUserChange(next);
+    onChange(next);
   };
 
   const compactCell = cell !== null && field.autoSize === undefined && field.rows === undefined;
@@ -62,6 +72,7 @@ const TextareaInput: FC<FieldComponentProps<TextareaField, string>> = ({
         size={field.size}
         status={errors?.length ? "error" : undefined}
         value={value}
+        onBlur={() => entryCommit.handleBlur(value)}
         onChange={handleChange}
       />
     </FieldShell>
@@ -147,6 +158,7 @@ export const textareaFieldDefinition: FieldDefinition = defineFieldDefinition<Te
     name: "多行文本",
     group: "basic-input",
     keyed: true,
+    commit: "entry",
     icon: "text",
     create: () => {
       return { type: "textarea", label: "多行文本" };

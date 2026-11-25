@@ -4,6 +4,7 @@ import type {
   DateRangeField,
   FieldLinkage,
   FieldLinkageRule,
+  FormDataSource,
   FormSchema,
   PresentationLayer,
   SelectField,
@@ -15,8 +16,10 @@ import {
   hasLinkageDateLiterals,
   hasScopedDateLiterals,
   pruneDataSourceReferences,
+  pruneDataSourcesKeyReferences,
   pruneKeyReferences,
   pruneLinkageKeyReferences,
+  renameDataSourcesKeyReferences,
   renameKeyReferences,
   renameLinkageKeyReferences,
   renameVariableReferences,
@@ -159,18 +162,33 @@ describe("reconcile", () => {
       expect(renameKeyReferences(layer, [], "a", "total")).toBe(layer);
     });
 
-    it("rewrites a set_field targetKey in the same scope", () => {
+    it("rewrites set_fields targetKey, reference paths, and event when guards in the same scope", () => {
       const writer = tf("f2", "b", {
         linkage: {
           rules: [
             {
               id: "r1",
-              trigger: { kind: "change" },
+              trigger: {
+                kind: "commit",
+                when: {
+                  kind: "leaf",
+                  sourceKey: "$form.a",
+                  operator: "notEmpty"
+                }
+              },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "a",
-                  value: { kind: "literal", value: 1 }
+                  type: "api_call",
+                  request: {
+                    resource: "hr/staff",
+                    action: "find",
+                    params: { code: { kind: "reference", path: "$form.a" } }
+                  },
+                  output: "res"
+                },
+                {
+                  type: "set_fields",
+                  assignments: [{ targetKey: "a", value: { kind: "reference", path: "$form.a.sub" } }]
                 }
               ]
             }
@@ -181,8 +199,16 @@ describe("reconcile", () => {
 
       const next = renameKeyReferences(layer, [], "a", "total");
 
-      const action = linkageOf(findNode(next, "f2"))?.rules?.[0]?.actions[0];
-      expect(action).toMatchObject({ type: "set_field", targetKey: "total" });
+      const rule = linkageOf(findNode(next, "f2"))?.rules?.[0];
+      expect(rule?.trigger).toMatchObject({ when: { sourceKey: "$form.total" } });
+      expect(rule?.actions[0]).toMatchObject({
+        type: "api_call",
+        request: { params: { code: { kind: "reference", path: "$form.total" } } }
+      });
+      expect(rule?.actions[1]).toMatchObject({
+        type: "set_fields",
+        assignments: [{ targetKey: "total", value: { kind: "reference", path: "$form.total.sub" } }]
+      });
     });
 
     it("rewrites references inside a subform scope without touching a same-named outer key", () => {
@@ -346,7 +372,7 @@ describe("reconcile", () => {
       });
     });
 
-    it("drops a set_field action on a removed target and removes the rule emptied by it", () => {
+    it("drops a set_fields action when all its targets are removed and removes the rule emptied by it", () => {
       const writer = tf("f2", "b", {
         linkage: {
           rules: [
@@ -355,9 +381,8 @@ describe("reconcile", () => {
               trigger: { kind: "change" },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "a",
-                  value: { kind: "literal", value: 1 }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "a", value: { kind: "literal", value: 1 } }]
                 }
               ]
             }
@@ -371,6 +396,38 @@ describe("reconcile", () => {
       expect(linkageOf(findNode(next, "f2"))?.rules).toEqual([]);
     });
 
+    it("prunes only the removed assignment inside set_fields when sibling assignments remain", () => {
+      const writer = tf("f2", "b", {
+        linkage: {
+          rules: [
+            {
+              id: "r1",
+              trigger: { kind: "commit" },
+              actions: [
+                {
+                  type: "set_fields",
+                  assignments: [
+                    { targetKey: "a", value: { kind: "literal", value: 1 } },
+                    { targetKey: "keep", value: { kind: "literal", value: 2 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      });
+      const layer = layerOf(writer);
+
+      const next = pruneKeyReferences(layer, [], new Set(["a"]));
+
+      expect(linkageOf(findNode(next, "f2"))?.rules?.[0]?.actions).toEqual([
+        {
+          type: "set_fields",
+          assignments: [{ targetKey: "keep", value: { kind: "literal", value: 2 } }]
+        }
+      ]);
+    });
+
     it("keeps the rule when other actions survive the action prune", () => {
       const writer = tf("f2", "b", {
         linkage: {
@@ -380,9 +437,8 @@ describe("reconcile", () => {
               trigger: { kind: "change" },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "a",
-                  value: { kind: "literal", value: 1 }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "a", value: { kind: "literal", value: 1 } }]
                 },
                 {
                   type: "alert",
@@ -461,9 +517,8 @@ describe("reconcile", () => {
             trigger: { kind: "load" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "a",
-                value: { kind: "literal", value: 1 }
+                type: "set_fields",
+                assignments: [{ targetKey: "a", value: { kind: "literal", value: 1 } }]
               }
             ]
           }
@@ -472,7 +527,10 @@ describe("reconcile", () => {
 
       const next = renameLinkageKeyReferences(linkage, "a", "total");
 
-      expect(next.rules?.[0]?.actions[0]).toMatchObject({ targetKey: "total" });
+      expect(next.rules?.[0]?.actions[0]).toMatchObject({
+        type: "set_fields",
+        assignments: [{ targetKey: "total" }]
+      });
     });
 
     it("prunes key references in a bare linkage payload", () => {
@@ -483,9 +541,8 @@ describe("reconcile", () => {
             trigger: { kind: "load" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "a",
-                value: { kind: "literal", value: 1 }
+                type: "set_fields",
+                assignments: [{ targetKey: "a", value: { kind: "literal", value: 1 } }]
               }
             ]
           },
@@ -497,6 +554,34 @@ describe("reconcile", () => {
 
       expect(next.rules).toHaveLength(1);
       expect(next.rules?.[0]?.id).toBe("r2");
+    });
+
+    it("renames and prunes key references in form-level remote dataSources params", () => {
+      const sources: FormDataSource[] = [
+        {
+          id: "DS_1",
+          name: "Staff",
+          kind: "remote",
+          request: {
+            resource: "hr/staff",
+            action: "find",
+            params: {
+              dept: { kind: "reference", path: "$form.deptId" },
+              keep: { kind: "literal", value: "active" }
+            }
+          }
+        }
+      ];
+
+      const renamed = renameDataSourcesKeyReferences(sources, "deptId", "departmentId");
+      expect(renamed?.[0]).toMatchObject({
+        request: { params: { dept: { kind: "reference", path: "$form.departmentId" } } }
+      });
+
+      const pruned = pruneDataSourcesKeyReferences(renamed, [{ scope: [], keys: new Set(["departmentId"]) }]);
+      expect(pruned?.[0]).toMatchObject({
+        request: { params: { dept: { kind: "reference", path: "" }, keep: { kind: "literal", value: "active" } } }
+      });
     });
 
     it("returns the input linkage reference when nothing matches", () => {
@@ -650,7 +735,7 @@ describe("reconcile", () => {
   });
 
   describe("date granularity literal scrubbing", () => {
-    it("scrubs own assign, self condition, sibling condition, and set_field literals while preserving expressions and non-value operators", () => {
+    it("scrubs own assign, self condition, sibling condition, and set_fields literals while preserving expressions and non-value operators", () => {
       const dateField = dateFieldOf("D1", "period", {
         linkage: {
           rules: [
@@ -712,14 +797,12 @@ describe("reconcile", () => {
                   value: { kind: "literal", value: "keep-sibling-assign" }
                 },
                 {
-                  type: "set_field",
-                  targetKey: "period",
-                  value: { kind: "literal", value: "2026-05-01" }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-05-01" } }]
                 },
                 {
-                  type: "set_field",
-                  targetKey: "period",
-                  value: { kind: "expression", source: "'2026-05'" }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "period", value: { kind: "expression", source: "'2026-05'" } }]
                 }
               ]
             }
@@ -758,14 +841,12 @@ describe("reconcile", () => {
         value: { kind: "literal", value: "keep-sibling-assign" }
       });
       expect(siblingRule?.actions[1]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "literal", value: "" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "literal", value: "" } }]
       });
       expect(siblingRule?.actions[2]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "expression", source: "'2026-05'" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "expression", source: "'2026-05'" } }]
       });
       expect(findNode(next, "T2")).toBe(untouched);
     });
@@ -825,9 +906,8 @@ describe("reconcile", () => {
               trigger: { kind: "change" },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "period",
-                  value: { kind: "literal", value: "2026-04-15" }
+                  type: "set_fields",
+                  assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-04-15" } }]
                 }
               ]
             }
@@ -945,9 +1025,8 @@ describe("reconcile", () => {
             trigger: { kind: "load" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "period",
-                value: { kind: "literal", value: "2026-04-15" }
+                type: "set_fields",
+                assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-04-15" } }]
               }
             ]
           }
@@ -966,9 +1045,8 @@ describe("reconcile", () => {
         nextGranularity: "month"
       });
       expect(next.rules?.[0]?.actions[0]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "literal", value: "" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "literal", value: "" } }]
       });
     });
 
@@ -1007,9 +1085,8 @@ describe("reconcile", () => {
             trigger: { kind: "load" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "period",
-                value: { kind: "literal", value: "2026-04-15" }
+                type: "set_fields",
+                assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-04-15" } }]
               }
             ]
           }

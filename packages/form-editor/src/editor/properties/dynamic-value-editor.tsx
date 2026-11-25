@@ -10,22 +10,27 @@ import { codeEditorWrapperCss, valueEditorCss } from "./entries/linkage/styles";
 
 const VALUE_MODES = [
   { value: "literal", label: "字面量" },
+  { value: "reference", label: "引用" },
   { value: "expression", label: "表达式" }
 ] as const;
 
 type DynamicValueMode = DynamicValue["kind"];
 
 function isDynamicValueMode(value: unknown): value is DynamicValueMode {
-  return value === "literal" || value === "expression";
+  return value === "literal" || value === "reference" || value === "expression";
 }
 
 /**
- * Switch a value between the two modes, keeping it when the mode is unchanged
+ * Switch a value between the three modes, keeping it when the mode is unchanged
  * so toggling the control back and forth does not discard what was typed.
  */
 export function setDynamicValueMode(current: DynamicValue, mode: DynamicValueMode): DynamicValue {
   if (mode === "literal") {
     return current.kind === "literal" ? current : { kind: "literal", value: "" };
+  }
+
+  if (mode === "reference") {
+    return current.kind === "reference" ? current : { kind: "reference", path: "" };
   }
 
   return current.kind === "expression" ? current : { kind: "expression", source: "" };
@@ -34,20 +39,19 @@ export function setDynamicValueMode(current: DynamicValue, mode: DynamicValueMod
 export interface DynamicValueEditorProps {
   value: DynamicValue;
   literalPlaceholder?: string;
+  referencePlaceholder?: string;
   expressionPlaceholder?: string;
   onChange: (next: DynamicValue) => void;
 }
 
 /**
- * Literal / expression switch plus the matching input — the one control for
- * every place the designer offers "a fixed value or a bound one": linkage
- * action values and remote data-source request parameters. Sharing it is what
- * keeps the two from drifting into different affordances for the same schema
- * shape.
+ * Literal / reference / expression switch plus the matching input — shared by
+ * linkage action values and remote request parameters.
  */
 export function DynamicValueEditor({
   expressionPlaceholder,
   literalPlaceholder,
+  referencePlaceholder = "字段键或作用域路径，如 $steps.res.name",
   value,
   onChange
 }: DynamicValueEditorProps): ReactElement {
@@ -71,15 +75,23 @@ export function DynamicValueEditor({
               onChange={event => onChange({ kind: "literal", value: event.target.value })}
             />
           )
-        : (
-            <div css={codeEditorWrapperCss}>
-              <ExpressionInput
-                placeholder={expressionPlaceholder}
-                value={value.source}
-                onChange={source => onChange({ kind: "expression", source })}
+        : value.kind === "reference"
+          ? (
+              <Input
+                placeholder={referencePlaceholder}
+                value={value.path}
+                onChange={event => onChange({ kind: "reference", path: event.target.value })}
               />
-            </div>
-          )}
+            )
+          : (
+              <div css={codeEditorWrapperCss}>
+                <ExpressionInput
+                  placeholder={expressionPlaceholder}
+                  value={value.source}
+                  onChange={source => onChange({ kind: "expression", source })}
+                />
+              </div>
+            )}
     </div>
   );
 }

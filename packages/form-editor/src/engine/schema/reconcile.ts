@@ -1,10 +1,12 @@
 import type {
   Block,
   DateGranularity,
+  DynamicValue,
   FieldLinkage,
   FieldLinkageAction,
   FieldLinkageRule,
   FieldOptionSource,
+  FormDataSource,
   FormField,
   FormSchema,
   LinkageCondition,
@@ -14,7 +16,18 @@ import type { ScopeKeyBucket } from "../keys";
 import type { ScopePath } from "./walk";
 
 import { assertNever } from "../assert-never";
-import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
+import {
+  getActionConditions,
+  getActionDataSourceId,
+  getActionDynamicValues,
+  mapActionConditions,
+  mapActionDynamicValues,
+  mapActionTargetKeys,
+  mapRemoteRequestDynamicValues,
+  rewriteActionVariable
+} from "../linkage/action-descriptors";
+import { leafSourceFormKey, withLeafSourceFormKey, withLeafSourceVariableName } from "../linkage/scope";
+import { getTriggerCondition, mapTriggerCondition } from "../linkage/shape";
 import { isDateLiteralCompatible, isEmptyDateLiteral } from "./date-granularity";
 import { bodyScopeKey, mapPreservingIdentity } from "./nodes";
 import { rewriteContainerBodies } from "./rewrite";
@@ -27,36 +40,14 @@ import { isContainerNode, isLeafField, isRootScope, scopeEquals, walkNodes } fro
  * literals that no longer match the target format; the functions here rewrite,
  * prune, or scrub those references so the editor never emits a broken schema.
  *
- * Scope model:
- *
- * - **Keys are per value scope.** A node's linkage resolves `leaf.sourceKey` /
- * `set_field.targetKey` against the node's *own* enclosing scope, so the
- * key-level and date-granularity functions take the affected {@link ScopePath}
- * and rewrite only nodes sitting in exactly that scope — a same-named key in an
- * outer scope or another subform template is a different binding and stays
- * untouched.
- * - **Variables and data sources are form-global.** Their functions rewrite
- * every node across **both** presentations plus the form-level
- * `schema.linkage`, with no scope filter.
- * - **The form-level `schema.linkage` resolves against the PC root scope.**
- * The layer-level key functions cannot see it, so the store reconciles it via
- * the exported linkage-level helpers whenever a *pc root-scope* key is renamed,
- * removed, or switched to a new date granularity; mobile-layer-only changes
- * never touch it.
- *
- * Identity contract (shared with `mutate.ts` / `edit-ops.ts`): a call that
- * changes nothing returns the **input reference unchanged**, and a change
- * rebuilds only the path to it — untouched nodes, rules, and block lists keep
- * their references, so the store detects no-ops with `===` and the canvas
- * memoization stays intact.
+ * All action traversals route exclusively through the central action
+ * descriptors (`engine/linkage/action-descriptors.ts`), and all trigger
+ * condition/guard traversals through `getTriggerCondition` /
+ * `mapTriggerCondition` (`engine/linkage/shape.ts`).
  */
 
 /* ----------------------------------------------------------- tree plumbing */
 
-/**
- * Per-node rewrite applied by {@link reconcileLayer}. Receives each node with
- * its enclosing {@link ScopePath}; returns the node unchanged to skip it.
- */
 type NodePatch = (node: Block, scope: ScopePath) => Block;
 
 function reconcileBlocks(blocks: Block[], scope: ScopePath, patch: NodePatch): Block[] {
@@ -76,20 +67,12 @@ function reconcileBlock(block: Block, scope: ScopePath, patch: NodePatch): Block
   return rewriteContainerBodies(patched, body => reconcileBlocks(body, inner, patch));
 }
 
-/**
- * Apply a scope-tracking {@link NodePatch} to every node of a layer with full
- * structural sharing.
- */
 function reconcileLayer(layer: PresentationLayer, patch: NodePatch): PresentationLayer {
   const children = reconcileBlocks(layer.children, [], patch);
 
   return children === layer.children ? layer : { ...layer, children };
 }
 
-/**
- * Transform both device presentations through `transform`, preserving the
- * schema reference when neither layer changed.
- */
 function mapPresentations(schema: FormSchema, transform: (layer: PresentationLayer) => PresentationLayer): FormSchema {
   const pc = transform(schema.presentations.pc);
   const mobile = schema.presentations.mobile === undefined ? undefined : transform(schema.presentations.mobile);
@@ -104,14 +87,6 @@ function mapPresentations(schema: FormSchema, transform: (layer: PresentationLay
   };
 }
 
-/**
- * Re-apply a per-linkage transform to the form-level `schema.linkage` (the PC
- * root-scope events), preserving the schema reference when the linkage is absent
- * or the transform changed nothing. The form-global reconcilers (variables /
- * data sources) pair this tail with a {@link mapPresentations} pass over the node
- * trees, so the shared "rewrite both presentations, then the form linkage" shape
- * lives in one place.
- */
 function reconcileFormLinkage(schema: FormSchema, transform: (linkage: FieldLinkage) => FieldLinkage): FormSchema {
   if (schema.linkage === undefined) {
     return schema;
@@ -122,7 +97,76 @@ function reconcileFormLinkage(schema: FormSchema, transform: (linkage: FieldLink
   return linkage === schema.linkage ? schema : { ...schema, linkage };
 }
 
+function mapOptionSourceDynamicValues(
+  source: FieldOptionSource | undefined,
+  mapper: (value: DynamicValue) => DynamicValue
+): FieldOptionSource | undefined {
+  if (source?.kind !== "remote") {
+    return source;
+  }
+
+  const nextRequest = mapRemoteRequestDynamicValues(source.request, mapper);
+
+  return nextRequest === source.request ? source : { ...source, request: nextRequest };
+}
+
+function mapNodeOptionSourceDynamicValues(
+  node: Block,
+  mapper: (value: DynamicValue) => DynamicValue
+): Block {
+  if (isLeafField(node)) {
+    const field = node as FormField & { dataSource?: FieldOptionSource };
+
+    if (field.dataSource === undefined) {
+      return node;
+    }
+
+    const nextSource = mapOptionSourceDynamicValues(field.dataSource, mapper);
+
+    return nextSource === field.dataSource ? node : ({ ...node, dataSource: nextSource } as Block);
+  }
+
+  if (node.type === "subform" && node.rows?.mode === "fixed") {
+    const nextSource = mapOptionSourceDynamicValues(node.rows.source, mapper);
+
+    return nextSource === node.rows.source || nextSource === undefined
+      ? node
+      : { ...node, rows: { ...node.rows, source: nextSource } };
+  }
+
+  return node;
+}
+
+function mapFormDataSourcesDynamicValues(
+  dataSources: FormDataSource[] | undefined,
+  mapper: (value: DynamicValue) => DynamicValue
+): FormDataSource[] | undefined {
+  if (dataSources === undefined) {
+    return dataSources;
+  }
+
+  return mapPreservingIdentity(dataSources, source => {
+    if (source.kind !== "remote") {
+      return source;
+    }
+
+    const nextRequest = mapRemoteRequestDynamicValues(source.request, mapper);
+
+    return nextRequest === source.request ? source : { ...source, request: nextRequest };
+  });
+}
+
 /* ------------------------------------------------------------- key renames */
+
+function renameDynamicValueKey(value: DynamicValue, oldKey: string, newKey: string): DynamicValue {
+  if (value.kind !== "reference") {
+    return value;
+  }
+
+  return leafSourceFormKey(value.path) === oldKey
+    ? { ...value, path: withLeafSourceFormKey(value.path, newKey) }
+    : value;
+}
 
 function renameConditionKeys(condition: LinkageCondition, oldKey: string, newKey: string): LinkageCondition {
   switch (condition.kind) {
@@ -149,18 +193,18 @@ function renameConditionKeys(condition: LinkageCondition, oldKey: string, newKey
   }
 }
 
+function renameActionKeys(action: FieldLinkageAction, oldKey: string, newKey: string): FieldLinkageAction {
+  let next = mapActionTargetKeys(action, targetKey => targetKey === oldKey ? newKey : targetKey) ?? action;
+
+  next = mapActionDynamicValues(next, value => renameDynamicValueKey(value, oldKey, newKey));
+  next = mapActionConditions(next, condition => renameConditionKeys(condition, oldKey, newKey)) ?? next;
+
+  return next;
+}
+
 function renameRuleKeys(rule: FieldLinkageRule, oldKey: string, newKey: string): FieldLinkageRule {
-  let { trigger } = rule;
-
-  if (trigger.kind === "condition") {
-    const condition = renameConditionKeys(trigger.condition, oldKey, newKey);
-
-    if (condition !== trigger.condition) {
-      trigger = { ...trigger, condition };
-    }
-  }
-
-  const actions = mapPreservingIdentity(rule.actions, action => action.type === "set_field" && action.targetKey === oldKey ? { ...action, targetKey: newKey } : action);
+  const trigger = mapTriggerCondition(rule.trigger, condition => renameConditionKeys(condition, oldKey, newKey)) ?? rule.trigger;
+  const actions = mapPreservingIdentity(rule.actions, action => renameActionKeys(action, oldKey, newKey));
 
   return trigger === rule.trigger && actions === rule.actions
     ? rule
@@ -172,12 +216,8 @@ function renameRuleKeys(rule: FieldLinkageRule, oldKey: string, newKey: string):
 }
 
 /**
- * Rewrite every `leaf.sourceKey` / `set_field.targetKey` reference to `oldKey`
- * inside one linkage payload. Scope-blind by design: the caller decides which
- * linkage resolves in the affected scope — the layer-level
- * {@link renameKeyReferences} filters per node, and the store applies this
- * directly to the form-level `schema.linkage` when a pc root-scope key is
- * renamed.
+ * Rewrite every form-key reference (`leaf.sourceKey`, trigger `when`, action
+ * target keys, and `reference` dynamic values) inside one linkage payload.
  */
 export function renameLinkageKeyReferences(linkage: FieldLinkage, oldKey: string, newKey: string): FieldLinkage {
   if (!linkage.rules) {
@@ -190,13 +230,19 @@ export function renameLinkageKeyReferences(linkage: FieldLinkage, oldKey: string
 }
 
 /**
- * Rewrite condition `sourceKey`s and `set_field.targetKey`s from `oldKey` to
- * `newKey` across the layer, for the nodes whose linkage resolves in exactly
- * `scope`. Subform templates open their own scope, so a same-named key inside
- * (or outside) them is a different binding and is left untouched.
- *
- * Identity contract: no reference to `oldKey` in that scope ⇒ the input layer
- * reference is returned.
+ * Rewrite form-key `reference` params on form-global remote `dataSources`.
+ */
+export function renameDataSourcesKeyReferences(
+  dataSources: FormDataSource[] | undefined,
+  oldKey: string,
+  newKey: string
+): FormDataSource[] | undefined {
+  return mapFormDataSourcesDynamicValues(dataSources, value => renameDynamicValueKey(value, oldKey, newKey));
+}
+
+/**
+ * Rewrite form-key references in linkage rules and remote option-source params
+ * across the layer for nodes whose scope matches `scope`.
  */
 export function renameKeyReferences(
   layer: PresentationLayer,
@@ -205,25 +251,36 @@ export function renameKeyReferences(
   newKey: string
 ): PresentationLayer {
   return reconcileLayer(layer, (node, nodeScope) => {
-    if (node.linkage === undefined || !scopeEquals(nodeScope, scope)) {
+    if (!scopeEquals(nodeScope, scope)) {
       return node;
     }
 
-    const linkage = renameLinkageKeyReferences(node.linkage, oldKey, newKey);
+    let next = mapNodeOptionSourceDynamicValues(node, value => renameDynamicValueKey(value, oldKey, newKey));
 
-    return linkage === node.linkage ? node : { ...node, linkage };
+    if (next.linkage !== undefined) {
+      const linkage = renameLinkageKeyReferences(next.linkage, oldKey, newKey);
+
+      if (linkage !== next.linkage) {
+        next = { ...next, linkage };
+      }
+    }
+
+    return next;
   });
 }
 
 /* -------------------------------------------------------------- key prunes */
 
-/**
- * Prune a condition against removed keys. Returns the input when untouched, a
- * rewritten condition when partially pruned, and `undefined` when the
- * condition itself is gone — a leaf on a removed key, or a group emptied *by
- * this prune* (a group that was already empty is authoring state, not a
- * dangling reference, and is kept).
- */
+function pruneDynamicValueKeys(value: DynamicValue, removedKeys: ReadonlySet<string>): DynamicValue {
+  if (value.kind !== "reference") {
+    return value;
+  }
+
+  const key = leafSourceFormKey(value.path);
+
+  return key !== undefined && removedKeys.has(key) ? { ...value, path: "" } : value;
+}
+
 function pruneCondition(condition: LinkageCondition, removedKeys: ReadonlySet<string>): LinkageCondition | undefined {
   switch (condition.kind) {
     case "leaf": {
@@ -268,43 +325,50 @@ function pruneCondition(condition: LinkageCondition, removedKeys: ReadonlySet<st
   }
 }
 
-/**
- * Prune one rule: a `condition` trigger whose condition is gone removes the
- * rule; `set_field` actions targeting a removed key are dropped, and a rule
- * emptied of actions *by that drop* is removed.
- */
+function pruneActionKeys(action: FieldLinkageAction, removedKeys: ReadonlySet<string>): FieldLinkageAction | undefined {
+  const afterTargets = mapActionTargetKeys(action, targetKey => removedKeys.has(targetKey) ? undefined : targetKey);
+
+  if (afterTargets === undefined) {
+    return undefined;
+  }
+
+  const afterValues = mapActionDynamicValues(afterTargets, value => pruneDynamicValueKeys(value, removedKeys));
+
+  return mapActionConditions(afterValues, condition => pruneCondition(condition, removedKeys));
+}
+
 function pruneRuleKeys(rule: FieldLinkageRule, removedKeys: ReadonlySet<string>): FieldLinkageRule | undefined {
-  let { trigger } = rule;
+  const trigger = mapTriggerCondition(rule.trigger, condition => pruneCondition(condition, removedKeys));
 
-  if (trigger.kind === "condition") {
-    const condition = pruneCondition(trigger.condition, removedKeys);
-
-    if (condition === undefined) {
-      return undefined;
-    }
-
-    if (condition !== trigger.condition) {
-      trigger = { ...trigger, condition };
-    }
+  if (trigger === undefined) {
+    return undefined;
   }
 
   const actions: FieldLinkageAction[] = [];
   let actionsChanged = false;
+  let droppedAction = false;
 
   for (const action of rule.actions) {
-    if (action.type === "set_field" && removedKeys.has(action.targetKey)) {
+    const pruned = pruneActionKeys(action, removedKeys);
+
+    if (pruned === undefined) {
       actionsChanged = true;
+      droppedAction = true;
       continue;
     }
 
-    actions.push(action);
+    if (pruned !== action) {
+      actionsChanged = true;
+    }
+
+    actions.push(pruned);
   }
 
   if (trigger === rule.trigger && !actionsChanged) {
     return rule;
   }
 
-  if (actionsChanged && actions.length === 0) {
+  if (droppedAction && actions.length === 0) {
     return undefined;
   }
 
@@ -317,10 +381,10 @@ function pruneRuleKeys(rule: FieldLinkageRule, removedKeys: ReadonlySet<string>)
 
 /**
  * Prune every reference to a removed key inside one linkage payload. Cascades
- * bottom-up: leaf → enclosing group → rule, and action → rule. Scope-blind by
- * design, mirroring {@link renameLinkageKeyReferences} — the store applies
- * this directly to the form-level `schema.linkage` when pc root-scope keys are
- * removed.
+ * bottom-up: leaf → enclosing group → rule (both `condition` triggers and event
+ * `when` guards), target assignment → action → rule, and clears dangling
+ * `reference` dynamic values to `path: ""` so a future key reuse cannot
+ * silently rebind them.
  */
 export function pruneLinkageKeyReferences(linkage: FieldLinkage, removedKeys: ReadonlySet<string>): FieldLinkage {
   if (!linkage.rules) {
@@ -349,16 +413,22 @@ export function pruneLinkageKeyReferences(linkage: FieldLinkage, removedKeys: Re
 }
 
 /**
- * Drop every reference to the removed keys across the layer, for the nodes
- * whose linkage resolves in exactly `scope`: leaf conditions on a removed
- * `sourceKey` are pruned (cascading group → rule removal), and `set_field`
- * actions on a removed `targetKey` are dropped (a rule emptied of actions is
- * removed). Subform templates are separate key namespaces and are left
- * untouched unless `scope` names them.
- *
- * Identity contract: nothing referenced a removed key in that scope ⇒ the
- * input layer reference is returned.
+ * Clear dangling form-key `reference` params on form-global remote
+ * `dataSources` when PC root-scope keys are removed.
  */
+export function pruneDataSourcesKeyReferences(
+  dataSources: FormDataSource[] | undefined,
+  buckets: readonly ScopeKeyBucket[]
+): FormDataSource[] | undefined {
+  const rootBucket = buckets.find(bucket => isRootScope(bucket.scope));
+
+  if (rootBucket === undefined || rootBucket.keys.size === 0) {
+    return dataSources;
+  }
+
+  return mapFormDataSourcesDynamicValues(dataSources, value => pruneDynamicValueKeys(value, rootBucket.keys));
+}
+
 export function pruneKeyReferences(
   layer: PresentationLayer,
   scope: ScopePath,
@@ -369,23 +439,24 @@ export function pruneKeyReferences(
   }
 
   return reconcileLayer(layer, (node, nodeScope) => {
-    if (node.linkage === undefined || !scopeEquals(nodeScope, scope)) {
+    if (!scopeEquals(nodeScope, scope)) {
       return node;
     }
 
-    const linkage = pruneLinkageKeyReferences(node.linkage, removedKeys);
+    let next = mapNodeOptionSourceDynamicValues(node, value => pruneDynamicValueKeys(value, removedKeys));
 
-    return linkage === node.linkage ? node : { ...node, linkage };
+    if (next.linkage !== undefined) {
+      const linkage = pruneLinkageKeyReferences(next.linkage, removedKeys);
+
+      if (linkage !== next.linkage) {
+        next = { ...next, linkage };
+      }
+    }
+
+    return next;
   });
 }
 
-/**
- * Prune layer-level linkage references to a set of removed keys, scope by scope.
- * The composite the store and the removal-impact preview share: a subtree
- * removal (or a cross-scope move's departure) collects its dying keys into
- * {@link ScopeKeyBucket}s, and this applies {@link pruneKeyReferences} once per
- * bucket. Identity-preserving — returns the input layer when nothing matched.
- */
 export function pruneScopedReferences(layer: PresentationLayer, buckets: readonly ScopeKeyBucket[]): PresentationLayer {
   let next = layer;
 
@@ -396,13 +467,6 @@ export function pruneScopedReferences(layer: PresentationLayer, buckets: readonl
   return next;
 }
 
-/**
- * Prune the form-level linkage (the PC root scope) against the root bucket of a
- * removal — the keys that died at `scope === []`. Mobile / nested-scope buckets
- * never touch it. Identity-preserving: returns the input linkage when there is
- * no root bucket or nothing matched. Pairs with {@link pruneScopedReferences} so
- * every caller treats the form linkage's root-scope special case identically.
- */
 export function pruneFormLinkageForRootBucket(linkage: FieldLinkage, buckets: readonly ScopeKeyBucket[]): FieldLinkage {
   const rootBucket = buckets.find(bucket => isRootScope(bucket.scope));
 
@@ -411,52 +475,108 @@ export function pruneFormLinkageForRootBucket(linkage: FieldLinkage, buckets: re
 
 /* --------------------------------------------------------------- variables */
 
+function renameDynamicValueVariable(value: DynamicValue, name: string, nextName: string): DynamicValue {
+  if (value.kind !== "reference") {
+    return value;
+  }
+
+  const nextPath = withLeafSourceVariableName(value.path, name, nextName);
+
+  return nextPath === value.path ? value : { ...value, path: nextPath };
+}
+
+function renameConditionVariables(condition: LinkageCondition, name: string, nextName: string): LinkageCondition {
+  switch (condition.kind) {
+    case "leaf": {
+      const nextSourceKey = withLeafSourceVariableName(condition.sourceKey, name, nextName);
+
+      return nextSourceKey === condition.sourceKey ? condition : { ...condition, sourceKey: nextSourceKey };
+    }
+
+    case "group": {
+      const children = mapPreservingIdentity(condition.children, child => renameConditionVariables(child, name, nextName));
+
+      return children === condition.children ? condition : { ...condition, children };
+    }
+
+    case "expression": {
+      return condition;
+    }
+
+    default: {
+      return assertNever(condition);
+    }
+  }
+}
+
+function renameActionVariables(action: FieldLinkageAction, name: string, nextName: string): FieldLinkageAction {
+  let next = rewriteActionVariable(action, name, nextName);
+
+  next = mapActionDynamicValues(next, value => renameDynamicValueVariable(value, name, nextName));
+  next = mapActionConditions(next, condition => renameConditionVariables(condition, name, nextName)) ?? next;
+
+  return next;
+}
+
 function renameLinkageVariableReferences(linkage: FieldLinkage, name: string, nextName: string): FieldLinkage {
   if (!linkage.rules) {
     return linkage;
   }
 
   const rules = mapPreservingIdentity(linkage.rules, rule => {
-    const actions = mapPreservingIdentity(rule.actions, action => action.type === "set_variable" && action.variable === name ? { ...action, variable: nextName } : action);
+    const trigger = mapTriggerCondition(rule.trigger, condition => renameConditionVariables(condition, name, nextName)) ?? rule.trigger;
+    const actions = mapPreservingIdentity(rule.actions, action => renameActionVariables(action, name, nextName));
 
-    return actions === rule.actions ? rule : { ...rule, actions };
+    return trigger === rule.trigger && actions === rule.actions
+      ? rule
+      : {
+          ...rule,
+          trigger,
+          actions
+        };
   });
 
   return rules === linkage.rules ? linkage : { ...linkage, rules };
 }
 
 /**
- * Rewrite every `set_variable` action targeting variable `name` to
- * `nextName`, across **both** presentations and the form-level
- * `schema.linkage`. Variables are form-global, so there is no scope filter.
- *
- * Identity contract: no action targeted `name` ⇒ the input schema reference is
- * returned.
+ * Rewrite every variable reference (`set_variable` targets, `$vars.<name>`
+ * condition/guard leaves, `$vars.<name>` reference dynamic values in actions
+ * and remote option sources) across both presentations, form-global
+ * `dataSources`, and `schema.linkage`.
  */
 export function renameVariableReferences(schema: FormSchema, name: string, nextName: string): FormSchema {
-  return reconcileFormLinkage(
+  let next = reconcileFormLinkage(
     mapPresentations(schema, layer => reconcileLayer(layer, node => {
-      if (node.linkage === undefined) {
-        return node;
+      let updated = mapNodeOptionSourceDynamicValues(node, value => renameDynamicValueVariable(value, name, nextName));
+
+      if (updated.linkage !== undefined) {
+        const linkage = renameLinkageVariableReferences(updated.linkage, name, nextName);
+
+        if (linkage !== updated.linkage) {
+          updated = { ...updated, linkage };
+        }
       }
 
-      const linkage = renameLinkageVariableReferences(node.linkage, name, nextName);
-
-      return linkage === node.linkage ? node : { ...node, linkage };
+      return updated;
     })),
     linkage => renameLinkageVariableReferences(linkage, name, nextName)
   );
+
+  const nextDataSources = mapFormDataSourcesDynamicValues(
+    next.dataSources,
+    value => renameDynamicValueVariable(value, name, nextName)
+  );
+
+  if (nextDataSources !== next.dataSources && nextDataSources !== undefined) {
+    next = { ...next, dataSources: nextDataSources };
+  }
+
+  return next;
 }
 
 /* ------------------------------------------------------------ data sources */
 
-/**
- * Drop a field's `dataSource` when it is a `ref` to the removed source. The
- * key is deleted (not set to `undefined`), leaving the field source-less —
- * inline `static` / `remote` sources are unrelated and kept. The structural
- * read mirrors `isKeyedNode`: only some field types declare the slot, so the
- * union is probed through a narrow auxiliary shape rather than widened.
- */
 function pruneFieldDataSource(field: FormField, dataSourceId: string): FormField {
   const { dataSource } = field as { dataSource?: FieldOptionSource };
 
@@ -476,7 +596,9 @@ function pruneRuleDataSource(rule: FieldLinkageRule, dataSourceId: string): Fiel
   let changed = false;
 
   for (const action of rule.actions) {
-    if (action.type === "refresh_data_source" && action.dataSourceId === dataSourceId) {
+    const slot = getActionDataSourceId(action);
+
+    if (slot !== undefined && slot.value === dataSourceId) {
       changed = true;
       continue;
     }
@@ -517,18 +639,6 @@ function pruneLinkageDataSourceReferences(linkage: FieldLinkage, dataSourceId: s
   return changed ? { ...linkage, rules } : linkage;
 }
 
-/**
- * Drop every reference to a removed form-global data source: field-level
- * `{ kind: "ref" }` option sources lose their `dataSource` key (the field
- * becomes source-less), and `refresh_data_source` actions naming it are
- * dropped (a rule emptied of actions is removed) — across **both**
- * presentations and the form-level `schema.linkage`. Data sources are
- * form-global, so there is no scope filter. The declaration itself lives in
- * `schema.dataSources` and is the caller's to remove.
- *
- * Identity contract: nothing referenced the source ⇒ the input schema
- * reference is returned.
- */
 export function pruneDataSourceReferences(schema: FormSchema, dataSourceId: string): FormSchema {
   return reconcileFormLinkage(
     mapPresentations(schema, layer => reconcileLayer(layer, node => {
@@ -567,10 +677,6 @@ export function pruneDataSourceReferences(schema: FormSchema, dataSourceId: stri
 
 /* -------------------------------------------------------- date granularity */
 
-/**
- * Target of a date-granularity literal scrub: a `date` or `daterange` field
- * identified by its `key` and `fieldType`, switching to `nextGranularity`.
- */
 export interface DateGranularityScrubTarget {
   key: string;
   fieldType: "date" | "daterange";
@@ -579,26 +685,18 @@ export interface DateGranularityScrubTarget {
 
 type DateConditionLeaf = Extract<LinkageCondition, { kind: "leaf" }>;
 
-type DateLiteralAction = Extract<FieldLinkageAction, { type: "assign" | "set_field" }> & {
-  value: { kind: "literal"; value: unknown };
-};
-
 function isTargetDateConditionLeaf(condition: DateConditionLeaf, key: string): boolean {
   return leafSourceFormKey(condition.sourceKey) === key
     && condition.operator !== "empty"
     && condition.operator !== "notEmpty";
 }
 
-function isTargetDateLiteralAction(
-  action: FieldLinkageAction,
+function matchesDateTargetSlot(
+  targetKey: string | "self" | undefined,
   key: string,
   includeOwnAssign: boolean
-): action is DateLiteralAction {
-  if (action.type === "assign") {
-    return includeOwnAssign && action.value.kind === "literal";
-  }
-
-  return action.type === "set_field" && action.targetKey === key && action.value.kind === "literal";
+): boolean {
+  return targetKey === key || (includeOwnAssign && targetKey === "self");
 }
 
 function conditionHasDateLiterals(condition: LinkageCondition, key: string): boolean {
@@ -621,13 +719,28 @@ function conditionHasDateLiterals(condition: LinkageCondition, key: string): boo
   }
 }
 
-/**
- * Report whether one linkage payload carries any non-empty literal targeting
- * `key` (value-bearing leaf conditions on `key`, `set_field` literal actions
- * targeting `key`, and — when `includeOwnAssign` is set — `assign` literal
- * actions). Shares its matching predicates with {@link scrubLinkageDateLiterals}
- * so the confirmation gate and the scrub stay in lockstep.
- */
+function actionHasDateLiterals(action: FieldLinkageAction, key: string, includeOwnAssign: boolean): boolean {
+  for (const slot of getActionDynamicValues(action)) {
+    if (
+      matchesDateTargetSlot(slot.targetKey, key, includeOwnAssign)
+      && typeof slot.value === "object"
+      && slot.value !== null
+      && (slot.value as DynamicValue).kind === "literal"
+      && !isEmptyDateLiteral((slot.value as { kind: "literal"; value: unknown }).value)
+    ) {
+      return true;
+    }
+  }
+
+  for (const slot of getActionConditions(action)) {
+    if (conditionHasDateLiterals(slot.condition as LinkageCondition, key)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function hasLinkageDateLiterals(
   linkage: FieldLinkage,
   key: string,
@@ -640,20 +753,16 @@ export function hasLinkageDateLiterals(
   const includeOwnAssign = options?.includeOwnAssign === true;
 
   return linkage.rules.some(rule => {
-    if (rule.trigger.kind === "condition" && conditionHasDateLiterals(rule.trigger.condition, key)) {
+    const triggerCondition = getTriggerCondition(rule.trigger);
+
+    if (triggerCondition !== undefined && conditionHasDateLiterals(triggerCondition, key)) {
       return true;
     }
 
-    return rule.actions.some(
-      action => isTargetDateLiteralAction(action, key, includeOwnAssign) && !isEmptyDateLiteral(action.value.value)
-    );
+    return rule.actions.some(action => actionHasDateLiterals(action, key, includeOwnAssign));
   });
 }
 
-/**
- * Report whether any node in `scope` of `layer` carries an authored linkage
- * literal targeting `key` (including own `assign` literals on `targetFieldId`).
- */
 export function hasScopedDateLiterals(
   layer: PresentationLayer,
   scope: ScopePath,
@@ -715,14 +824,21 @@ function scrubActionDateLiterals(
   target: DateGranularityScrubTarget,
   includeOwnAssign: boolean
 ): FieldLinkageAction {
-  if (
-    isTargetDateLiteralAction(action, target.key, includeOwnAssign)
-    && !isDateLiteralCompatible(target.fieldType, action.value.value, target.nextGranularity)
-  ) {
-    return { ...action, value: { kind: "literal", value: "" } };
-  }
+  let next = mapActionDynamicValues(action, (value, meta) => {
+    if (
+      matchesDateTargetSlot(meta.targetKey, target.key, includeOwnAssign)
+      && value.kind === "literal"
+      && !isDateLiteralCompatible(target.fieldType, value.value, target.nextGranularity)
+    ) {
+      return { kind: "literal", value: "" };
+    }
 
-  return action;
+    return value;
+  });
+
+  next = mapActionConditions(next, condition => scrubConditionDateLiterals(condition, target)) ?? next;
+
+  return next;
 }
 
 function scrubRuleDateLiterals(
@@ -730,16 +846,7 @@ function scrubRuleDateLiterals(
   target: DateGranularityScrubTarget,
   includeOwnAssign: boolean
 ): FieldLinkageRule {
-  let { trigger } = rule;
-
-  if (trigger.kind === "condition") {
-    const condition = scrubConditionDateLiterals(trigger.condition, target);
-
-    if (condition !== trigger.condition) {
-      trigger = { ...trigger, condition };
-    }
-  }
-
+  const trigger = mapTriggerCondition(rule.trigger, condition => scrubConditionDateLiterals(condition, target)) ?? rule.trigger;
   const actions = mapPreservingIdentity(
     rule.actions,
     action => scrubActionDateLiterals(action, target, includeOwnAssign)
@@ -754,17 +861,6 @@ function scrubRuleDateLiterals(
       };
 }
 
-/**
- * Clear every literal inside one linkage payload that is incompatible with
- * `target.nextGranularity` — condition leaves on `target.key`, `set_field`
- * literal actions targeting `target.key`, and (when `includeOwnAssign` is set)
- * own `assign` literal actions. Scope-blind by design, mirroring
- * {@link renameLinkageKeyReferences} and {@link pruneLinkageKeyReferences}: the
- * store applies this directly to the PC root `schema.linkage` when affected.
- *
- * Identity contract: no incompatible literal ⇒ the input linkage reference is
- * returned.
- */
 export function scrubLinkageDateLiterals(
   linkage: FieldLinkage,
   target: DateGranularityScrubTarget,
@@ -783,15 +879,6 @@ export function scrubLinkageDateLiterals(
   return rules === linkage.rules ? linkage : { ...linkage, rules };
 }
 
-/**
- * Clear every linkage literal incompatible with `target.nextGranularity` across
- * the nodes of `layer` whose linkage resolves in exactly `scope` (including own
- * `assign` literals on `targetFieldId`). Subform templates open their own
- * scope, so a same-named key in another scope is left untouched.
- *
- * Identity contract: no incompatible literal in that scope ⇒ the input layer
- * reference is returned.
- */
 export function scrubDateLiterals(
   layer: PresentationLayer,
   scope: ScopePath,

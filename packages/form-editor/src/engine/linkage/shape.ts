@@ -1,4 +1,12 @@
-import type { FieldLinkage, FieldLinkageAction, FieldLinkageRule, LinkageCondition, LinkageTriggerKind } from "../../types";
+import type {
+  ConditionRetrigger,
+  FieldLinkage,
+  FieldLinkageAction,
+  FieldLinkageRule,
+  LinkageCondition,
+  LinkageTrigger,
+  LinkageTriggerKind
+} from "../../types";
 
 import { isRecord } from "../validation";
 
@@ -56,6 +64,71 @@ export function ruleCondition(rule: FieldLinkageRule): LinkageCondition | undefi
   }
 
   return rule.trigger.condition as LinkageCondition | undefined;
+}
+
+/**
+ * The retrigger policy of a `condition`-triggered rule (`"edge"` by default).
+ */
+export function ruleConditionRetrigger(rule: FieldLinkageRule): ConditionRetrigger {
+  if (!isRecord(rule) || !isRecord(rule.trigger) || rule.trigger.kind !== "condition") {
+    return "edge";
+  }
+
+  return rule.trigger.retrigger === "always" ? "always" : "edge";
+}
+
+/**
+ * The optional `when` guard of an event-triggered rule, or `undefined` when
+ * absent, on a `condition` trigger, or malformed.
+ */
+export function ruleWhen(rule: FieldLinkageRule): LinkageCondition | undefined {
+  if (!isRecord(rule) || !isRecord(rule.trigger) || rule.trigger.kind === "condition") {
+    return undefined;
+  }
+
+  return isRecord(rule.trigger.when) ? (rule.trigger.when as unknown as LinkageCondition) : undefined;
+}
+
+/**
+ * The condition attached to a trigger — `trigger.condition` for a `condition`
+ * trigger or `trigger.when` for a guarded event trigger.
+ */
+export function getTriggerCondition(trigger: LinkageTrigger): LinkageCondition | undefined {
+  return trigger.kind === "condition" ? trigger.condition : trigger.when;
+}
+
+/**
+ * Rewrite the condition attached to a trigger (either `condition` or an event's
+ * `when` guard), preserving identity when unchanged. Returning `undefined`
+ * from `mapper` drops the entire trigger (and thus its rule), so pruning a
+ * guarded event's only referenced field never silently turns a guarded side
+ * effect into an unconditional one.
+ */
+export function mapTriggerCondition(
+  trigger: LinkageTrigger,
+  mapper: (condition: LinkageCondition) => LinkageCondition | undefined
+): LinkageTrigger | undefined {
+  if (trigger.kind === "condition") {
+    const next = mapper(trigger.condition);
+
+    if (next === undefined) {
+      return undefined;
+    }
+
+    return next === trigger.condition ? trigger : { ...trigger, condition: next };
+  }
+
+  if (trigger.when === undefined) {
+    return trigger;
+  }
+
+  const next = mapper(trigger.when);
+
+  if (next === undefined) {
+    return undefined;
+  }
+
+  return next === trigger.when ? trigger : { ...trigger, when: next };
 }
 
 /**

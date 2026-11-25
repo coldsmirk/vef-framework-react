@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FormEditorStoreProvider } from "../../../../store/form-store";
 import { definePropertyEntry } from "../../../../types";
+import { PreviewRuntimeProvider } from "../../../preview-runtime-context";
 import { LinkageRulesEntry } from "./linkage-rules-entry";
 
 const entry = definePropertyEntry<FormField, FieldLinkage | undefined>({
@@ -338,9 +339,9 @@ describe("linkage rules entry", () => {
 
       await user.click(screen.getByRole("switch", { name: "重复触发" }));
 
-      // The toggle lives on the effect action, not the trigger.
-      expect(lastLinkage(onChange).rules?.[0]?.actions?.[0]).toMatchObject({
-        type: "alert",
+      // The toggle lives on the condition trigger, not on individual actions.
+      expect(lastLinkage(onChange).rules?.[0]?.trigger).toMatchObject({
+        kind: "condition",
         retrigger: "always"
       });
     });
@@ -406,7 +407,7 @@ describe("linkage rules entry", () => {
       expect(lastLinkage(onChange).rules?.[0]?.actions).toEqual([{ type: "reset" }]);
     });
 
-    it("renders the target picker for a set_field action", () => {
+    it("renders the target picker for a set_fields action", () => {
       const target = targetField({
         rules: [
           {
@@ -414,9 +415,8 @@ describe("linkage rules entry", () => {
             trigger: { kind: "change" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "",
-                value: { kind: "literal", value: "" }
+                type: "set_fields",
+                assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
               }
             ]
           }
@@ -570,6 +570,7 @@ describe("linkage rules entry", () => {
             id: "R1",
             trigger: {
               kind: "condition",
+              retrigger: "always",
               condition: {
                 kind: "group",
                 logic: "all",
@@ -586,8 +587,7 @@ describe("linkage rules entry", () => {
               {
                 id: "A1",
                 type: "alert",
-                message: { kind: "literal", value: "hi" },
-                retrigger: "always"
+                message: { kind: "literal", value: "hi" }
               }
             ]
           }
@@ -598,10 +598,81 @@ describe("linkage rules entry", () => {
 
       await user.click(screen.getByRole("switch", { name: "重复触发" }));
 
-      const action = lastLinkage(onChange).rules?.[0]?.actions?.[0];
-      expect(action).toMatchObject({ id: "A1", type: "alert" });
+      const trigger = lastLinkage(onChange).rules?.[0]?.trigger;
+      expect(trigger).toMatchObject({ kind: "condition" });
       // Absent, not `undefined` — the persisted schema stays minimal.
-      expect(action).not.toHaveProperty("retrigger");
+      expect(trigger).not.toHaveProperty("retrigger");
+    });
+  });
+
+  describe("service capability gating", () => {
+    it("hides api_call and navigate from action options when unwired, yet keeps a stored api_call editable", async () => {
+      const user = userEvent.setup();
+      const target = targetField({
+        rules: [
+          {
+            id: "R1",
+            trigger: { kind: "commit" },
+            actions: [
+              {
+                id: "A1",
+                type: "submit"
+              },
+              {
+                id: "A2",
+                type: "api_call",
+                request: { resource: "hr/staff", action: "find" },
+                output: "res"
+              }
+            ]
+          }
+        ]
+      });
+      const schema = schemaFor(target);
+
+      render(
+        <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: false, hasNavigate: false } }}>
+          <FormEditorStoreProvider initialState={{ schema }}>
+            <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={vi.fn()} />
+          </FormEditorStoreProvider>
+        </PreviewRuntimeProvider>
+      );
+
+      // The already-stored api_call stays rendered with its output intact.
+      expect(screen.getByDisplayValue("res")).toBeInTheDocument();
+
+      // Opening the first action's type selector omits api_call and navigate.
+      const [, firstActionTypeSelect] = screen.getAllByRole("combobox");
+      await user.click(firstActionTypeSelect as HTMLElement);
+      expect(screen.queryByRole("option", { name: "调用接口" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: "页面跳转" })).not.toBeInTheDocument();
+    });
+
+    it("offers api_call and navigate when host services are wired", async () => {
+      const user = userEvent.setup();
+      const target = targetField({
+        rules: [
+          {
+            id: "R1",
+            trigger: { kind: "commit" },
+            actions: [{ id: "A1", type: "submit" }]
+          }
+        ]
+      });
+      const schema = schemaFor(target);
+
+      render(
+        <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
+          <FormEditorStoreProvider initialState={{ schema }}>
+            <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={vi.fn()} />
+          </FormEditorStoreProvider>
+        </PreviewRuntimeProvider>
+      );
+
+      const [, actionTypeSelect] = screen.getAllByRole("combobox");
+      await user.click(actionTypeSelect as HTMLElement);
+      expect(await screen.findByText("调用接口")).toBeInTheDocument();
+      expect(screen.getByText("页面跳转")).toBeInTheDocument();
     });
   });
 
@@ -615,9 +686,8 @@ describe("linkage rules entry", () => {
             actions: [
               {
                 id: "A1",
-                type: "set_field",
-                targetKey: "",
-                value: { kind: "literal", value: "x" }
+                type: "set_fields",
+                assignments: [{ targetKey: "", value: { kind: "literal", value: "x" } }]
               }
             ]
           }
@@ -656,9 +726,8 @@ describe("linkage rules entry", () => {
             actions: [
               {
                 id: "A2",
-                type: "set_field",
-                targetKey: "",
-                value: { kind: "literal", value: "x" }
+                type: "set_fields",
+                assignments: [{ targetKey: "", value: { kind: "literal", value: "x" } }]
               }
             ]
           }

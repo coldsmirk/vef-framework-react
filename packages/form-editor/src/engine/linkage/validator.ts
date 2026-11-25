@@ -3,6 +3,7 @@ import type {
   EffectAction,
   FieldLinkage,
   FieldLinkageAction,
+  KeyedFormField,
   KeyedNodeUnion,
   LinkageCondition,
   LinkageTrigger,
@@ -14,16 +15,33 @@ import type {
 import type { ScopePath } from "../schema/walk";
 import type { ValidationIssue } from "../validation";
 
-import { assertNever, exhaustive } from "../assert-never";
+import { assertNever } from "../assert-never";
 import { isKeyedNode } from "../keys";
 import { isLeafField, walkNodes } from "../schema/walk";
-import { createIssue, isRecord, validateRemoteRequest } from "../validation";
+import { createIssue, isRecord, isValidIdentifier, validateRemoteRequest } from "../validation";
+import {
+  getActionConditions,
+  getActionDataSourceId,
+  getActionDescriptor,
+  getActionDynamicValues,
+  getActionOutput,
+  getActionRequests,
+  getActionTargetKeys,
+  getActionVariable
+} from "./action-descriptors";
 import { findLinkageCycles } from "./cycle";
 import { LINKAGE_OPERATORS } from "./operators";
 import { parseLeafSource } from "./scope";
 import { hasConditionTriggeredShow } from "./shape";
 import { collectConditionSourceKeys } from "./source-tracking";
-import { ALERT_LEVELS, FIELD_TRIGGER_KINDS, FORM_TRIGGER_KINDS, isStateAction, KEYED_ONLY_ACTIONS, LINKAGE_ACTION_TYPES } from "./taxonomy";
+import {
+  ALERT_LEVELS,
+  FIELD_TRIGGER_KINDS,
+  FORM_TRIGGER_KINDS,
+  isStateAction,
+  KEYED_ONLY_ACTIONS,
+  LINKAGE_ACTION_TYPES
+} from "./taxonomy";
 
 export interface LinkageValidationResult {
   issues: ValidationIssue[];
@@ -32,8 +50,8 @@ export interface LinkageValidationResult {
 /**
  * The trigger / action constraints a given linkage scope enforces. Field rules
  * allow field triggers and state actions; form-scope rules (the global "events"
- * panel) allow only lifecycle triggers and effect actions, because the form has
- * no self field whose state could be derived.
+ * panel) allow only lifecycle / condition triggers and effect actions, because
+ * the form has no self field whose state could be derived.
  */
 interface RuleScopePolicy {
   triggerKinds: readonly LinkageTriggerKind[];
@@ -57,15 +75,7 @@ const ALERT_LEVEL_SET: ReadonlySet<string> = new Set(ALERT_LEVELS);
 /**
  * The state actions that WRITE form-data values (`assign` directly, `script`
  * via its returned `value` patch). Only these create real feedback edges for
- * the cycle detector: the level-stable actions (`show` / `hide` / `enable` /
- * `disable` / `require` / `optional`) derive state from values without ever
- * writing one back (hiding does not clear values in this runtime), so a rule
- * carrying only those may freely reference any field — including the block
- * itself ("require self when self is empty").
- *
- * Declared as a compile-checked table (the taxonomy.ts pattern): a future
- * state action type forces an explicit true/false entry here, so the cycle
- * detector can never silently miss a new value-writing action.
+ * the cycle detector.
  */
 const VALUE_WRITING_STATE_ACTION_TABLE: Record<StateActionType, boolean> = {
   show: false,
@@ -84,10 +94,16 @@ const VALUE_WRITING_STATE_ACTIONS: ReadonlySet<StateActionType> = new Set(
 );
 
 /**
- * Per-scope view of the keyed nodes available as linkage sources. A subform
- * template opens its own scope, so a rule's `sourceKey` is resolved against the
- * keys in **its own** scope — a row field references its row siblings, not the
- * outer form, matching the runtime's per-row evaluation.
+ * Whether a node is a legal write target for `set_fields` — a keyed leaf field
+ * other than `upload` (and never a container such as `subform`). Shared by the
+ * validator, runtime write gate, and designer pickers.
+ */
+export function isWritableTargetField(node: Block): node is KeyedFormField {
+  return isLeafField(node) && isKeyedNode(node) && node.type !== "upload";
+}
+
+/**
+ * Per-scope view of the keyed nodes available as linkage sources and targets.
  */
 type KeyedNodesByScope = Map<string, Map<string, KeyedNodeUnion>>;
 
@@ -97,20 +113,7 @@ function scopeId(scope: ScopePath): string {
 
 /**
  * Validates linkage data for one device presentation (import dialog / API
- * payload). The editor's own mutators always produce well-formed trees, so this
- * is the boundary guard. The **tree** must already be structurally valid (run
- * `validateSchema` first); the linkage payloads hanging off it are treated as
- * untrusted JSON and plain-object-guarded before any member access.
- * `formLinkage` is the shared form-scope linkage; pass it alongside the tree it
- * should resolve against (the pc presentation).
- *
- * Walks the presentation's node tree — leaf fields AND containers carry
- * linkage — to (a) flag malformed nodes, (b) confirm referenced source / target
- * keys exist within the rule's value scope (dangling references are warnings:
- * the editor legitimately produces them mid-authoring), (c) reject state
- * actions on edge triggers and keyed-only actions on non-keyed blocks, and
- * (d) accumulate scope-namespaced edges (condition → value-writing state
- * action) for the cycle detector.
+ * payload). All action-slot traversals run through {@link "./action-descriptors"!ACTION_DESCRIPTORS}.
  */
 export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: FieldLinkage): LinkageValidationResult {
   const issues: ValidationIssue[] = [];
@@ -170,12 +173,8 @@ export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: Fi
     });
   });
 
-  // Form-scope linkage (the global "events" panel): lifecycle / condition
-  // triggers and effect actions only, resolved against the root value scope.
   if (formLinkage !== undefined) {
     if (isRecord(formLinkage)) {
-      // The form has no self field, so default-state overrides are meaningless
-      // at this scope — reject them rather than carry dead configuration.
       if (formLinkage.defaults !== undefined) {
         issues.push(createIssue("schema.linkage.defaults", "defaults_on_form_scope"));
       }
@@ -202,15 +201,6 @@ export function validateLinkageSchema(layer: PresentationLayer, formLinkage?: Fi
   return { issues };
 }
 
-/**
- * The value-bearing actions (`require` / `optional` / `assign`) and
- * `defaults.required` drive a single keyed leaf field's runtime state
- * (required / value). A subform is keyed but a container — the runtime applies
- * none of these to it — so they are rejected on it, the same as on a non-keyed
- * block, rather than passing validation and silently no-op-ing at runtime.
- * (`show` / `hide` / `enable` / `disable` are NOT gated here: they apply to
- * containers too, a container's `disable` propagating to its descendants.)
- */
 function isKeyedLeaf(block: Block): boolean {
   return isLeafField(block) && isKeyedNode(block);
 }
@@ -242,13 +232,6 @@ function validateDefaults(args: {
   }
 }
 
-/**
- * A block that starts hidden can only ever become visible through one of its
- * OWN rules carrying a `show` action — state actions are self-targeted, and
- * the form scope cannot show fields. Default-hidden with no such rule means
- * the block is invisible for the form's whole lifetime; warn, because this is
- * almost always the leftover of deleting the field its show rule depended on.
- */
 function flagUnreachableHidden(args: {
   defaults: unknown;
   issues: ValidationIssue[];
@@ -371,26 +354,8 @@ function validateRule(args: {
     where: `${where}.actions`
   });
 
-  // Only a condition trigger paired with a value-WRITING state action
-  // (`assign` / `script`) makes this block's value depend on its source fields
-  // — the feedback loop the cycle detector guards. Level-stable state actions
-  // and effect-only rules create no write-back, so they are free to reference
-  // any field, including the block itself.
   const writesValue = validActions.some(action => isStateAction(action) && VALUE_WRITING_STATE_ACTIONS.has(action.type));
 
-  // Both write-back cases register on the same edge map for the same reason —
-  // a condition trigger whose actions write a statically-known key make that
-  // key depend on the trigger's source fields, the feedback loop the cycle
-  // detector guards. Collect the write targets in registration order, then
-  // register each:
-  //  - the block's OWN key, when a value-WRITING state action (`assign` /
-  //    `script`) pairs with the condition (level-stable state actions and
-  //    effect-only rules create no write-back);
-  //  - every `set_field` with `retrigger: "always"`, which re-fires whenever a
-  //    tracked source changes while the condition holds (rising-edge `set_field`
-  //    fires once per false→true transition and settles, so it stays edge-free).
-  // A plain list (not a set) preserves the per-target issue output when a key
-  // is targeted twice.
   if (trigger?.kind === "condition") {
     const targetKeys: string[] = [];
 
@@ -398,9 +363,13 @@ function validateRule(args: {
       targetKeys.push(block.key);
     }
 
-    for (const action of validActions) {
-      if (action.type === "set_field" && action.retrigger === "always" && action.targetKey !== "") {
-        targetKeys.push(action.targetKey);
+    if (trigger.retrigger === "always") {
+      for (const action of validActions) {
+        for (const slot of getActionTargetKeys(action)) {
+          if (typeof slot.targetKey === "string" && slot.targetKey.length > 0) {
+            targetKeys.push(slot.targetKey);
+          }
+        }
       }
     }
 
@@ -418,12 +387,6 @@ function validateRule(args: {
   }
 }
 
-/**
- * Validate a rule's trigger against the scope policy. Returns the trigger only
- * when it is structurally valid end to end — for a `condition` kind that
- * includes its condition tree, so callers (action / edge rules) can safely walk
- * `trigger.condition`. Returns `undefined` otherwise.
- */
 function validateTrigger(args: {
   block: Block | null;
   issues: ValidationIssue[];
@@ -455,15 +418,20 @@ function validateTrigger(args: {
     return undefined;
   }
 
-  // The `change` edge fires off a keyed leaf field's onChange; a container or a
-  // non-keyed presentation block has no such hook, so the trigger would never
-  // run. Reject it rather than pass validation and silently no-op at runtime.
-  if (trigger.kind === "change" && block !== null && !isKeyedLeaf(block)) {
-    issues.push(createIssue(`${where}.kind`, "trigger_requires_keyed_leaf", undefined, ruleId));
+  if ((trigger.kind === "change" || trigger.kind === "commit") && block !== null && !isKeyedLeaf(block)) {
+    issues.push(createIssue(`${where}.kind`, "trigger_requires_keyed_leaf", { kind: trigger.kind }, ruleId));
     return undefined;
   }
 
   if (trigger.kind === "condition") {
+    if (trigger.retrigger !== undefined && trigger.retrigger !== "edge" && trigger.retrigger !== "always") {
+      issues.push(createIssue(`${where}.retrigger`, "retrigger_invalid", undefined, ruleId));
+    }
+
+    if (trigger.when !== undefined) {
+      issues.push(createIssue(`${where}.when`, "trigger_malformed", undefined, ruleId));
+    }
+
     const conditionValid = validateCondition({
       condition: trigger.condition,
       issues,
@@ -475,18 +443,31 @@ function validateTrigger(args: {
     if (!conditionValid) {
       return undefined;
     }
+
+    return trigger as unknown as LinkageTrigger;
   }
 
-  // Runtime-verified: `kind` is one of this scope's trigger kinds and a
-  // condition trigger's condition tree passed the structural pass above.
+  if (trigger.retrigger !== undefined) {
+    if (trigger.retrigger !== "edge" && trigger.retrigger !== "always") {
+      issues.push(createIssue(`${where}.retrigger`, "retrigger_invalid", undefined, ruleId));
+    } else {
+      issues.push(createIssue(`${where}.retrigger`, "retrigger_ignored", undefined, ruleId));
+    }
+  }
+
+  if (trigger.when !== undefined) {
+    validateCondition({
+      condition: trigger.when,
+      issues,
+      keyedNodes,
+      ruleId,
+      where: `${where}.when`
+    });
+  }
+
   return trigger as unknown as LinkageTrigger;
 }
 
-/**
- * Validate a rule's action list. Returns the actions that passed the
- * plain-object guard and the known-type check, so the caller's value-writing
- * scan never touches malformed entries.
- */
 function validateActions(args: {
   actions: unknown;
   block: Block | null;
@@ -520,6 +501,7 @@ function validateActions(args: {
 
   const entries: unknown[] = actions;
   const valid: FieldLinkageAction[] = [];
+  const priorOutputs = new Set<string>();
 
   for (const [actionIndex, action] of entries.entries()) {
     const validated = validateAction({
@@ -529,6 +511,7 @@ function validateActions(args: {
       issues,
       keyedNodes,
       policy,
+      priorOutputs,
       ruleId,
       where: `${where}[${actionIndex}]`
     });
@@ -548,6 +531,7 @@ function validateAction(args: {
   issues: ValidationIssue[];
   keyedNodes: Map<string, KeyedNodeUnion>;
   policy: RuleScopePolicy;
+  priorOutputs: Set<string>;
   ruleId: string | undefined;
   where: string;
 }): FieldLinkageAction | undefined {
@@ -558,6 +542,7 @@ function validateAction(args: {
     issues,
     keyedNodes,
     policy,
+    priorOutputs,
     ruleId,
     where
   } = args;
@@ -572,8 +557,6 @@ function validateAction(args: {
     return undefined;
   }
 
-  // Runtime-verified discriminant; each member's payload is still
-  // runtime-checked field by field below before being trusted.
   const typed = action as FieldLinkageAction;
 
   if (isStateAction(typed)) {
@@ -587,40 +570,42 @@ function validateAction(args: {
       return undefined;
     }
 
-    validateStateAction({
+    validateStateActionExtras({
       action: typed,
       block,
       issues,
       ruleId,
       where
     });
+    validateActionDescriptorSlots({
+      action: typed,
+      issues,
+      keyedNodes,
+      priorOutputs,
+      ruleId,
+      where
+    });
     return typed;
   }
 
-  // `retrigger` tunes how an effect re-fires under a `condition` trigger; an
-  // unknown value is structural breakage, while a value on an edge-triggered
-  // rule is merely dead configuration the runtime ignores.
-  const { retrigger } = action;
-
-  if (retrigger !== undefined) {
-    if (retrigger !== "edge" && retrigger !== "always") {
-      issues.push(createIssue(`${where}.retrigger`, "retrigger_invalid", undefined, ruleId));
-    } else if (isEdge) {
-      issues.push(createIssue(`${where}.retrigger`, "retrigger_ignored", undefined, ruleId));
-    }
-  }
-
-  validateEffectAction({
+  validateEffectActionExtras({
+    action: typed,
+    issues,
+    ruleId,
+    where
+  });
+  validateActionDescriptorSlots({
     action: typed,
     issues,
     keyedNodes,
+    priorOutputs,
     ruleId,
     where
   });
   return typed;
 }
 
-function validateStateAction(args: {
+function validateStateActionExtras(args: {
   action: StateAction;
   block: Block | null;
   issues: ValidationIssue[];
@@ -639,14 +624,7 @@ function validateStateAction(args: {
     issues.push(createIssue(`${where}.type`, "action_requires_keyed_leaf", { type: action.type }, ruleId));
   }
 
-  if (action.type === "assign") {
-    validateActionValue({
-      issues,
-      ruleId,
-      value: action.value,
-      where: `${where}.value`
-    });
-  } else if (action.type === "script") {
+  if (action.type === "script") {
     if (typeof action.source !== "string") {
       issues.push(createIssue(`${where}.source`, "action_malformed", undefined, ruleId));
     } else if (action.source.length === 0) {
@@ -655,10 +633,98 @@ function validateStateAction(args: {
   }
 }
 
-function validateEffectAction(args: {
+function validateEffectActionExtras(args: {
   action: EffectAction;
   issues: ValidationIssue[];
+  ruleId: string | undefined;
+  where: string;
+}): void {
+  const {
+    action,
+    issues,
+    ruleId,
+    where
+  } = args;
+
+  if (action.onError !== undefined && action.onError !== "stop" && action.onError !== "continue") {
+    issues.push(createIssue(`${where}.onError`, "on_error_invalid", undefined, ruleId));
+  }
+
+  switch (action.type) {
+    case "set_fields": {
+      if (!Array.isArray(action.assignments)) {
+        issues.push(createIssue(`${where}.assignments`, "action_malformed", undefined, ruleId));
+        return;
+      }
+
+      if (action.assignments.length === 0) {
+        issues.push(createIssue(`${where}.assignments`, "assignments_empty", undefined, ruleId));
+        return;
+      }
+
+      for (const [index, entry] of action.assignments.entries()) {
+        if (!isRecord(entry)) {
+          issues.push(createIssue(`${where}.assignments[${index}]`, "action_malformed", undefined, ruleId));
+        }
+      }
+
+      return;
+    }
+
+    case "select_record": {
+      if (action.title !== undefined && typeof action.title !== "string") {
+        issues.push(createIssue(`${where}.title`, "action_malformed", undefined, ruleId));
+      }
+
+      if (action.emptyMessage !== undefined && typeof action.emptyMessage !== "string") {
+        issues.push(createIssue(`${where}.emptyMessage`, "action_malformed", undefined, ruleId));
+      }
+
+      if (action.whenNone !== undefined && action.whenNone !== "continue" && action.whenNone !== "stop") {
+        issues.push(createIssue(`${where}.whenNone`, "when_none_invalid", undefined, ruleId));
+      }
+
+      if (action.columns !== undefined) {
+        if (Array.isArray(action.columns)) {
+          for (const [index, column] of action.columns.entries()) {
+            if (!isRecord(column) || typeof column.path !== "string" || typeof column.label !== "string") {
+              issues.push(createIssue(`${where}.columns[${index}]`, "action_malformed", undefined, ruleId));
+            }
+          }
+        } else {
+          issues.push(createIssue(`${where}.columns`, "action_malformed", undefined, ruleId));
+        }
+      }
+
+      return;
+    }
+
+    case "alert": {
+      if (action.level !== undefined && !ALERT_LEVEL_SET.has(action.level)) {
+        issues.push(createIssue(`${where}.level`, "alert_level_invalid", undefined, ruleId));
+      }
+
+      break;
+    }
+
+    default: {
+      break;
+    }
+  }
+}
+
+/**
+ * Validate every structural slot declared on `action`'s descriptor: requests,
+ * target keys, dynamic values (checking `$steps` against `priorOutputs`),
+ * conditions, variable, dataSourceId, and finally the step's own `output`
+ * (registered into `priorOutputs` AFTER checking its inputs so a step can
+ * never reference itself).
+ */
+function validateActionDescriptorSlots(args: {
+  action: FieldLinkageAction;
+  issues: ValidationIssue[];
   keyedNodes: Map<string, KeyedNodeUnion>;
+  priorOutputs: Set<string>;
   ruleId: string | undefined;
   where: string;
 }): void {
@@ -666,121 +732,118 @@ function validateEffectAction(args: {
     action,
     issues,
     keyedNodes,
+    priorOutputs,
     ruleId,
     where
   } = args;
 
-  switch (action.type) {
-    case "set_field": {
-      const { targetKey } = action;
+  if (!getActionDescriptor(action)) {
+    return;
+  }
 
-      if (typeof targetKey !== "string") {
-        issues.push(createIssue(`${where}.targetKey`, "action_malformed", undefined, ruleId));
-      } else if (targetKey.length === 0) {
-        issues.push(createIssue(`${where}.targetKey`, "target_key_empty", undefined, ruleId));
-      } else if (!keyedNodes.has(targetKey)) {
-        // Dangling targets are warnings: deleting a field after a rule
-        // referenced it is a legitimate mid-authoring state. A subform key is a
-        // legal target — assigning an array value is the documented way to
-        // reset a repeating group's rows wholesale, and the runtime applies it
-        // through the form api like any scalar key.
-        issues.push(createIssue(`${where}.targetKey`, "target_key_unresolved", { key: targetKey }, ruleId));
+  for (const slot of getActionRequests(action)) {
+    issues.push(...validateRemoteRequest(slot.request, `${where}.${slot.path}`, ruleId));
+  }
+
+  const seenTargets = new Set<string>();
+
+  for (const slot of getActionTargetKeys(action)) {
+    const slotPath = `${where}.${slot.path}`;
+
+    if (typeof slot.targetKey !== "string") {
+      issues.push(createIssue(slotPath, "action_malformed", undefined, ruleId));
+      continue;
+    }
+
+    if (slot.targetKey.length === 0) {
+      issues.push(createIssue(slotPath, "target_key_empty", undefined, ruleId));
+      continue;
+    }
+
+    if (seenTargets.has(slot.targetKey)) {
+      issues.push(createIssue(slotPath, "target_key_duplicate", { key: slot.targetKey }, ruleId));
+      continue;
+    }
+
+    seenTargets.add(slot.targetKey);
+
+    const targetNode = keyedNodes.get(slot.targetKey);
+
+    if (targetNode === undefined) {
+      issues.push(createIssue(slotPath, "target_key_unresolved", { key: slot.targetKey }, ruleId));
+      continue;
+    }
+
+    if (!isWritableTargetField(targetNode)) {
+      issues.push(createIssue(slotPath, "target_not_writable", { key: slot.targetKey, type: targetNode.type }, ruleId));
+    }
+  }
+
+  for (const slot of getActionDynamicValues(action)) {
+    validateDynamicValue({
+      allowSteps: slot.allowSteps,
+      issues,
+      keyedNodes,
+      priorOutputs,
+      ruleId,
+      value: slot.value,
+      where: `${where}.${slot.path}`
+    });
+  }
+
+  for (const slot of getActionConditions(action)) {
+    validateCondition({
+      condition: slot.condition,
+      issues,
+      keyedNodes,
+      ruleId,
+      where: `${where}.${slot.path}`
+    });
+  }
+
+  const variableSlot = getActionVariable(action);
+
+  if (variableSlot !== undefined) {
+    const slotPath = `${where}.${variableSlot.path}`;
+
+    if (typeof variableSlot.value !== "string") {
+      issues.push(createIssue(slotPath, "action_malformed", undefined, ruleId));
+    } else if (variableSlot.value.length === 0) {
+      issues.push(createIssue(slotPath, "variable_empty", undefined, ruleId));
+    }
+  }
+
+  const dataSourceSlot = getActionDataSourceId(action);
+
+  if (dataSourceSlot !== undefined) {
+    const slotPath = `${where}.${dataSourceSlot.path}`;
+
+    if (typeof dataSourceSlot.value !== "string") {
+      issues.push(createIssue(slotPath, "action_malformed", undefined, ruleId));
+    } else if (dataSourceSlot.value.length === 0) {
+      issues.push(createIssue(slotPath, "data_source_id_empty", undefined, ruleId));
+    }
+  }
+
+  const outputSlot = getActionOutput(action);
+
+  if (outputSlot !== undefined) {
+    const slotPath = `${where}.${outputSlot.path}`;
+
+    if (outputSlot.value === undefined) {
+      if (outputSlot.required) {
+        issues.push(createIssue(slotPath, "action_malformed", undefined, ruleId));
       }
-
-      validateActionValue({
-        issues,
-        ruleId,
-        value: action.value,
-        where: `${where}.value`
-      });
-      return;
-    }
-
-    case "set_variable": {
-      const { variable } = action;
-
-      if (typeof variable !== "string") {
-        issues.push(createIssue(`${where}.variable`, "action_malformed", undefined, ruleId));
-      } else if (variable.length === 0) {
-        issues.push(createIssue(`${where}.variable`, "variable_empty", undefined, ruleId));
-      }
-
-      validateActionValue({
-        issues,
-        ruleId,
-        value: action.value,
-        where: `${where}.value`
-      });
-      return;
-    }
-
-    case "refresh_data_source": {
-      // Like `set_variable`, the target is a form-global name, not a same-scope
-      // keyed node, so only non-emptiness is checked here; the editor's picker
-      // constrains it to an existing data source.
-      const { dataSourceId } = action;
-
-      if (typeof dataSourceId !== "string") {
-        issues.push(createIssue(`${where}.dataSourceId`, "action_malformed", undefined, ruleId));
-      } else if (dataSourceId.length === 0) {
-        issues.push(createIssue(`${where}.dataSourceId`, "data_source_id_empty", undefined, ruleId));
-      }
-
-      return;
-    }
-
-    case "alert": {
-      const { level } = action;
-
-      if (level !== undefined && !ALERT_LEVEL_SET.has(level)) {
-        issues.push(createIssue(`${where}.level`, "alert_level_invalid", undefined, ruleId));
-      }
-
-      validateActionValue({
-        issues,
-        ruleId,
-        value: action.message,
-        where: `${where}.message`
-      });
-      return;
-    }
-
-    case "navigate": {
-      validateActionValue({
-        issues,
-        ruleId,
-        value: action.to,
-        where: `${where}.to`
-      });
-      return;
-    }
-
-    case "api_call": {
-      issues.push(...validateRemoteRequest(action.request, `${where}.request`, ruleId));
-      return;
-    }
-
-    case "submit": {
-      return;
-    }
-
-    case "reset": {
-      return;
-    }
-
-    default: {
-      exhaustive(action);
+    } else if (typeof outputSlot.value !== "string" || !isValidIdentifier(outputSlot.value)) {
+      issues.push(createIssue(slotPath, "output_invalid", undefined, ruleId));
+    } else if (priorOutputs.has(outputSlot.value)) {
+      issues.push(createIssue(slotPath, "output_duplicate", { output: outputSlot.value }, ruleId));
+    } else {
+      priorOutputs.add(outputSlot.value);
     }
   }
 }
 
-/**
- * Validate a condition tree. Returns `true` only when the tree is structurally
- * sound — every node a plain object of a known kind, group children arrays,
- * `sourceKey` / `source` strings — i.e. safe for `collectConditionSourceKeys`
- * and the runtime matcher to walk. Empty groups and empty / dangling source
- * keys are warnings and do NOT invalidate the tree.
- */
 function validateCondition(args: {
   condition: unknown;
   issues: ValidationIssue[];
@@ -843,23 +906,28 @@ function validateCondition(args: {
 }
 
 /**
- * Check that a leaf `sourceKey` names something that can hold a value: a form
- * key present in the rule's value scope (spelled plain or `$form.key`), or a
- * path under a context root. A context path's members are host data this
- * static pass cannot see into, so any member is accepted; a `$` root no scope
- * slot answers to is not — it could never resolve, and silently never matching
- * is exactly what a typo like `$applcant` would otherwise do.
+ * Check that a scope path (`sourceKey` in a leaf condition or `path` in a
+ * `reference` dynamic value) names a resolvable slot. Shared by linkage
+ * conditions, action dynamic values, and remote option-source params.
+ *
+ * When `keyedNodes` is omitted (form-global remote data sources whose scope
+ * depends on where they are referenced), form-key existence is skipped while
+ * scope-root validity and `$steps` prohibition still hold.
  */
-function validateLeafSource(args: {
+export function validateScopePath(args: {
+  allowSteps: boolean;
   issues: ValidationIssue[];
-  keyedNodes: Map<string, KeyedNodeUnion>;
-  ruleId: string | undefined;
+  keyedNodes: ReadonlyMap<string, unknown> | ReadonlySet<string> | undefined;
+  priorOutputs?: ReadonlySet<string>;
+  ruleId?: string;
   sourceKey: string;
   where: string;
 }): void {
   const {
+    allowSteps,
     issues,
     keyedNodes,
+    priorOutputs,
     ruleId,
     sourceKey,
     where
@@ -868,7 +936,7 @@ function validateLeafSource(args: {
 
   switch (source.kind) {
     case "form": {
-      if (!keyedNodes.has(source.key)) {
+      if (keyedNodes !== undefined && !keyedNodes.has(source.key)) {
         issues.push(createIssue(where, "source_key_unresolved", { key: sourceKey }, ruleId));
       }
 
@@ -876,6 +944,19 @@ function validateLeafSource(args: {
     }
 
     case "context": {
+      return;
+    }
+
+    case "step": {
+      if (!allowSteps) {
+        issues.push(createIssue(where, "source_scope_unknown", { key: sourceKey }, ruleId));
+        return;
+      }
+
+      if (!priorOutputs?.has(source.step)) {
+        issues.push(createIssue(where, "step_output_unresolved", { step: source.step }, ruleId));
+      }
+
       return;
     }
 
@@ -914,7 +995,8 @@ function validateLeafCondition(args: {
   } else if (sourceKey.length === 0) {
     issues.push(createIssue(`${where}.sourceKey`, "source_key_empty", undefined, ruleId));
   } else {
-    validateLeafSource({
+    validateScopePath({
+      allowSteps: false,
       issues,
       keyedNodes,
       ruleId,
@@ -961,9 +1043,6 @@ function validateGroupCondition(args: {
   const { children } = condition;
 
   if (children.length === 0) {
-    // Legal, but almost always a mistake: `all` over no children holds, so
-    // the rule always applies, while `any` never does. The editor never
-    // authors one, so it arrives only from imported or hand-written JSON.
     issues.push(createIssue(`${where}.children`, "condition_group_empty", undefined, ruleId));
   }
 
@@ -982,14 +1061,24 @@ function validateGroupCondition(args: {
   return valid;
 }
 
-function validateActionValue(args: {
+/**
+ * Validate one {@link "../../types"!DynamicValue} slot (`literal` / `reference` /
+ * `expression`). Shared by linkage actions and remote option-source params.
+ */
+export function validateDynamicValue(args: {
+  allowSteps: boolean;
   issues: ValidationIssue[];
-  ruleId: string | undefined;
+  keyedNodes: ReadonlyMap<string, unknown> | ReadonlySet<string> | undefined;
+  priorOutputs?: ReadonlySet<string>;
+  ruleId?: string;
   value: unknown;
   where: string;
 }): void {
   const {
+    allowSteps,
     issues,
+    keyedNodes,
+    priorOutputs,
     ruleId,
     value,
     where
@@ -1001,6 +1090,26 @@ function validateActionValue(args: {
   }
 
   if (value.kind === "literal") {
+    return;
+  }
+
+  if (value.kind === "reference") {
+    if (typeof value.path !== "string") {
+      issues.push(createIssue(`${where}.path`, "value_malformed", undefined, ruleId));
+    } else if (value.path.length === 0) {
+      issues.push(createIssue(`${where}.path`, "source_key_empty", undefined, ruleId));
+    } else {
+      validateScopePath({
+        allowSteps,
+        issues,
+        keyedNodes,
+        priorOutputs,
+        ruleId,
+        sourceKey: value.path,
+        where: `${where}.path`
+      });
+    }
+
     return;
   }
 
@@ -1017,14 +1126,6 @@ function validateActionValue(args: {
   issues.push(createIssue(`${where}.kind`, "value_malformed", undefined, ruleId));
 }
 
-/**
- * Register the dependency edges of one value-writing condition rule onto
- * `targetKey` — the block's own key for `assign` / `script`, the written
- * field's key for a re-triggering `set_field`. Reached only with a
- * structurally validated condition (see `validateTrigger`), so the source-key
- * walk cannot crash. A self-reference here is an error: the rule writes the
- * very value it reads, the textbook feedback loop.
- */
 function registerRuleEdges(args: {
   condition: LinkageCondition;
   edges: Map<string, Set<string>>;
@@ -1053,8 +1154,6 @@ function registerRuleEdges(args: {
       continue;
     }
 
-    // Namespace edges by scope so identical keys reused across scopes never
-    // form a false cross-scope cycle.
     const from = `${scopeKey}::${sourceKey}`;
     const to = `${scopeKey}::${targetKey}`;
     const targets = edges.get(from) ?? new Set<string>();

@@ -1,25 +1,22 @@
 import type { ReactElement, ReactNode } from "react";
 
-import type { DataSourceResolver, FieldOptionSource, FormDataSource } from "../types";
+import type { FieldOptionSource, FormDataSource, FormServices } from "../types";
 
 import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { noopDataSourceResolver } from "../types";
-import { DataSourceProvider, useFieldOptions } from "./data-source-context";
+import { DataSourceProvider, mapRemoteResponseToOptions, useFieldOptions } from "./data-source-context";
 
-// Function.prototype is a no-op function — useful for silencing console without
-// running into `@typescript-eslint/no-empty-function`.
 const silence = Function.prototype as () => void;
 
-function wrap(dataSources: FormDataSource[], resolver: DataSourceResolver) {
+function wrap(dataSources: FormDataSource[], request?: FormServices["request"]) {
   return function Wrapper({ children }: { children: ReactNode }): ReactElement {
-    return <DataSourceProvider dataSources={dataSources} resolver={resolver}>{children}</DataSourceProvider>;
+    return <DataSourceProvider dataSources={dataSources} request={request}>{children}</DataSourceProvider>;
   };
 }
 
-function optionsFor(source: FieldOptionSource, dataSources: FormDataSource[], resolver: DataSourceResolver) {
-  return renderHook(() => useFieldOptions(source), { wrapper: wrap(dataSources, resolver) });
+function optionsFor(source: FieldOptionSource, dataSources: FormDataSource[], request?: FormServices["request"]) {
+  return renderHook(() => useFieldOptions(source), { wrapper: wrap(dataSources, request) });
 }
 
 function Probe({ source }: { source: FieldOptionSource }): ReactElement {
@@ -28,9 +25,30 @@ function Probe({ source }: { source: FieldOptionSource }): ReactElement {
   return <span>{options.map(option => String(option.value)).join(",")}</span>;
 }
 
+describe("mapRemoteResponseToOptions", () => {
+  it("maps an array of records with default label/value keys", () => {
+    expect(mapRemoteResponseToOptions([{ label: "A", value: "a" }, { label: "B", value: 2 }])).toEqual([
+      { label: "A", value: "a" },
+      { label: "B", value: 2 }
+    ]);
+  });
+
+  it("extracts items from a paginated result and applies custom mapping", () => {
+    expect(
+      mapRemoteResponseToOptions(
+        { items: [{ code: "E1", name: "Alice" }, { code: "E2", name: "Bob" }], total: 2 },
+        { labelKey: "name", valueKey: "code" }
+      )
+    ).toEqual([
+      { label: "Alice", value: "E1" },
+      { label: "Bob", value: "E2" }
+    ]);
+  });
+});
+
 describe("useFieldOptions", () => {
   it("returns a static source's options synchronously", () => {
-    const { result } = optionsFor({ kind: "static", options: [{ label: "A", value: "a" }] }, [], noopDataSourceResolver);
+    const { result } = optionsFor({ kind: "static", options: [{ label: "A", value: "a" }] }, []);
 
     expect(result.current.options).toEqual([{ label: "A", value: "a" }]);
     expect(result.current.loading).toBe(false);
@@ -46,36 +64,37 @@ describe("useFieldOptions", () => {
       }
     ];
 
-    const { result } = optionsFor({ kind: "ref", dataSourceId: "ds1" }, dataSources, noopDataSourceResolver);
+    const { result } = optionsFor({ kind: "ref", dataSourceId: "ds1" }, dataSources);
 
     expect(result.current.options).toEqual([{ label: "北京", value: "bj" }]);
   });
 
-  it("resolves a remote source through the injected resolver", async () => {
-    const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "C", value: "c" }]) };
+  it("resolves a remote source through services.request with an AbortSignal", async () => {
+    const request = vi.fn().mockResolvedValue([{ label: "C", value: "c" }]);
 
-    const { result } = optionsFor({ kind: "remote", request: { resource: "geo", action: "cities" } }, [], resolver);
+    const { result } = optionsFor({ kind: "remote", request: { resource: "geo", action: "cities" } }, [], request);
 
     await waitFor(() => expect(result.current.options).toEqual([{ label: "C", value: "c" }]));
-    expect(resolver.resolve).toHaveBeenCalledWith({ resource: "geo", action: "cities" }, undefined);
+    expect(request).toHaveBeenCalledWith(
+      { resource: "geo", action: "cities" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
-  it("hands the resolver a mapping without blank keys", async () => {
-    // A blank key persisted by an older designer means "the default", but a
-    // resolver reading `mapping.labelKey ?? "label"` would take "" literally.
-    const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([]) };
+  it("normalizes blank mapping keys and maps paginated responses", async () => {
+    const request = vi.fn().mockResolvedValue({ items: [{ label: "北京", code: "bj" }], total: 1 });
 
-    optionsFor({
+    const { result } = optionsFor({
       kind: "remote",
       request: { resource: "geo", action: "cities" },
       mapping: { labelKey: "", valueKey: "code" }
-    }, [], resolver);
+    }, [], request);
 
-    await waitFor(() => expect(resolver.resolve).toHaveBeenCalledWith({ resource: "geo", action: "cities" }, { valueKey: "code" }));
+    await waitFor(() => expect(result.current.options).toEqual([{ label: "北京", value: "bj" }]));
   });
 
   it("resolves a ref to a form-global remote source", async () => {
-    const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "D", value: "d" }]) };
+    const request = vi.fn().mockResolvedValue([{ label: "D", value: "d" }]);
     const dataSources: FormDataSource[] = [
       {
         id: "ds2",
@@ -85,20 +104,38 @@ describe("useFieldOptions", () => {
       }
     ];
 
-    const { result } = optionsFor({ kind: "ref", dataSourceId: "ds2" }, dataSources, resolver);
+    const { result } = optionsFor({ kind: "ref", dataSourceId: "ds2" }, dataSources, request);
 
     await waitFor(() => expect(result.current.options).toEqual([{ label: "D", value: "d" }]));
   });
 
   it("returns no options for an unknown ref", () => {
-    const { result } = optionsFor({ kind: "ref", dataSourceId: "missing" }, [], noopDataSourceResolver);
+    const { result } = optionsFor({ kind: "ref", dataSourceId: "missing" }, []);
 
     expect(result.current.options).toEqual([]);
   });
 
+  it("aborts an in-flight option fetch when the last consumer unmounts", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const deferred = Promise.withResolvers<unknown>();
+    const request = vi.fn((_req, options: { signal: AbortSignal }) => {
+      capturedSignal = options.signal;
+      return deferred.promise;
+    });
+
+    const { unmount } = optionsFor({ kind: "remote", request: { resource: "geo", action: "cities" } }, [], request);
+
+    await waitFor(() => expect(capturedSignal).toBeDefined());
+    expect(capturedSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
   describe("provider-scoped cache", () => {
     it("reuses a resolved remote response across a consumer remount", async () => {
-      const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "C", value: "c" }]) };
+      const request = vi.fn().mockResolvedValue([{ label: "C", value: "c" }]);
       const dataSources: FormDataSource[] = [
         {
           id: "ds",
@@ -109,11 +146,8 @@ describe("useFieldOptions", () => {
       ];
       const source: FieldOptionSource = { kind: "ref", dataSourceId: "ds" };
 
-      // The provider instance persists across rerenders; only the consumer
-      // unmounts and remounts — the editor's edit ⇄ preview Activity
-      // round-trip in miniature.
       const view = render(
-        <DataSourceProvider dataSources={dataSources} resolver={resolver}>
+        <DataSourceProvider dataSources={dataSources} request={request}>
           <Probe source={source} />
         </DataSourceProvider>
       );
@@ -121,45 +155,45 @@ describe("useFieldOptions", () => {
       await screen.findByText("c");
 
       view.rerender(
-        <DataSourceProvider dataSources={dataSources} resolver={resolver}>
+        <DataSourceProvider dataSources={dataSources} request={request}>
           <span>empty</span>
         </DataSourceProvider>
       );
       view.rerender(
-        <DataSourceProvider dataSources={dataSources} resolver={resolver}>
+        <DataSourceProvider dataSources={dataSources} request={request}>
           <Probe source={source} />
         </DataSourceProvider>
       );
 
       await screen.findByText("c");
-      expect(resolver.resolve).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(1);
     });
 
     it("deduplicates concurrent in-flight fetches for the same resolved request", async () => {
       const deferred = Promise.withResolvers<Array<{ label: string; value: string }>>();
-      const resolver: DataSourceResolver = { resolve: vi.fn(() => deferred.promise) };
+      const request = vi.fn(() => deferred.promise);
       const source: FieldOptionSource = { kind: "remote", request: { resource: "sys/role", action: "find_options" } };
 
       render(
-        <DataSourceProvider resolver={resolver}>
+        <DataSourceProvider request={request}>
           <Probe source={source} />
           <Probe source={source} />
           <Probe source={source} />
         </DataSourceProvider>
       );
 
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
       deferred.resolve([{ label: "Admin", value: "admin" }]);
 
       expect(await screen.findAllByText("admin")).toHaveLength(3);
-      expect(resolver.resolve).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("refresh versions", () => {
     it("re-fetches a ref-to-remote source when its version nonce bumps", async () => {
-      const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "A", value: "a" }]) };
+      const request = vi.fn().mockResolvedValue([{ label: "A", value: "a" }]);
       const dataSources: FormDataSource[] = [
         {
           id: "ds",
@@ -171,32 +205,28 @@ describe("useFieldOptions", () => {
       const source: FieldOptionSource = { kind: "ref", dataSourceId: "ds" };
 
       const { rerender } = render(
-        <DataSourceProvider dataSources={dataSources} resolver={resolver} versions={{}}>
+        <DataSourceProvider dataSources={dataSources} request={request} versions={{}}>
           <Probe source={source} />
         </DataSourceProvider>
       );
 
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
-      // Bumping the source's nonce re-runs the fetch against the same request.
       rerender(
-        <DataSourceProvider dataSources={dataSources} resolver={resolver} versions={{ ds: 1 }}>
+        <DataSourceProvider dataSources={dataSources} request={request} versions={{ ds: 1 }}>
           <Probe source={source} />
         </DataSourceProvider>
       );
 
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     });
 
     it("keeps the previous options while a refresh is in flight", async () => {
-      // First resolve returns immediately; the refresh hangs until released, so
-      // the in-flight window is observable.
       const versionsRef = { current: {} as Record<string, number> };
       const refreshGate = Promise.withResolvers<Array<{ label: string; value: string }>>();
-      const resolve = vi.fn()
+      const request = vi.fn()
         .mockResolvedValueOnce([{ label: "A", value: "a" }])
         .mockReturnValueOnce(refreshGate.promise);
-      const resolver: DataSourceResolver = { resolve };
       const dataSources: FormDataSource[] = [
         {
           id: "ds",
@@ -210,7 +240,7 @@ describe("useFieldOptions", () => {
       const { rerender, result } = renderHook(() => useFieldOptions(source), {
         wrapper: function Wrapper({ children }: { children: ReactNode }): ReactElement {
           return (
-            <DataSourceProvider dataSources={dataSources} resolver={resolver} versions={versionsRef.current}>
+            <DataSourceProvider dataSources={dataSources} request={request} versions={versionsRef.current}>
               {children}
             </DataSourceProvider>
           );
@@ -219,8 +249,6 @@ describe("useFieldOptions", () => {
 
       await waitFor(() => expect(result.current.options).toEqual([{ label: "A", value: "a" }]));
 
-      // Bump the nonce: the refresh starts, and the stale-looking options must
-      // survive the in-flight window instead of blanking the consuming select.
       versionsRef.current = { ds: 1 };
       rerender();
 
@@ -237,10 +265,9 @@ describe("useFieldOptions", () => {
       const versionsRef = { current: {} as Record<string, number> };
       const failure = new Error("backend down");
       const consoleWarn = vi.spyOn(console, "warn").mockImplementation(silence);
-      const resolve = vi.fn()
+      const request = vi.fn()
         .mockResolvedValueOnce([{ label: "A", value: "a" }])
         .mockRejectedValueOnce(failure);
-      const resolver: DataSourceResolver = { resolve };
       const dataSources: FormDataSource[] = [
         {
           id: "ds",
@@ -254,7 +281,7 @@ describe("useFieldOptions", () => {
       const { rerender, result } = renderHook(() => useFieldOptions(source), {
         wrapper: function Wrapper({ children }: { children: ReactNode }): ReactElement {
           return (
-            <DataSourceProvider dataSources={dataSources} resolver={resolver} versions={versionsRef.current}>
+            <DataSourceProvider dataSources={dataSources} request={request} versions={versionsRef.current}>
               {children}
             </DataSourceProvider>
           );
@@ -278,27 +305,24 @@ describe("useFieldOptions", () => {
     });
 
     it("does not re-fetch an inline remote source when versions change", async () => {
-      const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "A", value: "a" }]) };
+      const request = vi.fn().mockResolvedValue([{ label: "A", value: "a" }]);
       const source: FieldOptionSource = { kind: "remote", request: { resource: "r", action: "a" } };
 
       const { rerender } = render(
-        <DataSourceProvider resolver={resolver} versions={{}}>
+        <DataSourceProvider request={request} versions={{}}>
           <Probe source={source} />
         </DataSourceProvider>
       );
 
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
-      // An inline remote source has no `refreshId`, so an unrelated version bump
-      // must not churn it into a re-fetch. `rerender` flushes effects in `act`, so
-      // a spurious re-fetch would already have called `resolve` a second time.
       rerender(
-        <DataSourceProvider resolver={resolver} versions={{ other: 1 }}>
+        <DataSourceProvider request={request} versions={{ other: 1 }}>
           <Probe source={source} />
         </DataSourceProvider>
       );
 
-      expect(resolver.resolve).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(1);
     });
   });
 });

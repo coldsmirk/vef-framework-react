@@ -183,11 +183,11 @@ export function JsonSplitView({
               <FormRenderer
                 containOverlays
                 codeSetQueryFn={runtime.codeSetQueryFn}
-                dataSourceResolver={runtime.dataSourceResolver}
                 device={device}
                 evaluationContext={runtime.evaluationContext}
                 evaluators={runtime.evaluators}
                 schema={schema}
+                services={runtime.services}
               />
             )
           : null}

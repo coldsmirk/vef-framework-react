@@ -3,9 +3,9 @@ import type { DeviceRegistries, FormFieldRegistry } from "../registry/form-field
 import type { ValidationIssue } from "../validation";
 
 import { CONTAINER_TYPES, GAP_SCALES, ROW_COLS } from "../../types";
-import { validateLinkageSchema } from "../linkage";
+import { validateDynamicValue, validateLinkageSchema } from "../linkage";
 import { findDuplicateOptionValues } from "../options";
-import { createIssue, hasErrorIssues, isRecord, validateRemoteRequest } from "../validation";
+import { createIssue, hasErrorIssues, isRecord, isValidIdentifier, validateRemoteRequest } from "../validation";
 import { isValidFixedItemValue } from "./subform";
 
 /**
@@ -31,21 +31,12 @@ export interface ValidateSchemaResult {
 const KEY_CHARSET = /^\w+$/;
 
 /**
- * Variable names are identifier-shaped (no digit lead): expressions address
- * them as `$vars.<name>`, and `$vars.123` is unparseable. Field keys stay on
- * the looser {@link KEY_CHARSET} — they are record-accessed, never dotted
- * from a literal.
- */
-const VARIABLE_NAME = /^[A-Z_]\w*$/i;
-
-/**
  * Whether a string is a legal `$vars` access name (identifier-shaped, no digit
- * lead). The single source of truth for the variable-name grammar: the store's
- * rename guard imports this so a rename can never mint a declaration the import
- * boundary would reject.
+ * lead). Delegates to {@link isValidIdentifier} so variable names and step
+ * outputs share one grammar.
  */
 export function isValidVariableName(name: string): boolean {
-  return VARIABLE_NAME.test(name);
+  return isValidIdentifier(name);
 }
 
 /**
@@ -82,6 +73,11 @@ interface Ctx {
    * subforms referencing a global static source can validate its items.
    */
   dataSourcesById: ReadonlyMap<string, Record<string, unknown>>;
+  /**
+   * Inline remote option-source requests queued during the structural walk and
+   * validated once `keysByScope` has collected every sibling key in each scope.
+   */
+  pendingRemoteParams: PendingRemoteOptionParams[];
 }
 
 /**
@@ -267,6 +263,7 @@ function validateDataSourcePayload(entry: Record<string, unknown>, where: string
 
     case "remote": {
       issues.push(...validateRemoteRequest(entry.request, `${where}.request`));
+      validateRemoteOptionParams(entry.request, `${where}.request`, undefined, issues);
       validateOptionMapping(entry.mapping, `${where}.mapping`, "data_sources_invalid", issues);
       return;
     }
@@ -303,6 +300,38 @@ function validateOptionList(
       issues.push(createIssue(`${where}[${index}]`, code));
     }
   }
+}
+
+/**
+ * Validate `request.params` on a remote option source (form-global data source,
+ * inline field option source, or fixed-row subform source). `$steps` is
+ * forbidden here (`allowSteps: false`).
+ */
+function validateRemoteOptionParams(
+  request: unknown,
+  where: string,
+  keyedNodes: ReadonlySet<string> | undefined,
+  issues: ValidationIssue[]
+): void {
+  if (!isRecord(request) || !isRecord(request.params)) {
+    return;
+  }
+
+  for (const [paramKey, paramValue] of Object.entries(request.params)) {
+    validateDynamicValue({
+      allowSteps: false,
+      issues,
+      keyedNodes,
+      value: paramValue,
+      where: `${where}.params.${paramKey}`
+    });
+  }
+}
+
+interface PendingRemoteOptionParams {
+  request: unknown;
+  where: string;
+  scopeKey: string;
 }
 
 /**
@@ -374,13 +403,18 @@ function validatePresentation(args: {
     seenIds: new Set(),
     keysByScope: new Map(),
     dataSourceIds,
-    dataSourcesById
+    dataSourcesById,
+    pendingRemoteParams: []
   };
 
   const before = issues.length;
 
   for (const [index, block] of layer.children.entries()) {
     validateBlock(block, `${where}.children[${index}]`, [], ctx);
+  }
+
+  for (const pending of ctx.pendingRemoteParams) {
+    validateRemoteOptionParams(pending.request, pending.where, ctx.keysByScope.get(pending.scopeKey), issues);
   }
 
   if (!hasErrorIssues(issues.slice(before))) {
@@ -489,7 +523,7 @@ function validateLeafField(
   validateFieldRules(raw.validate, `${where}.validate`, ctx);
 
   if (raw.dataSource !== undefined) {
-    validateFieldOptionSource(raw.dataSource, `${where}.dataSource`, ctx);
+    validateFieldOptionSource(raw.dataSource, `${where}.dataSource`, scope, ctx);
   }
 }
 
@@ -501,7 +535,7 @@ function validateLeafField(
  * names a host data dictionary (an unpicked one is a warning, like an unpicked
  * data source).
  */
-function validateFieldOptionSource(source: unknown, where: string, ctx: Ctx): void {
+function validateFieldOptionSource(source: unknown, where: string, scope: string[], ctx: Ctx): void {
   if (!isRecord(source)) {
     ctx.issues.push(createIssue(where, "data_source_invalid"));
     return;
@@ -529,6 +563,11 @@ function validateFieldOptionSource(source: unknown, where: string, ctx: Ctx): vo
 
     case "remote": {
       ctx.issues.push(...validateRemoteRequest(source.request, `${where}.request`));
+      ctx.pendingRemoteParams.push({
+        request: source.request,
+        where: `${where}.request`,
+        scopeKey: scope.join("/")
+      });
       validateOptionMapping(source.mapping, `${where}.mapping`, "data_source_invalid", ctx.issues);
       return;
     }
@@ -758,7 +797,7 @@ function validateSubform(raw: Record<string, unknown>, where: string, scope: str
   // inner scope and any colliding template field raises `duplicate_key`.
   const inner = hasKey ? [...scope, raw.key as string] : scope;
 
-  validateSubformRows(raw.rows, `${where}.rows`, inner, ctx);
+  validateSubformRows(raw.rows, `${where}.rows`, scope, inner, ctx);
   validateBlockList(raw.template, `${where}.template`, inner, ctx);
 
   // The table variant edits each template field as a column, so its template
@@ -778,7 +817,7 @@ function validateSubform(raw: Record<string, unknown>, where: string, scope: str
   }
 }
 
-function validateSubformRows(rows: unknown, where: string, innerScope: string[], ctx: Ctx): void {
+function validateSubformRows(rows: unknown, where: string, outerScope: string[], innerScope: string[], ctx: Ctx): void {
   if (rows === undefined) {
     return;
   }
@@ -836,7 +875,7 @@ function validateSubformRows(rows: unknown, where: string, innerScope: string[],
     return;
   }
 
-  validateFieldOptionSource(rows.source, `${where}.source`, ctx);
+  validateFieldOptionSource(rows.source, `${where}.source`, outerScope, ctx);
   validateFixedRowStaticItems(rows.source, `${where}.source`, ctx);
 }
 

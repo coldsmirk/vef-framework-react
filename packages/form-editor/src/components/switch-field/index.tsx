@@ -5,6 +5,7 @@ import type { FieldComponentProps, FieldDefinition, PropertiesDescriptor, Switch
 import { css } from "@emotion/react";
 import { Switch } from "@vef-framework-react/components";
 
+import { FieldBusyIndicator } from "../../render/parts/field-busy-indicator";
 import { CellFieldFrame, FieldFooter, useFieldCell } from "../../render/parts/field-shell";
 import { Label } from "../../render/parts/label";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
@@ -68,6 +69,8 @@ const SwitchInput: FC<FieldComponentProps<SwitchField, boolean>> = ({
         <Label htmlFor={domId} position="right" required={required}>
           {field.label ?? "开关"}
         </Label>
+
+        <FieldBusyIndicator inline />
       </div>
 
       {/* Helper text and `require`-linkage validation errors render through the

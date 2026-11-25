@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { CodeSetQueryFn, DataSourceResolver, EvaluationContext, LinkageEvaluators } from "../types";
+import type { CodeSetQueryFn, EvaluationContext, FormServices, LinkageEvaluators } from "../types";
 
 import { createContext, use, useCallback, useMemo, useState } from "react";
 
@@ -8,31 +8,29 @@ import { withContextValues } from "../engine/linkage/scope";
 import { useContextSources } from "./context-sources";
 
 /**
+ * Which host services are wired in production (before preview overrides
+ * `navigate` with a toast). Used by the linkage designer to gate `api_call`
+ * and `navigate` creation so authored actions always have a live backing.
+ */
+export interface ServiceCapabilities {
+  hasRequest: boolean;
+  hasNavigate: boolean;
+}
+
+/**
  * Host-injected runtime capabilities the editor's live preview (and JSON split
- * render) need so the in-designer `FormRenderer` behaves like the deployed form:
- * remote / ref data sources resolve, a custom linkage engine runs, and the host
- * evaluation scope (`$user` / `$node` / `$applicant` / `$globals`) is present.
- * Mirrors the slots `FormRendererProps` already exposes; the editor only
- * forwards them.
+ * render) need so the in-designer `FormRenderer` behaves like the deployed form.
  */
 export interface PreviewRuntime {
   evaluators?: LinkageEvaluators;
-  dataSourceResolver?: DataSourceResolver;
+  services?: FormServices;
+  serviceCapabilities?: ServiceCapabilities;
   codeSetQueryFn?: CodeSetQueryFn;
   evaluationContext?: EvaluationContext;
 }
 
-/**
- * The designer's preview samples for the host's system variables, keyed by
- * scope path (`$applicant.departmentId`). Design-time only: they never enter
- * the schema, and they exist so a rule about the initiator can be tried in the
- * preview before any real initiator exists.
- */
 export interface PreviewSamples {
   samples: ReadonlyMap<string, string>;
-  /**
-   * Set a sample, or clear it with an empty string.
-   */
   setSample: (path: string, value: string) => void;
 }
 
@@ -50,11 +48,6 @@ function noopSetSample(): void {
 
 const DETACHED_SAMPLES: PreviewSamples = { samples: NO_SAMPLES, setSample: noopSetSample };
 
-/**
- * A sample is typed as text, so read it the way the designer means it: `500`
- * is a number, `true` a boolean, `{"a":1}` an object, and anything that is not
- * JSON (`张三`, `dept-01`) stays the text it is.
- */
 function parseSample(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -63,12 +56,6 @@ function parseSample(text: string): unknown {
   }
 }
 
-/**
- * Publishes the preview runtime: the host's capabilities, with the designer's
- * samples laid over the host evaluation context. Only samples for currently
- * declared system variables apply, so a variable the host stops declaring
- * cannot keep steering the preview from a panel that no longer shows it.
- */
 export function PreviewRuntimeProvider({
   children,
   value
@@ -112,13 +99,14 @@ export function PreviewRuntimeProvider({
   const runtime = useMemo<PreviewRuntime>(
     () => {
       return {
-        dataSourceResolver: value.dataSourceResolver,
+        services: value.services,
+        serviceCapabilities: value.serviceCapabilities,
         codeSetQueryFn: value.codeSetQueryFn,
         evaluators: value.evaluators,
         evaluationContext
       };
     },
-    [value.dataSourceResolver, value.codeSetQueryFn, value.evaluators, evaluationContext]
+    [value.services, value.serviceCapabilities, value.codeSetQueryFn, value.evaluators, evaluationContext]
   );
 
   const previewSamples = useMemo<PreviewSamples>(
@@ -135,18 +123,10 @@ export function PreviewRuntimeProvider({
   );
 }
 
-/**
- * The host-injected preview runtime, defaulting to an empty bundle (every slot
- * falls back to the renderer's own no-op default).
- */
 export function usePreviewRuntime(): PreviewRuntime {
   return use(PreviewRuntimeContext);
 }
 
-/**
- * The designer's preview samples and their setter. Outside a provider the
- * samples are empty and setting one does nothing.
- */
 export function usePreviewSamples(): PreviewSamples {
   return use(PreviewSamplesContext) ?? DETACHED_SAMPLES;
 }

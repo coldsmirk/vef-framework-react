@@ -1,4 +1,4 @@
-import type { DataSourceResolver, FieldOption, FormSchema } from "../types";
+import type { FieldOption, FormSchema, FormServices } from "../types";
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -11,12 +11,12 @@ import { FormRenderer } from "./form-renderer";
 function renderForm(
   schema: FormSchema,
   options: {
-    dataSourceResolver?: DataSourceResolver;
     defaultValues?: Record<string, unknown>;
     disabled?: boolean;
     evaluationContext?: { applicant?: { departmentId?: string } };
     onSubmit?: (values: Record<string, unknown>) => void;
     renderFieldExtra?: Parameters<typeof FormRenderer>[0]["renderFieldExtra"];
+    services?: FormServices;
   } = {}
 ) {
   const registry = createDefaultRegistry();
@@ -25,12 +25,12 @@ function renderForm(
     <ConfigProvider>
       <RegistryProvider registries={{ pc: registry, mobile: registry }}>
         <FormRenderer
-          dataSourceResolver={options.dataSourceResolver}
           defaultValues={options.defaultValues}
           disabled={options.disabled}
           evaluationContext={options.evaluationContext}
           renderFieldExtra={options.renderFieldExtra}
           schema={schema}
+          services={options.services}
           onSubmit={options.onSubmit}
         />
       </RegistryProvider>
@@ -470,7 +470,7 @@ describe("subform table runtime behavior", () => {
       }
     };
 
-    renderForm(schema, { dataSourceResolver: { resolve }, onSubmit });
+    renderForm(schema, { services: { request: resolve }, onSubmit });
 
     await user.click(screen.getByRole("button", { name: /新增一行/ }));
 
@@ -553,7 +553,7 @@ describe("subform table runtime behavior", () => {
     };
 
     renderForm(schema, {
-      dataSourceResolver: { resolve },
+      services: { request: resolve },
       evaluationContext: { applicant: { departmentId: "dept-hq" } }
     });
 
@@ -569,7 +569,7 @@ describe("subform table runtime behavior", () => {
           action: "find_options",
           params: { dept: "D1", applicantDept: "dept-hq" }
         },
-        undefined
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
 
@@ -586,7 +586,7 @@ describe("subform table runtime behavior", () => {
           action: "find_options",
           params: { dept: "D2", applicantDept: "dept-hq" }
         },
-        undefined
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
   });

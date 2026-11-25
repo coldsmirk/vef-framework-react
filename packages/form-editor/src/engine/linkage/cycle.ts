@@ -13,7 +13,7 @@
  *
  * LIMITATION: the graph is built only from trigger-condition source keys
  * (see `collectConditionSourceKeys`), NOT from the data referenced inside
- * `assign` / `set_field` value expressions, which are opaque to static
+ * `assign` / `set_fields` value expressions, which are opaque to static
  * analysis. Two fields that assign each other's value via expression therefore
  * form a runtime loop this detector cannot see — authors must avoid mutual
  * expression-assignment. The runtime's `stabilizeStateMap` deep-equality guard

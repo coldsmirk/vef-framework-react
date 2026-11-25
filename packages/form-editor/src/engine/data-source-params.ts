@@ -1,8 +1,10 @@
-import type { DynamicValue, RemoteDataSourceRequest, ResolvedDataSourceRequest, RuntimeSchema } from "../types";
+import type { DynamicValue, FieldLinkage, RemoteDataSourceRequest, ResolvedDataSourceRequest, RuntimeSchema } from "../types";
 
+import { getActionRequests } from "./linkage/action-descriptors";
 import { linkageRules, ruleActions } from "./linkage/shape";
 import { getNodeOptionSource } from "./options";
 import { walkNodes } from "./schema/walk";
+import { isRecord } from "./validation";
 
 /**
  * Evaluates one bound parameter. Both lanes that resolve a request — the
@@ -12,22 +14,46 @@ import { walkNodes } from "./schema/walk";
 export type ParamEvaluator = (param: DynamicValue) => unknown;
 
 /**
- * Whether a request binds any parameter to the form. A request with only fixed
- * parameters resolves to itself, which is what lets the runtime skip
- * subscribing to form values for it at all.
+ * Whether a request binds any parameter to the live form or context (`reference`
+ * or `expression`). A request with only literal parameters resolves to itself,
+ * letting the runtime skip subscribing to form values for it.
  */
 export function hasBoundParams(request: RemoteDataSourceRequest): boolean {
-  return Object.values(request.params ?? {}).some(param => param.kind === "expression");
+  if (!isRecord(request) || !isRecord(request.params)) {
+    return false;
+  }
+
+  return Object.values(request.params).some(
+    param => isRecord(param) && (param.kind === "expression" || param.kind === "reference")
+  );
+}
+
+function linkageHasBoundParams(linkage: FieldLinkage | undefined): boolean {
+  for (const rule of linkageRules(linkage)) {
+    for (const action of ruleActions(rule)) {
+      for (const slot of getActionRequests(action)) {
+        if (isRecord(slot.request) && hasBoundParams(slot.request as unknown as RemoteDataSourceRequest)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
  * Whether anything in the schema binds a data-source parameter to the form: a
- * form-global source, a field's inline remote source, or an `api_call` effect.
- * Computed once per schema so a form that binds nothing never pays for the
- * values subscription the scope provider would otherwise open.
+ * form-global source, a field's inline remote source, or any linkage action
+ * carrying a request (both form-level `schema.linkage` and node-level linkage,
+ * traversed via action descriptors).
  */
 export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
   if ((schema.dataSources ?? []).some(source => source.kind === "remote" && hasBoundParams(source.request))) {
+    return true;
+  }
+
+  if (linkageHasBoundParams(schema.linkage)) {
     return true;
   }
 
@@ -46,14 +72,8 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
       return;
     }
 
-    for (const rule of linkageRules(node.linkage)) {
-      for (const action of ruleActions(rule)) {
-        if (action.type === "api_call" && hasBoundParams(action.request)) {
-          bound = true;
-
-          return;
-        }
-      }
+    if (linkageHasBoundParams(node.linkage)) {
+      bound = true;
     }
   });
 
@@ -62,15 +82,12 @@ export function schemaHasBoundParams(schema: RuntimeSchema): boolean {
 
 /**
  * Resolve a request's parameters to concrete values, so whoever performs the
- * call — a {@link DataSourceResolver}, a host `api_call` handler — only ever
- * sees plain data and stays transport-only.
+ * call (`FormServices.request`) only ever sees plain data and stays
+ * transport-only.
  *
- * A parameter resolving to `undefined` is omitted rather than sent — an
- * expression reading a key the form does not carry, or any expression at all
- * when no evaluator is wired. Sending the key with an `undefined` value would
- * put a hole on the wire the backend has to special-case; omitting it says the
- * same thing in the vocabulary every transport already understands. An empty
- * value the form really holds (`""`) is a value, not an absence, and is sent.
+ * A parameter resolving to `undefined` is omitted rather than sent — a
+ * reference or expression reading an absent key. An empty value the form really
+ * holds (`""`) is a value, not an absence, and is sent.
  */
 export function resolveRequestParams(
   request: RemoteDataSourceRequest,
@@ -81,7 +98,7 @@ export function resolveRequestParams(
     ...rest
   } = request;
 
-  if (!params) {
+  if (!isRecord(params)) {
     return rest;
   }
 

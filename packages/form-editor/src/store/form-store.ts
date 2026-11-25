@@ -24,8 +24,10 @@ import {
   hasLinkageDateLiterals,
   hasScopedDateLiterals,
   pruneDataSourceReferences,
+  pruneDataSourcesKeyReferences,
   pruneFormLinkageForRootBucket,
   pruneScopedReferences,
+  renameDataSourcesKeyReferences,
   renameKeyReferences,
   renameLinkageKeyReferences,
   renameVariableReferences,
@@ -665,11 +667,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
           // The form-level linkage resolves against the PC root scope: prune
           // it when root-scope pc keys moved away (mirrors removeNode).
-          if (device === "pc" && nextSchema.linkage !== undefined) {
-            const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, departedKeyBuckets);
+          if (device === "pc") {
+            if (nextSchema.linkage !== undefined) {
+              const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, departedKeyBuckets);
 
-            if (linkage !== nextSchema.linkage) {
-              nextSchema = { ...nextSchema, linkage };
+              if (linkage !== nextSchema.linkage) {
+                nextSchema = { ...nextSchema, linkage };
+              }
+            }
+
+            if (nextSchema.dataSources !== undefined) {
+              const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, departedKeyBuckets);
+
+              if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
+                nextSchema = { ...nextSchema, dataSources };
+              }
             }
           }
         }
@@ -708,11 +720,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
         // The form-level linkage resolves against the PC root scope: prune it
         // when root-scope pc keys died. Mobile keys never touch it.
-        if (device === "pc" && nextSchema.linkage !== undefined) {
-          const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removedKeyBuckets);
+        if (device === "pc") {
+          if (nextSchema.linkage !== undefined) {
+            const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removedKeyBuckets);
 
-          if (linkage !== nextSchema.linkage) {
-            nextSchema = { ...nextSchema, linkage };
+            if (linkage !== nextSchema.linkage) {
+              nextSchema = { ...nextSchema, linkage };
+            }
+          }
+
+          if (nextSchema.dataSources !== undefined) {
+            const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, removedKeyBuckets);
+
+            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
+              nextSchema = { ...nextSchema, dataSources };
+            }
           }
         }
 
@@ -744,11 +766,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
 
         let nextSchema = withPresentation(schema, device, nextLayer);
 
-        if (device === "pc" && nextSchema.linkage !== undefined) {
-          const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removal.buckets);
+        if (device === "pc") {
+          if (nextSchema.linkage !== undefined) {
+            const linkage = pruneFormLinkageForRootBucket(nextSchema.linkage, removal.buckets);
 
-          if (linkage !== nextSchema.linkage) {
-            nextSchema = { ...nextSchema, linkage };
+            if (linkage !== nextSchema.linkage) {
+              nextSchema = { ...nextSchema, linkage };
+            }
+          }
+
+          if (nextSchema.dataSources !== undefined) {
+            const dataSources = pruneDataSourcesKeyReferences(nextSchema.dataSources, removal.buckets);
+
+            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
+              nextSchema = { ...nextSchema, dataSources };
+            }
           }
         }
 
@@ -955,11 +987,21 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         // there or reached it through the twin above.
         const pcKeyChanged = device === "pc" || (twin !== undefined && otherDevice === "pc");
 
-        if (pcKeyChanged && scope.length === 0 && nextSchema.linkage !== undefined) {
-          const linkage = renameLinkageKeyReferences(nextSchema.linkage, previousKey, unique);
+        if (pcKeyChanged && scope.length === 0) {
+          if (nextSchema.linkage !== undefined) {
+            const linkage = renameLinkageKeyReferences(nextSchema.linkage, previousKey, unique);
 
-          if (linkage !== nextSchema.linkage) {
-            nextSchema = { ...nextSchema, linkage };
+            if (linkage !== nextSchema.linkage) {
+              nextSchema = { ...nextSchema, linkage };
+            }
+          }
+
+          if (nextSchema.dataSources !== undefined) {
+            const dataSources = renameDataSourcesKeyReferences(nextSchema.dataSources, previousKey, unique);
+
+            if (dataSources !== nextSchema.dataSources && dataSources !== undefined) {
+              nextSchema = { ...nextSchema, dataSources };
+            }
           }
         }
 

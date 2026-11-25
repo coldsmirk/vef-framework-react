@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import type { FC, FocusEvent, KeyboardEvent } from "react";
 
 import type { FieldComponentProps, FieldDefinition, NumberField, PropertiesDescriptor } from "../../types";
 
@@ -7,6 +7,7 @@ import { InputNumber } from "@vef-framework-react/components";
 import { FieldShell, useFieldCell } from "../../render/parts/field-shell";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { columnTypeEntry, maxValueEntry, messageEntry, minValueEntry, requiredEntry, sizeEntry } from "../field-entries";
+import { parseNumberDraft, useEntryCommit } from "../use-entry-commit";
 
 const inputStyle = { width: "100%" } as const;
 
@@ -18,9 +19,61 @@ const NumberInput: FC<FieldComponentProps<NumberField, number | undefined>> = ({
   labelPosition,
   required,
   value,
-  onChange
+  onChange,
+  onCommit
 }) => {
   const cell = useFieldCell();
+  const entryCommit = useEntryCommit({
+    value,
+    onCommit,
+    commitOnEnter: true
+  });
+
+  const handleChange = (raw: string | number | null): void => {
+    const next = typeof raw === "number" ? raw : undefined;
+
+    entryCommit.notifyUserChange(next);
+    onChange(next);
+  };
+
+  // Flush the input's raw text through `parseNumberDraft` before firing
+  // `onCommit` so an out-of-range or unrounded draft that antd InputNumber
+  // hasn't flushed yet lands in form state before the commit sequence reads it.
+  const flushAndRead = (target: EventTarget): number | undefined => {
+    if (!(target instanceof HTMLInputElement)) {
+      return value;
+    }
+
+    const flushed = parseNumberDraft(target.value, field.min, field.max, field.precision);
+
+    if (!Object.is(flushed, value)) {
+      entryCommit.notifyUserChange(flushed);
+      onChange(flushed);
+    }
+
+    return flushed;
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (!onCommit || event.key !== "Enter" || entryCommit.isComposing(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    const flushed = flushAndRead(event.target);
+
+    entryCommit.commitNow(flushed);
+  };
+
+  const handleBlur = (event: FocusEvent<HTMLInputElement>): void => {
+    if (!onCommit) {
+      return;
+    }
+
+    const flushed = flushAndRead(event.target);
+
+    entryCommit.handleBlur(flushed);
+  };
 
   return (
     <FieldShell
@@ -47,7 +100,11 @@ const NumberInput: FC<FieldComponentProps<NumberField, number | undefined>> = ({
         style={inputStyle}
         suffix={field.suffix}
         value={value}
-        onChange={next => onChange(typeof next === "number" ? next : undefined)}
+        onBlur={handleBlur}
+        onChange={handleChange}
+        onCompositionEnd={entryCommit.handleCompositionEnd}
+        onCompositionStart={entryCommit.handleCompositionStart}
+        onKeyDown={handleKeyDown}
       />
     </FieldShell>
   );
@@ -204,6 +261,7 @@ export const numberFieldDefinition: FieldDefinition = defineFieldDefinition<Numb
     name: "数字",
     group: "basic-input",
     keyed: true,
+    commit: "entry",
     icon: "hash",
     create: () => {
       return { type: "number", label: "数字" };

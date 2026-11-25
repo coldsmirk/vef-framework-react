@@ -6,9 +6,9 @@ import type {
   CodeSetDescriptor,
   CodeSetQueryFn,
   DataSourceApi,
-  DataSourceResolver,
   EvaluationContext,
   FormSchema,
+  FormServices,
   LinkageContextSource,
   LinkageEvaluators
 } from "../types";
@@ -35,7 +35,7 @@ import { editorSensors, isContainerDragData, useEditorDragEnd } from "./dnd";
 import { EditorLayoutProvider, useEditorLayout, useEditorLayoutMeasure } from "./editor-layout-context";
 import { EditorFooter } from "./footer/footer";
 import { HostValidationProvider } from "./host-validation";
-import { previewDispatchEffect } from "./preview-effects";
+import { createPreviewServices } from "./preview-effects";
 import { PreviewRuntimeProvider } from "./preview-runtime-context";
 import { PropertiesPanel } from "./properties/properties-panel";
 import { SidebarPanel } from "./sidebar/sidebar-panel";
@@ -125,17 +125,17 @@ export interface FormEditorProviderProps {
    */
   evaluators?: LinkageEvaluators;
   /**
-   * Host resolver for `remote` option sources, forwarded to the live preview so
-   * remote / ref-to-remote data sources actually resolve while designing.
+   * Host runtime services (`request`, `navigate`, `notify`). Forwarded to the
+   * live preview (`request` runs for real; `navigate` becomes a preview toast)
+   * and used by the linkage designer to gate `api_call` / `navigate` creation.
    */
-  dataSourceResolver?: DataSourceResolver;
+  services?: FormServices;
   /**
-   * The host's catalog of option APIs. Remote option sources then lead with a
-   * picker — the designer chooses "部门列表" and binds its declared parameters
-   * instead of typing an endpoint and a field mapping — with "自定义接口" kept
-   * for anything else. Design-time only: a pick is stored as the request
-   * itself, so the runtime resolves it through `dataSourceResolver` exactly as
-   * it does a hand-typed one.
+   * The host's catalog of option / lookup APIs. Remote option sources then lead
+   * with a picker — the designer chooses an endpoint and binds its declared
+   * parameters — with "自定义接口" kept for anything else. Design-time only: a
+   * pick is stored as the request itself, so the runtime resolves it through
+   * `services.request` exactly as it does a hand-typed one.
    */
   dataSourceApis?: DataSourceApi[];
   /**
@@ -240,13 +240,13 @@ export function FormEditorProvider({
   codeSets,
   contextSources,
   dataSourceApis,
-  dataSourceResolver,
   evaluators,
   evaluationContext,
   initialSchema,
   onSchemaChange,
   registries: registriesProp,
   registry: registryProp,
+  services,
   validate
 }: FormEditorProviderProps): ReactElement {
   const [registries] = useState<DeviceRegistries>(() => {
@@ -259,24 +259,42 @@ export function FormEditorProvider({
   const evaluateExpression = evaluators?.evaluateExpression;
   const evaluateScriptAction = evaluators?.evaluateScriptAction;
   const evaluateAssignExpression = evaluators?.evaluateAssignExpression;
-  const dispatchEffect = evaluators?.dispatchEffect;
+  const hostRequest = services?.request;
+  const hostNavigate = services?.navigate;
+  const hostNotify = services?.notify;
 
-  // The preview renders host-delegated effects (`alert` / `navigate` / `api_call`)
-  // through `previewDispatchEffect` so a designer can see them fire while building
-  // a form. A host that supplies its own `dispatchEffect` keeps full control.
-  // Depends on the four fixed evaluator slots rather than the object identity,
-  // so a host passing an inline `evaluators={{...}}` object does not invalidate
-  // the preview runtime context on every render.
-  const previewEvaluators = useMemo<LinkageEvaluators>(
+  const previewEvaluators = useMemo<LinkageEvaluators | undefined>(
     () => {
+      if (evaluateExpression === undefined && evaluateScriptAction === undefined && evaluateAssignExpression === undefined) {
+        return;
+      }
+
       return {
         ...evaluateExpression !== undefined && { evaluateExpression },
         ...evaluateScriptAction !== undefined && { evaluateScriptAction },
-        ...evaluateAssignExpression !== undefined && { evaluateAssignExpression },
-        dispatchEffect: dispatchEffect ?? previewDispatchEffect
+        ...evaluateAssignExpression !== undefined && { evaluateAssignExpression }
       };
     },
-    [evaluateExpression, evaluateScriptAction, evaluateAssignExpression, dispatchEffect]
+    [evaluateExpression, evaluateScriptAction, evaluateAssignExpression]
+  );
+
+  const previewServices = useMemo<FormServices>(
+    () => createPreviewServices({
+      ...hostRequest !== undefined && { request: hostRequest },
+      ...hostNavigate !== undefined && { navigate: hostNavigate },
+      ...hostNotify !== undefined && { notify: hostNotify }
+    }),
+    [hostRequest, hostNavigate, hostNotify]
+  );
+
+  const serviceCapabilities = useMemo(
+    () => {
+      return {
+        hasRequest: hostRequest !== undefined,
+        hasNavigate: hostNavigate !== undefined
+      };
+    },
+    [hostRequest, hostNavigate]
   );
 
   return (
@@ -284,7 +302,8 @@ export function FormEditorProvider({
       <RegistryProvider registries={registries}>
         <ContextSourcesProvider sources={contextSources}>
           <PreviewRuntimeProvider value={{
-            dataSourceResolver,
+            services: previewServices,
+            serviceCapabilities,
             codeSetQueryFn,
             evaluators: previewEvaluators,
             evaluationContext

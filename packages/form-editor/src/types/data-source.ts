@@ -4,22 +4,23 @@ import type { DynamicValue } from "./dynamic-value";
 import type { FieldOption } from "./schema";
 
 /**
- * An RPC request describing where a selection field's options come from. The
- * shape matches the framework's resource/action/version addressing; the host's
- * resolver turns it into an actual fetch. Kept transport-agnostic so the form
- * editor never depends on a concrete `apiClient`.
+ * An RPC request describing where a selection field's options or an `api_call`
+ * action's data come from. The shape matches the framework's
+ * resource/action/version addressing; the host's {@link FormServices.request}
+ * turns it into an actual fetch. Kept transport-agnostic so the form editor
+ * never depends on a concrete `apiClient`.
  */
 export interface RemoteDataSourceRequest {
   resource: string;
   action: string;
   version?: string;
   /**
-   * Request parameters, each either a fixed value or an expression bound to the
-   * live form. Expressions are evaluated by the form runtime **before** the
-   * request reaches the resolver, so a {@link DataSourceResolver} always sees
-   * concrete values and stays transport-only.
+   * Request parameters, each a literal, a scope-path reference, or an
+   * expression bound to the live form. Bound values are evaluated by the form
+   * runtime **before** the request reaches the host service, so
+   * `FormServices.request` always sees concrete values and stays transport-only.
    *
-   * Binding a parameter is what makes a cascading select work — "the wards of
+   * Binding a parameter is what makes a cascading select work — "the teams of
    * the department picked above". The runtime keys its option cache on the
    * resolved request, so a bound value changing re-resolves the options and an
    * unrelated keystroke does not.
@@ -29,10 +30,10 @@ export interface RemoteDataSourceRequest {
 
 /**
  * A request whose parameters have already been evaluated — what the form
- * runtime hands to a resolver or a host `api_call` handler. Splitting it from
- * {@link RemoteDataSourceRequest} keeps expression evaluation the runtime's
+ * runtime hands to {@link FormServices.request}. Splitting it from
+ * {@link RemoteDataSourceRequest} keeps bound-value evaluation the runtime's
  * job: the schema type carries bindings, this one carries data, and nothing
- * downstream has to know an expression ever existed.
+ * downstream has to know a reference or expression ever existed.
  */
 export interface ResolvedDataSourceRequest {
   resource: string;
@@ -43,8 +44,8 @@ export interface ResolvedDataSourceRequest {
 
 /**
  * How to read `{ label, value }` out of each raw remote record. Mirrors the
- * field-mapping of `@vef-framework-react/hooks` `useDataOptionsQuery`, so a host
- * resolver built on it maps one-to-one. Defaults: `label` / `value`.
+ * field-mapping of `@vef-framework-react/hooks` `useDataOptionsQuery`.
+ * Defaults: `label` / `value`.
  */
 export interface RemoteOptionMapping {
   labelKey?: string;
@@ -54,9 +55,19 @@ export interface RemoteOptionMapping {
 }
 
 /**
+ * One field of a record returned by a {@link DataSourceApi}. Design-time only:
+ * the designer lists these as pickable paths when mapping step outputs; schemas
+ * store the plain path string.
+ */
+export interface DataSourceApiField {
+  path: string;
+  label: string;
+}
+
+/**
  * One parameter a {@link DataSourceApi} takes. The designer lists it as a
- * named row the designer binds to a fixed value or an expression, instead of a
- * name typed by hand.
+ * named row the designer binds to a fixed value, reference, or expression,
+ * instead of a name typed by hand.
  */
 export interface DataSourceApiParam {
   /**
@@ -77,7 +88,7 @@ export interface DataSourceApiParam {
    */
   required?: boolean;
   /**
-   * Bound into the request when the API is picked — a literal, or an
+   * Bound into the request when the API is picked — a literal, reference, or
    * expression such as `$applicant.departmentId`.
    */
   defaultValue?: DynamicValue;
@@ -85,9 +96,9 @@ export interface DataSourceApiParam {
 
 /**
  * One endpoint a host offers in the designer's API picker for remote option
- * sources — "部门列表" instead of a hand-typed resource / action pair. Picking
- * it copies the endpoint and its mapping into the schema, so a schema stays
- * self-contained: the runtime resolver and a backend projection read the
+ * sources and `api_call` actions — "部门列表" instead of a hand-typed resource /
+ * action pair. Picking it copies the endpoint and its mapping into the schema,
+ * so a schema stays self-contained: the runtime and backend projection read the
  * stored request and never need this catalog. A stored request is recognized
  * as an API again by its endpoint (`resource` + `action` + `version`), so a
  * catalog lists each endpoint once.
@@ -117,6 +128,11 @@ export interface DataSourceApi {
    * The parameters the endpoint takes, in display order.
    */
   params?: DataSourceApiParam[];
+  /**
+   * Fields present on records returned by this endpoint, for the designer's
+   * reference picker and column matching. Design-time only.
+   */
+  fields?: DataSourceApiField[];
 }
 
 /**
@@ -152,26 +168,6 @@ export interface FormVariable {
   type: "string" | "number" | "boolean" | "json";
   defaultValue?: unknown;
 }
-
-/**
- * Host-injected resolver that turns a {@link RemoteDataSourceRequest} into a
- * concrete option list. The package ships a no-op default (returns `[]`) so it
- * has zero networking dependency; a host wires the real one on top of the
- * framework `apiClient` (and may cache through TanStack Query). Mirrors the
- * `LinkageEvaluators` host-injection philosophy.
- */
-export interface DataSourceResolver {
-  resolve: (request: ResolvedDataSourceRequest, mapping?: RemoteOptionMapping) => Promise<FieldOption[]>;
-}
-
-/**
- * The no-op resolver used when a host supplies none — remote sources resolve to
- * an empty list rather than erroring, exactly as the default linkage evaluator
- * returns a benign result.
- */
-export const noopDataSourceResolver: DataSourceResolver = {
-  resolve: () => Promise.resolve([])
-};
 
 /**
  * Loads host data dictionaries (code sets) in one call: given a list of code

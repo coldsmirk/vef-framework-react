@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { FormRendererApi } from "../render/form-renderer";
-import type { Block, ButtonField, DataSourceResolver, FormSchema, SelectField, SubformNode, TextfieldField } from "../types";
+import type { Block, ButtonField, FormSchema, FormServices, SelectField, SubformNode, TextfieldField } from "../types";
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -123,7 +123,7 @@ function countingSchema(): FormSchema {
 /**
  * A form whose `picker` select is bound (by `ref`) to a remote data source, and
  * whose `trigger` field fires a `change` → `refresh_data_source`. Used to prove
- * the effect re-resolves the source through the host resolver.
+ * the effect re-resolves the source through the host request service.
  */
 function refreshDataSourceSchema(): FormSchema {
   const picker: SelectField = {
@@ -161,12 +161,12 @@ function refreshDataSourceSchema(): FormSchema {
 }
 
 /**
- * A form where typing in `source` fires a `change` → two `set_field` writes:
+ * A form where typing in `source` fires a `change` → `set_fields` writing
  * "hacked" into `locked` (the clamp target under test) and "ok" into `mirror`
  * (never clamped). The mirror write proves the effect ran, so a blocked
  * `locked` assertion cannot pass vacuously.
  */
-function setFieldPairSchema(): FormSchema {
+function setFieldsPairSchema(): FormSchema {
   return stack(
     field("source", {
       linkage: {
@@ -176,14 +176,11 @@ function setFieldPairSchema(): FormSchema {
             trigger: { kind: "change" },
             actions: [
               {
-                type: "set_field",
-                targetKey: "locked",
-                value: { kind: "literal", value: "hacked" }
-              },
-              {
-                type: "set_field",
-                targetKey: "mirror",
-                value: { kind: "literal", value: "ok" }
+                type: "set_fields",
+                assignments: [
+                  { targetKey: "locked", value: { kind: "literal", value: "hacked" } },
+                  { targetKey: "mirror", value: { kind: "literal", value: "ok" } }
+                ]
               }
             ]
           }
@@ -199,7 +196,7 @@ describe("runtime effect lane", () => {
   describe("condition rising edge", () => {
     it("fires a condition effect once on the rising edge, not per keystroke", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("trigger"),
         field("watcher", {
@@ -222,17 +219,17 @@ describe("runtime effect lane", () => {
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       // "a" → notEmpty becomes true (rising edge → fire); "ab" stays true (no edge).
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "ab");
 
-      expect(dispatchEffect).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
     });
 
     it("re-fires after the condition falls and rises again", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("trigger"),
         field("watcher", {
@@ -256,7 +253,7 @@ describe("runtime effect lane", () => {
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       const input = screen.getByRole("textbox", { name: "trigger" });
       await user.type(input, "go");
@@ -265,11 +262,11 @@ describe("runtime effect lane", () => {
       // back to "go" — rises again
       await user.type(input, "{Backspace}");
 
-      expect(dispatchEffect).toHaveBeenCalledTimes(2);
+      expect(notify).toHaveBeenCalledTimes(2);
     });
 
     it("does not fire a condition effect already true on mount", () => {
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("watcher", {
           linkage: {
@@ -294,16 +291,16 @@ describe("runtime effect lane", () => {
 
       // `watcher` is empty on mount → condition true, but a seed is not a rising
       // edge, so nothing fires.
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
-      expect(dispatchEffect).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
     });
   });
 
   describe("condition retrigger 'always'", () => {
     it("re-fires on every source-field change while the condition holds", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("trigger"),
         field("watcher", {
@@ -313,37 +310,32 @@ describe("runtime effect lane", () => {
                 id: "R1",
                 trigger: {
                   kind: "condition",
+                  retrigger: "always",
                   condition: {
                     kind: "leaf",
                     sourceKey: "trigger",
                     operator: "notEmpty"
                   }
                 },
-                actions: [
-                  {
-                    type: "alert",
-                    retrigger: "always",
-                    message: { kind: "literal", value: "hi" }
-                  }
-                ]
+                actions: [{ type: "alert", message: { kind: "literal", value: "hi" } }]
               }
             ]
           }
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       // "a" makes it true; "b" and "c" keep it true but each changes the source,
       // so an `always` rule fires on all three keystrokes (an `edge` rule fires once).
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "abc");
 
-      expect(dispatchEffect).toHaveBeenCalledTimes(3);
+      expect(notify).toHaveBeenCalledTimes(3);
     });
 
     it("does not re-fire when an unrelated field changes", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("trigger"),
         field("other"),
@@ -354,40 +346,35 @@ describe("runtime effect lane", () => {
                 id: "R1",
                 trigger: {
                   kind: "condition",
+                  retrigger: "always",
                   condition: {
                     kind: "leaf",
                     sourceKey: "trigger",
                     operator: "notEmpty"
                   }
                 },
-                actions: [
-                  {
-                    type: "alert",
-                    retrigger: "always",
-                    message: { kind: "literal", value: "hi" }
-                  }
-                ]
+                actions: [{ type: "alert", message: { kind: "literal", value: "hi" } }]
               }
             ]
           }
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "x");
-      expect(dispatchEffect).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
 
       // `other` is not a source of the condition, so typing into it must not
       // re-fire the rule even though the condition still holds.
       await user.type(screen.getByRole("textbox", { name: "other" }), "yz");
 
-      expect(dispatchEffect).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
     });
 
     it("converges when an always expression rule writes a variable", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       // The loop combo (all UI-authorable): an opaque expression condition has
       // no tracked source keys, `always` re-fires it, and `set_variable`
       // re-runs the detector through the evaluation context. It must re-fire
@@ -400,17 +387,19 @@ describe("runtime effect lane", () => {
             rules: [
               {
                 id: "R1",
-                trigger: { kind: "condition", condition: { kind: "expression", source: "$form.trigger != ''" } },
+                trigger: {
+                  kind: "condition",
+                  retrigger: "always",
+                  condition: { kind: "expression", source: "$form.trigger != ''" }
+                },
                 actions: [
                   {
                     type: "set_variable",
-                    retrigger: "always",
                     variable: "count",
                     value: { kind: "literal", value: "1" }
                   },
                   {
                     type: "alert",
-                    retrigger: "always",
                     message: { kind: "literal", value: "hi" }
                   }
                 ]
@@ -420,22 +409,22 @@ describe("runtime effect lane", () => {
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       // "x" raises the edge: both actions fire once; the variable write must
       // not re-trigger the rule (no value changed).
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "x");
-      expect(dispatchEffect).toHaveBeenCalledTimes(1);
+      expect(notify).toHaveBeenCalledTimes(1);
 
       // "y" is one more value change while the condition holds → exactly one
       // re-fire (the set_variable repeat writes the identical value and bails).
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "y");
-      expect(dispatchEffect).toHaveBeenCalledTimes(2);
+      expect(notify).toHaveBeenCalledTimes(2);
     });
 
     it("does not loop when an always expression rule rewrites the same field value", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("trigger"),
         field("target"),
@@ -444,17 +433,18 @@ describe("runtime effect lane", () => {
             rules: [
               {
                 id: "R1",
-                trigger: { kind: "condition", condition: { kind: "expression", source: "$form.trigger != ''" } },
+                trigger: {
+                  kind: "condition",
+                  retrigger: "always",
+                  condition: { kind: "expression", source: "$form.trigger != ''" }
+                },
                 actions: [
                   {
-                    type: "set_field",
-                    retrigger: "always",
-                    targetKey: "target",
-                    value: { kind: "literal", value: "filled" }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "target", value: { kind: "literal", value: "filled" } }]
                   },
                   {
                     type: "alert",
-                    retrigger: "always",
                     message: { kind: "literal", value: "hi" }
                   }
                 ]
@@ -464,22 +454,22 @@ describe("runtime effect lane", () => {
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "x");
 
       await waitFor(() => {
         expect(screen.getByRole("textbox", { name: "target" })).toHaveValue("filled");
       });
-      // Rising edge fires once; the set_field write is itself one real value
+      // Rising edge fires once; the set_fields write is itself one real value
       // change, so the always lane legitimately repeats once more — and the
-      // repeated set_field writes the value the target already holds, which is
+      // repeated set_fields writes the value the target already holds, which is
       // dropped, so the cascade stops at exactly two dispatches.
-      expect(dispatchEffect).toHaveBeenCalledTimes(2);
+      expect(notify).toHaveBeenCalledTimes(2);
     });
 
     it("does not fire on mount even when retrigger is 'always'", () => {
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("watcher", {
           linkage: {
@@ -488,19 +478,14 @@ describe("runtime effect lane", () => {
                 id: "R1",
                 trigger: {
                   kind: "condition",
+                  retrigger: "always",
                   condition: {
                     kind: "leaf",
                     sourceKey: "watcher",
                     operator: "empty"
                   }
                 },
-                actions: [
-                  {
-                    type: "alert",
-                    retrigger: "always",
-                    message: { kind: "literal", value: "hi" }
-                  }
-                ]
+                actions: [{ type: "alert", message: { kind: "literal", value: "hi" } }]
               }
             ]
           }
@@ -509,16 +494,16 @@ describe("runtime effect lane", () => {
 
       // `watcher` is empty on mount → condition true, but the seed run never
       // fires, the same as an `edge` rule.
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
-      expect(dispatchEffect).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
     });
   });
 
   describe("field events", () => {
-    it("fires a change-triggered effect through the host dispatcher", async () => {
+    it("fires a change-triggered effect through the host notify service", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("a", {
           linkage: {
@@ -533,19 +518,16 @@ describe("runtime effect lane", () => {
         })
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       await user.type(screen.getByRole("textbox", { name: "a" }), "z");
 
-      expect(dispatchEffect).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "alert" }),
-        expect.anything()
-      );
+      expect(notify).toHaveBeenCalledWith("info", "x");
     });
 
     it("fires a blur-triggered effect when focus leaves the field", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema = stack(
         field("a", {
           linkage: {
@@ -561,20 +543,17 @@ describe("runtime effect lane", () => {
         field("b")
       );
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       await user.click(screen.getByRole("textbox", { name: "a" }));
       await user.click(screen.getByRole("textbox", { name: "b" }));
 
-      expect(dispatchEffect).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "alert" }),
-        expect.anything()
-      );
+      expect(notify).toHaveBeenCalledWith("info", "bye");
     });
   });
 
   describe("native effects", () => {
-    it("writes another field via a set_field effect", async () => {
+    it("writes another field via a set_fields effect", async () => {
       const user = userEvent.setup();
       const schema = stack(
         field("source", {
@@ -585,9 +564,8 @@ describe("runtime effect lane", () => {
                 trigger: { kind: "change" },
                 actions: [
                   {
-                    type: "set_field",
-                    targetKey: "target",
-                    value: { kind: "literal", value: "filled" }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "target", value: { kind: "literal", value: "filled" } }]
                   }
                 ]
               }
@@ -636,11 +614,11 @@ describe("runtime effect lane", () => {
     });
   });
 
-  describe("set_field permission gate", () => {
-    it("drops a change-edge set_field into a visible-clamped field", async () => {
+  describe("set_fields permission gate", () => {
+    it("drops a change-edge set_fields into a visible-clamped field", async () => {
       const user = userEvent.setup();
 
-      renderForm(<FormRenderer fieldPermissions={{ locked: "visible" }} schema={setFieldPairSchema()} />);
+      renderForm(<FormRenderer fieldPermissions={{ locked: "visible" }} schema={setFieldsPairSchema()} />);
 
       await user.type(screen.getByRole("textbox", { name: "source" }), "x");
 
@@ -655,11 +633,11 @@ describe("runtime effect lane", () => {
       ).toHaveValue("");
     });
 
-    it("drops a change-edge set_field into a hidden-clamped field", async () => {
+    it("drops a change-edge set_fields into a hidden-clamped field", async () => {
       const user = userEvent.setup();
       const api = createRef<FormRendererApi>();
 
-      renderForm(<FormRenderer apiRef={api} fieldPermissions={{ locked: "hidden" }} schema={setFieldPairSchema()} />);
+      renderForm(<FormRenderer apiRef={api} fieldPermissions={{ locked: "hidden" }} schema={setFieldsPairSchema()} />);
 
       await user.type(screen.getByRole("textbox", { name: "source" }), "x");
 
@@ -674,10 +652,10 @@ describe("runtime effect lane", () => {
       ).toMatchObject({ locked: "" });
     });
 
-    it("applies a change-edge set_field into an editable-clamped field", async () => {
+    it("applies a change-edge set_fields into an editable-clamped field", async () => {
       const user = userEvent.setup();
 
-      renderForm(<FormRenderer fieldPermissions={{ locked: "editable" }} schema={setFieldPairSchema()} />);
+      renderForm(<FormRenderer fieldPermissions={{ locked: "editable" }} schema={setFieldsPairSchema()} />);
 
       await user.type(screen.getByRole("textbox", { name: "source" }), "x");
 
@@ -689,7 +667,7 @@ describe("runtime effect lane", () => {
       });
     });
 
-    it("drops a form-level load set_field into a visible-clamped field", async () => {
+    it("drops a form-level load set_fields into a visible-clamped field", async () => {
       const schema: FormSchema = {
         ...stack(field("locked"), field("mirror")),
         linkage: {
@@ -699,14 +677,11 @@ describe("runtime effect lane", () => {
               trigger: { kind: "load" },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: "locked",
-                  value: { kind: "literal", value: "hacked" }
-                },
-                {
-                  type: "set_field",
-                  targetKey: "mirror",
-                  value: { kind: "literal", value: "ok" }
+                  type: "set_fields",
+                  assignments: [
+                    { targetKey: "locked", value: { kind: "literal", value: "hacked" } },
+                    { targetKey: "mirror", value: { kind: "literal", value: "ok" } }
+                  ]
                 }
               ]
             }
@@ -725,7 +700,7 @@ describe("runtime effect lane", () => {
       ).toHaveValue("");
     });
 
-    it("leaves a subform row's set_field unaffected by a same-named top-level clamp", async () => {
+    it("leaves a subform row's set_fields unaffected by a same-named top-level clamp", async () => {
       const user = userEvent.setup();
       const subform: SubformNode = {
         id: "Sub_lines",
@@ -741,9 +716,8 @@ describe("runtime effect lane", () => {
                   trigger: { kind: "change" },
                   actions: [
                     {
-                      type: "set_field",
-                      targetKey: "amount",
-                      value: { kind: "literal", value: "9" }
+                      type: "set_fields",
+                      assignments: [{ targetKey: "amount", value: { kind: "literal", value: "9" } }]
                     }
                   ]
                 }
@@ -798,7 +772,7 @@ describe("runtime effect lane", () => {
       await user.click(screen.getByRole("button", { name: "重置" }));
 
       await waitFor(() => {
-        expect(screen.getByRole("textbox", { name: "name" }), "the gate only guards set_field").toHaveValue("");
+        expect(screen.getByRole("textbox", { name: "name" }), "the gate only guards set_fields").toHaveValue("");
       });
     });
 
@@ -842,7 +816,7 @@ describe("runtime effect lane", () => {
 
   describe("form lifecycle", () => {
     it("fires a form-scope load effect on mount", async () => {
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const schema: FormSchema = {
         ...stack(field("name")),
         linkage: {
@@ -856,20 +830,17 @@ describe("runtime effect lane", () => {
         }
       };
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} />);
 
       await waitFor(() => {
-        expect(dispatchEffect).toHaveBeenCalledWith(
-          expect.objectContaining({ type: "alert" }),
-          expect.anything()
-        );
+        expect(notify).toHaveBeenCalledWith("info", "loaded");
       });
     });
 
     it("fires beforeSubmit and afterSubmit around a submission", async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const button: ButtonField = {
         id: "Field_go",
         type: "button",
@@ -903,31 +874,24 @@ describe("runtime effect lane", () => {
         }
       };
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} onSubmit={onSubmit} />);
+      renderForm(<FormRenderer schema={schema} services={{ notify }} onSubmit={onSubmit} />);
 
       await user.click(screen.getByRole("button", { name: "提交" }));
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledTimes(1);
       });
-      expect(dispatchEffect).toHaveBeenCalledWith(
-        expect.objectContaining({ message: { kind: "literal", value: "before" } }),
-        expect.anything()
-      );
-      expect(dispatchEffect).toHaveBeenCalledWith(
-        expect.objectContaining({ message: { kind: "literal", value: "after" } }),
-        expect.anything()
-      );
+      expect(notify).toHaveBeenCalledWith("info", "before");
+      expect(notify).toHaveBeenCalledWith("info", "after");
     });
 
-    it("awaits an async beforeSubmit effect before running the host onSubmit", async () => {
+    it("awaits an async beforeSubmit api_call before running the host onSubmit", async () => {
       const user = userEvent.setup();
       const order: string[] = [];
-      // A host `dispatchEffect` that resolves on a later microtask; if the
-      // lifecycle did not await it, `onSubmit` would record first.
-      const dispatchEffect = vi.fn(async () => {
+      const request = vi.fn(async () => {
         await Promise.resolve();
         order.push("before");
+        return { ok: true };
       });
       const onSubmit = vi.fn(() => {
         order.push("submit");
@@ -954,13 +918,13 @@ describe("runtime effect lane", () => {
             {
               id: "F1",
               trigger: { kind: "beforeSubmit" },
-              actions: [{ type: "alert", message: { kind: "literal", value: "before" } }]
+              actions: [{ type: "api_call", request: { resource: "sys/check", action: "validate" } }]
             }
           ]
         }
       };
 
-      renderForm(<FormRenderer evaluators={{ dispatchEffect }} schema={schema} onSubmit={onSubmit} />);
+      renderForm(<FormRenderer schema={schema} services={{ request }} onSubmit={onSubmit} />);
 
       await user.click(screen.getByRole("button", { name: "提交" }));
 
@@ -1031,26 +995,26 @@ describe("runtime effect lane", () => {
   });
 
   describe("refresh_data_source", () => {
-    it("re-resolves a ref data source through the resolver when the effect fires", async () => {
+    it("re-resolves a ref data source through services.request when the effect fires", async () => {
       const user = userEvent.setup();
-      const resolver: DataSourceResolver = { resolve: vi.fn().mockResolvedValue([{ label: "北京", value: "bj" }]) };
+      const services: FormServices = { request: vi.fn().mockResolvedValue([{ label: "北京", value: "bj" }]) };
 
-      renderForm(<FormRenderer dataSourceResolver={resolver} schema={refreshDataSourceSchema()} />);
+      renderForm(<FormRenderer schema={refreshDataSourceSchema()} services={services} />);
 
       // The picker resolves its remote source once on mount.
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(services.request).toHaveBeenCalledTimes(1));
 
       // Typing fires change → refresh_data_source, bumping the version → one re-fetch.
       await user.type(screen.getByRole("textbox", { name: "trigger" }), "x");
 
-      await waitFor(() => expect(resolver.resolve).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(services.request).toHaveBeenCalledTimes(2));
     });
   });
 
   describe("subform row identity", () => {
     it("does not replay a surviving row's condition effects when an earlier row is removed", async () => {
       const user = userEvent.setup();
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       const subform: SubformNode = {
         id: "Sub_lines",
         type: "subform",
@@ -1086,8 +1050,8 @@ describe("runtime effect lane", () => {
       renderForm(
         <FormRenderer
           defaultValues={{ lines: [{ flag: "" }, { flag: "x" }] }}
-          evaluators={{ dispatchEffect }}
           schema={stack(subform)}
+          services={{ notify }}
         />
       );
 
@@ -1097,13 +1061,13 @@ describe("runtime effect lane", () => {
       await user.click(removeButtons[0]!);
 
       expect(screen.getAllByRole("textbox", { name: "flag" })).toHaveLength(1);
-      expect(dispatchEffect).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
     });
   });
 
   describe("schema swap", () => {
     it("re-seeds condition edges so an already-true condition does not fire after a swap", () => {
-      const dispatchEffect = vi.fn();
+      const notify = vi.fn();
       // `before` seeds the edge tracker with a non-null truth vector (its rule is
       // false on mount: `a` is empty, so `notEmpty` is false).
       const before: FormSchema = stack(
@@ -1153,7 +1117,7 @@ describe("runtime effect lane", () => {
       const registry = createDefaultRegistry();
       const { rerender } = render(
         <RegistryProvider registries={{ pc: registry, mobile: registry }}>
-          <FormRenderer evaluators={{ dispatchEffect }} schema={before} />
+          <FormRenderer schema={before} services={{ notify }} />
         </RegistryProvider>
       );
 
@@ -1161,11 +1125,11 @@ describe("runtime effect lane", () => {
       // re-seeds the edge tracker, so it must NOT fire on the new schema's mount.
       rerender(
         <RegistryProvider registries={{ pc: registry, mobile: registry }}>
-          <FormRenderer evaluators={{ dispatchEffect }} schema={after} />
+          <FormRenderer schema={after} services={{ notify }} />
         </RegistryProvider>
       );
 
-      expect(dispatchEffect).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
     });
   });
 });

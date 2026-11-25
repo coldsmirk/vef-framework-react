@@ -99,8 +99,16 @@ export type ValidationIssueCode
     | "defaults_requires_keyed_leaf"
     | "defaults_on_form_scope"
     | "default_hidden_unreachable"
+    | "assignments_empty"
     | "target_key_empty"
     | "target_key_unresolved"
+    | "target_not_writable"
+    | "target_key_duplicate"
+    | "output_invalid"
+    | "output_duplicate"
+    | "step_output_unresolved"
+    | "when_none_invalid"
+    | "on_error_invalid"
     | "variable_empty"
     | "data_source_id_empty"
     | "value_malformed"
@@ -159,6 +167,7 @@ interface ValidationIssueParams {
   data_source_ref_unknown: { id: string };
   request_incomplete: { missing: string };
   trigger_kind_invalid: { kind: string };
+  trigger_requires_keyed_leaf: { kind: string };
   action_unknown_type: { type: string };
   state_action_on_edge_trigger: { type: string };
   state_action_on_form_scope: { type: string };
@@ -166,6 +175,10 @@ interface ValidationIssueParams {
   source_key_unresolved: { key: string };
   source_scope_unknown: { key: string };
   target_key_unresolved: { key: string };
+  target_not_writable: { key: string; type: string };
+  target_key_duplicate: { key: string };
+  output_duplicate: { output: string };
+  step_output_unresolved: { step: string };
   cycle_detected: { cycle: string };
 }
 
@@ -186,6 +199,7 @@ const WARNING_CODES: ReadonlySet<ValidationIssueCode> = new Set<ValidationIssueC
   "source_scope_unknown",
   "source_empty",
   "actions_empty",
+  "assignments_empty",
   "target_key_empty",
   "target_key_unresolved",
   "variable_empty",
@@ -229,7 +243,6 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   rules_not_array: "rules 必须是数组",
   rule_malformed: "规则结构无效：必须是对象",
   trigger_malformed: "触发器结构无效：必须是包含 kind 的对象",
-  trigger_requires_keyed_leaf: "kind \"change\" 只能用于 keyed 叶子字段",
   condition_malformed: "条件结构无效",
   condition_kind_invalid: "kind 不是受支持的条件类型",
   logic_invalid: "logic 必须为 \"all\" 或 \"any\"",
@@ -239,15 +252,19 @@ const PARAMLESS_MESSAGES: Record<ParamlessCode, string> = {
   source_empty: "表达式 / 脚本内容为空",
   actions_not_array: "actions 必须是数组",
   actions_empty: "规则没有任何动作，不会生效",
+  assignments_empty: "写入字段动作没有配置任何目标赋值",
   action_malformed: "动作结构无效",
   defaults_requires_keyed_leaf: "defaults.required 只能用于 keyed 叶子字段",
   defaults_on_form_scope: "表单级联动不支持 defaults（表单没有自身字段）",
   default_hidden_unreachable: "默认隐藏但没有任何「显示」动作的规则，运行时将永远不可见",
   target_key_empty: "targetKey 尚未选择",
+  output_invalid: "output 必须是合法标识符（字母或下划线开头，仅含字母、数字和下划线）",
+  when_none_invalid: "whenNone 必须为 \"continue\" 或 \"stop\"",
+  on_error_invalid: "onError 必须为 \"stop\" 或 \"continue\"",
   variable_empty: "variable 尚未填写",
   data_source_id_empty: "dataSourceId 尚未选择",
   code_set_empty: "数据字典尚未选择",
-  value_malformed: "取值结构无效：须为 literal 或 expression 形态",
+  value_malformed: "取值结构无效：须为 literal、reference 或 expression 形态",
   alert_level_invalid: "level 不是受支持的提示级别",
   retrigger_invalid: "retrigger 必须为 \"edge\" 或 \"always\"",
   retrigger_ignored: "retrigger 仅对条件触发生效，事件触发将忽略该配置",
@@ -276,6 +293,7 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
   data_source_ref_unknown: "引用的数据源不存在：{id}",
   request_incomplete: "请求尚未配置完整：缺少{missing}",
   trigger_kind_invalid: "kind \"{kind}\" 不能用于该作用域",
+  trigger_requires_keyed_leaf: "kind \"{kind}\" 只能用于 keyed 叶子字段",
   action_unknown_type: "type \"{type}\" 不是受支持的联动动作",
   state_action_on_edge_trigger: "\"{type}\" 是状态动作，只能用于条件触发",
   state_action_on_form_scope: "\"{type}\" 是状态动作，不能用于表单级联动",
@@ -283,6 +301,10 @@ const PARAM_MESSAGES: Record<ParamCode, string> = {
   source_key_unresolved: "sourceKey 未指向同一作用域内已存在的 keyed 节点：{key}",
   source_scope_unknown: "sourceKey 的变量作用域不存在（可用 $form / $vars / $user / $node / $applicant / $globals）：{key}",
   target_key_unresolved: "targetKey 未指向同一作用域内已存在的 keyed 节点：{key}",
+  target_not_writable: "目标字段 \"{key}\"（{type}）不支持作为写入目标",
+  target_key_duplicate: "同一写入动作中目标字段重复：{key}",
+  output_duplicate: "规则内步骤结果名重复：{output}",
+  step_output_unresolved: "$steps.{step} 未引用本规则中更早的步骤结果",
   cycle_detected: "联动规则存在循环依赖：{cycle}"
 };
 
@@ -360,6 +382,17 @@ export function hasErrorIssues(issues: readonly SchemaIssue[]): boolean {
   return issues.some(issue => issue.severity === "error");
 }
 
+const IDENTIFIER_PATTERN = /^[A-Z_]\w*$/i;
+
+/**
+ * Whether `name` is a valid JS-style identifier (letter or underscore lead,
+ * followed by letters, digits, or underscores). Shared by form variable names
+ * (`$vars.<name>`) and action-sequence step outputs (`$steps.<output>`).
+ */
+export function isValidIdentifier(name: string): boolean {
+  return IDENTIFIER_PATTERN.test(name);
+}
+
 /**
  * Null-safe plain-object guard narrowed to a string-keyed record so the
  * validators can read members of untrusted input without casts. Delegates to
@@ -403,6 +436,10 @@ export function validateRemoteRequest(request: unknown, path: string, ruleId?: s
     issues.push(createIssue(`${path}.resource`, "request_incomplete", { missing: "资源（resource）" }, ruleId));
   } else if (actionMissing) {
     issues.push(createIssue(`${path}.action`, "request_incomplete", { missing: "动作（action）" }, ruleId));
+  }
+
+  if (request.params !== undefined && !isRecord(request.params)) {
+    issues.push(createIssue(`${path}.params`, "request_malformed", undefined, ruleId));
   }
 
   return issues;

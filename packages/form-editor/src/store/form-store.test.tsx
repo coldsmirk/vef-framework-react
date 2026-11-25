@@ -203,9 +203,8 @@ function dateSchemaWithLiterals(): FormSchema {
           trigger: { kind: "load" },
           actions: [
             {
-              type: "set_field",
-              targetKey: "period",
-              value: { kind: "literal", value: "2026-04-15" }
+              type: "set_fields",
+              assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-04-15" } }]
             }
           ]
         }
@@ -276,14 +275,12 @@ function dateSchemaWithLiterals(): FormSchema {
                   actions: [
                     { type: "show" },
                     {
-                      type: "set_field",
-                      targetKey: "period",
-                      value: { kind: "literal", value: "2026-05-01" }
+                      type: "set_fields",
+                      assignments: [{ targetKey: "period", value: { kind: "literal", value: "2026-05-01" } }]
                     },
                     {
-                      type: "set_field",
-                      targetKey: "period",
-                      value: { kind: "expression", source: "'2026-05'" }
+                      type: "set_fields",
+                      assignments: [{ targetKey: "period", value: { kind: "expression", source: "'2026-05'" } }]
                     }
                   ]
                 }
@@ -513,9 +510,8 @@ describe("form store", () => {
                 trigger: { kind: "load" },
                 actions: [
                   {
-                    type: "set_field",
-                    targetKey: "amount",
-                    value: { kind: "literal", value: 1 }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "amount", value: { kind: "literal", value: 1 } }]
                   }
                 ]
               }
@@ -684,9 +680,8 @@ describe("form store", () => {
                 trigger: { kind: "load" },
                 actions: [
                   {
-                    type: "set_field",
-                    targetKey: "amount",
-                    value: { kind: "literal", value: 1 }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "amount", value: { kind: "literal", value: 1 } }]
                   }
                 ]
               }
@@ -1199,9 +1194,8 @@ describe("form store", () => {
                 trigger: { kind: "load" },
                 actions: [
                   {
-                    type: "set_field",
-                    targetKey: "amount",
-                    value: { kind: "literal", value: 1 }
+                    type: "set_fields",
+                    assignments: [{ targetKey: "amount", value: { kind: "literal", value: 1 } }]
                   }
                 ]
               }
@@ -1218,7 +1212,10 @@ describe("form store", () => {
       expect(watcher?.linkage?.rules?.[0]?.trigger).toMatchObject({
         condition: { sourceKey: "total" }
       });
-      expect(api.getState().schema.linkage?.rules?.[0]?.actions[0]).toMatchObject({ targetKey: "total" });
+      expect(api.getState().schema.linkage?.rules?.[0]?.actions[0]).toMatchObject({
+        type: "set_fields",
+        assignments: [{ targetKey: "total" }]
+      });
     });
 
     it("renames the same field on both devices", () => {
@@ -1328,23 +1325,20 @@ describe("form store", () => {
         }
       });
       expect(pcNote?.linkage?.rules?.[0]?.actions[1]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "literal", value: "" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "literal", value: "" } }]
       });
       expect(pcNote?.linkage?.rules?.[0]?.actions[2]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "expression", source: "'2026-05'" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "expression", source: "'2026-05'" } }]
       });
       expect(mobileDate.linkage?.rules?.[0]?.actions[0]).toEqual({
         type: "assign",
         value: { kind: "literal", value: "" }
       });
       expect(schema.linkage?.rules?.[0]?.actions[0]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "literal", value: "" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "literal", value: "" } }]
       });
 
       // One undo restores field granularity, twin granularity, both layers'
@@ -1370,9 +1364,8 @@ describe("form store", () => {
       expect(mobileDate.granularity).toBe("quarter");
       expect(pcDate.granularity).toBe("quarter");
       expect(schema.linkage?.rules?.[0]?.actions[0]).toEqual({
-        type: "set_field",
-        targetKey: "period",
-        value: { kind: "literal", value: "" }
+        type: "set_fields",
+        assignments: [{ targetKey: "period", value: { kind: "literal", value: "" } }]
       });
     });
 
@@ -1385,9 +1378,8 @@ describe("form store", () => {
             trigger: { kind: "load" as const },
             actions: [
               {
-                type: "set_field" as const,
-                targetKey: "period",
-                value: { kind: "literal" as const, value: "2026-04-15" }
+                type: "set_fields" as const,
+                assignments: [{ targetKey: "period", value: { kind: "literal" as const, value: "2026-04-15" } }]
               }
             ]
           }
@@ -1467,9 +1459,8 @@ describe("form store", () => {
             trigger: { kind: "load" as const },
             actions: [
               {
-                type: "set_field" as const,
-                targetKey: "period",
-                value: { kind: "literal" as const, value: "2026-04-15" }
+                type: "set_fields" as const,
+                assignments: [{ targetKey: "period", value: { kind: "literal" as const, value: "2026-04-15" } }]
               }
             ]
           }

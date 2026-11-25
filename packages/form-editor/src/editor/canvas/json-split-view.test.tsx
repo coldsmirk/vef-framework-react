@@ -114,8 +114,8 @@ describe("JsonSplitView", () => {
     expect(screen.getByRole("button", { name: /下载/ })).toBeInTheDocument();
   });
 
-  it("forwards the injected data-source resolver to the live preview", async () => {
-    const resolve = vi.fn().mockResolvedValue([{ label: "上海", value: "sh" }]);
+  it("forwards the injected services.request to the live preview", async () => {
+    const request = vi.fn().mockResolvedValue([{ label: "上海", value: "sh" }]);
     const remoteSchema: FormSchema = {
       id: "Form_R",
       version: 2,
@@ -134,11 +134,9 @@ describe("JsonSplitView", () => {
       }
     };
 
-    setupView(remoteSchema, { dataSourceResolver: { resolve } });
+    setupView(remoteSchema, { services: { request } });
 
-    // The remote select can only resolve options if the runtime reached the
-    // preview's FormRenderer — the seam this guards.
-    await waitFor(() => expect(resolve).toHaveBeenCalled());
+    await waitFor(() => expect(request).toHaveBeenCalled());
   });
 
   describe("editable buffer", () => {

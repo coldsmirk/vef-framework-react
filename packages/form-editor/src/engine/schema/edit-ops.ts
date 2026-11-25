@@ -1,9 +1,12 @@
 import type {
   Block,
   CssLength,
+  DynamicValue,
   FieldLinkage,
   FieldLinkageAction,
+  FieldOptionSource,
   FlexSlot,
+  FormField,
   LinkageCondition,
   LinkageTrigger,
   PresentationLayer,
@@ -18,7 +21,14 @@ import { ROW_COLS } from "../../types";
 import { assertNever } from "../assert-never";
 import { createId, idPrefixForType } from "../ids";
 import { collectScopeKeys, isKeyedNode, nextUniqueKey } from "../keys";
+import {
+  mapActionConditions,
+  mapActionDynamicValues,
+  mapActionTargetKeys,
+  mapRemoteRequestDynamicValues
+} from "../linkage/action-descriptors";
 import { leafSourceFormKey, withLeafSourceFormKey } from "../linkage/scope";
+import { mapTriggerCondition } from "../linkage/shape";
 import { removeBlock, updateNode } from "./mutate";
 import { containerBodies, mapPreservingIdentity, withContainerBodies } from "./nodes";
 import { rewriteContainerBodies } from "./rewrite";
@@ -423,7 +433,7 @@ const keepId: IdPolicy = (_prefix, sourceId) => sourceId;
  * so its template always recurses with `null` (keys preserved), even when the
  * outer block is reallocating. Linkage rules get fresh ids so the clone and
  * source never share a rule identity, and `leaf.sourceKey` /
- * `set_field.targetKey` references between cloned nodes are remapped to the
+ * `set_fields` target keys and action references between cloned nodes are remapped to the
  * reallocated keys.
  */
 export function cloneBlock(block: Block, allocateKey: KeyPolicy): Block {
@@ -554,63 +564,102 @@ function rebuildBlocks(blocks: Block[], allocateKey: KeyPolicy, idPolicy: IdPoli
   return blocks.map(block => rebuildBlock(block, allocateKey, idPolicy));
 }
 
-/**
- * Phase 2 of {@link rekeyTree}: rewrite linkage `leaf.sourceKey` in the block's
- * own value scope via `keyMap` (old→new). Scope-aware — a nested subform
- * template is a separate key namespace, so the rewrite does not descend into it
- * (a key name that merely coincides there must not be remapped). Expression and
- * script sources are opaque host code and are left untouched.
- */
-function remapScopeLinkage(block: Block, keyMap: Map<string, string>): Block {
-  const linkage = remapLinkage(block.linkage, keyMap);
-
-  if (!isContainerNode(block)) {
-    return { ...block, linkage };
+function remapDynamicValueKeys(value: DynamicValue, keyMap: Map<string, string>): DynamicValue {
+  if (value.kind !== "reference") {
+    return value;
   }
 
-  switch (block.type) {
+  const key = leafSourceFormKey(value.path);
+  const mapped = key === undefined ? undefined : keyMap.get(key);
+
+  return mapped === undefined ? value : { ...value, path: withLeafSourceFormKey(value.path, mapped) };
+}
+
+function remapNodeOptionSourceKeys(block: Block, keyMap: Map<string, string>): Block {
+  if (!isContainerNode(block)) {
+    const field = block as FormField & { dataSource?: FieldOptionSource };
+
+    if (field.dataSource?.kind !== "remote") {
+      return block;
+    }
+
+    const nextRequest = mapRemoteRequestDynamicValues(field.dataSource.request, value => remapDynamicValueKeys(value, keyMap));
+
+    return nextRequest === field.dataSource.request
+      ? block
+      : ({ ...block, dataSource: { ...field.dataSource, request: nextRequest } } as Block);
+  }
+
+  if (block.type === "subform" && block.rows?.mode === "fixed" && block.rows.source.kind === "remote") {
+    const nextRequest = mapRemoteRequestDynamicValues(block.rows.source.request, value => remapDynamicValueKeys(value, keyMap));
+
+    return nextRequest === block.rows.source.request
+      ? block
+      : { ...block, rows: { ...block.rows, source: { ...block.rows.source, request: nextRequest } } };
+  }
+
+  return block;
+}
+
+/**
+ * Phase 2 of {@link rekeyTree}: rewrite linkage and remote option-source key
+ * references in the block's own value scope via `keyMap` (old→new). Scope-aware
+ * — a nested subform template is a separate key namespace, so the rewrite does
+ * not descend into it. Expression and script sources are opaque host code and
+ * are left untouched.
+ */
+function remapScopeLinkage(block: Block, keyMap: Map<string, string>): Block {
+  const withSource = remapNodeOptionSourceKeys(block, keyMap);
+  const linkage = remapLinkage(withSource.linkage, keyMap);
+
+  if (!isContainerNode(withSource)) {
+    return linkage === withSource.linkage ? withSource : { ...withSource, linkage };
+  }
+
+  switch (withSource.type) {
     case "section": {
       return {
-        ...block,
+        ...withSource,
         linkage,
-        children: remapScopeBlocks(block.children, keyMap)
+        children: remapScopeBlocks(withSource.children, keyMap)
       };
     }
 
     case "tabs": {
       return {
-        ...block,
+        ...withSource,
         linkage,
-        tabs: block.tabs.map(tab => {
+        tabs: withSource.tabs.map(tab => {
           return { ...tab, children: remapScopeBlocks(tab.children, keyMap) };
         })
       };
     }
 
     case "subform": {
-      // The template is a separate scope; only the subform's own linkage (which
-      // references outer-scope siblings) is remapped here.
-      return { ...block, linkage };
+      // The template is a separate scope; only the subform's own linkage and
+      // fixed-row remote source (which reference outer-scope siblings) are
+      // remapped here.
+      return { ...withSource, linkage };
     }
 
     case "flex": {
       return {
-        ...block,
+        ...withSource,
         linkage,
-        children: remapScopeBlocks(block.children, keyMap)
+        children: remapScopeBlocks(withSource.children, keyMap)
       };
     }
 
     case "grid": {
       return {
-        ...block,
+        ...withSource,
         linkage,
-        children: remapScopeBlocks(block.children, keyMap)
+        children: remapScopeBlocks(withSource.children, keyMap)
       };
     }
 
     default: {
-      return assertNever(block);
+      return assertNever(withSource);
     }
   }
 }
@@ -637,23 +686,20 @@ function remapLinkage(linkage: FieldLinkage | undefined, keyMap: Map<string, str
 }
 
 function remapTriggerKeys(trigger: LinkageTrigger, keyMap: Map<string, string>): LinkageTrigger {
-  return trigger.kind === "condition"
-    ? { ...trigger, condition: remapConditionKeys(trigger.condition, keyMap) }
-    : trigger;
+  return mapTriggerCondition(trigger, condition => remapConditionKeys(condition, keyMap)) ?? trigger;
 }
 
 /**
- * A `set_field` effect references a sibling field's key; a cross-scope move
- * re-keys it just like a condition source. Other actions carry no field key.
+ * Remap every form-key slot (target keys, reference dynamic values, conditions)
+ * carried by an action through the central action descriptors.
  */
 function remapActionKeys(action: FieldLinkageAction, keyMap: Map<string, string>): FieldLinkageAction {
-  if (action.type !== "set_field") {
-    return action;
-  }
+  let next = mapActionTargetKeys(action, targetKey => keyMap.get(targetKey) ?? targetKey) ?? action;
 
-  const mapped = keyMap.get(action.targetKey);
+  next = mapActionDynamicValues(next, value => remapDynamicValueKeys(value, keyMap));
+  next = mapActionConditions(next, condition => remapConditionKeys(condition, keyMap)) ?? next;
 
-  return mapped === undefined ? action : { ...action, targetKey: mapped };
+  return next;
 }
 
 function remapConditionKeys(condition: LinkageCondition, keyMap: Map<string, string>): LinkageCondition {

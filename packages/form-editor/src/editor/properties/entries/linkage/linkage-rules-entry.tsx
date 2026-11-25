@@ -42,35 +42,23 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   const isTargetKeyed = isKeyedField(field);
   // Field options, data-source options, and deferred rule diagnostics —
   // resolved in the target field's own value scope (a subform field references
-  // its row siblings, not the outer form). The one field-option list feeds both
-  // the condition source and the `set_field` target picker, and includes the
-  // field itself — a rule may key off its own value.
+  // its row siblings, not the outer form). Condition sources and `set_fields`
+  // targets resolve from the same scope.
   const {
     dataSourceOptions,
     fieldOptions,
-    issuesByRule
+    issuesByRule,
+    targetOptions
   } = useLinkageEditorModel({
     layer,
     nodeId: field.id,
     dataSources: schema.dataSources
   });
-  // Seed a new rule's condition off a SIBLING so it reads naturally; a field
-  // whose only in-scope source is itself falls back to an edge rule rather than
-  // a pre-filled self-condition (self stays selectable in the dropdown after).
-  // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
   const seedKey = seedSourceKey(fieldOptions, selfKey);
-  // Drop trigger kinds the target can't actually use, rather than letting an
-  // author configure a silently-inert (and validator-rejected) rule:
-  // - `change` rides the keyed field's onChange, so a non-keyed field
-  //   (divider / alert / button) can never fire it.
-  // - `condition` with no keyed field in scope yields an empty group the
-  //   validator rejects and the visual builder can't repair.
-  // Memoized to a stable reference so it does not bust the rule cards' memo each
-  // keystroke (`fieldOptions` is itself identity-stable — see useStableOptions).
   const triggerKinds = useMemo(
     () => FIELD_TRIGGER_KINDS.filter(kind => {
-      if (kind === "change") {
+      if (kind === "change" || kind === "commit") {
         return isTargetKeyed;
       }
 
@@ -122,7 +110,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
         rules={rules}
         selfKey={selfKey}
         sourceOptions={fieldOptions}
-        targetOptions={fieldOptions}
+        targetOptions={targetOptions}
         triggerKinds={triggerKinds}
         onChange={next => commit({ ...linkage, rules: next })}
       />

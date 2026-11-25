@@ -19,6 +19,7 @@ import { isLeafField, isRootScope, walkNodes } from "../schema/walk";
 import { isRecord } from "../validation";
 import { resolveLinkageEvaluators } from "./default-evaluator";
 import { matchLeaf } from "./operators";
+import { resolveLeafSourceValue } from "./scope";
 import { linkageRules } from "./shape";
 import { isStateAction } from "./taxonomy";
 
@@ -415,19 +416,50 @@ function applyAction(
 
 /**
  * Resolve a {@link LinkageActionValue} to a concrete value: a literal verbatim,
- * or an expression run through the injected evaluator. Shared by the state
- * lane's `assign` and the effect lane's value-bearing actions (`set_field` /
- * `alert` / `navigate`).
+ * a scope-path reference via {@link resolveLeafSourceValue}, or an expression
+ * run through the injected evaluator. Shared by the state lane's `assign`,
+ * remote option-source params, and the effect lane's value-bearing actions.
+ *
+ * `options.allowSteps` gates `$steps.<output>` references — `false` by default
+ * (conditions, state actions, option-source params) and `true` inside effect
+ * action sequences.
  */
 export function resolveActionValue(
   actionValue: LinkageActionValue,
   values: Record<string, unknown>,
   evaluators: Required<LinkageEvaluators>,
-  context?: EvaluationContext
+  context?: EvaluationContext,
+  options?: { allowSteps?: boolean }
 ): unknown {
-  return actionValue.kind === "literal"
-    ? actionValue.value
-    : evaluators.evaluateAssignExpression(actionValue.source, values, context);
+  if (!isRecord(actionValue)) {
+    return undefined;
+  }
+
+  switch (actionValue.kind) {
+    case "literal": {
+      return actionValue.value;
+    }
+
+    case "reference": {
+      if (typeof actionValue.path !== "string" || actionValue.path.length === 0) {
+        return undefined;
+      }
+
+      return resolveLeafSourceValue(actionValue.path, values, context, options);
+    }
+
+    case "expression": {
+      if (typeof actionValue.source !== "string") {
+        return undefined;
+      }
+
+      return evaluators.evaluateAssignExpression(actionValue.source, values, context);
+    }
+
+    default: {
+      return undefined;
+    }
+  }
 }
 
 /**
@@ -568,7 +600,7 @@ function seedSubformRows(
  * `undefined` as uncontrolled, so string-like fields seed `""`; a number seeds
  * `undefined` (an empty numeric input) and a switch seeds `false`.
  */
-function getFieldDefaultValue(field: KeyedFormField): unknown {
+export function getFieldDefaultValue(field: KeyedFormField): unknown {
   switch (field.type) {
     case "number": {
       return undefined;

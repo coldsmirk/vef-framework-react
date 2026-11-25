@@ -4,6 +4,8 @@ import type { ButtonField, FieldComponentProps } from "../../types";
 
 import Button from "antd-mobile/es/components/button";
 
+import { useFieldBusy } from "../../runtime/effects";
+
 type ButtonProps = ComponentProps<typeof Button>;
 
 /**
@@ -35,6 +37,7 @@ export const MobileButton: FC<FieldComponentProps<ButtonField, undefined>> = ({
   domId,
   field
 }) => {
+  const busy = useFieldBusy(field.id);
   const base = typePresentation[field.buttonType ?? "primary"];
   const color = field.danger ? "danger" : base.color;
   const { fill } = base;
@@ -46,6 +49,7 @@ export const MobileButton: FC<FieldComponentProps<ButtonField, undefined>> = ({
       disabled={disabled}
       fill={fill}
       id={domId}
+      loading={busy}
       shape={field.shape === "round" ? "rounded" : "default"}
       size={field.size}
       type={field.action ?? "submit"}

@@ -7,6 +7,7 @@ import { css } from "@emotion/react";
 import { Button as ButtonInternal } from "@vef-framework-react/components";
 
 import { EditorIcon } from "../../icons";
+import { useFieldBusy } from "../../runtime/effects";
 import { defineFieldDefinition, definePropertyEntry } from "../../types";
 import { sizeEntry } from "../field-entries";
 
@@ -23,24 +24,29 @@ export const Button: FC<FieldComponentProps<ButtonField, undefined>> = ({
   disabled,
   domId,
   field
-}) => (
-  <ButtonInternal
-    autoInsertSpace={false}
-    block={field.block}
-    css={buttonCss}
-    danger={field.danger}
-    disabled={disabled}
-    ghost={field.ghost}
-    htmlType={field.action ?? "submit"}
-    icon={field.icon ? <EditorIcon name={field.icon} /> : undefined}
-    id={domId}
-    shape={field.shape}
-    size={field.size}
-    type={field.buttonType ?? "primary"}
-  >
-    {field.label ?? "按钮"}
-  </ButtonInternal>
-);
+}) => {
+  const busy = useFieldBusy(field.id);
+
+  return (
+    <ButtonInternal
+      autoInsertSpace={false}
+      block={field.block}
+      css={buttonCss}
+      danger={field.danger}
+      disabled={disabled}
+      ghost={field.ghost}
+      htmlType={field.action ?? "submit"}
+      icon={field.icon ? <EditorIcon name={field.icon} /> : undefined}
+      id={domId}
+      loading={busy}
+      shape={field.shape}
+      size={field.size}
+      type={field.buttonType ?? "primary"}
+    >
+      {field.label ?? "按钮"}
+    </ButtonInternal>
+  );
+};
 
 /**
  * Property descriptor for buttons. `general` carries the label only; `action`

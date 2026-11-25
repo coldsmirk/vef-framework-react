@@ -556,11 +556,11 @@ describe("FormRenderer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("delivers a beforeSubmit set_field write in the payload", async () => {
+  it("delivers a beforeSubmit set_fields write in the payload", async () => {
     // form-core hands `onSubmit` the values snapshot it captured for
     // validation, and `writeFieldValue` mints a NEW values object — so the
     // write used to be visible in the UI and absent from the wire, which is the
-    // one thing a `set_field` at this trigger exists to do.
+    // one thing a `set_fields` at this trigger exists to do.
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     const schema: FormSchema = {
@@ -573,9 +573,8 @@ describe("FormRenderer", () => {
             actions: [
               {
                 id: "Action_stamp",
-                type: "set_field",
-                targetKey: "stamp",
-                value: { kind: "literal", value: "STAMPED" }
+                type: "set_fields",
+                assignments: [{ targetKey: "stamp", value: { kind: "literal", value: "STAMPED" } }]
               }
             ]
           }

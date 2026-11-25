@@ -37,6 +37,7 @@ interface EvaluationBindings {
   node: Scope;
   applicant: Scope;
   globals: Scope;
+  steps: Scope | undefined;
   now: Date;
 }
 
@@ -58,8 +59,9 @@ const expressionCache = lru<ExpressionFn>(COMPILE_CACHE_SIZE);
 const scriptCache = lru<ScriptFn>(COMPILE_CACHE_SIZE);
 
 // `field` and `$form` both bind the form values (`field` is the legacy alias);
-// strict mode keeps `this === undefined` and disables sloppy-mode escape hatches.
-const SCOPE_PARAMS = ["field", "$form", "$vars", "$user", "$node", "$applicant", "$globals", "$now"] as const;
+// `$steps` is defined only inside action sequences (`undefined` elsewhere).
+// Strict mode keeps `this === undefined` and disables sloppy-mode escape hatches.
+const SCOPE_PARAMS = ["field", "$form", "$vars", "$user", "$node", "$applicant", "$globals", "$steps", "$now"] as const;
 
 /**
  * Bind a compiled `new Function` to {@link EvaluationBindings}, passing them
@@ -74,6 +76,7 @@ function bindScope<T>(fn: (...args: unknown[]) => T): CompiledFn<T> {
     bindings.node,
     bindings.applicant,
     bindings.globals,
+    bindings.steps,
     bindings.now
   );
 }
@@ -148,6 +151,7 @@ function runCompiled<T>(
     node: context?.node ?? EMPTY_SCOPE,
     applicant: context?.applicant ?? EMPTY_SCOPE,
     globals: context?.globals ?? EMPTY_SCOPE,
+    steps: context?.steps,
     now: new Date()
   });
 }
@@ -192,24 +196,14 @@ export function defaultEvaluateScriptAction(
 }
 
 /**
- * No-op effect dispatcher used when the host wires none. Host-delegated effect
- * actions (`alert` / `api_call` / `navigate`) become benign no-ops — exactly as
- * a `remote` data source resolves to an empty list without a resolver.
- */
-function noopDispatchEffect(): void {
-  // Intentionally empty: see doc comment.
-}
-
-/**
  * Resolves a host-supplied {@link LinkageEvaluators} to a fully populated set,
  * filling missing expression and script slots with the default `new Function`
- * evaluators and effects with the no-op dispatcher.
+ * evaluators.
  */
 export function resolveLinkageEvaluators(overrides?: LinkageEvaluators): Required<LinkageEvaluators> {
   return {
     evaluateExpression: overrides?.evaluateExpression ?? defaultEvaluateExpression,
     evaluateScriptAction: overrides?.evaluateScriptAction ?? defaultEvaluateScriptAction,
-    evaluateAssignExpression: overrides?.evaluateAssignExpression ?? defaultEvaluateAssignExpression,
-    dispatchEffect: overrides?.dispatchEffect ?? noopDispatchEffect
+    evaluateAssignExpression: overrides?.evaluateAssignExpression ?? defaultEvaluateAssignExpression
   };
 }
