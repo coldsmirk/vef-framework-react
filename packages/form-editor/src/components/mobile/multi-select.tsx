@@ -50,7 +50,7 @@ const popupActionCss = css({
 });
 
 const popupConfirmCss = css({
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   fontWeight: 500
 });
 

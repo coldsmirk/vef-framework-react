@@ -102,7 +102,7 @@ const badgeCss = css({
 
 const activeBadgeCss = css({
   background: globalCssVars.colorPrimaryBg,
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });
 
 const railTabsCss = css({
@@ -147,11 +147,11 @@ const railTabButtonCss = css({
 
 const railTabButtonActiveCss = css({
   background: globalCssVars.colorPrimaryBg,
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
 
   "&:hover": {
     background: globalCssVars.colorPrimaryBg,
-    color: globalCssVars.colorPrimary
+    color: globalCssVars.colorPrimaryText
   }
 });
 

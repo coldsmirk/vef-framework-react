@@ -123,7 +123,7 @@ const dropdownItemStyle = css({
   },
 
   "&[data-active]": {
-    color: globalCssVars.colorPrimary,
+    color: globalCssVars.colorPrimaryText,
     fontWeight: 600
   }
 });

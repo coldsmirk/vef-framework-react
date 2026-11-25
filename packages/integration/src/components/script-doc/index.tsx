@@ -13,7 +13,7 @@ const helpIconCss = css({
   cursor: "help",
   transition: `color ${globalCssVars.motionDurationMid}`,
   "&:hover": {
-    color: globalCssVars.colorPrimary
+    color: globalCssVars.colorPrimaryText
   }
 });
 

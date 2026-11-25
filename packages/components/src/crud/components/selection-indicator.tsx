@@ -24,7 +24,7 @@ const selectionWrapperStyle = css({
 });
 
 const selectedCountStyle = css({
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   fontWeight: globalCssVars.fontWeightStrong
 });
 

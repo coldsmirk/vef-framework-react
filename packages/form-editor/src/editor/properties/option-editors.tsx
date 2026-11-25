@@ -91,7 +91,7 @@ const iconButtonCss = css({
 });
 
 const detailToggleActiveCss = css({
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });
 
 const foldSpacerCss = css({

@@ -67,7 +67,7 @@ const popupActionCss = css({
 });
 
 const popupConfirmCss = css({
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   fontWeight: 500,
   textAlign: "right"
 });
@@ -270,7 +270,7 @@ const checkboxDisabledCss = css({
 
 const singleCheckCss = css({
   flexShrink: 0,
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   fontSize: globalCssVars.fontSize,
   fontWeight: 600
 });

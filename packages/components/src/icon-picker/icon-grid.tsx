@@ -71,7 +71,7 @@ const cellStyle = css({
   },
   "&.vef-icon-picker-cell-selected": {
     backgroundColor: globalCssVars.colorPrimaryBg,
-    color: globalCssVars.colorPrimary
+    color: globalCssVars.colorPrimaryText
   }
 });
 

@@ -75,7 +75,7 @@ export const dataListAddHeaderButtonCss = css({
   color: globalCssVars.colorTextSecondary,
 
   "&:hover": {
-    color: globalCssVars.colorPrimary
+    color: globalCssVars.colorPrimaryText
   }
 });
 

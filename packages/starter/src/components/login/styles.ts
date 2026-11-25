@@ -435,10 +435,10 @@ export const formSubtitle = css({
 
 export const dateHighlight = css({
   fontWeight: 500,
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });
 
 export const formIcon = css({
   marginRight: "8px",
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });

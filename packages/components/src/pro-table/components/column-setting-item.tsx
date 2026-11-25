@@ -71,11 +71,11 @@ const actionButtonStyle = css({
   transitionDuration: globalCssVars.motionDurationMid,
 
   "&:hover": {
-    color: globalCssVars.colorPrimary
+    color: globalCssVars.colorPrimaryText
   }
 });
 const activeButtonStyle = css({
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   backgroundColor: globalCssVars.colorPrimaryBg
 });
 const disabledButtonStyle = css({

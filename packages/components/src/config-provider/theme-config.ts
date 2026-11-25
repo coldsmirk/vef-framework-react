@@ -26,6 +26,13 @@ function getColor(color: LiteralUnion<PresetColor, string>) {
 }
 
 /**
+ * The brand as text: as it is in light mode, where it equals the primary, and
+ * lifted towards white in dark mode, where the primary reads at barely 2:1
+ * against both the elevated surfaces and its own tint (`colorPrimaryBg`).
+ */
+const darkPrimaryText = "color-mix(in srgb, var(--vef-color-primary) 55%, #fff)";
+
+/**
  * Global token configuration
  */
 function buildGlobalTokens(
@@ -35,6 +42,7 @@ function buildGlobalTokens(
 ): Partial<AliasToken> {
   return {
     colorPrimary: getColor(colors.primary),
+    ...isDarkMode && { colorPrimaryText: darkPrimaryText },
     colorSuccess: getColor(colors.success),
     colorInfo: getColor(colors.info),
     colorWarning: getColor(colors.warning),
@@ -107,17 +115,17 @@ function buildComponentTokens(isDarkMode: boolean): NonNullable<ThemeConfigInter
       headerBg: "transparent"
     },
     Select: {
-      optionSelectedColor: globalCssVars.colorPrimary
+      optionSelectedColor: globalCssVars.colorPrimaryText
     },
     Tree: {
       titleHeight: 32,
       indentSize: 16,
-      nodeSelectedColor: globalCssVars.colorPrimary
+      nodeSelectedColor: globalCssVars.colorPrimaryText
     },
     TreeSelect: {
       titleHeight: 28,
       indentSize: 16,
-      nodeSelectedColor: globalCssVars.colorPrimary
+      nodeSelectedColor: globalCssVars.colorPrimaryText
     },
     Radio: {
       radioSize: 18

@@ -38,7 +38,7 @@ const iconTileCss = css({
   borderRadius: 10,
   flexShrink: 0,
   background: `color-mix(in srgb, ${globalCssVars.colorPrimary} 10%, transparent)`,
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });
 
 const flowGridCss = css({

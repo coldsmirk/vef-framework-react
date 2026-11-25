@@ -13,10 +13,6 @@ interface TabItemProps extends ComponentProps<typeof motion.div> {
   onClose?: () => void;
 }
 
-// In dark mode the active label/glyph (colorPrimary) sits on the dark colorPrimaryBg fill at only
-// ~2:1. A light brand tint lifts it above AA while keeping the soft-brand pill look intact.
-const darkActiveBrand = "color-mix(in srgb, var(--vef-color-primary) 55%, #fff)";
-
 const tabItemStyle = css({
   flex: "none",
   height: "calc(100% - 12px)",
@@ -58,7 +54,7 @@ const tabItemStyle = css({
   // (solid blue in the sidebar, translucent pill in the header), so the tint alone carries the
   // state — no outline ring, which previously read as a foreign control dropped into the row.
   "&.active": {
-    color: globalCssVars.colorPrimary,
+    color: globalCssVars.colorPrimaryText,
     backgroundColor: globalCssVars.colorPrimaryBg,
     fontWeight: 500,
 
@@ -67,17 +63,9 @@ const tabItemStyle = css({
     },
 
     "& .vef-btn-sm": {
-      "--vef-btn-text-color": globalCssVars.colorPrimary,
+      "--vef-btn-text-color": globalCssVars.colorPrimaryText,
       "--vef-btn-text-color-hover": globalCssVars.colorPrimaryHover,
       "--vef-btn-text-color-active": globalCssVars.colorPrimaryActive
-    },
-
-    "html.dark &": {
-      color: darkActiveBrand,
-
-      "& .vef-btn-sm": {
-        "--vef-btn-text-color": darkActiveBrand
-      }
     }
   }
 });

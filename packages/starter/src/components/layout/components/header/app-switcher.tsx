@@ -57,7 +57,7 @@ const appItemStyle = css({
   },
   "&[data-active='true']": {
     backgroundColor: globalCssVars.colorPrimaryBg,
-    color: globalCssVars.colorPrimary,
+    color: globalCssVars.colorPrimaryText,
 
     // Fill the active tile's icon chip solid, with a soft brand glow for depth.
     "& [data-app-icon]": {

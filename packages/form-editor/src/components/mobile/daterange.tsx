@@ -60,7 +60,7 @@ const popupActionCss = css({
 });
 
 const popupConfirmCss = css({
-  color: globalCssVars.colorPrimary,
+  color: globalCssVars.colorPrimaryText,
   fontWeight: 500,
 
   "&:disabled": {
@@ -95,7 +95,7 @@ const endpointButtonCss = css({
 const endpointActiveCss = css({
   borderColor: globalCssVars.colorPrimary,
   background: globalCssVars.colorPrimaryBg,
-  color: globalCssVars.colorPrimary
+  color: globalCssVars.colorPrimaryText
 });
 
 const endpointLabelCss = css({
