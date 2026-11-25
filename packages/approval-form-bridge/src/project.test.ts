@@ -634,6 +634,151 @@ describe("projectFormSchema", () => {
       expect(result.fields[0]).not.toHaveProperty("options");
       expect(result.issues).toEqual([]);
     });
+
+    it("flattens tree-select and tree-multi-select options honoring leafOnly while keeping flat controls top-level", () => {
+      const nestedSource: FormDataSource = {
+        id: "DS_TREE",
+        kind: "static",
+        name: "区域树",
+        options: [
+          {
+            label: "华东",
+            value: "east",
+            description: "华东片区",
+            children: [
+              {
+                label: "上海",
+                value: "sh",
+                disabled: true
+              },
+              {
+                label: "杭州",
+                value: "hz",
+                description: "省会"
+              }
+            ]
+          },
+          { label: "华北", value: "north" }
+        ]
+      };
+
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "T1",
+            type: "tree-select",
+            key: "anyRegion",
+            label: "任意区域",
+            dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+          },
+          {
+            id: "T2",
+            type: "tree-multi-select",
+            key: "leafRegions",
+            label: "末级区域",
+            leafOnly: true,
+            dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+          },
+          {
+            id: "T3",
+            type: "select",
+            key: "topRegion",
+            label: "顶层区域",
+            dataSource: { kind: "ref", dataSourceId: "DS_TREE" }
+          }
+        ],
+        { dataSources: [nestedSource] }
+      ));
+
+      expect(result.valid).toBe(true);
+      expect(result.fields).toMatchObject([
+        {
+          key: "anyRegion",
+          kind: "select",
+          columnType: "text",
+          options: [
+            { label: "华东", value: "east" },
+            { label: "上海", value: "sh" },
+            { label: "杭州", value: "hz" },
+            { label: "华北", value: "north" }
+          ]
+        },
+        {
+          key: "leafRegions",
+          kind: "select",
+          isMultiple: true,
+          columnType: "json",
+          options: [
+            { label: "上海", value: "sh" },
+            { label: "杭州", value: "hz" },
+            { label: "华北", value: "north" }
+          ]
+        },
+        {
+          key: "topRegion",
+          kind: "select",
+          columnType: "text",
+          options: [
+            { label: "华东", value: "east" },
+            { label: "华北", value: "north" }
+          ]
+        }
+      ]);
+      expect(result.formFields[1]).toEqual({
+        key: "leafRegions",
+        kind: "select",
+        label: "末级区域",
+        isMultiple: true,
+        options: [
+          { label: "上海", value: "sh" },
+          { label: "杭州", value: "hz" },
+          { label: "华北", value: "north" }
+        ]
+      });
+    });
+
+    it("preserves childrenKey and parentKey in remote option mappings and detects cross-device divergence", () => {
+      const result = projectFormSchema(schemaOf(
+        [
+          {
+            id: "P1",
+            type: "tree-select",
+            key: "dept",
+            label: "部门",
+            dataSource: {
+              kind: "remote",
+              request: { resource: "md/department", action: "find_flat_options" },
+              mapping: { parentKey: "parentId", descriptionKey: "remark" }
+            }
+          }
+        ],
+        {
+          mobile: {
+            children: [
+              {
+                id: "M1",
+                type: "tree-select",
+                key: "dept",
+                label: "部门",
+                dataSource: {
+                  kind: "remote",
+                  request: { resource: "md/department", action: "find_flat_options" },
+                  mapping: { childrenKey: "sub", descriptionKey: "remark" }
+                }
+              }
+            ]
+          }
+        }
+      ));
+
+      expect(result.valid).toBe(false);
+      expect(result.fields[0]?.optionSource?.mapping).toEqual({ parentKey: "parentId", descriptionKey: "remark" });
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: "cross_device_options_mismatch",
+        path: "dept",
+        severity: "error"
+      }));
+    });
   });
 
   describe("subform projection", () => {

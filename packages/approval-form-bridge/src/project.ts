@@ -29,10 +29,12 @@ import {
   dateGranularityMaxLength,
   findDuplicateOptionValues,
   findParentContainer,
+  flattenSelectableOptions,
   getDynamicSubformRows,
   inferColumnType,
   isFixedSubform,
   isKeyedNode,
+  isTreeSelectFieldType,
   isValidFixedItemValue,
   normalizeOptionMapping,
   walkNodes
@@ -98,6 +100,8 @@ const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
   number: "number",
   select: "select",
   "multi-select": "select",
+  "tree-select": "select",
+  "tree-multi-select": "select",
   radio: "select",
   "checkbox-group": "select",
   date: "date",
@@ -111,7 +115,11 @@ const KIND_BY_TYPE: Record<string, ApprovalFieldKind> = {
  * rather than a single scalar. Projected with `isMultiple: true`, mirroring
  * `multiValueSelectTypes` in Go `internal/approval/formeditor/project.go`.
  */
-const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set(["checkbox-group", "multi-select"]);
+const MULTI_VALUE_SELECT_TYPES: ReadonlySet<string> = new Set([
+  "checkbox-group",
+  "multi-select",
+  "tree-multi-select"
+]);
 
 /**
  * Widget types that bind a value the approval contract cannot carry (as
@@ -579,7 +587,9 @@ function resolveOptionSource(
     return {};
   }
 
-  const result = resolveOptionSourceValue(source, dataSources);
+  const flattenTree = isTreeSelectFieldType(field.type);
+  const leafOnly = (field.type === "tree-select" || field.type === "tree-multi-select") && field.leafOnly === true;
+  const result = resolveOptionSourceValue(source, dataSources, { flattenTree, leafOnly });
 
   if (result.options === undefined && result.optionSource?.kind !== "codeSet") {
     issues.push(issueOptionsNotStatic(path));
@@ -592,10 +602,16 @@ function resolveOptionSource(
  * Pure dereference + projection of a {@link FieldOptionSource}, shared between
  * leaf selection fields and fixed-row subform sources. Mirrors
  * `resolveOptionSourceValue` in Go `internal/approval/formeditor/project.go`.
+ *
+ * Enumerated static options always strip `disabled`, `description`, and
+ * `children` to plain `{ label, value }` pairs: flat selection fields and
+ * fixed-row subforms take top-level items only, while tree controls flatten in
+ * pre-order (filtering to leaves when `leafOnly` is true).
  */
 function resolveOptionSourceValue(
   source: FieldOptionSource | undefined,
-  dataSources: Map<string, FormDataSource>
+  dataSources: Map<string, FormDataSource>,
+  config: { flattenTree?: boolean; leafOnly?: boolean } = {}
 ): { options?: ApprovalFieldOption[]; optionSource?: ApprovalFieldOptionSource } {
   if (source === undefined) {
     return {};
@@ -604,7 +620,15 @@ function resolveOptionSourceValue(
   const resolved = source.kind === "ref" ? dataSources.get(source.dataSourceId) : source;
 
   if (resolved?.kind === "static") {
-    return { options: resolved.options };
+    const projected = config.flattenTree === true
+      ? flattenSelectableOptions(resolved.options, { leafOnly: config.leafOnly === true })
+      : resolved.options;
+
+    return {
+      options: projected.map(option => {
+        return { label: option.label, value: option.value };
+      })
+    };
   }
 
   if (resolved?.kind === "codeSet") {

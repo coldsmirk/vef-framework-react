@@ -36,6 +36,8 @@ const EXPECTED_ERROR_ISSUES: Record<string, { code: ProjectionIssueCode; path: s
   cross_device_table_conflict: { code: "cross_device_table_mismatch", path: "items" },
   cross_device_table_row_mode_conflict: { code: "cross_device_table_rows_mismatch", path: "checks" },
   cross_device_table_validation_conflict: { code: "cross_device_validation_mismatch", path: "items" },
+  cross_device_tree_leaf_only_conflict: { code: "cross_device_options_mismatch", path: "region" },
+  cross_device_tree_mapping_conflict: { code: "cross_device_options_mismatch", path: "dept" },
   cross_device_unmappable: { code: "unmappable_field_type", path: "a" },
   cross_device_validation_conflict: { code: "cross_device_validation_mismatch", path: "phone" },
   nested_subform: { code: "nested_subform_unsupported", path: "items.parts" },

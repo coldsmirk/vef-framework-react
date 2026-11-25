@@ -283,7 +283,9 @@ function remoteMappingEqual(
   return (a?.labelKey ?? "") === (b?.labelKey ?? "")
     && (a?.valueKey ?? "") === (b?.valueKey ?? "")
     && (a?.disabledKey ?? "") === (b?.disabledKey ?? "")
-    && (a?.descriptionKey ?? "") === (b?.descriptionKey ?? "");
+    && (a?.descriptionKey ?? "") === (b?.descriptionKey ?? "")
+    && (a?.childrenKey ?? "") === (b?.childrenKey ?? "")
+    && (a?.parentKey ?? "") === (b?.parentKey ?? "");
 }
 
 function validationContractEqual(a: ProjectedApprovalField, b: ProjectedApprovalField): boolean {
