@@ -283,9 +283,12 @@ const pcScrollAreaCss = css({
     top: 0,
     zIndex: 2
   },
-  // A date or a name broken over two lines is slow to scan; a wide list scrolls
-  // sideways instead.
+  // A date or a name broken over two lines is slow to scan: the dialog widens to
+  // the columns, a long text is cut, and past the window the list scrolls sideways.
   "& .vef-table-thead > tr > th, & .vef-table-tbody > tr > td": {
+    maxWidth: 320,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
     whiteSpace: "nowrap"
   },
   "& .vef-table-tbody > tr": {
@@ -299,7 +302,17 @@ const pcScrollAreaCss = css({
   }
 });
 
-const PC_MODAL_WIDTH = 760;
+const PC_MODAL_WIDTH = "fit-content";
+
+const PC_MODAL_STYLE = {
+  minWidth: "min(520px, calc(100vw - 32px))"
+} as const;
+
+// The dialog sizes to its columns, so their width has to reach it: the framework
+// table keeps its own from its host by default.
+const PC_TABLE_STYLE = {
+  contain: "none"
+} as const;
 
 const PC_VIEWPORT_STYLE = {
   maxHeight: "60vh"
@@ -540,6 +553,9 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
       return {
         key: column.path,
         title: column.label,
+        onCell: (row: RecordRow) => {
+          return { title: formatCellValue(readRecordCellValue(row.record, column.path)) };
+        },
         render: (_value: unknown, row: RecordRow) => formatCellValue(readRecordCellValue(row.record, column.path))
       };
     }),
@@ -709,13 +725,13 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
 
   return (
     <Modal
-      centered
       destroyOnHidden
       keyboard
       afterClose={handleAfterClose}
       focusable={MODAL_FOCUSABLE}
       footer={null}
       open={isOpen}
+      style={PC_MODAL_STYLE}
       title={title}
       width={PC_MODAL_WIDTH}
       afterOpenChange={open => {
@@ -734,7 +750,7 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
         tabIndex={-1}
         onKeyDown={handleKeyDown}
       >
-        <ScrollArea css={pcScrollAreaCss} scrollbars="both" viewportStyle={PC_VIEWPORT_STYLE}>
+        <ScrollArea css={pcScrollAreaCss} scrollbars="both" type="auto" viewportStyle={PC_VIEWPORT_STYLE}>
           <Table<RecordRow>
             columns={tableColumns}
             dataSource={tableData}
@@ -743,6 +759,7 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
             rowClassName={(_record, index) => index === activeIndex ? ACTIVE_ROW_CLASS : ""}
             rowKey="rowKey"
             size="small"
+            style={PC_TABLE_STYLE}
             onRow={(row, rowIndex = 0) => {
               const isSelected = rowIndex === activeIndex;
 
