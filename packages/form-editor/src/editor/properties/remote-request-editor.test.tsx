@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
-import { RemoteRequestEditor, RequestParamsEditor } from "./remote-request-editor";
+import { CatalogRemoteRequestEditor, RequestParamsEditor } from "./remote-request-editor";
 
 interface RequestHarnessProps {
   initial: RemoteDataSourceRequest;
@@ -21,7 +21,7 @@ function RequestHarness({ initial, onCommit }: RequestHarnessProps): ReactElemen
   const [request, setRequest] = useState(initial);
 
   return (
-    <RemoteRequestEditor
+    <CatalogRemoteRequestEditor
       request={request}
       onChange={next => {
         onCommit?.(next);
@@ -65,7 +65,7 @@ const TWO_PARAMS: RemoteDataSourceRequest = {
   }
 };
 
-describe("RemoteRequestEditor", () => {
+describe("CatalogRemoteRequestEditor", () => {
   it("drops the version key when the version is cleared", async () => {
     const user = userEvent.setup();
     const onCommit = vi.fn();

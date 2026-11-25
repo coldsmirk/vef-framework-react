@@ -17,13 +17,15 @@ export {
   mapActionTargetKeys,
   mapRemoteRequestDynamicValues,
   rewriteActionVariable,
+  writeActionOutput,
   type ActionDescriptor,
   type DataSourceIdSlot,
   type DynamicValueSlot,
   type OutputSlot,
   type RequestSlot,
   type TargetKeySlot,
-  type VariableSlot
+  type VariableSlot,
+  type WriteTarget
 } from "./action-descriptors";
 export {
   defaultEvaluateAssignExpression,
@@ -63,18 +65,15 @@ export {
 export {
   collectInferredSelectRecordColumns,
   collectStepOutputNames,
-  collectStepReferenceUsages,
-  findBrokenStepReferencesAfterReorder,
+  findBrokenStepReferences,
   findDependentStepsAfter,
+  getStepOutputName,
   matchStepFieldsToTargets,
   nextUniqueStepOutput,
   renameStepOutputInRule,
   resolvePriorStepSchemas,
-  resolveSelectRecordSourceFields,
-  type BrokenStepReference,
-  type FieldMatchResult,
-  type PriorStepSchema,
-  type StepReferenceUsage
+  resolveRecordSourceFields,
+  type PriorStepSchema
 } from "./step-schema";
 export {
   ALERT_LEVELS,

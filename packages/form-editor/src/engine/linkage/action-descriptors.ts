@@ -6,6 +6,8 @@ import type {
   RemoteDataSourceRequest
 } from "../../types";
 
+import { omit } from "@vef-framework-react/shared";
+
 import { mapPreservingIdentity } from "../schema/nodes";
 import { isRecord } from "../validation";
 
@@ -19,6 +21,12 @@ import { isRecord } from "../validation";
  * (compile-checked via `Record<LinkageActionType, …>`) plus one execution
  * branch, with no scattered `switch (action.type)` passes to keep in sync.
  */
+
+/**
+ * The form field a dynamic value is written to: the rule's own field
+ * (`assign`), or a same-scope field by key (`set_fields`).
+ */
+export type WriteTarget = { kind: "self" } | { kind: "field"; key: string };
 
 export interface DynamicValueSlot {
   /**
@@ -37,11 +45,9 @@ export interface DynamicValueSlot {
    */
   allowSteps: boolean;
   /**
-   * Field key written by this slot: `"self"` for `assign`, the assignment's
-   * `targetKey` for `set_fields`, or `undefined` when the slot does not write a
-   * form field.
+   * The field this slot writes; omitted when it does not write one.
    */
-  targetKey?: string | "self";
+  target?: WriteTarget;
 }
 
 export interface TargetKeySlot {
@@ -60,10 +66,14 @@ export interface RequestSlot {
   request: unknown;
 }
 
-export interface OutputSlot {
+export interface OutputSlot<TAction extends FieldLinkageAction = FieldLinkageAction> {
   path: string;
   required: boolean;
-  value: unknown;
+  read: (action: TAction) => unknown;
+  /**
+   * Rename the output; `undefined` clears it.
+   */
+  write: (action: TAction, next: string | undefined) => TAction;
 }
 
 export interface VariableSlot<TAction extends FieldLinkageAction = FieldLinkageAction> {
@@ -82,14 +92,14 @@ export interface ActionDescriptor<TAction extends FieldLinkageAction = FieldLink
   dynamicValues?: (action: TAction) => DynamicValueSlot[];
   mapDynamicValues?: (
     action: TAction,
-    mapper: (value: DynamicValue, meta: { targetKey?: string | "self" }) => DynamicValue
+    mapper: (value: DynamicValue, target: WriteTarget | undefined) => DynamicValue
   ) => TAction;
   targetKeys?: (action: TAction) => TargetKeySlot[];
   mapTargetKeys?: (
     action: TAction,
     mapper: (targetKey: string) => string | undefined
   ) => TAction | undefined;
-  output?: (action: TAction) => OutputSlot;
+  output?: OutputSlot<TAction>;
   requests?: (action: TAction) => RequestSlot[];
   variable?: VariableSlot<TAction>;
   dataSourceId?: DataSourceIdSlot<TAction>;
@@ -100,6 +110,8 @@ type ActionByType<T extends LinkageActionType> = Extract<FieldLinkageAction, { t
 type ActionDescriptorTable = {
   [T in LinkageActionType]: ActionDescriptor<ActionByType<T>>;
 };
+
+const SELF_TARGET: WriteTarget = { kind: "self" };
 
 const EMPTY_STATE_DESCRIPTOR: { readonly family: "state" } = {
   family: "state"
@@ -173,11 +185,11 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
         path: "value",
         value: action.value,
         allowSteps: false,
-        targetKey: "self"
+        target: SELF_TARGET
       }
     ],
     mapDynamicValues: (action, mapper) => {
-      const next = mapper(action.value, { targetKey: "self" });
+      const next = mapper(action.value, SELF_TARGET);
 
       return next === action.value ? action : { ...action, value: next };
     }
@@ -200,7 +212,7 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
           path: `assignments[${index}].value`,
           value: entry.value,
           allowSteps: true,
-          ...typeof entry.targetKey === "string" && { targetKey: entry.targetKey }
+          ...typeof entry.targetKey === "string" && { target: { kind: "field", key: entry.targetKey } }
         });
       }
 
@@ -212,7 +224,7 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
       }
 
       const assignments = mapPreservingIdentity(action.assignments, entry => {
-        const nextValue = mapper(entry.value, { targetKey: entry.targetKey });
+        const nextValue = mapper(entry.value, { kind: "field", key: entry.targetKey });
 
         return nextValue === entry.value ? entry : { ...entry, value: nextValue };
       });
@@ -280,7 +292,7 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
       }
     ],
     mapDynamicValues: (action, mapper) => {
-      const next = mapper(action.value, {});
+      const next = mapper(action.value, undefined);
 
       return next === action.value ? action : { ...action, value: next };
     },
@@ -294,17 +306,16 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
     family: "effect",
     dynamicValues: action => collectRequestParamSlots(action.request, "request", true),
     mapDynamicValues: (action, mapper) => {
-      const nextRequest = mapRemoteRequestDynamicValues(action.request, value => mapper(value, {}));
+      const nextRequest = mapRemoteRequestDynamicValues(action.request, value => mapper(value, undefined));
 
       return nextRequest === action.request ? action : { ...action, request: nextRequest };
     },
     requests: action => [{ path: "request", request: action.request }],
-    output: action => {
-      return {
-        path: "output",
-        required: false,
-        value: action.output
-      };
+    output: {
+      path: "output",
+      required: false,
+      read: action => action.output,
+      write: (action, next) => next === undefined ? omit(action, ["output"]) : { ...action, output: next }
     }
   },
   select_record: {
@@ -317,16 +328,17 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
       }
     ],
     mapDynamicValues: (action, mapper) => {
-      const next = mapper(action.source, {});
+      const next = mapper(action.source, undefined);
 
       return next === action.source ? action : { ...action, source: next };
     },
-    output: action => {
-      return {
-        path: "output",
-        required: true,
-        value: action.output
-      };
+    output: {
+      path: "output",
+      required: true,
+      read: action => action.output,
+      write: (action, next) => {
+        return { ...action, output: next ?? "" };
+      }
     }
   },
   refresh_data_source: {
@@ -346,7 +358,7 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
       }
     ],
     mapDynamicValues: (action, mapper) => {
-      const next = mapper(action.message, {});
+      const next = mapper(action.message, undefined);
 
       return next === action.message ? action : { ...action, message: next };
     }
@@ -361,7 +373,7 @@ export const ACTION_DESCRIPTORS: ActionDescriptorTable = {
       }
     ],
     mapDynamicValues: (action, mapper) => {
-      const next = mapper(action.to, {});
+      const next = mapper(action.to, undefined);
 
       return next === action.to ? action : { ...action, to: next };
     }
@@ -388,7 +400,7 @@ export function getActionDynamicValues(action: FieldLinkageAction): DynamicValue
 
 export function mapActionDynamicValues(
   action: FieldLinkageAction,
-  mapper: (value: DynamicValue, meta: { targetKey?: string | "self" }) => DynamicValue
+  mapper: (value: DynamicValue, target: WriteTarget | undefined) => DynamicValue
 ): FieldLinkageAction {
   const descriptor = getActionDescriptor(action);
 
@@ -408,8 +420,23 @@ export function mapActionTargetKeys(
   return descriptor?.mapTargetKeys ? descriptor.mapTargetKeys(action, mapper) : action;
 }
 
-export function getActionOutput(action: FieldLinkageAction): OutputSlot | undefined {
-  return getActionDescriptor(action)?.output?.(action);
+export function getActionOutput(action: FieldLinkageAction): { path: string; required: boolean; value: unknown } | undefined {
+  const slot = getActionDescriptor(action)?.output;
+
+  return slot
+    ? {
+        path: slot.path,
+        required: slot.required,
+        value: slot.read(action)
+      }
+    : undefined;
+}
+
+export function writeActionOutput<T extends FieldLinkageAction>(action: T, next: string | undefined): T {
+  const slot = getActionDescriptor(action)?.output;
+
+  // A descriptor's writer keeps its action's type; the lookup erased the pair.
+  return slot ? slot.write(action, next) as T : action;
 }
 
 export function getActionRequests(action: FieldLinkageAction): RequestSlot[] {

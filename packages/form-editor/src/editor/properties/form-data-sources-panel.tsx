@@ -38,6 +38,7 @@ import {
 } from "./data-source-usage";
 import { DraftField, DraftModal } from "./draft-modal";
 import { OptionListEditor } from "./option-editors";
+import { NodeReferenceScopeProvider } from "./reference-scope";
 import { RemoteOptionSourceEditor } from "./remote-option-source-editor";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 import { useDataEntryEditor } from "./use-data-entry-editor";
@@ -409,13 +410,15 @@ function DataSourceModal({
             </DraftField>
           )
         : (
-            <RemoteOptionSourceEditor
-              mapping={draft.mapping}
-              request={draft.request}
-              onChange={(request, mapping) => setDraft(
-                current => current.kind === "remote" ? withRemotePayload(current, request, mapping) : current
-              )}
-            />
+            <NodeReferenceScopeProvider nodeId={null}>
+              <RemoteOptionSourceEditor
+                mapping={draft.mapping}
+                request={draft.request}
+                onChange={(request, mapping) => setDraft(
+                  current => current.kind === "remote" ? withRemotePayload(current, request, mapping) : current
+                )}
+              />
+            </NodeReferenceScopeProvider>
           )}
     </DraftModal>
   );

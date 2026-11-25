@@ -1,8 +1,8 @@
 import type * as ComponentsModule from "@vef-framework-react/components";
 import type { CodeEditorProps } from "@vef-framework-react/components";
-import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ChangeEvent, ReactElement } from "react";
 
+import type { LinkageFocusRef } from "../../../../store/form-store";
 import type {
   DataSourceApi,
   FieldLinkage,
@@ -12,12 +12,11 @@ import type {
   NumberField,
   SelectField,
   SwitchField,
-  TextareaField,
   TextfieldField,
   UploadField
 } from "../../../../types";
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -30,11 +29,14 @@ import { ContextSourcesProvider } from "../../../context-sources";
 import { DataSourceApisProvider } from "../../../data-source-apis";
 import { PreviewRuntimeProvider } from "../../../preview-runtime-context";
 import { PropertiesPanel } from "../../properties-panel";
-import { reorderActions } from "./actions-editor";
 import { commitHintForField, LinkageRulesEntry } from "./linkage-rules-entry";
 import { createActionFor, switchRuleTrigger } from "./mutators";
 
+const codeEditorRender = vi.hoisted(() => vi.fn());
+
 function CodeEditor(props: CodeEditorProps): ReactElement {
+  codeEditorRender(props.value);
+
   return (
     <textarea
       aria-label="mock-code-editor"
@@ -92,19 +94,50 @@ const RAW_API: DataSourceApi = {
 const CONTEXT_SOURCES: LinkageContextSource[] = [{ key: "$applicant.name", label: "申请人姓名" }];
 const DEFAULT_APIS: DataSourceApi[] = [STAFF_API, RAW_API];
 
-function FocusDispatcher(): ReactElement {
+const REGISTRIES = { pc: createDefaultRegistry(), mobile: createDefaultRegistry() };
+
+function FocusDispatcher({ focus }: { focus: LinkageFocusRef }): ReactElement {
   const api = useFormEditorStoreApi();
 
   useEffect(() => {
-    api.getState().requestLinkageFocus({
-      scope: "node",
-      nodeId: "Field_code",
-      ruleIndex: 0,
-      actionIndex: 1
-    });
-  }, [api]);
+    api.getState().requestLinkageFocus(focus);
+  }, [api, focus]);
 
   return <PropertiesPanel />;
+}
+
+/**
+ * The real properties panel over the real store, on the rule a diagnostic
+ * points at.
+ */
+function renderPanel(linkage: FieldLinkage, focus: LinkageFocusRef): void {
+  render(
+    <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
+      <RegistryProvider registries={REGISTRIES}>
+        <FormEditorStoreProvider initialState={{ schema: makeStaffSchema(linkage) }}>
+          <FocusDispatcher focus={focus} />
+        </FormEditorStoreProvider>
+      </RegistryProvider>
+    </PreviewRuntimeProvider>
+  );
+}
+
+function hintOf(field: FormField): string {
+  return commitHintForField(field, REGISTRIES.pc.get(field.type));
+}
+
+function alertRule(id: string, source: string): NonNullable<FieldLinkage["rules"]>[number] {
+  return {
+    id,
+    trigger: { kind: "commit" },
+    actions: [
+      {
+        id: `${id}_A1`,
+        type: "alert",
+        message: { kind: "expression", source }
+      }
+    ]
+  };
 }
 
 function makeStaffSchema(codeLinkage?: FieldLinkage): FormSchema {
@@ -218,18 +251,20 @@ function StatefulLinkageHarness({
     <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest, hasNavigate } }}>
       <DataSourceApisProvider apis={apis}>
         <ContextSourcesProvider sources={contextSources}>
-          <FormEditorStoreProvider initialState={{ schema }}>
-            <LinkageRulesEntry
-              entry={ENTRY}
-              field={field}
-              schema={schema}
-              onChange={value => {
-                const next = value as FieldLinkage | undefined;
-                onCommit?.(next);
-                setField(current => ENTRY.write(current, next));
-              }}
-            />
-          </FormEditorStoreProvider>
+          <RegistryProvider registries={REGISTRIES}>
+            <FormEditorStoreProvider initialState={{ schema }}>
+              <LinkageRulesEntry
+                entry={ENTRY}
+                field={field}
+                schema={schema}
+                onChange={value => {
+                  const next = value as FieldLinkage | undefined;
+                  onCommit?.(next);
+                  setField(current => ENTRY.write(current, next));
+                }}
+              />
+            </FormEditorStoreProvider>
+          </RegistryProvider>
         </ContextSourcesProvider>
       </DataSourceApisProvider>
     </PreviewRuntimeProvider>
@@ -238,39 +273,22 @@ function StatefulLinkageHarness({
 
 describe("action sequence designer", () => {
   describe("control-specific commit hints and event guards", () => {
-    it("tailors commit trigger hints to each control type", () => {
-      const textfield: TextfieldField = {
+    it("describes how each control commits", () => {
+      expect(hintOf({
         id: "F1",
         type: "textfield",
         key: "k1"
-      };
-      const textarea: TextareaField = {
+      })).toBe("按回车，或离开输入框且内容变化时触发");
+      expect(hintOf({
         id: "F2",
         type: "textarea",
         key: "k2"
-      };
-      const select: SelectField = {
+      })).toBe("离开输入框且内容变化时触发");
+      expect(hintOf({
         id: "F3",
-        type: "select",
-        key: "k3",
-        dataSource: { kind: "static", options: [] }
-      };
-      const sw: SwitchField = {
-        id: "F4",
         type: "switch",
-        key: "k4"
-      };
-      const upload: UploadField = {
-        id: "F5",
-        type: "upload",
-        key: "k5"
-      };
-
-      expect(commitHintForField(textfield, undefined)).toBe("按回车或离开输入框且内容变化时触发");
-      expect(commitHintForField(textarea, undefined)).toBe("离开输入框且内容变化时触发");
-      expect(commitHintForField(select, undefined)).toBe("每次选择后触发");
-      expect(commitHintForField(sw, undefined)).toBe("切换开关状态后触发");
-      expect(commitHintForField(upload, undefined)).toBe("文件变更后触发");
+        key: "k3"
+      })).toBe("值改变后立即触发");
     });
 
     it("adds, edits, and removes a when guard on an event trigger", async () => {
@@ -298,7 +316,7 @@ describe("action sequence designer", () => {
         />
       );
 
-      expect(screen.getByText("按回车或离开输入框且内容变化时触发")).toBeInTheDocument();
+      expect(screen.getByText("按回车，或离开输入框且内容变化时触发")).toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: /添加执行条件/ }));
 
@@ -435,6 +453,16 @@ describe("action sequence designer", () => {
       });
     });
 
+    it("draws a select_record only from the results before it, and names it apart from all", () => {
+      const call = createActionFor("api_call");
+      const select = createActionFor("select_record", [call]);
+
+      expect(createActionFor("select_record", [createActionFor("submit"), call, select], 0)).toMatchObject({
+        output: "selected_2",
+        source: { kind: "reference", path: "" }
+      });
+    });
+
     it("propagates output renames, supports 按名称匹配, and previews inferred select_record columns", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
@@ -506,7 +534,7 @@ describe("action sequence designer", () => {
 
       // Expand step 2 (select_record) and check auto-inferred columns preview.
       await user.click(screen.getByRole("button", { name: /选择记录 · result → selected/ }));
-      expect(screen.getByText(/当前留空，多条记录时将自动展示后续写入引用的列：工号、姓名、手机号、性别/)).toBeInTheDocument();
+      expect(screen.getByText("留空时展示后续步骤引用的列：工号、姓名、手机号、性别")).toBeInTheDocument();
 
       // Rename step 1's output in modal and verify step 2's source follows automatically.
       const updatedModalButtons = screen.getAllByRole("button", { name: "弹窗编辑步骤" });
@@ -604,20 +632,37 @@ describe("action sequence designer", () => {
       }
     });
 
-    it("reorders actions via pure reorderActions helper", () => {
-      const actions = [
-        { id: "A1", type: "submit" as const },
-        { id: "A2", type: "reset" as const }
-      ];
-      const event = {
-        canceled: false,
-        operation: {
-          source: { id: "A2" },
-          target: { id: "A1" }
-        }
-      } as unknown as DragEndEvent;
+    it("starts an untouched value over when its target changes", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
 
-      expect(reorderActions(actions, event)?.map(item => item.id)).toEqual(["A2", "A1"]);
+      render(
+        <StatefulLinkageHarness
+          initialLinkage={{
+            rules: [
+              {
+                id: "R1",
+                trigger: { kind: "commit" },
+                actions: [
+                  {
+                    id: "A1",
+                    type: "set_fields",
+                    assignments: [{ targetKey: "active", value: { kind: "literal", value: false } }]
+                  }
+                ]
+              }
+            ]
+          }}
+          onCommit={onCommit}
+        />
+      );
+
+      await user.click(screen.getByRole("combobox", { name: "目标字段" }));
+      await user.click(await screen.findByText("姓名 · name"));
+
+      expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions[0]).toMatchObject({
+        assignments: [{ targetKey: "name", value: { kind: "literal", value: "" } }]
+      });
     });
 
     it("marks stored api_call with 当前宿主不支持 when request service is unwired", async () => {
@@ -646,53 +691,96 @@ describe("action sequence designer", () => {
       );
 
       expect(screen.getByText("当前宿主不支持")).toBeInTheDocument();
-      expect(screen.getByText(/当前宿主未接入接口调用服务/)).toBeInTheDocument();
+      expect(screen.getByText(/当前宿主未接入接口调用，执行到此步骤会失败/)).toBeInTheDocument();
 
       // Still editable: changing onError works and updates the badge.
       const onErrorSelect = screen.getByLabelText("失败处理");
       await user.click(onErrorSelect);
-      await user.click(await screen.findByText("忽略错误继续后续动作"));
+      await user.click(await screen.findByText("忽略失败，继续后续步骤"));
       expect(screen.getByText("失败继续")).toBeInTheDocument();
     });
   });
 
-  describe("diagnostic jump to exact linkage step", () => {
-    it("switches the properties panel to 联动 tab and expands the targeted action step", async () => {
-      const schema = makeStaffSchema({
-        rules: [
-          {
-            id: "R1",
-            trigger: { kind: "commit" },
-            actions: [
-              {
-                id: "A1",
-                type: "api_call",
-                request: { resource: "md/staff", action: "lookup" },
-                output: "result"
-              },
-              {
-                id: "A2",
-                type: "set_fields",
-                assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
-              }
-            ]
-          }
-        ]
+  describe("diagnostic jump", () => {
+    const lookupRules: FieldLinkage = {
+      rules: [
+        {
+          id: "R1",
+          trigger: { kind: "commit" },
+          actions: [
+            {
+              id: "A1",
+              type: "api_call",
+              request: { resource: "md/staff", action: "lookup" },
+              output: "result"
+            },
+            {
+              id: "A2",
+              type: "set_fields",
+              assignments: [{ targetKey: "", value: { kind: "literal", value: "" } }]
+            }
+          ]
+        },
+        alertRule("R2", "1")
+      ]
+    };
+
+    it("opens the 联动 tab and expands the step", async () => {
+      renderPanel(lookupRules, {
+        nodeId: "Field_code",
+        ruleIndex: 0,
+        actionIndex: 1
       });
 
-      render(
-        <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
-          <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
-            <FormEditorStoreProvider initialState={{ schema }}>
-              <FocusDispatcher />
-            </FormEditorStoreProvider>
-          </RegistryProvider>
-        </PreviewRuntimeProvider>
-      );
-
-      // The lazy LinkageRulesEntry mounts, switches to the 联动 tab, and
-      // automatically expands step 2 (set_fields), exposing its target picker.
       expect(await screen.findByText("选择目标字段")).toBeInTheDocument();
+    });
+
+    it("leaves the step alone once it has been shown", async () => {
+      const user = userEvent.setup();
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+
+      renderPanel(lookupRules, {
+        nodeId: "Field_code",
+        ruleIndex: 0,
+        actionIndex: 1
+      });
+
+      await user.click(await screen.findByRole("button", { name: /设置字段/ }));
+      scroll.mockClear();
+      await user.click(screen.getByRole("button", { name: /调用接口/ }));
+      await user.click(within(screen.getByRole("group", { name: "规则 1" })).getByLabelText("失败处理"));
+      await user.click(await screen.findByText("忽略失败，继续后续步骤"));
+
+      expect(screen.getByText("失败继续")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /设置字段/ })).toHaveAttribute("aria-expanded", "false");
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it("scrolls a rule into view when the issue names no step", async () => {
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+
+      renderPanel(lookupRules, { nodeId: "Field_code", ruleIndex: 1 });
+
+      const card = await screen.findByRole("group", { name: "规则 2" });
+
+      await waitFor(() => expect(scroll.mock.contexts).toContain(card));
+    });
+  });
+
+  describe("editing one rule", () => {
+    it("renders no other rule again", async () => {
+      const user = userEvent.setup();
+
+      renderPanel({ rules: [alertRule("R1", "first"), alertRule("R2", "second")] }, { nodeId: "Field_code", ruleIndex: 0 });
+
+      const card = await screen.findByRole("group", { name: "规则 1" });
+      const [editor] = within(card).getAllByLabelText("mock-code-editor");
+
+      codeEditorRender.mockClear();
+      await user.type(editor as HTMLElement, "!");
+
+      await waitFor(() => expect(codeEditorRender).toHaveBeenCalledWith("first!"));
+      expect(codeEditorRender).not.toHaveBeenCalledWith("second");
     });
   });
 });

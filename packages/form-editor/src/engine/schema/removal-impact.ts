@@ -10,7 +10,7 @@ import type {
 import type { ScopeKeyBucket } from "../keys";
 
 import { collectBlocksKeysByScope, collectSubtreeKeysByScope } from "../keys";
-import { getActionDynamicValues } from "../linkage/action-descriptors";
+import { getActionDynamicValues, getActionTargetKeys } from "../linkage/action-descriptors";
 import { leafSourceFormKey } from "../linkage/scope";
 import { hasConditionTriggeredShow } from "../linkage/shape";
 import { isRecord } from "../validation";
@@ -237,10 +237,10 @@ function countClearedNodeOptionSourceReferences(node: Block, removedKeys: Readon
 }
 
 /**
- * Count the `set_fields` write items removed and the surviving dynamic-value
- * reference slots cleared inside one SURVIVING rule. Rules dropped wholesale
- * are already reported under `removedRules` / `formRulesRemoved` and are not
- * double-counted here.
+ * Count the write items removed and the dynamic-value references cleared inside
+ * one SURVIVING rule. Rules dropped wholesale are already reported under
+ * `removedRules` / `formRulesRemoved` and are not double-counted here, nor is a
+ * reference that goes away with its removed write item.
  */
 function countSurvivingRuleImpacts(
   rule: FieldLinkageRule,
@@ -250,20 +250,16 @@ function countSurvivingRuleImpacts(
   let referencesCleared = 0;
 
   for (const action of rule.actions) {
-    if (action.type === "set_fields") {
-      for (const assignment of action.assignments) {
-        if (removedKeys.has(assignment.targetKey)) {
-          assignmentsRemoved += 1;
-        } else if (isRemovedReference(assignment.value, removedKeys)) {
-          referencesCleared += 1;
-        }
+    for (const slot of getActionTargetKeys(action)) {
+      if (typeof slot.targetKey === "string" && removedKeys.has(slot.targetKey)) {
+        assignmentsRemoved += 1;
       }
-
-      continue;
     }
 
     for (const slot of getActionDynamicValues(action)) {
-      if (isRemovedReference(slot.value, removedKeys)) {
+      const itemRemoved = slot.target?.kind === "field" && removedKeys.has(slot.target.key);
+
+      if (!itemRemoved && isRemovedReference(slot.value, removedKeys)) {
         referencesCleared += 1;
       }
     }

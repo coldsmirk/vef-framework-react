@@ -1,6 +1,7 @@
 import type { SchemaIssue } from "../engine/validation";
-import type { DataEntryRef, FormEditorStoreApi, PropertiesTabId, SidebarTabId } from "../store/form-store";
+import type { DataEntryRef, FormEditorStoreApi, LinkageFocusRef, PropertiesTabId, SidebarTabId } from "../store/form-store";
 import type { Block, FieldLinkage, FormSchema, PresentationDevice, PresentationLayer } from "../types";
+import type { LinkageIssuePath } from "./linkage-issue-path";
 
 import { useCallback } from "react";
 
@@ -8,6 +9,7 @@ import { assertNever } from "../engine/assert-never";
 import { isKeyedNode } from "../engine/keys";
 import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/walk";
 import { useFormEditorStoreApi } from "../store/form-store";
+import { parseLinkageIssuePath } from "./linkage-issue-path";
 import { actionLabelFor } from "./properties/entries/linkage/options";
 
 /**
@@ -18,8 +20,7 @@ import { actionLabelFor } from "./properties/entries/linkage/options";
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
-    | { kind: "linkage"; scope: "node"; device: PresentationDevice; nodeId: string; ruleIndex: number; actionIndex?: number }
-    | { kind: "linkage"; scope: "form"; ruleIndex: number; actionIndex?: number }
+    | { kind: "linkage"; device: PresentationDevice; focus: LinkageFocusRef }
     | { kind: "dataEntry"; entry: DataEntryRef }
     | { kind: "sidebar"; tab: SidebarTabId }
     | { kind: "properties"; tab: PropertiesTabId };
@@ -34,10 +35,6 @@ const BODY_SEGMENT = /^(?<body>children|tabs|template)\[(?<index>\d+)\]$/;
 
 const NODE_SEGMENT = /^node\[(?<id>[^\]]+)\]$/;
 
-const RULES_SEGMENT = /^rules\[(?<index>\d+)\]$/;
-
-const ACTIONS_SEGMENT = /^actions\[(?<index>\d+)\]$/;
-
 const DATA_SOURCES_HEAD = /^dataSources(?:\[\d+\])?$/;
 
 const VARIABLES_HEAD = /^variables(?:\[\d+\])?$/;
@@ -49,33 +46,18 @@ const VARIABLES_HEAD = /^variables(?:\[\d+\])?$/;
 const ENVELOPE_PATHS: ReadonlySet<string> = new Set(["", "id", "version", "presentations"]);
 
 /**
- * Parse `.rules[r]` (and optional `.actions[a]`) immediately following a
- * `linkage` segment. Returns `undefined` when the path does not name a rule.
+ * The rule a path names on `nodeId` (`null` for the form's own events), shown
+ * on `device`.
  */
-function parseLinkageTrail(segments: readonly string[]): {
-  ruleIndex: number;
-  actionIndex?: number;
-  inWhenGuard: boolean;
-} | undefined {
-  const [ruleSegment, nextSegment, thirdSegment] = segments;
-
-  if (ruleSegment === undefined) {
-    return undefined;
-  }
-
-  const ruleMatch = RULES_SEGMENT.exec(ruleSegment)?.groups?.index;
-
-  if (ruleMatch === undefined) {
-    return undefined;
-  }
-
-  const ruleIndex = Number(ruleMatch);
-  const actionMatch = nextSegment === undefined ? undefined : ACTIONS_SEGMENT.exec(nextSegment)?.groups?.index;
-
+function linkageTarget(device: PresentationDevice, nodeId: string | null, trail: LinkageIssuePath): IssueTarget {
   return {
-    ruleIndex,
-    ...actionMatch !== undefined && { actionIndex: Number(actionMatch) },
-    inWhenGuard: nextSegment === "trigger" && thirdSegment === "when"
+    kind: "linkage",
+    device,
+    focus: {
+      nodeId,
+      ruleIndex: trail.ruleIndex,
+      ...trail.actionIndex !== undefined && { actionIndex: trail.actionIndex }
+    }
   };
 }
 
@@ -212,41 +194,15 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
       return undefined;
     }
 
-    if (second === "linkage") {
-      const trail = parseLinkageTrail(segments.slice(2));
+    const trail = parseLinkageIssuePath(path);
 
-      if (trail !== undefined) {
-        return {
-          kind: "linkage",
-          scope: "node",
-          device: found.device,
-          nodeId: found.nodeId,
-          ruleIndex: trail.ruleIndex,
-          ...trail.actionIndex !== undefined && { actionIndex: trail.actionIndex }
-        };
-      }
-    }
-
-    return {
-      kind: "node",
-      device: found.device,
-      nodeId: found.nodeId
-    };
+    return trail === undefined ? { kind: "node", ...found } : linkageTarget(found.device, found.nodeId, trail);
   }
 
   if (head === "linkage" || (head === "schema" && second === "linkage")) {
-    const trail = parseLinkageTrail(head === "linkage" ? segments.slice(1) : segments.slice(2));
+    const trail = parseLinkageIssuePath(path);
 
-    if (trail !== undefined) {
-      return {
-        kind: "linkage",
-        scope: "form",
-        ruleIndex: trail.ruleIndex,
-        ...trail.actionIndex !== undefined && { actionIndex: trail.actionIndex }
-      };
-    }
-
-    return { kind: "properties", tab: "form" };
+    return trail === undefined ? { kind: "properties", tab: "form" } : linkageTarget(device, null, trail);
   }
 
   if (DATA_SOURCES_HEAD.test(head)) {
@@ -263,13 +219,7 @@ export function locateIssue(path: string, schema: FormSchema, device: Presentati
 
   const foundByKey = findNodeInDevices(schema, device, layer => nodeIdByKeyChain(layer, segments));
 
-  return foundByKey === undefined
-    ? undefined
-    : {
-        kind: "node",
-        device: foundByKey.device,
-        nodeId: foundByKey.nodeId
-      };
+  return foundByKey === undefined ? undefined : { kind: "node", ...foundByKey };
 }
 
 /**
@@ -328,24 +278,34 @@ function describeDataPath(path: string, schema: FormSchema): string | undefined 
   return undefined;
 }
 
-function describeLinkageDetail(
-  linkage: FieldLinkage | undefined,
-  ruleIndex: number,
-  actionIndex: number | undefined,
-  inWhenGuard: boolean
-): string {
-  const parts = [`规则 ${ruleIndex + 1}`];
+function nodeAt(schema: FormSchema, device: PresentationDevice, nodeId: string): Block | undefined {
+  const layer = schema.presentations[device];
+
+  return layer === undefined ? undefined : findNode(layer, nodeId);
+}
+
+function describeNode(schema: FormSchema, device: PresentationDevice, nodeId: string): string {
+  const node = nodeAt(schema, device, nodeId);
+  const name = node === undefined ? nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
+
+  return device === "mobile" ? `移动端 · ${name}` : name;
+}
+
+function describeRule(linkage: FieldLinkage | undefined, trail: LinkageIssuePath): string {
+  const {
+    actionIndex,
+    inWhenGuard,
+    ruleIndex
+  } = trail;
+  const rule = `规则 ${ruleIndex + 1}`;
 
   if (actionIndex !== undefined) {
     const action = linkage?.rules?.[ruleIndex]?.actions[actionIndex];
-    const typeLabel = action === undefined ? "" : `（${actionLabelFor(action.type)}）`;
 
-    parts.push(`步骤 ${actionIndex + 1}${typeLabel}`);
-  } else if (inWhenGuard) {
-    parts.push("执行条件");
+    return `${rule} · 步骤 ${actionIndex + 1}${action === undefined ? "" : `（${actionLabelFor(action.type)}）`}`;
   }
 
-  return parts.join(" · ");
+  return inWhenGuard ? `${rule} · 执行条件` : rule;
 }
 
 /**
@@ -363,30 +323,16 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
 
   switch (target.kind) {
     case "node": {
-      const layer = schema.presentations[target.device];
-      const node = layer === undefined ? undefined : findNode(layer, target.nodeId);
-      const name = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
-
-      return target.device === "mobile" ? `移动端 · ${name}` : name;
+      return describeNode(schema, target.device, target.nodeId);
     }
 
     case "linkage": {
-      const segments = path.split(".");
-      const trail = target.scope === "node"
-        ? parseLinkageTrail(segments.slice(2))
-        : parseLinkageTrail(segments[0] === "linkage" ? segments.slice(1) : segments.slice(2));
-      const inWhenGuard = trail?.inWhenGuard === true;
+      const { nodeId, ...trail } = target.focus;
+      const inWhenGuard = parseLinkageIssuePath(path)?.inWhenGuard === true;
 
-      if (target.scope === "form") {
-        return `表单事件 · ${describeLinkageDetail(schema.linkage, target.ruleIndex, target.actionIndex, inWhenGuard)}`;
-      }
-
-      const layer = schema.presentations[target.device];
-      const node = layer === undefined ? undefined : findNode(layer, target.nodeId);
-      const rawName = node === undefined ? target.nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
-      const prefix = target.device === "mobile" ? `移动端 · ${rawName}` : rawName;
-
-      return `${prefix} · ${describeLinkageDetail(node?.linkage, target.ruleIndex, target.actionIndex, inWhenGuard)}`;
+      return nodeId === null
+        ? `表单事件 · ${describeRule(schema.linkage, { ...trail, inWhenGuard })}`
+        : `${describeNode(schema, target.device, nodeId)} · ${describeRule(nodeAt(schema, target.device, nodeId)?.linkage, { ...trail, inWhenGuard })}`;
     }
 
     case "dataEntry": {
@@ -436,25 +382,11 @@ function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): voi
     }
 
     case "linkage": {
-      if (target.scope === "node") {
-        if (state.device !== target.device) {
-          state.setDevice(target.device);
-        }
-
-        storeApi.getState().requestLinkageFocus({
-          scope: "node",
-          nodeId: target.nodeId,
-          ruleIndex: target.ruleIndex,
-          ...target.actionIndex !== undefined && { actionIndex: target.actionIndex }
-        });
-        return;
+      if (state.device !== target.device) {
+        state.setDevice(target.device);
       }
 
-      state.requestLinkageFocus({
-        scope: "form",
-        ruleIndex: target.ruleIndex,
-        ...target.actionIndex !== undefined && { actionIndex: target.actionIndex }
-      });
+      state.requestLinkageFocus(target.focus);
       return;
     }
 

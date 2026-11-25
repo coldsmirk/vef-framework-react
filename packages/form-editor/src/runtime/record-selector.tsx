@@ -9,6 +9,7 @@ import Popup from "antd-mobile/es/components/popup";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useMobileScopeContainer } from "../components/mobile/scope";
+import { collectInferredSelectRecordColumns } from "../engine/linkage";
 import { walkOwnPath } from "../engine/linkage/scope";
 import { isRecord } from "../engine/validation";
 import { useDevice } from "../store/engine-provider";
@@ -174,38 +175,6 @@ export function readRecordCellValue(record: Record<string, unknown>, path: strin
   return walkOwnPath(record, path.split("."));
 }
 
-function collectInferredColumnsFromAssignments(
-  assignments: readonly unknown[],
-  prefix: string,
-  scopeFields: ReadonlyMap<string, KeyedFormField>,
-  seen: Set<string>,
-  inferred: SelectRecordColumn[]
-): void {
-  for (const assignment of assignments) {
-    if (
-      !isRecord(assignment)
-      || !isRecord(assignment.value)
-      || assignment.value.kind !== "reference"
-      || typeof assignment.value.path !== "string"
-      || !assignment.value.path.startsWith(prefix)
-    ) {
-      continue;
-    }
-
-    const subPath = assignment.value.path.slice(prefix.length);
-
-    if (subPath.length === 0 || seen.has(subPath)) {
-      continue;
-    }
-
-    seen.add(subPath);
-    const target = typeof assignment.targetKey === "string" ? scopeFields.get(assignment.targetKey) : undefined;
-    const label = target?.label || (typeof assignment.targetKey === "string" && assignment.targetKey.length > 0 ? assignment.targetKey : subPath);
-
-    inferred.push({ path: subPath, label });
-  }
-}
-
 function collectScalarKeysFromRecord(
   record: Record<string, unknown>,
   seenKeys: Set<string>,
@@ -251,20 +220,12 @@ export function inferSelectRecordColumns(
     }
   }
 
-  if (typeof action.output === "string" && action.output.length > 0) {
-    const prefix = `$steps.${action.output}.`;
-    const seen = new Set<string>();
-    const inferred: SelectRecordColumn[] = [];
+  const inferred = typeof action.output === "string"
+    ? collectInferredSelectRecordColumns(action.output, remainingActions, scopeFields)
+    : [];
 
-    for (const next of remainingActions) {
-      if (isRecord(next) && next.type === "set_fields" && Array.isArray(next.assignments)) {
-        collectInferredColumnsFromAssignments(next.assignments, prefix, scopeFields, seen, inferred);
-      }
-    }
-
-    if (inferred.length > 0) {
-      return inferred;
-    }
+  if (inferred.length > 0) {
+    return inferred;
   }
 
   const scalarKeys: string[] = [];
@@ -322,6 +283,11 @@ const pcScrollAreaCss = css({
     top: 0,
     zIndex: 2
   },
+  // A date or a name broken over two lines is slow to scan; a wide list scrolls
+  // sideways instead.
+  "& .vef-table-thead > tr > th, & .vef-table-tbody > tr > td": {
+    whiteSpace: "nowrap"
+  },
   "& .vef-table-tbody > tr": {
     cursor: "pointer"
   },
@@ -332,6 +298,8 @@ const pcScrollAreaCss = css({
     backgroundColor: globalCssVars.colorPrimaryBgHover
   }
 });
+
+const PC_MODAL_WIDTH = 760;
 
 const PC_VIEWPORT_STYLE = {
   maxHeight: "60vh"
@@ -741,6 +709,7 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
 
   return (
     <Modal
+      centered
       destroyOnHidden
       keyboard
       afterClose={handleAfterClose}
@@ -748,7 +717,7 @@ export function RecordSelectorHost({ controller }: { controller: RecordSelectorC
       footer={null}
       open={isOpen}
       title={title}
-      width={640}
+      width={PC_MODAL_WIDTH}
       afterOpenChange={open => {
         const container = pcContainerRef.current;
 

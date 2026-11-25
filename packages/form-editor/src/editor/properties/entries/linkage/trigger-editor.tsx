@@ -1,17 +1,16 @@
 import type { FC } from "react";
 
-import type { FormVariable, LinkageTrigger, LinkageTriggerKind } from "../../../../types";
-import type { SourceFieldOption } from "./options";
+import type { LinkageTrigger, LinkageTriggerKind } from "../../../../types";
 
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Popconfirm, Select, Switch } from "@vef-framework-react/components";
 
 import { EditorIcon } from "../../../../icons";
-import { useContextSources } from "../../../context-sources";
+import { useReferenceScope } from "../../reference-scope";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { ConditionEditor } from "./condition-editor";
-import { createGroup, createLeaf, createTrigger } from "./mutators";
-import { isLinkageTriggerKind, seedSourceKey, triggerOptionsFor } from "./options";
+import { createGroup, createLeaf, withOptional } from "./mutators";
+import { isLinkageTriggerKind, triggerOptionsFor } from "./options";
 import {
   actionRetriggerCss,
   actionRetriggerLabelCss,
@@ -25,13 +24,11 @@ import {
 } from "./styles";
 
 /**
- * Plain-language description of each edge trigger. `commit` is overridden per
- * control via `commitHint` (entry fields vs textarea vs switch vs pickers) so
- * the description always matches how the control actually commits at runtime.
+ * Plain-language description of each event trigger. `commit` is described per
+ * control (see `commitHint`), as each control commits its own way.
  */
-const TRIGGER_HINTS: Partial<Record<LinkageTriggerKind, string>> = {
+const TRIGGER_HINTS: Record<Exclude<LinkageTriggerKind, "commit" | "condition">, string> = {
   change: "当该字段的值发生变化时触发",
-  commit: "输入完成时触发",
   focus: "当该字段获得焦点时触发",
   blur: "当该字段失去焦点时触发",
   click: "当点击该字段时触发",
@@ -59,21 +56,15 @@ const guardTitleCss = css({
   color: globalCssVars.colorTextSecondary
 });
 
-const EMPTY_VARIABLES: readonly FormVariable[] = [];
-
 export interface TriggerEditorProps {
   trigger: LinkageTrigger;
   /**
    * Trigger kinds offered, by scope (field vs form).
    */
   triggerKinds: readonly LinkageTriggerKind[];
-  sourceOptions: SourceFieldOption[];
   /**
-   * Form-global variables forwarded to the condition / event-guard picker.
-   */
-  variables?: readonly FormVariable[];
-  /**
-   * Control-specific description of the `commit` trigger ("输入完成时").
+   * How the owning control commits ("输入完成时"); present where `commit` is
+   * offered.
    */
   commitHint?: string;
   /**
@@ -85,7 +76,7 @@ export interface TriggerEditorProps {
    * Whether the rule contains any effect actions (controls whether the
    * rule-level `retrigger` toggle shows for a `condition` trigger).
    */
-  hasEffectActions?: boolean;
+  hasEffectActions: boolean;
   /**
    * Whether switching away from the current trigger discards real work (e.g.
    * state actions that must be stripped when leaving a `condition` trigger).
@@ -93,11 +84,9 @@ export interface TriggerEditorProps {
   confirmKindSwitch: boolean;
   onChange: (next: LinkageTrigger) => void;
   /**
-   * Optional rule-level trigger-kind switcher that preserves still-applicable
-   * guards (`when` ↔ `condition`) across switches. Falls back to `createTrigger`
-   * when rendered standalone.
+   * Switch the rule to another trigger kind, carrying over what still applies.
    */
-  onKindSwitch?: (nextKind: LinkageTriggerKind) => void;
+  onKindSwitch: (nextKind: LinkageTriggerKind) => void;
 }
 
 /**
@@ -109,37 +98,28 @@ export interface TriggerEditorProps {
 export const TriggerEditor: FC<TriggerEditorProps> = ({
   commitHint,
   confirmKindSwitch,
-  hasEffectActions = false,
+  hasEffectActions,
   onChange,
   onKindSwitch,
   selfKey,
-  sourceOptions,
   trigger,
-  triggerKinds,
-  variables = EMPTY_VARIABLES
+  triggerKinds
 }) => {
-  const contextSources = useContextSources();
+  const {
+    contextSources,
+    fieldOptions,
+    variables
+  } = useReferenceScope();
   const kindSwitch = useConfirmableKindSwitch<LinkageTriggerKind>({
     current: trigger.kind,
     needsConfirm: confirmKindSwitch,
-    commit: kind => {
-      if (onKindSwitch !== undefined) {
-        onKindSwitch(kind);
-        return;
-      }
-
-      onChange(createTrigger(kind, seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value));
-    }
+    commit: onKindSwitch
   });
 
   const guardSeed = selfKey
-    ?? sourceOptions[0]?.value
+    ?? fieldOptions[0]?.value
     ?? (variables[0]?.name ? `$vars.${variables[0].name}` : undefined)
     ?? contextSources[0]?.key;
-
-  const edgeHint = trigger.kind === "commit"
-    ? (commitHint ?? TRIGGER_HINTS.commit)
-    : TRIGGER_HINTS[trigger.kind];
 
   return (
     <div css={sectionCss}>
@@ -171,8 +151,6 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
               <ConditionEditor
                 condition={trigger.condition}
                 selfKey={selfKey}
-                sourceOptions={sourceOptions}
-                variables={variables}
                 onChange={condition => onChange({ ...trigger, condition })}
               />
 
@@ -194,18 +172,8 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                         aria-label="重复触发"
                         checked={trigger.retrigger === "always"}
                         size="small"
-                        onChange={checked => {
-                          if (checked) {
-                            onChange({ ...trigger, retrigger: "always" });
-                            return;
-                          }
-
-                          // Turning the toggle off removes the key entirely (the default is
-                          // "edge") so the persisted trigger stays minimal.
-                          const next = { ...trigger };
-                          delete next.retrigger;
-                          onChange(next);
-                        }}
+                        // Off is the default ("edge"), so it is not stored.
+                        onChange={checked => onChange(withOptional(trigger, "retrigger", checked ? "always" : undefined))}
                       />
                     </div>
                   )
@@ -214,7 +182,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
           )
         : (
             <>
-              <div css={triggerHintCss}>{edgeHint}</div>
+              <div css={triggerHintCss}>{trigger.kind === "commit" ? commitHint : TRIGGER_HINTS[trigger.kind]}</div>
 
               {trigger.when === undefined
                 ? (
@@ -246,11 +214,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                         <Button
                           size="small"
                           type="text"
-                          onClick={() => {
-                            const next = { ...trigger };
-                            delete next.when;
-                            onChange(next);
-                          }}
+                          onClick={() => onChange(withOptional(trigger, "when", undefined))}
                         >
                           移除条件
                         </Button>
@@ -259,8 +223,6 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
                       <ConditionEditor
                         condition={trigger.when}
                         selfKey={selfKey}
-                        sourceOptions={sourceOptions}
-                        variables={variables}
                         onChange={when => onChange({ ...trigger, when })}
                       />
                     </div>

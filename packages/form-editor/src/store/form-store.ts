@@ -92,12 +92,13 @@ export interface DataEntryRef {
 }
 
 /**
- * One-shot navigation request targeting a specific linkage rule (and optional
- * step inside it), dispatched when jumping from a diagnostic in the footer.
+ * A linkage rule, and the step inside it when `actionIndex` is given.
  */
 export interface LinkageFocusRef {
-  scope: "node" | "form";
-  nodeId?: string;
+  /**
+   * The node owning the rule; `null` for the form's own events.
+   */
+  nodeId: string | null;
   ruleIndex: number;
   actionIndex?: number;
 }
@@ -645,29 +646,23 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        if (focus.scope === "form") {
+        if (focus.nodeId === null) {
           set({
             propertiesTab: "form",
             propertiesDrawerOpen: true,
-            pendingLinkageFocus: { ...focus }
+            pendingLinkageFocus: focus
           });
           return;
         }
 
-        if (focus.nodeId === undefined) {
-          return;
-        }
-
-        const node = findNode(currentLayer(schema, device), focus.nodeId);
-
-        if (!node) {
+        if (findNode(currentLayer(schema, device), focus.nodeId) === undefined) {
           return;
         }
 
         coalesceKey = null;
         set({
           ...selectPatch(focus.nodeId),
-          pendingLinkageFocus: { ...focus }
+          pendingLinkageFocus: focus
         });
       },
 

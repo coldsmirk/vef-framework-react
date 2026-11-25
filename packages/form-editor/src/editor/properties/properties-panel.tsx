@@ -200,7 +200,7 @@ export function PropertiesPanel(): ReactElement {
   // Jumping to a node's linkage diagnostic opens the field's "联动" tab so the
   // lazy LinkageRulesEntry mounts and consumes `pendingLinkageFocus`.
   useEffect(() => {
-    if (pendingLinkageFocus?.scope === "node") {
+    if (pendingLinkageFocus !== null && pendingLinkageFocus.nodeId !== null) {
       setFieldTab("linkage");
     }
   }, [pendingLinkageFocus]);

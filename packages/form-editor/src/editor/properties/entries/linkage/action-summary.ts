@@ -1,18 +1,15 @@
 import type { DataSourceApi, DynamicValue, FieldLinkageAction } from "../../../../types";
+import type { LinkageScope } from "./use-linkage-editor-model";
 
+import { findDataSourceApi } from "../../../../engine/data-source-apis";
 import { parseLeafSource } from "../../../../engine/linkage/scope";
-import { findDataSourceApi } from "../../../data-source-apis";
 import { actionLabelFor, alertLevelOptions } from "./options";
 
-export interface ActionSummaryContext {
-  apis: readonly DataSourceApi[];
-  fieldLabels: ReadonlyMap<string, string>;
-  dataSourceLabels: ReadonlyMap<string, string>;
-}
-
 export interface ActionSummary {
-  title: string;
-  detail: string;
+  text: string;
+  /**
+   * Whether the step still lacks something it needs to run.
+   */
   incomplete: boolean;
 }
 
@@ -22,233 +19,154 @@ function truncate(text: string): string {
   return text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text;
 }
 
-function summarizeReferencePath(path: string, fieldLabels: ReadonlyMap<string, string>): string {
-  const trimmed = path.trim();
-
-  if (trimmed.length === 0) {
-    return "";
-  }
-
-  const parsed = parseLeafSource(trimmed);
+function describeReference(path: string, scope: LinkageScope): string {
+  const parsed = parseLeafSource(path.trim());
 
   switch (parsed.kind) {
     case "step": {
-      return parsed.path.length > 0 ? `${parsed.step}.${parsed.path.join(".")}` : parsed.step;
+      return [parsed.step, ...parsed.path].join(".");
     }
 
     case "form": {
-      const label = fieldLabels.get(parsed.key) ?? parsed.key;
-
-      return parsed.path.length > 0 ? `${label}.${parsed.path.join(".")}` : label;
+      return [scope.fieldsByKey.get(parsed.key)?.label || parsed.key, ...parsed.path].join(".");
     }
 
     case "context": {
-      if (parsed.root === "$vars" && parsed.path.length > 0) {
+      if (parsed.root === "$vars") {
         return parsed.path.join(".");
       }
 
-      return trimmed;
+      return scope.reference.contextSources.find(source => source.key === path)?.label ?? path;
     }
 
     case "unknown": {
-      return trimmed;
+      return path;
     }
   }
 }
 
-function summarizeDynamicValue(value: DynamicValue, fieldLabels: ReadonlyMap<string, string>): string {
-  if (value.kind === "literal") {
-    if (value.value === undefined || value.value === null || value.value === "") {
-      return "";
+function describeValue(value: DynamicValue, scope: LinkageScope): string {
+  switch (value.kind) {
+    case "literal": {
+      if (typeof value.value === "boolean") {
+        return value.value ? "开启" : "关闭";
+      }
+
+      return truncate(Array.isArray(value.value) ? value.value.join("、") : String(value.value ?? ""));
     }
 
-    if (typeof value.value === "boolean") {
-      return value.value ? "开启" : "关闭";
+    case "reference": {
+      return describeReference(value.path, scope);
     }
 
-    if (Array.isArray(value.value)) {
-      return value.value.length > 0 ? truncate(value.value.join("、")) : "";
+    case "expression": {
+      return value.source.trim().length > 0 ? "表达式" : "";
     }
-
-    return truncate(String(value.value));
   }
+}
 
-  if (value.kind === "reference") {
-    return summarizeReferencePath(value.path, fieldLabels);
-  }
-
-  return value.source.trim().length > 0 ? "表达式" : "";
+function withOutput(text: string, output: string | undefined): string {
+  return output ? `${text} → ${output}` : text;
 }
 
 /**
- * Plain-Chinese one-line summary of one linkage action for collapsed step rows
- * (e.g. "调用接口 · 职员查询 → result", "设置字段 · 写入 6 个字段"). Never
- * exposes internal schema keys such as `$steps` or `targetKey`.
+ * What the step does, after its type: `undefined` when that says it all.
  */
-export function summarizeAction(action: FieldLinkageAction, ctx: ActionSummaryContext): ActionSummary {
-  const title = actionLabelFor(action.type);
-
+function describeAction(
+  action: FieldLinkageAction,
+  scope: LinkageScope,
+  apis: readonly DataSourceApi[]
+): { detail: string; incomplete: boolean } | undefined {
   switch (action.type) {
     case "api_call": {
-      const api = findDataSourceApi(ctx.apis, action.request);
-      const resource = action.request.resource.trim();
-      const actionName = action.request.action.trim();
-      const outputSuffix = action.output && action.output.trim().length > 0 ? ` → ${action.output.trim()}` : "";
+      const endpoint = [action.request.resource.trim(), action.request.action.trim()];
+      const isConfigured = endpoint.every(part => part.length > 0);
+      const label = findDataSourceApi(apis, action.request)?.label ?? (isConfigured ? endpoint.join(" / ") : "未选择接口");
 
-      if (api !== undefined) {
-        return {
-          title,
-          detail: `${api.label}${outputSuffix}`,
-          incomplete: false
-        };
-      }
-
-      if (resource.length > 0 && actionName.length > 0) {
-        return {
-          title,
-          detail: `${resource} / ${actionName}${outputSuffix}`,
-          incomplete: false
-        };
-      }
-
-      return {
-        title,
-        detail: `未选择接口${outputSuffix}`,
-        incomplete: true
-      };
+      return { detail: withOutput(label, action.output), incomplete: !isConfigured };
     }
 
     case "select_record": {
-      const sourceText = summarizeDynamicValue(action.source, ctx.fieldLabels);
-      const output = action.output.trim();
-      const incomplete = sourceText.length === 0 || output.length === 0;
-      const left = sourceText.length > 0 ? sourceText : "未选择来源";
-      const right = output.length > 0 ? ` → ${output}` : "";
+      const source = describeValue(action.source, scope);
 
       return {
-        title,
-        detail: `${left}${right}`,
-        incomplete
+        detail: withOutput(source || "未选择来源", action.output),
+        incomplete: source.length === 0 || action.output.length === 0
       };
     }
 
     case "set_fields": {
-      const configured = action.assignments.filter(item => item.targetKey.trim().length > 0);
+      const [first, ...others] = action.assignments.filter(item => item.targetKey.length > 0);
 
-      if (configured.length === 0) {
-        return {
-          title,
-          detail: "未配置写入项",
-          incomplete: true
-        };
-      }
-
-      const hasIncomplete = action.assignments.some(item => item.targetKey.trim().length === 0);
-
-      if (configured.length === 1 && configured[0] !== undefined) {
-        const label = ctx.fieldLabels.get(configured[0].targetKey) ?? configured[0].targetKey;
-
-        return {
-          title,
-          detail: `写入「${label}」`,
-          incomplete: hasIncomplete
-        };
+      if (first === undefined) {
+        return { detail: "未配置写入项", incomplete: true };
       }
 
       return {
-        title,
-        detail: `写入 ${configured.length} 个字段`,
-        incomplete: hasIncomplete
+        detail: others.length === 0
+          ? `写入「${scope.fieldsByKey.get(first.targetKey)?.label || first.targetKey}」`
+          : `写入 ${others.length + 1} 个字段`,
+        incomplete: others.length + 1 < action.assignments.length
       };
     }
 
     case "set_variable": {
-      const name = action.variable.trim();
-
-      if (name.length === 0) {
-        return {
-          title,
-          detail: "未填写变量名",
-          incomplete: true
-        };
-      }
-
-      return {
-        title,
-        detail: `写入「${name}」`,
-        incomplete: false
-      };
+      return action.variable.length > 0
+        ? { detail: `写入「${action.variable}」`, incomplete: false }
+        : { detail: "未填写变量名", incomplete: true };
     }
 
     case "refresh_data_source": {
-      const id = action.dataSourceId.trim();
-
-      if (id.length === 0) {
-        return {
-          title,
-          detail: "未选择数据源",
-          incomplete: true
-        };
-      }
-
-      return {
-        title,
-        detail: ctx.dataSourceLabels.get(id) ?? id,
-        incomplete: false
-      };
+      return action.dataSourceId.length > 0
+        ? {
+            detail: scope.dataSourceOptions.find(option => option.value === action.dataSourceId)?.label ?? action.dataSourceId,
+            incomplete: false
+          }
+        : { detail: "未选择数据源", incomplete: true };
     }
 
     case "alert": {
-      const level = alertLevelOptions.find(option => option.value === (action.level ?? "info"))?.label ?? "信息";
-      const text = summarizeDynamicValue(action.message, ctx.fieldLabels);
+      const level = alertLevelOptions.find(option => option.value === (action.level ?? "info"))?.label;
+      const message = describeValue(action.message, scope);
 
-      return {
-        title,
-        detail: text.length > 0 ? `${level} · ${text}` : `${level} · 未填写内容`,
-        incomplete: text.length === 0
-      };
+      return { detail: `${level} · ${message || "未填写内容"}`, incomplete: message.length === 0 };
     }
 
     case "navigate": {
-      const text = summarizeDynamicValue(action.to, ctx.fieldLabels);
+      const to = describeValue(action.to, scope);
 
-      return {
-        title,
-        detail: text.length > 0 ? text : "未填写路径",
-        incomplete: text.length === 0
-      };
+      return { detail: to || "未填写路径", incomplete: to.length === 0 };
     }
 
     case "assign": {
-      const text = summarizeDynamicValue(action.value, ctx.fieldLabels);
-
-      return {
-        title,
-        detail: text.length > 0 ? text : "留空",
-        incomplete: false
-      };
+      return { detail: describeValue(action.value, scope) || "留空", incomplete: false };
     }
 
     case "script": {
-      const hasCode = action.source.trim().length > 0;
-
-      return {
-        title,
-        detail: hasCode ? "自定义脚本" : "未编写脚本",
-        incomplete: !hasCode
-      };
+      return action.source.trim().length > 0
+        ? { detail: "自定义脚本", incomplete: false }
+        : { detail: "未编写脚本", incomplete: true };
     }
 
     default: {
-      return {
-        title,
-        detail: "",
-        incomplete: false
-      };
+      return undefined;
     }
   }
 }
 
-export function formatActionSummaryLine(summary: ActionSummary): string {
-  return summary.detail.length > 0 ? `${summary.title} · ${summary.detail}` : summary.title;
+/**
+ * One action in one line, in the designer's words: "调用接口 · 职员查询 → result",
+ * "设置字段 · 写入 6 个字段".
+ */
+export function summarizeAction(
+  action: FieldLinkageAction,
+  scope: LinkageScope,
+  apis: readonly DataSourceApi[]
+): ActionSummary {
+  const title = actionLabelFor(action.type);
+  const description = describeAction(action, scope, apis);
+
+  return description === undefined
+    ? { text: title, incomplete: false }
+    : { text: `${title} · ${description.detail}`, incomplete: description.incomplete };
 }

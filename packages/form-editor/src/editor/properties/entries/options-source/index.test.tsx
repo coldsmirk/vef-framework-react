@@ -1,9 +1,12 @@
+import type { ReactElement, ReactNode } from "react";
+
 import type { FieldOptionSource, FormSchema, SelectField, TreeSelectField } from "../../../../types";
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { FormEditorStoreProvider } from "../../../../store/form-store";
 import { definePropertyEntry } from "../../../../types";
 import { CodeSetCatalogProvider } from "../../../code-set-catalog";
 import { OptionsSourceEntry } from "./index";
@@ -35,8 +38,16 @@ function schemaWith(dataSources: FormSchema["dataSources"] = []): FormSchema {
   };
 }
 
+function StoreWrapper({ children }: { children: ReactNode }): ReactElement {
+  return <FormEditorStoreProvider initialState={{ schema: schemaWith() }}>{children}</FormEditorStoreProvider>;
+}
+
 function renderEntry(field: SelectField, onChange: (value: unknown) => void, schema = schemaWith()): void {
-  render(<OptionsSourceEntry entry={entry} field={field} schema={schema} onChange={onChange} />);
+  render(
+    <FormEditorStoreProvider initialState={{ schema }}>
+      <OptionsSourceEntry entry={entry} field={field} schema={schema} onChange={onChange} />
+    </FormEditorStoreProvider>
+  );
 }
 
 describe("options source entry", () => {
@@ -84,7 +95,8 @@ describe("options source entry", () => {
           field={makeField({ kind: "static", options: [{ label: "华东", value: "east" }] })}
           schema={schemaWith()}
           onChange={onChange}
-        />
+        />,
+        { wrapper: StoreWrapper }
       );
 
       expect(screen.queryByRole("button", { name: "添加子项" })).not.toBeInTheDocument();
@@ -184,7 +196,9 @@ describe("options source entry", () => {
           }
         ]}
         >
-          <OptionsSourceEntry entry={entry} field={makeField({ kind: "codeSet", codeSet: "" })} schema={schemaWith()} onChange={onChange} />
+          <FormEditorStoreProvider initialState={{ schema: schemaWith() }}>
+            <OptionsSourceEntry entry={entry} field={makeField({ kind: "codeSet", codeSet: "" })} schema={schemaWith()} onChange={onChange} />
+          </FormEditorStoreProvider>
         </CodeSetCatalogProvider>
       );
 

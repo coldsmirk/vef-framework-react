@@ -1,25 +1,33 @@
 import type { DropdownMenuItem } from "@vef-framework-react/components";
-import type { DragEndEvent } from "@vef-framework-react/core";
-import type { ChangeEvent, ReactElement } from "react";
+import type { ReactElement } from "react";
 
 import type { FieldLinkageAction, KeyedFormField, SelectRecordColumn, SelectRecordWhenNone } from "../../../../types";
 import type { OptionItem } from "./options";
 
 import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars, Input, Select } from "@vef-framework-react/components";
-import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
-import { useMemo, useRef } from "react";
+import { DragDropProvider, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
+import { useId, useMemo } from "react";
 
-import { collectInferredSelectRecordColumns, resolveSelectRecordSourceFields } from "../../../../engine/linkage";
+import { collectInferredSelectRecordColumns, resolveRecordSourceFields } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
-import { useDataSourceApis } from "../../../data-source-apis";
+import { DraftField } from "../../draft-modal";
 import { DynamicValueEditor } from "../../dynamic-value-editor";
+import { useReferenceScope } from "../../reference-scope";
+import { draggingRowCss, DragHandle, useSortableRows } from "../../sortable-rows";
+import { withOptional } from "./mutators";
 import { actionDeleteCss, selectStyle } from "./styles";
 
 const sectionCss = css({
   display: "flex",
   flexDirection: "column",
   gap: 8
+});
+
+const fieldsCss = css({
+  display: "flex",
+  flexDirection: "column",
+  gap: 12
 });
 
 const subHeaderCss = css({
@@ -58,97 +66,20 @@ const columnRowCss = css({
   gap: 6
 });
 
-const columnDraggingCss = css({
-  borderRadius: globalCssVars.borderRadius,
-  background: globalCssVars.colorBgElevated,
-  boxShadow: globalCssVars.shadowLg
-});
-
-const dragHandleCss = css({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 22,
-  height: 22,
-  flexShrink: 0,
-  borderRadius: globalCssVars.borderRadiusSm,
-  color: globalCssVars.colorTextTertiary,
-  cursor: "grab",
-  transition: `color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
-
-  "&:hover": {
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary
-  },
-
-  "&:focus-visible": {
-    outline: "none",
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary,
-    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
-  },
-
-  "&:active": {
-    cursor: "grabbing"
-  },
-
-  "& > svg": {
-    width: 14,
-    height: 14
-  }
-});
-
 const actionsRowCss = css({
   display: "flex",
   gap: 6,
   flexWrap: "wrap"
 });
 
-const fieldGroupCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 4
-});
-
-const fieldLabelCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary
-});
-
-export const WHEN_NONE_OPTIONS: Array<OptionItem<SelectRecordWhenNone>> = [
+const WHEN_NONE_OPTIONS: Array<OptionItem<SelectRecordWhenNone>> = [
   { value: "stop", label: "无匹配时终止后续动作" },
   { value: "continue", label: "无匹配时继续（结果为空）" }
 ];
 
 const ADD_ALL_KEY = "__add_all__";
-const EMPTY_COLUMNS: SelectRecordColumn[] = [];
-
-let columnRowCounter = 0;
-
-function nextColumnRowId(): string {
-  columnRowCounter += 1;
-
-  return `select-col-${columnRowCounter}`;
-}
-
-export function reorderSelectColumns(
-  columns: SelectRecordColumn[],
-  rowIds: string[],
-  event: DragEndEvent
-): { columns: SelectRecordColumn[]; rowIds: string[] } | null {
-  const nextIds = moveDragItem(rowIds, event);
-
-  if (nextIds === rowIds) {
-    return null;
-  }
-
-  const byId = new Map(rowIds.map((id, index) => [id, columns[index]] as const));
-  const nextColumns = nextIds
-    .map(id => byId.get(id))
-    .filter((item): item is SelectRecordColumn => item !== undefined);
-
-  return { columns: nextColumns, rowIds: nextIds };
-}
+const NO_COLUMNS: SelectRecordColumn[] = [];
+const BLANK_COLUMN: SelectRecordColumn = { label: "", path: "" };
 
 interface SortableColumnRowProps {
   id: string;
@@ -174,34 +105,21 @@ function SortableColumnRow({
   } = useSortable({ id, index });
 
   return (
-    <div ref={ref} css={[columnRowCss, isDragging && columnDraggingCss]}>
-      {canReorder
-        ? (
-            <span
-              ref={handleRef}
-              aria-label="拖动列排序"
-              css={dragHandleCss}
-              role="button"
-              tabIndex={0}
-              title="拖动排序"
-            >
-              <EditorIcon name="grip-vertical" />
-            </span>
-          )
-        : null}
+    <div ref={ref} css={[columnRowCss, isDragging && draggingRowCss]}>
+      {canReorder ? <DragHandle handleRef={handleRef} label="拖动列排序" /> : null}
 
       <Input
         aria-label="列标题"
         placeholder="列标题"
         value={column.label}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => onChange({ ...column, label: event.target.value })}
+        onChange={event => onChange({ ...column, label: event.target.value })}
       />
 
       <Input
         aria-label="字段路径"
         placeholder="字段路径，如 name"
         value={column.path}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => onChange({ ...column, path: event.target.value })}
+        onChange={event => onChange({ ...column, path: event.target.value })}
       />
 
       <Button
@@ -216,107 +134,35 @@ function SortableColumnRow({
   );
 }
 
-export interface SelectRecordColumnsEditorProps {
-  columns: SelectRecordColumn[] | undefined;
-  actionIndex: number;
-  allActions: readonly FieldLinkageAction[];
-  outputName: string;
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
+type SelectRecordAction = Extract<FieldLinkageAction, { type: "select_record" }>;
+
+interface SelectRecordColumnsEditorProps {
+  action: SelectRecordAction;
+  laterActions: readonly FieldLinkageAction[];
+  fieldsByKey: ReadonlyMap<string, KeyedFormField>;
   onChange: (columns: SelectRecordColumn[] | undefined) => void;
 }
 
 /**
- * Configures the display columns of `select_record`: pick from the source
- * step's declared `fields`, rename titles, drag-sort, or leave empty to
- * auto-infer from downstream `set_fields` bindings (with a live preview of the
- * inferred columns).
+ * The columns the picker shows: chosen from the source's declared fields or
+ * typed, and left out to follow what the later steps read.
  */
-export function SelectRecordColumnsEditor({
-  actionIndex,
-  allActions,
-  columns,
-  onChange,
-  outputName,
-  scopeFieldsByKey
+function SelectRecordColumnsEditor({
+  action,
+  fieldsByKey,
+  laterActions,
+  onChange
 }: SelectRecordColumnsEditorProps): ReactElement {
-  const apis = useDataSourceApis();
-  const list = columns ?? EMPTY_COLUMNS;
-  const rowIdsRef = useRef<string[]>([]);
+  const { priorSteps = [] } = useReferenceScope();
+  const list = action.columns ?? NO_COLUMNS;
+  const rows = useSortableRows(list, next => onChange(next.length > 0 ? next : undefined));
 
-  if (rowIdsRef.current.length !== list.length) {
-    rowIdsRef.current = list.map(() => nextColumnRowId());
-  }
-
-  const rowIds = rowIdsRef.current;
-
-  const sourceFields = useMemo(
-    () => resolveSelectRecordSourceFields(allActions, actionIndex, apis),
-    [allActions, actionIndex, apis]
-  );
-
-  const usedPaths = useMemo(
-    () => new Set(list.map(col => col.path.trim()).filter(path => path.length > 0)),
-    [list]
-  );
-
-  const availableSourceFields = useMemo(
-    () => sourceFields.filter(field => !usedPaths.has(field.path)),
-    [sourceFields, usedPaths]
-  );
-
+  const sourceFields = resolveRecordSourceFields(action.source, priorSteps);
+  const availableSourceFields = sourceFields.filter(field => list.every(column => column.path.trim() !== field.path));
   const inferredColumns = useMemo(
-    () => list.length > 0
-      ? []
-      : collectInferredSelectRecordColumns(outputName, allActions.slice(actionIndex + 1), scopeFieldsByKey),
-    [list.length, outputName, allActions, actionIndex, scopeFieldsByKey]
+    () => collectInferredSelectRecordColumns(action.output, laterActions, fieldsByKey),
+    [action.output, laterActions, fieldsByKey]
   );
-
-  const commit = (next: SelectRecordColumn[]): void => {
-    onChange(next.length > 0 ? next : undefined);
-  };
-
-  const updateAt = (index: number, next: SelectRecordColumn): void => {
-    commit(list.map((col, current) => current === index ? next : col));
-  };
-
-  const removeAt = (index: number): void => {
-    rowIdsRef.current = rowIds.filter((_id, current) => current !== index);
-    commit(list.filter((_col, current) => current !== index));
-  };
-
-  const addCustom = (): void => {
-    rowIdsRef.current = [...rowIds, nextColumnRowId()];
-    commit([...list, { label: "", path: "" }]);
-  };
-
-  const addFromSourceField = (path: string, label: string): void => {
-    rowIdsRef.current = [...rowIds, nextColumnRowId()];
-    commit([...list, { label, path }]);
-  };
-
-  const addAllSourceFields = (): void => {
-    if (availableSourceFields.length === 0) {
-      return;
-    }
-
-    const appended = availableSourceFields.map(field => {
-      return { label: field.label, path: field.path };
-    });
-
-    rowIdsRef.current = [...rowIds, ...appended.map(() => nextColumnRowId())];
-    commit([...list, ...appended]);
-  };
-
-  const handleDragEnd = (event: DragEndEvent): void => {
-    const result = reorderSelectColumns(list, rowIds, event);
-
-    if (result === null) {
-      return;
-    }
-
-    rowIdsRef.current = result.rowIds;
-    commit(result.columns);
-  };
 
   const sourceMenuItems: DropdownMenuItem[] = [
     ...availableSourceFields.length > 1
@@ -343,14 +189,7 @@ export function SelectRecordColumnsEditor({
 
         {list.length > 0
           ? (
-              <Button
-                size="small"
-                type="text"
-                onClick={() => {
-                  rowIdsRef.current = [];
-                  onChange(undefined);
-                }}
-              >
+              <Button size="small" type="text" onClick={() => rows.replaceAll([])}>
                 恢复自动推断
               </Button>
             )
@@ -361,31 +200,29 @@ export function SelectRecordColumnsEditor({
         ? (
             <div css={hintBoxCss}>
               {inferredColumns.length > 0
-                ? `当前留空，多条记录时将自动展示后续写入引用的列：${inferredColumns.map(col => col.label).join("、")}`
-                : "当前留空，运行时将自动展示后续「设置字段」引用的列；若无引用则自动展示记录的前几个文本字段。"}
+                ? `留空时展示后续步骤引用的列：${inferredColumns.map(column => column.label).join("、")}`
+                : "留空时展示后续「设置字段」引用的列；没有引用时，展示记录中的文本、数字和是否字段"}
             </div>
           )
         : (
-            <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={handleDragEnd}>
+            <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={rows.handleDragEnd}>
               <div css={columnListCss}>
                 {list.map((column, index) => {
-                  const id = rowIds[index];
+                  const id = rows.ids[index];
 
-                  if (id === undefined) {
-                    return null;
-                  }
-
-                  return (
-                    <SortableColumnRow
-                      key={id}
-                      canReorder={list.length > 1}
-                      column={column}
-                      id={id}
-                      index={index}
-                      onChange={next => updateAt(index, next)}
-                      onRemove={() => removeAt(index)}
-                    />
-                  );
+                  return id === undefined
+                    ? null
+                    : (
+                        <SortableColumnRow
+                          key={id}
+                          canReorder={list.length > 1}
+                          column={column}
+                          id={id}
+                          index={index}
+                          onChange={next => rows.update(index, next)}
+                          onRemove={() => rows.remove(index)}
+                        />
+                      );
                 })}
               </div>
             </DragDropProvider>
@@ -399,16 +236,11 @@ export function SelectRecordColumnsEditor({
                 menu={{
                   items: sourceMenuItems,
                   onClick: event => {
-                    if (event.key === ADD_ALL_KEY) {
-                      addAllSourceFields();
-                      return;
-                    }
-
-                    const field = availableSourceFields.find(item => item.path === event.key);
-
-                    if (field !== undefined) {
-                      addFromSourceField(field.path, field.label);
-                    }
+                    rows.append(availableSourceFields
+                      .filter(field => event.key === ADD_ALL_KEY || event.key === field.path)
+                      .map(field => {
+                        return { label: field.label, path: field.path };
+                      }));
                   }
                 }}
               >
@@ -419,7 +251,7 @@ export function SelectRecordColumnsEditor({
             )
           : null}
 
-        <Button icon={<EditorIcon name="plus" />} size="small" type="dashed" onClick={addCustom}>
+        <Button icon={<EditorIcon name="plus" />} size="small" type="dashed" onClick={() => rows.append([BLANK_COLUMN])}>
           添加自定义列
         </Button>
       </div>
@@ -428,131 +260,77 @@ export function SelectRecordColumnsEditor({
 }
 
 export interface SelectRecordEditorProps {
-  action: Extract<FieldLinkageAction, { type: "select_record" }>;
-  actionIndex: number;
-  allActions: readonly FieldLinkageAction[];
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
+  action: SelectRecordAction;
+  laterActions: readonly FieldLinkageAction[];
+  fieldsByKey: ReadonlyMap<string, KeyedFormField>;
   /**
-   * Slot for the output-name control (inline buffered input in the right panel,
-   * or a `DraftField` in the wide modal).
+   * The output-name control, which names differently inline and in a draft.
    */
   outputControl: ReactElement;
-  onChange: (next: Extract<FieldLinkageAction, { type: "select_record" }>) => void;
+  onChange: (next: SelectRecordAction) => void;
 }
 
 /**
- * Body fields for a `select_record` action, shared by the right panel and the
- * wide action modal.
+ * Body of a `select_record` step, shared by the side panel and the modal.
  */
 export function SelectRecordEditor({
   action,
-  actionIndex,
-  allActions,
+  fieldsByKey,
+  laterActions,
   onChange,
-  outputControl,
-  scopeFieldsByKey
+  outputControl
 }: SelectRecordEditorProps): ReactElement {
-  const effectiveActions = useMemo(
-    () => allActions.map((item, idx) => idx === actionIndex ? action : item),
-    [allActions, actionIndex, action]
-  );
+  const titleId = useId();
+  const emptyMessageId = useId();
 
   return (
-    <div css={sectionCss}>
-      <div css={fieldGroupCss}>
-        <span css={fieldLabelCss}>数据来源</span>
-
+    <div css={fieldsCss}>
+      <DraftField label="数据来源">
         <DynamicValueEditor
-          preferSteps
           expressionPlaceholder="自定义表达式"
           literalPlaceholder="来源数据"
           referencePlaceholder="选择来源步骤或字段"
           value={action.source}
           onChange={source => onChange({ ...action, source })}
         />
-      </div>
+      </DraftField>
 
       {outputControl}
 
       <SelectRecordColumnsEditor
-        actionIndex={actionIndex}
-        allActions={effectiveActions}
-        columns={action.columns}
-        outputName={action.output}
-        scopeFieldsByKey={scopeFieldsByKey}
-        onChange={columns => {
-          if (columns === undefined) {
-            const next = { ...action };
-            delete next.columns;
-            onChange(next);
-            return;
-          }
-
-          onChange({ ...action, columns });
-        }}
+        action={action}
+        fieldsByKey={fieldsByKey}
+        laterActions={laterActions}
+        onChange={columns => onChange(withOptional(action, "columns", columns))}
       />
 
-      <div css={fieldGroupCss}>
-        <span css={fieldLabelCss}>无匹配时</span>
-
+      <DraftField label="无匹配时">
         <Select
+          aria-label="无匹配时"
           options={WHEN_NONE_OPTIONS}
           style={selectStyle}
           value={action.whenNone ?? "stop"}
-          onChange={value => {
-            if (value === "continue") {
-              onChange({ ...action, whenNone: "continue" });
-              return;
-            }
-
-            const next = { ...action };
-            delete next.whenNone;
-            onChange(next);
-          }}
+          onChange={value => onChange(withOptional(action, "whenNone", value === "continue" ? "continue" : undefined))}
         />
-      </div>
+      </DraftField>
 
-      <div css={fieldGroupCss}>
-        <span css={fieldLabelCss}>弹窗标题（可选）</span>
-
+      <DraftField htmlFor={titleId} label="弹窗标题（可选）">
         <Input
+          id={titleId}
           placeholder="如：选择职员"
           value={action.title ?? ""}
-          onChange={event => {
-            const title = event.target.value;
-
-            if (title.length === 0) {
-              const next = { ...action };
-              delete next.title;
-              onChange(next);
-              return;
-            }
-
-            onChange({ ...action, title });
-          }}
+          onChange={event => onChange(withOptional(action, "title", event.target.value || undefined))}
         />
-      </div>
+      </DraftField>
 
-      <div css={fieldGroupCss}>
-        <span css={fieldLabelCss}>无匹配提示（可选）</span>
-
+      <DraftField htmlFor={emptyMessageId} label="无匹配提示（可选）">
         <Input
+          id={emptyMessageId}
           placeholder="如：未查到对应记录"
           value={action.emptyMessage ?? ""}
-          onChange={event => {
-            const emptyMessage = event.target.value;
-
-            if (emptyMessage.length === 0) {
-              const next = { ...action };
-              delete next.emptyMessage;
-              onChange(next);
-              return;
-            }
-
-            onChange({ ...action, emptyMessage });
-          }}
+          onChange={event => onChange(withOptional(action, "emptyMessage", event.target.value || undefined))}
         />
-      </div>
+      </DraftField>
     </div>
   );
 }

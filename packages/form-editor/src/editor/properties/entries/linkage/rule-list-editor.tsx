@@ -1,30 +1,25 @@
 import type { DropdownMenuItem } from "@vef-framework-react/components";
 import type { FC } from "react";
 
-import type { WritableTargetField } from "../../../../engine/linkage";
 import type { ValidationIssue } from "../../../../engine/validation";
 import type {
   FieldLinkageAction,
   FieldLinkageRule,
-  FormDataSource,
-  FormField,
-  FormVariable,
-  KeyedFormField,
   LinkageTrigger,
   LinkageTriggerKind
 } from "../../../../types";
-import type { ActionFocusSignal } from "./actions-editor";
-import type { SourceFieldOption } from "./options";
 import type { LinkageRuleTemplate } from "./templates";
+import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars } from "@vef-framework-react/components";
 import { useLatest } from "@vef-framework-react/hooks";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 
 import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
+import { ReferenceScopeProvider } from "../../reference-scope";
 import { ActionsEditor } from "./actions-editor";
 import { reconcileRuleTrigger, switchRuleTrigger, triggerSwitchStripsStateActions } from "./mutators";
 import { seedSourceKey } from "./options";
@@ -43,13 +38,10 @@ import {
   ruleTitleCss
 } from "./styles";
 import { TriggerEditor } from "./trigger-editor";
+import { useAttention } from "./use-attention";
 
 const EMPTY_ISSUES: readonly ValidationIssue[] = [];
-const EMPTY_DATA_SOURCES: readonly FormDataSource[] = [];
-const EMPTY_VARIABLES: readonly FormVariable[] = [];
-const EMPTY_TARGETS: readonly WritableTargetField[] = [];
-const EMPTY_SCOPE_FIELDS: ReadonlyMap<string, KeyedFormField> = new Map();
-const EMPTY_TEMPLATES: readonly LinkageRuleTemplate[] = [];
+const NO_TEMPLATES: readonly LinkageRuleTemplate[] = [];
 
 const addActionsBarCss = css({
   display: "flex",
@@ -79,14 +71,25 @@ const ruleCardHighlightedCss = css({
   boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBg}`
 });
 
+/**
+ * The rule (and the step inside it) a diagnostic jumped to; a new object per
+ * jump.
+ */
+interface RuleFocus {
+  ruleId: string;
+  actionIndex?: number;
+}
+
 export interface RuleListEditorProps {
   rules: FieldLinkageRule[];
   /**
-   * Scope identity for consuming diagnostic jumps (`pendingLinkageFocus`):
-   * pass the owning node id for field / container rules, `null` for form-level
-   * events, or omit when rendered standalone.
+   * The node owning the rules; `null` for the form's own events.
    */
-  scopeNodeId?: string | null;
+  ownerNodeId: string | null;
+  /**
+   * What the rules can read and write.
+   */
+  scope: LinkageScope;
   /**
    * Trigger kinds offered, by scope (field vs container vs form).
    */
@@ -103,47 +106,24 @@ export interface RuleListEditorProps {
    */
   isContainerTarget?: boolean;
   /**
-   * Control-specific description for the `commit` trigger.
+   * How the owning control commits; present where `commit` is offered.
    */
   commitHint?: string;
-  /**
-   * Owning field for typed literal input on `assign`.
-   */
-  ownerField?: FormField;
-  /**
-   * Keyed fields offered as a condition's source and reference picker fields.
-   */
-  sourceOptions: SourceFieldOption[];
-  /**
-   * Form-global declared variables for unified condition and reference pickers.
-   */
-  variables?: readonly FormVariable[];
   /**
    * The owning block's data-binding key (when keyed).
    */
   selfKey?: string;
-  /**
-   * Keyed fields offered as `set_fields` targets.
-   */
-  targetOptions: SourceFieldOption[];
-  writableTargets?: readonly WritableTargetField[];
-  scopeFieldsByKey?: ReadonlyMap<string, KeyedFormField>;
-  dataSources?: readonly FormDataSource[];
-  /**
-   * Form-global data sources offered as a `refresh_data_source` target.
-   */
-  dataSourceOptions: SourceFieldOption[];
   /**
    * Localized noun for the empty state and add button ("联动" / "事件").
    */
   noun: string;
   /**
    * Live validator issues mapped per rule id (see `groupIssuesByRule`); each
-   * card renders its own bucket. Omitted means no diagnostics surface.
+   * card renders its own bucket.
    */
-  issuesByRule?: ReadonlyMap<string, ValidationIssue[]>;
+  issuesByRule: ReadonlyMap<string, ValidationIssue[]>;
   /**
-   * Optional starter templates offered beside "新建规则" (e.g. "查询并回填").
+   * Ready-made rules offered beside the add button.
    */
   templates?: readonly LinkageRuleTemplate[];
   /**
@@ -163,31 +143,24 @@ export interface RuleListEditorProps {
  * {@link TriggerEditor} (WHEN) over an {@link ActionsEditor} (THEN). Field
  * linkage, container linkage, and the form-level events panel all render
  * through it, differing only in the allowed triggers, the action palette,
- * starter templates, and the new-rule seed.
+ * templates, and the new-rule seed.
  */
 export const RuleListEditor: FC<RuleListEditorProps> = ({
   addDisabledReason,
   allowStateActions,
   commitHint,
   createRule,
-  dataSourceOptions,
-  dataSources = EMPTY_DATA_SOURCES,
   isContainerTarget = false,
   isTargetKeyed,
   issuesByRule,
   noun,
   onChange,
-  ownerField,
+  ownerNodeId,
   rules,
-  scopeFieldsByKey = EMPTY_SCOPE_FIELDS,
-  scopeNodeId,
+  scope,
   selfKey,
-  sourceOptions,
-  targetOptions,
-  templates = EMPTY_TEMPLATES,
-  triggerKinds,
-  variables = EMPTY_VARIABLES,
-  writableTargets = EMPTY_TARGETS
+  templates = NO_TEMPLATES,
+  triggerKinds
 }) => {
   // Latest-value refs so the per-rule handlers stay referentially stable across
   // renders (feeding RuleCard's memo) while still reading the current rules /
@@ -197,66 +170,26 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
   const onChangeRef = useLatest(onChange);
   const allowStateActionsRef = useLatest(allowStateActions);
   const createRuleRef = useLatest(createRule);
-  const sourceOptionsRef = useLatest(sourceOptions);
+  const scopeRef = useLatest(scope);
   const selfKeyRef = useLatest(selfKey);
 
   const storeApi = useFormEditorStoreApi();
-  const pendingFocus = useFormEditorStore(s => s.pendingLinkageFocus);
-  const ruleCardRefs = useRef(new Map<string, HTMLDivElement>());
-  const [highlightedRuleId, setHighlightedRuleId] = useState<string | null>(null);
-  const [focusByRuleId, setFocusByRuleId] = useState<{ ruleId: string; signal: ActionFocusSignal } | null>(null);
+  const pendingFocus = useFormEditorStore(s => s.pendingLinkageFocus?.nodeId === ownerNodeId ? s.pendingLinkageFocus : null);
+  const [focus, setFocus] = useState<RuleFocus | null>(null);
 
-  // Consume diagnostic jumps aimed at this rule list's scope, scrolling the
-  // target rule into view and forwarding any step index to its ActionsEditor.
   useEffect(() => {
-    if (pendingFocus === null || scopeNodeId === undefined) {
-      return;
-    }
-
-    const matchesScope = scopeNodeId === null
-      ? pendingFocus.scope === "form"
-      : pendingFocus.scope === "node" && pendingFocus.nodeId === scopeNodeId;
-
-    if (!matchesScope) {
+    if (pendingFocus === null) {
       return;
     }
 
     storeApi.getState().clearPendingLinkageFocus();
 
-    const targetRule = rules[pendingFocus.ruleIndex];
+    const rule = rulesRef.current[pendingFocus.ruleIndex];
 
-    if (targetRule === undefined) {
-      return;
+    if (rule !== undefined) {
+      setFocus({ ruleId: rule.id, actionIndex: pendingFocus.actionIndex });
     }
-
-    if (pendingFocus.actionIndex === undefined) {
-      setHighlightedRuleId(targetRule.id);
-      const frame = globalThis.requestAnimationFrame?.(() => {
-        ruleCardRefs.current.get(targetRule.id)?.scrollIntoView?.({ block: "nearest" });
-      });
-      const timer = setTimeout(() => {
-        setHighlightedRuleId(current => current === targetRule.id ? null : current);
-      }, 1800);
-
-      return () => {
-        if (frame !== undefined) {
-          globalThis.cancelAnimationFrame?.(frame);
-        }
-
-        clearTimeout(timer);
-      };
-    }
-
-    setFocusByRuleId(prev => {
-      return {
-        ruleId: targetRule.id,
-        signal: {
-          index: pendingFocus.actionIndex as number,
-          nonce: (prev?.signal.nonce ?? 0) + 1
-        }
-      };
-    });
-  }, [pendingFocus, scopeNodeId, rules, storeApi]);
+  }, [pendingFocus, rulesRef, storeApi]);
 
   const updateRule = useCallback(
     (ruleId: string, updater: (rule: FieldLinkageRule) => FieldLinkageRule): void => {
@@ -290,24 +223,16 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
 
   const handleTriggerKindSwitch = useCallback(
     (ruleId: string, nextKind: LinkageTriggerKind): void => {
-      const fallback = seedSourceKey(sourceOptionsRef.current, selfKeyRef.current)
-        ?? sourceOptionsRef.current[0]?.value;
+      const { fieldOptions } = scopeRef.current.reference;
+      const fallback = seedSourceKey(fieldOptions, selfKeyRef.current) ?? fieldOptions[0]?.value;
 
       updateRule(ruleId, current => switchRuleTrigger(current, nextKind, allowStateActionsRef.current, fallback));
     },
-    [allowStateActionsRef, selfKeyRef, sourceOptionsRef, updateRule]
+    [allowStateActionsRef, scopeRef, selfKeyRef, updateRule]
   );
 
   const handleFocusAction = useCallback((ruleId: string, actionIndex: number): void => {
-    setFocusByRuleId(prev => {
-      return {
-        ruleId,
-        signal: {
-          index: actionIndex,
-          nonce: (prev?.signal.nonce ?? 0) + 1
-        }
-      };
-    });
+    setFocus({ ruleId, actionIndex });
   }, []);
 
   const addRule = useCallback((): void => {
@@ -350,30 +275,15 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
                   key={rule.id}
                   allowStateActions={allowStateActions}
                   commitHint={commitHint}
-                  dataSourceOptions={dataSourceOptions}
-                  dataSources={dataSources}
-                  focusActionSignal={focusByRuleId?.ruleId === rule.id ? focusByRuleId.signal : null}
-                  highlighted={highlightedRuleId === rule.id}
+                  focus={focus?.ruleId === rule.id ? focus : null}
                   index={index}
                   isContainerTarget={isContainerTarget}
-                  issues={issuesByRule?.get(rule.id) ?? EMPTY_ISSUES}
+                  issues={issuesByRule.get(rule.id) ?? EMPTY_ISSUES}
                   isTargetKeyed={isTargetKeyed}
-                  ownerField={ownerField}
                   rule={rule}
-                  scopeFieldsByKey={scopeFieldsByKey}
+                  scope={scope}
                   selfKey={selfKey}
-                  sourceOptions={sourceOptions}
-                  targetOptions={targetOptions}
                   triggerKinds={triggerKinds}
-                  variables={variables}
-                  writableTargets={writableTargets}
-                  cardRef={node => {
-                    if (node === null) {
-                      ruleCardRefs.current.delete(rule.id);
-                    } else {
-                      ruleCardRefs.current.set(rule.id, node);
-                    }
-                  }}
                   onActionsChange={handleActionsChange}
                   onFocusAction={handleFocusAction}
                   onRemove={handleRemove}
@@ -434,24 +344,15 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
 interface RuleCardProps {
   allowStateActions: boolean;
   commitHint?: string;
-  dataSourceOptions: SourceFieldOption[];
-  dataSources: readonly FormDataSource[];
-  focusActionSignal: ActionFocusSignal | null;
-  highlighted: boolean;
+  focus: RuleFocus | null;
   index: number;
   isContainerTarget: boolean;
   isTargetKeyed: boolean;
   issues: readonly ValidationIssue[];
-  ownerField?: FormField;
   rule: FieldLinkageRule;
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
+  scope: LinkageScope;
   selfKey?: string;
-  sourceOptions: SourceFieldOption[];
-  targetOptions: SourceFieldOption[];
   triggerKinds: readonly LinkageTriggerKind[];
-  variables: readonly FormVariable[];
-  writableTargets: readonly WritableTargetField[];
-  cardRef: (node: HTMLDivElement | null) => void;
   onActionsChange: (ruleId: string, actions: FieldLinkageAction[]) => void;
   onFocusAction: (ruleId: string, actionIndex: number) => void;
   onRemove: (ruleId: string) => void;
@@ -461,12 +362,8 @@ interface RuleCardProps {
 
 const RuleCardBase: FC<RuleCardProps> = ({
   allowStateActions,
-  cardRef,
   commitHint,
-  dataSourceOptions,
-  dataSources,
-  focusActionSignal,
-  highlighted,
+  focus,
   index,
   isContainerTarget,
   isTargetKeyed,
@@ -476,27 +373,19 @@ const RuleCardBase: FC<RuleCardProps> = ({
   onRemove,
   onTriggerChange,
   onTriggerKindSwitch,
-  ownerField,
   rule,
-  scopeFieldsByKey,
+  scope,
   selfKey,
-  sourceOptions,
-  targetOptions,
-  triggerKinds,
-  variables,
-  writableTargets
+  triggerKinds
 }) => {
-  // Guards carry across trigger switches (`when` ↔ `condition`), so only
-  // leaving a `condition` trigger that carries state actions loses work.
-  const confirmKindSwitch = triggerSwitchStripsStateActions(rule);
-  const hasEffectActions = rule.actions.some(action => isEffectAction(action));
+  const { highlighted, ref } = useAttention(focus !== null && focus.actionIndex === undefined ? focus : null);
 
   return (
     // A rule card is a composite of related controls (trigger + actions +
     // diagnostics) — expose it as a labelled group so assistive tech (and
     // accessible queries) can address one rule.
     <div
-      ref={cardRef}
+      ref={ref}
       aria-label={`规则 ${index + 1}`}
       css={[ruleCardCss, highlighted && ruleCardHighlightedCss]}
       role="group"
@@ -519,44 +408,38 @@ const RuleCardBase: FC<RuleCardProps> = ({
         />
       </div>
 
-      <div css={ruleBodyCss}>
-        <TriggerEditor
-          commitHint={commitHint}
-          confirmKindSwitch={confirmKindSwitch}
-          hasEffectActions={hasEffectActions}
-          selfKey={selfKey}
-          sourceOptions={sourceOptions}
-          trigger={rule.trigger}
-          triggerKinds={triggerKinds}
-          variables={variables}
-          onChange={trigger => onTriggerChange(rule.id, trigger)}
-          onKindSwitch={nextKind => onTriggerKindSwitch(rule.id, nextKind)}
-        />
+      <ReferenceScopeProvider value={scope.reference}>
+        <div css={ruleBodyCss}>
+          <TriggerEditor
+            commitHint={commitHint}
+            confirmKindSwitch={triggerSwitchStripsStateActions(rule)}
+            hasEffectActions={rule.actions.some(action => isEffectAction(action))}
+            selfKey={selfKey}
+            trigger={rule.trigger}
+            triggerKinds={triggerKinds}
+            onChange={trigger => onTriggerChange(rule.id, trigger)}
+            onKindSwitch={nextKind => onTriggerKindSwitch(rule.id, nextKind)}
+          />
 
-        <ActionsEditor
-          actions={rule.actions}
-          allowStateActions={allowStateActions}
-          dataSourceOptions={dataSourceOptions}
-          dataSources={dataSources}
-          focusSignal={focusActionSignal}
-          isContainerTarget={isContainerTarget}
-          isTargetKeyed={isTargetKeyed}
-          ownerField={ownerField}
-          ruleIssues={issues}
-          scopeFieldsByKey={scopeFieldsByKey}
-          sourceOptions={sourceOptions}
-          targetOptions={targetOptions}
-          triggerKind={rule.trigger.kind}
-          variables={variables}
-          writableTargets={writableTargets}
-          onChange={actions => onActionsChange(rule.id, actions)}
-        />
+          <ActionsEditor
+            actions={rule.actions}
+            allowStateActions={allowStateActions}
+            focus={focus}
+            isContainerTarget={isContainerTarget}
+            issues={issues}
+            isTargetKeyed={isTargetKeyed}
+            scope={scope}
+            selfKey={selfKey}
+            triggerKind={rule.trigger.kind}
+            onChange={actions => onActionsChange(rule.id, actions)}
+          />
 
-        <RuleDiagnostics
-          issues={issues}
-          onFocusAction={actionIndex => onFocusAction(rule.id, actionIndex)}
-        />
-      </div>
+          <RuleDiagnostics
+            issues={issues}
+            onFocusAction={actionIndex => onFocusAction(rule.id, actionIndex)}
+          />
+        </div>
+      </ReferenceScopeProvider>
     </div>
   );
 };

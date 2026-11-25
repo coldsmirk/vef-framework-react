@@ -44,6 +44,7 @@ import { ContainerLinkageSection } from "./entries/linkage/container-linkage-sec
 import { OptionSourceEditor } from "./entries/options-source";
 import { optionSourceHasPayload } from "./entries/options-source/source-mutators";
 import { PanelHeader } from "./panel-header";
+import { NodeReferenceScopeProvider } from "./reference-scope";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 
 const bodyCss = css({
@@ -574,14 +575,16 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
                 <Switch checked={fixed.required ?? false} onChange={required => patchFixed({ required })} />
               </div>
 
-              <OptionSourceEditor
-                allowBulkPaste
-                confirmTitle="切换行项目来源将丢弃当前配置"
-                dataSources={dataSources}
-                label="行项目来源"
-                source={fixed.source}
-                onChange={source => patchFixed({ source })}
-              />
+              <NodeReferenceScopeProvider nodeId={subform.id}>
+                <OptionSourceEditor
+                  allowBulkPaste
+                  confirmTitle="切换行项目来源将丢弃当前配置"
+                  dataSources={dataSources}
+                  label="行项目来源"
+                  source={fixed.source}
+                  onChange={source => patchFixed({ source })}
+                />
+              </NodeReferenceScopeProvider>
             </>
           )
         : (

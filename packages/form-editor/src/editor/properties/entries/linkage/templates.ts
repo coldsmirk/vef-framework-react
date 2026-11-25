@@ -12,14 +12,9 @@ export interface LinkageRuleTemplate {
 }
 
 /**
- * Pure factory for the "查询并回填" starter sequence:
- * commit (when self notEmpty)
- * 1. api_call → result
- * 2. select_record ($steps.result → selected, whenNone: "continue")
- * 3. set_fields (ready for "按名称匹配" or manual bindings)
- *
- * Produces an ordinary `FieldLinkageRule` with zero template marker — every
- * step is edited, reordered, and persisted identically to hand-authored rules.
+ * "查询并回填": when the field is committed and not empty, call an API, select
+ * one of its records, and write fields from it. An ordinary rule — nothing
+ * records that a template made it.
  */
 export function createLookupAndFillRule(selfKey: string): FieldLinkageRule {
   return {
@@ -52,20 +47,15 @@ export function createLookupAndFillRule(selfKey: string): FieldLinkageRule {
 }
 
 /**
- * Starter templates offered for a field's linkage panel. "查询并回填" is
- * offered only on writable leaf fields when the host wired `request` — a
- * non-writable field (button / divider / upload) or a host without `request`
- * cannot run the sequence.
+ * The ready-made rules a field's panel offers: those the field can trigger and
+ * the host can run.
  */
-export function buildFieldLinkageTemplates(args: {
-  field: FormField;
-  hasRequest: boolean | undefined;
-}): LinkageRuleTemplate[] {
-  if (!isWritableTargetField(args.field) || args.hasRequest !== true) {
+export function buildFieldLinkageTemplates(field: FormField, hasRequest: boolean): LinkageRuleTemplate[] {
+  if (!isWritableTargetField(field) || !hasRequest) {
     return [];
   }
 
-  const selfKey = args.field.key;
+  const selfKey = field.key;
 
   return [
     {

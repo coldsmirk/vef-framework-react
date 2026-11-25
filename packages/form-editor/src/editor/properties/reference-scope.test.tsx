@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { buildReferenceOptions, ReferencePicker } from "./reference-scope";
+import { buildReferenceOptions, ReferencePicker, ReferenceScopeProvider } from "./reference-scope";
 
 const FULL_SCOPE: ReferenceScope = {
   fieldOptions: [
@@ -20,7 +20,6 @@ const FULL_SCOPE: ReferenceScope = {
     }
   ],
   contextSources: [{ key: "$applicant.departmentId", label: "申请人部门" }],
-  allowSteps: true,
   priorSteps: [
     {
       index: 0,
@@ -43,24 +42,12 @@ const FULL_SCOPE: ReferenceScope = {
 };
 
 describe("buildReferenceOptions & ReferencePicker", () => {
-  it("groups form fields, variables, system variables, and prior step fields in one candidate list", () => {
+  it("groups earlier steps, form fields, variables, and system variables in one candidate list", () => {
     const resolved = buildReferenceOptions(FULL_SCOPE, "$steps.result.name");
 
     expect(resolved.unresolved).toBe(false);
     expect(resolved.selectValue).toBe("$steps.result.name");
     expect(resolved.freeStepTarget).toBeNull();
-    expect(resolved.options.map(group => "label" in group ? group.label : "")).toEqual([
-      "表单字段",
-      "表单变量",
-      "系统变量",
-      "步骤 1 · 职员查询",
-      "步骤 2 · 原始接口"
-    ]);
-  });
-
-  it("puts prior steps first when preferSteps is enabled", () => {
-    const resolved = buildReferenceOptions(FULL_SCOPE, "", { preferSteps: true });
-
     expect(resolved.options.map(group => "label" in group ? group.label : "")).toEqual([
       "步骤 1 · 职员查询",
       "步骤 2 · 原始接口",
@@ -68,6 +55,17 @@ describe("buildReferenceOptions & ReferencePicker", () => {
       "表单变量",
       "系统变量"
     ]);
+  });
+
+  it("lists fields without a heading when there is nothing else", () => {
+    const resolved = buildReferenceOptions({
+      ...FULL_SCOPE,
+      variables: [],
+      contextSources: [],
+      priorSteps: undefined
+    }, "code");
+
+    expect(resolved.options.map(option => option.label)).toEqual(["工号 · code", "姓名 · name"]);
   });
 
   it("recognizes explicit $form.<key> references and flags unknown paths with 未识别", () => {
@@ -86,14 +84,15 @@ describe("buildReferenceOptions & ReferencePicker", () => {
       const [path, setPath] = useState("$steps.raw.profile.email");
 
       return (
-        <ReferencePicker
-          scope={FULL_SCOPE}
-          value={path}
-          onChange={next => {
-            onChange(next);
-            setPath(next);
-          }}
-        />
+        <ReferenceScopeProvider value={FULL_SCOPE}>
+          <ReferencePicker
+            value={path}
+            onChange={next => {
+              onChange(next);
+              setPath(next);
+            }}
+          />
+        </ReferenceScopeProvider>
       );
     }
 

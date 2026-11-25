@@ -12,7 +12,7 @@ import type {
 } from "../../../../types";
 
 import { createId } from "../../../../engine/ids";
-import { isStateAction, nextUniqueStepOutput } from "../../../../engine/linkage";
+import { getStepOutputName, isStateAction, nextUniqueStepOutput } from "../../../../engine/linkage";
 import { operatorNeedsValue } from "./options";
 
 /**
@@ -22,6 +22,22 @@ import { operatorNeedsValue } from "./options";
  * expression / script mode.
  */
 export const MAX_CONDITION_NESTING_DEPTH = 1;
+
+/**
+ * Set an optional property, dropping its key when there is nothing to store so
+ * the persisted schema stays minimal.
+ */
+export function withOptional<T extends object, K extends keyof T>(target: T, key: K, value: T[K] | undefined): T {
+  const next: T = { ...target };
+
+  if (value === undefined) {
+    delete (next as Partial<T>)[key];
+  } else {
+    next[key] = value;
+  }
+
+  return next;
+}
 
 export function createLeaf(sourceKey: string, operator: LinkageOperator = "eq"): LinkageConditionLeaf {
   return {
@@ -50,37 +66,15 @@ export function createExpression(): LinkageCondition {
   };
 }
 
-function latestStepOutput(actions: readonly FieldLinkageAction[] | undefined): string | undefined {
-  if (actions === undefined) {
-    return undefined;
-  }
-
-  for (let index = actions.length - 1; index >= 0; index -= 1) {
-    const action = actions[index];
-
-    if (
-      action !== undefined
-      && (action.type === "api_call" || action.type === "select_record")
-      && typeof action.output === "string"
-      && action.output.length > 0
-    ) {
-      return action.output;
-    }
-  }
-
-  return undefined;
-}
-
 /**
- * Seed a fresh action of `type`. When `existingActions` is supplied (the
- * rule's current action list), `api_call` and `select_record` allocate
- * rule-unique `output` names (`result`, `result_2`, … / `selected`,
- * `selected_2`, …), and `select_record` defaults its `source` to the latest
- * prior step's output when one exists.
+ * Seed a fresh action of `type` for position `index` among `actions`: a step
+ * with a result gets a name no other step of the rule holds, and a
+ * `select_record` draws from the nearest result before it.
  */
 export function createActionFor(
   type: LinkageActionType,
-  existingActions?: readonly FieldLinkageAction[]
+  actions: readonly FieldLinkageAction[] = [],
+  index: number = actions.length
 ): FieldLinkageAction {
   const id = createId("Action");
 
@@ -152,18 +146,18 @@ export function createActionFor(
         id,
         type,
         request: { resource: "", action: "" },
-        output: nextUniqueStepOutput(existingActions ?? [], "result")
+        output: nextUniqueStepOutput(actions, "result", index)
       };
     }
 
     case "select_record": {
-      const priorOutput = latestStepOutput(existingActions);
+      const priorOutput = actions.slice(0, index).map(action => getStepOutputName(action)).findLast(name => name !== undefined);
 
       return {
         id,
         type,
         source: { kind: "reference", path: priorOutput === undefined ? "" : `$steps.${priorOutput}` },
-        output: nextUniqueStepOutput(existingActions ?? [], "selected")
+        output: nextUniqueStepOutput(actions, "selected", index)
       };
     }
 

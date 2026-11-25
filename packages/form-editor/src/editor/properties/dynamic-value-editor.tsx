@@ -1,14 +1,13 @@
 import type { ReactElement } from "react";
 
 import type { DynamicValue, FormDataSource, FormField } from "../../types";
-import type { ReferenceScope } from "./reference-scope";
 
 import { css } from "@emotion/react";
-import { Input, Segmented } from "@vef-framework-react/components";
+import { Segmented } from "@vef-framework-react/components";
 
 import { ExpressionInput } from "./entries/linkage/expression-input";
 import { codeEditorWrapperCss, valueEditorCss } from "./entries/linkage/styles";
-import { ReferencePicker, useReferenceScope } from "./reference-scope";
+import { ReferencePicker } from "./reference-scope";
 import { defaultLiteralValueForField, TypedLiteralInput } from "./typed-literal-input";
 
 const containerCss = css({
@@ -77,17 +76,6 @@ export interface DynamicValueEditorProps {
   referencePlaceholder?: string;
   expressionPlaceholder?: string;
   /**
-   * Optional explicit reference scope; when omitted, reads the nearest
-   * {@link ReferenceScopeProvider}. Falls back to a plain path input only when
-   * rendered detached from any editor scope.
-   */
-  referenceScope?: ReferenceScope | null;
-  /**
-   * Put earlier step outputs before form fields in the grouped reference picker
-   * (helpful for `select_record.source` and `set_fields` values).
-   */
-  preferSteps?: boolean;
-  /**
    * Target field being written (`set_fields` / `assign`): drives the typed
    * literal control (number, switch, date/datetime/daterange, static options).
    */
@@ -112,15 +100,10 @@ export function DynamicValueEditor({
   expressionPlaceholder,
   literalPlaceholder,
   onChange,
-  preferSteps = false,
-  referencePlaceholder = "选择引用数据",
-  referenceScope,
+  referencePlaceholder,
   targetField,
   value
 }: DynamicValueEditorProps): ReactElement {
-  const inheritedScope = useReferenceScope();
-  const scope = referenceScope === undefined ? inheritedScope : referenceScope;
-
   return (
     <div css={containerCss}>
       <div css={[valueEditorCss, value.kind !== "expression" && inlineValueEditorCss]}>
@@ -150,23 +133,11 @@ export function DynamicValueEditor({
           : value.kind === "reference"
             ? (
                 <div css={inputGrowCss}>
-                  {scope === null
-                    ? (
-                        <Input
-                          placeholder={referencePlaceholder}
-                          value={value.path}
-                          onChange={event => onChange({ kind: "reference", path: event.target.value })}
-                        />
-                      )
-                    : (
-                        <ReferencePicker
-                          placeholder={referencePlaceholder}
-                          preferSteps={preferSteps}
-                          scope={scope}
-                          value={value.path}
-                          onChange={path => onChange({ kind: "reference", path })}
-                        />
-                      )}
+                  <ReferencePicker
+                    placeholder={referencePlaceholder}
+                    value={value.path}
+                    onChange={path => onChange({ kind: "reference", path })}
+                  />
                 </div>
               )
             : (

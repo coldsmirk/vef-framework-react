@@ -6,14 +6,13 @@ import { describe, expect, it } from "vitest";
 import {
   collectInferredSelectRecordColumns,
   collectStepOutputNames,
-  collectStepReferenceUsages,
-  findBrokenStepReferencesAfterReorder,
+  findBrokenStepReferences,
   findDependentStepsAfter,
   matchStepFieldsToTargets,
   nextUniqueStepOutput,
   renameStepOutputInRule,
   resolvePriorStepSchemas,
-  resolveSelectRecordSourceFields
+  resolveRecordSourceFields
 } from "./step-schema";
 
 const STAFF_API: DataSourceApi = {
@@ -104,25 +103,33 @@ describe("step-schema helpers", () => {
     expect(cleared[0]).not.toHaveProperty("output");
   });
 
+  it("stops renaming at a step that redefines the old name", () => {
+    const [call, select, fill] = lookupSequence();
+    const redefined = { ...call!, id: "A4" };
+    const renamed = renameStepOutputInRule([call!, redefined, select!, fill!], 0, "first");
+
+    expect(renamed[0]).toMatchObject({ output: "first" });
+    expect(renamed[1]).toMatchObject({ output: "result" });
+    expect(renamed[2]).toMatchObject({ source: { kind: "reference", path: "$steps.result" } });
+  });
+
   it("finds dependent subsequent steps and reorder violations", () => {
     const actions = lookupSequence();
 
-    expect(collectStepReferenceUsages(actions, "result", 1)).toHaveLength(1);
-    expect(findDependentStepsAfter(actions, 0).map(item => item.index)).toEqual([1]);
-    expect(findDependentStepsAfter(actions, 1).map(item => item.index)).toEqual([2]);
+    expect(findDependentStepsAfter(actions, 0)).toEqual([1]);
+    expect(findDependentStepsAfter(actions, 1)).toEqual([2]);
     expect(findDependentStepsAfter(actions, 2)).toEqual([]);
 
     // Moving api_call after select_record breaks $steps.result.
     const reordered = [actions[1]!, actions[0]!, actions[2]!];
-    const broken = findBrokenStepReferencesAfterReorder(reordered);
-
-    expect(broken).toHaveLength(1);
-    expect(broken[0]).toMatchObject({
-      stepName: "result",
-      producerIndex: 1,
-      consumerIndex: 0
-    });
-    expect(findBrokenStepReferencesAfterReorder(actions)).toEqual([]);
+    expect(findBrokenStepReferences(reordered)).toEqual([
+      {
+        stepName: "result",
+        producerIndex: 1,
+        consumerIndex: 0
+      }
+    ]);
+    expect(findBrokenStepReferences(actions)).toEqual([]);
   });
 
   it("propagates declared API fields from api_call through select_record", () => {
@@ -141,7 +148,9 @@ describe("step-schema helpers", () => {
       fields: STAFF_API.fields
     });
 
-    expect(resolveSelectRecordSourceFields(actions, 1, [STAFF_API])).toEqual(STAFF_API.fields);
+    expect(resolveRecordSourceFields({ kind: "reference", path: "$steps.result" }, priorBeforeSetFields)).toEqual(STAFF_API.fields);
+    expect(resolveRecordSourceFields({ kind: "reference", path: "$steps.result.profile" }, priorBeforeSetFields)).toEqual([{ path: "email", label: "邮箱" }]);
+    expect(resolveRecordSourceFields({ kind: "reference", path: "name" }, priorBeforeSetFields)).toEqual([]);
   });
 
   it("previews inferred select_record columns from downstream set_fields", () => {

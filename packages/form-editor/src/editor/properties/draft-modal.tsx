@@ -137,7 +137,8 @@ export interface DraftFieldProps {
 }
 
 /**
- * One labelled row of a {@link DraftModal}. An error takes the hint's place.
+ * One labelled control of a draft, in a {@link DraftModal} or inline. An error
+ * takes the hint's place.
  */
 export function DraftField({
   children,

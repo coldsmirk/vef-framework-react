@@ -1,19 +1,22 @@
 import type { DropdownMenuItem, SelectProps } from "@vef-framework-react/components";
-import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ReactElement } from "react";
 
 import type { PriorStepSchema, WritableTargetField } from "../../../../engine/linkage";
 import type { FieldAssignment, FormDataSource } from "../../../../types";
 import type { SourceFieldOption } from "./options";
+import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars, Select } from "@vef-framework-react/components";
-import { DragDropProvider, moveDragItem, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
-import { useMemo, useRef, useState } from "react";
+import { DragDropProvider, RestrictToVerticalAxis, useSortable } from "@vef-framework-react/core";
+import { isDeepEqual } from "@vef-framework-react/shared";
+import { useMemo, useState } from "react";
 
 import { matchStepFieldsToTargets } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { DynamicValueEditor } from "../../dynamic-value-editor";
+import { useReferenceScope } from "../../reference-scope";
+import { draggingRowCss, DragHandle, useSortableRows } from "../../sortable-rows";
 import { defaultLiteralValueForField } from "../../typed-literal-input";
 import { actionDeleteCss, addInlineButtonCss, selectStyle } from "./styles";
 
@@ -68,11 +71,6 @@ const rowCardRemovableCss = css({
   }
 });
 
-const rowDraggingCss = css({
-  background: globalCssVars.colorBgElevated,
-  boxShadow: globalCssVars.shadowLg
-});
-
 const targetGroupCss = css({
   gridColumn: 1,
   gridRow: 1,
@@ -86,40 +84,6 @@ const targetSelectWrapCss = css({
   flex: 1,
   minWidth: 0,
   overflow: "hidden"
-});
-
-const dragHandleCss = css({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 22,
-  height: 22,
-  flexShrink: 0,
-  borderRadius: globalCssVars.borderRadiusSm,
-  color: globalCssVars.colorTextTertiary,
-  cursor: "grab",
-  transition: `color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
-
-  "&:hover": {
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary
-  },
-
-  "&:focus-visible": {
-    outline: "none",
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary,
-    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
-  },
-
-  "&:active": {
-    cursor: "grabbing"
-  },
-
-  "& > svg": {
-    width: 14,
-    height: 14
-  }
 });
 
 const arrowCss = css({
@@ -171,35 +135,26 @@ const duplicateWarningCss = css({
   color: globalCssVars.colorWarningText
 });
 
-let assignmentRowCounter = 0;
+const BLANK_ASSIGNMENT: FieldAssignment = { targetKey: "", value: { kind: "literal", value: "" } };
 
-function nextAssignmentRowId(): string {
-  assignmentRowCounter += 1;
+/**
+ * Point an assignment at another target. A value nothing was typed into starts
+ * over in the shape the new target takes.
+ */
+function retarget(
+  assignment: FieldAssignment,
+  previous: WritableTargetField | undefined,
+  next: WritableTargetField
+): FieldAssignment {
+  const { value } = assignment;
+  const isUntouched = value.kind === "literal"
+    && (value.value === undefined || isDeepEqual(value.value, defaultLiteralValueForField(previous)));
 
-  return `assignment-row-${assignmentRowCounter}`;
-}
-
-export function reorderAssignments(
-  assignments: FieldAssignment[],
-  rowIds: string[],
-  event: DragEndEvent
-): { assignments: FieldAssignment[]; rowIds: string[] } | null {
-  const nextIds = moveDragItem(rowIds, event);
-
-  if (nextIds === rowIds) {
-    return null;
-  }
-
-  const byId = new Map(rowIds.map((id, index) => [id, assignments[index]] as const));
-  const nextAssignments = nextIds
-    .map(id => byId.get(id))
-    .filter((item): item is FieldAssignment => item !== undefined);
-
-  return { assignments: nextAssignments, rowIds: nextIds };
-}
-
-function isEmptyLiteralValue(value: FieldAssignment["value"]): boolean {
-  return value.kind === "literal" && (value.value === "" || value.value === undefined);
+  return {
+    ...assignment,
+    targetKey: next.key,
+    value: isUntouched ? { kind: "literal", value: defaultLiteralValueForField(next) } : value
+  };
 }
 
 interface SortableAssignmentRowProps {
@@ -210,24 +165,22 @@ interface SortableAssignmentRowProps {
   targetField: WritableTargetField | undefined;
   dataSources: readonly FormDataSource[];
   duplicated: boolean;
-  canRemove: boolean;
-  canReorder: boolean;
+  isOnlyRow: boolean;
   onChange: (next: FieldAssignment) => void;
   onRemove: () => void;
-  resolveTargetField: (key: string) => WritableTargetField | undefined;
+  onRetarget: (key: string) => void;
 }
 
 function SortableAssignmentRow({
   assignment,
-  canRemove,
-  canReorder,
   dataSources,
   duplicated,
   id,
   index,
+  isOnlyRow,
   onChange,
   onRemove,
-  resolveTargetField,
+  onRetarget,
   targetField,
   targetOptions
 }: SortableAssignmentRowProps): ReactElement {
@@ -250,22 +203,9 @@ function SortableAssignmentRow({
     : targetOptions;
 
   return (
-    <div ref={ref} css={[rowCardCss, canRemove && rowCardRemovableCss, isDragging && rowDraggingCss]}>
+    <div ref={ref} css={[rowCardCss, !isOnlyRow && rowCardRemovableCss, isDragging && draggingRowCss]}>
       <div css={targetGroupCss}>
-        {canReorder
-          ? (
-              <span
-                ref={handleRef}
-                aria-label="拖动排序"
-                css={dragHandleCss}
-                role="button"
-                tabIndex={0}
-                title="拖动排序"
-              >
-                <EditorIcon name="grip-vertical" />
-              </span>
-            )
-          : null}
+        {isOnlyRow ? null : <DragHandle handleRef={handleRef} />}
 
         <div css={targetSelectWrapCss}>
           <Select
@@ -277,19 +217,7 @@ function SortableAssignmentRow({
             status={duplicated || targetUnresolved ? "warning" : undefined}
             style={selectStyle}
             value={hasTarget ? assignment.targetKey : undefined}
-            onChange={value => {
-              const nextKey = String(value);
-              const nextField = resolveTargetField(nextKey);
-              const nextValue = isEmptyLiteralValue(assignment.value)
-                ? { kind: "literal" as const, value: defaultLiteralValueForField(nextField) }
-                : assignment.value;
-
-              onChange({
-                ...assignment,
-                targetKey: nextKey,
-                value: nextValue
-              });
-            }}
+            onChange={value => onRetarget(String(value))}
           />
         </div>
       </div>
@@ -298,7 +226,6 @@ function SortableAssignmentRow({
 
       <div css={valueCellCss}>
         <DynamicValueEditor
-          preferSteps
           dataSources={dataSources}
           expressionPlaceholder="field.A"
           literalPlaceholder="写入的值"
@@ -309,8 +236,9 @@ function SortableAssignmentRow({
         />
       </div>
 
-      {canRemove
-        ? (
+      {isOnlyRow
+        ? null
+        : (
             <Button
               aria-label="删除字段赋值"
               css={[actionDeleteCss, deleteButtonCss]}
@@ -319,120 +247,62 @@ function SortableAssignmentRow({
               type="text"
               onClick={onRemove}
             />
-          )
-        : null}
+          )}
     </div>
   );
 }
 
+function collectDuplicates(assignments: readonly FieldAssignment[]): ReadonlySet<string> {
+  const keys = assignments.map(assignment => assignment.targetKey).filter(key => key.length > 0);
+
+  return new Set(keys.filter((key, index) => keys.indexOf(key) !== index));
+}
+
 export interface SetFieldsEditorProps {
   assignments: FieldAssignment[];
-  targetOptions: SourceFieldOption[];
-  writableTargets: readonly WritableTargetField[];
-  priorSteps: readonly PriorStepSchema[];
-  dataSources: readonly FormDataSource[];
+  scope: LinkageScope;
   onChange: (assignments: FieldAssignment[]) => void;
 }
 
 /**
- * Compact, drag-sortable mapping table for `set_fields`:
- * - target field ← typed literal / grouped reference / expression
- * - "按名称匹配" matches declared fields from an earlier step against unmapped
- * same-scope writable controls (key first, then trimmed label) and appends
- * only unmapped targets.
+ * The mapping table of a `set_fields` step: target field ← literal, reference
+ * or expression, with the declared fields of an earlier step's result matched
+ * onto the controls by name on request.
  */
 export function SetFieldsEditor({
   assignments,
-  dataSources,
   onChange,
-  priorSteps,
-  targetOptions,
-  writableTargets
+  scope
 }: SetFieldsEditorProps): ReactElement {
-  const rowIdsRef = useRef<string[]>([]);
+  const {
+    dataSources,
+    targetOptions,
+    writableTargets
+  } = scope;
+  const { priorSteps = [] } = useReferenceScope();
   const [matchStatus, setMatchStatus] = useState<string | null>(null);
+  const rows = useSortableRows(assignments, next => {
+    setMatchStatus(null);
+    onChange(next);
+  });
 
-  if (rowIdsRef.current.length !== assignments.length) {
-    rowIdsRef.current = assignments.map(() => nextAssignmentRowId());
-  }
+  const targetByKey = useMemo(() => new Map(writableTargets.map(field => [field.key, field])), [writableTargets]);
+  const duplicatedKeys = useMemo(() => collectDuplicates(assignments), [assignments]);
 
-  const rowIds = rowIdsRef.current;
-
-  const targetByKey = useMemo(() => {
-    const map = new Map<string, WritableTargetField>();
-
-    for (const field of writableTargets) {
-      map.set(field.key, field);
-    }
-
-    return map;
-  }, [writableTargets]);
-
-  const duplicatedKeys = useMemo(() => {
-    const seen = new Set<string>();
-    const dupes = new Set<string>();
-
-    for (const item of assignments) {
-      if (item.targetKey.length === 0) {
-        continue;
-      }
-
-      if (seen.has(item.targetKey)) {
-        dupes.add(item.targetKey);
-      } else {
-        seen.add(item.targetKey);
-      }
-    }
-
-    return dupes;
-  }, [assignments]);
-
-  // Prefer the closest preceding step declaring fields (e.g. `select_record`
-  // right before `set_fields` comes ahead of its upstream `api_call`).
-  const matchableSteps = useMemo(
-    () => priorSteps.filter(step => step.fields.length > 0).toReversed(),
-    [priorSteps]
-  );
+  // The nearest step first: the `select_record` right before this one ahead of
+  // the `api_call` it draws from.
+  const matchableSteps = priorSteps.filter(step => step.fields.length > 0).toReversed();
 
   const runMatch = (step: PriorStepSchema): void => {
-    const result = matchStepFieldsToTargets(step, writableTargets, assignments);
+    const { added, nextAssignments } = matchStepFieldsToTargets(step, writableTargets, assignments);
 
-    if (result.added.length === 0) {
-      setMatchStatus("没有可自动匹配的新字段（同名字段已全部映射或无同名项）");
-      return;
+    if (added.length > 0) {
+      rows.replaceAll(nextAssignments);
     }
 
-    rowIdsRef.current = result.nextAssignments.map(() => nextAssignmentRowId());
-    onChange(result.nextAssignments);
-    setMatchStatus(`已按名称匹配并新增 ${result.added.length} 项写入`);
-  };
-
-  const updateAt = (index: number, next: FieldAssignment): void => {
-    setMatchStatus(null);
-    onChange(assignments.map((item, current) => current === index ? next : item));
-  };
-
-  const removeAt = (index: number): void => {
-    setMatchStatus(null);
-    rowIdsRef.current = rowIds.filter((_id, current) => current !== index);
-    onChange(assignments.filter((_item, current) => current !== index));
-  };
-
-  const addRow = (): void => {
-    setMatchStatus(null);
-    rowIdsRef.current = [...rowIds, nextAssignmentRowId()];
-    onChange([...assignments, { targetKey: "", value: { kind: "literal", value: "" } }]);
-  };
-
-  const handleDragEnd = (event: DragEndEvent): void => {
-    const result = reorderAssignments(assignments, rowIds, event);
-
-    if (result === null) {
-      return;
-    }
-
-    rowIdsRef.current = result.rowIds;
-    onChange(result.assignments);
+    setMatchStatus(added.length > 0
+      ? `已按名称匹配并新增 ${added.length} 项写入`
+      : "没有可自动匹配的新字段（同名字段已全部映射或无同名项）");
   };
 
   const matchDropdownItems: DropdownMenuItem[] = matchableSteps.map(step => {
@@ -492,32 +362,36 @@ export function SetFieldsEditor({
         ? null
         : <span css={statusCss} role="status">{matchStatus}</span>}
 
-      <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={handleDragEnd}>
+      <DragDropProvider modifiers={[RestrictToVerticalAxis]} onDragEnd={rows.handleDragEnd}>
         <div css={rowsCss}>
           {assignments.map((assignment, index) => {
-            const id = rowIds[index];
+            const id = rows.ids[index];
+            const targetField = targetByKey.get(assignment.targetKey);
 
-            if (id === undefined) {
-              return null;
-            }
+            return id === undefined
+              ? null
+              : (
+                  <SortableAssignmentRow
+                    key={id}
+                    assignment={assignment}
+                    dataSources={dataSources}
+                    duplicated={duplicatedKeys.has(assignment.targetKey)}
+                    id={id}
+                    index={index}
+                    isOnlyRow={assignments.length === 1}
+                    targetField={targetField}
+                    targetOptions={targetOptions}
+                    onChange={next => rows.update(index, next)}
+                    onRemove={() => rows.remove(index)}
+                    onRetarget={key => {
+                      const next = targetByKey.get(key);
 
-            return (
-              <SortableAssignmentRow
-                key={id}
-                assignment={assignment}
-                canRemove={assignments.length > 1}
-                canReorder={assignments.length > 1}
-                dataSources={dataSources}
-                duplicated={duplicatedKeys.has(assignment.targetKey)}
-                id={id}
-                index={index}
-                resolveTargetField={key => targetByKey.get(key)}
-                targetField={targetByKey.get(assignment.targetKey)}
-                targetOptions={targetOptions}
-                onChange={next => updateAt(index, next)}
-                onRemove={() => removeAt(index)}
-              />
-            );
+                      if (next !== undefined) {
+                        rows.update(index, retarget(assignment, targetField, next));
+                      }
+                    }}
+                  />
+                );
           })}
         </div>
       </DragDropProvider>
@@ -535,7 +409,7 @@ export function SetFieldsEditor({
         icon={<EditorIcon name="plus" />}
         size="small"
         type="dashed"
-        onClick={addRow}
+        onClick={() => rows.append([BLANK_ASSIGNMENT])}
       >
         新增字段赋值
       </Button>

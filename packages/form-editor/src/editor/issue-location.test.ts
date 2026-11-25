@@ -134,19 +134,18 @@ describe("locateIssue", () => {
       expect(locateIssue("node[Field_remark].linkage.rules[0]", makeSchema(), "pc"))
         .toEqual({
           kind: "linkage",
-          scope: "node",
           device: "mobile",
-          nodeId: "Field_remark",
-          ruleIndex: 0
+          focus: { nodeId: "Field_remark", ruleIndex: 0 }
         });
       expect(locateIssue("node[Field_remark].linkage.rules[0].actions[2].assignments[0].targetKey", makeSchema(), "pc"))
         .toEqual({
           kind: "linkage",
-          scope: "node",
           device: "mobile",
-          nodeId: "Field_remark",
-          ruleIndex: 0,
-          actionIndex: 2
+          focus: {
+            nodeId: "Field_remark",
+            ruleIndex: 0,
+            actionIndex: 2
+          }
         });
     });
 
@@ -214,14 +213,17 @@ describe("locateIssue", () => {
     it("targets the exact form event rule and action", () => {
       expect(locateIssue("schema.linkage.rules[0]", makeSchema(), "pc")).toEqual({
         kind: "linkage",
-        scope: "form",
-        ruleIndex: 0
+        device: "pc",
+        focus: { nodeId: null, ruleIndex: 0 }
       });
       expect(locateIssue("schema.linkage.rules[1].actions[0].output", makeSchema(), "pc")).toEqual({
         kind: "linkage",
-        scope: "form",
-        ruleIndex: 1,
-        actionIndex: 0
+        device: "pc",
+        focus: {
+          nodeId: null,
+          ruleIndex: 1,
+          actionIndex: 0
+        }
       });
     });
 

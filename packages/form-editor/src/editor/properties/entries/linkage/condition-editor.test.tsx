@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
+import { ReferenceScopeProvider } from "../../reference-scope";
 import { ConditionEditor } from "./condition-editor";
 
 // CodeMirror does not run under jsdom; a textarea stand-in keeps the
@@ -77,14 +78,20 @@ function Harness({
   const [condition, setCondition] = useState(initial);
 
   return (
-    <ConditionEditor
-      condition={condition}
-      sourceOptions={sourceOptions}
-      onChange={next => {
-        onCommit(next);
-        setCondition(next);
-      }}
-    />
+    <ReferenceScopeProvider value={{
+      fieldOptions: sourceOptions,
+      variables: [],
+      contextSources: []
+    }}
+    >
+      <ConditionEditor
+        condition={condition}
+        onChange={next => {
+          onCommit(next);
+          setCondition(next);
+        }}
+      />
+    </ReferenceScopeProvider>
   );
 }
 

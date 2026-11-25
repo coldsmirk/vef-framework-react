@@ -27,7 +27,7 @@ export function ContextSourcesProvider({
 }): ReactNode {
   // Content-stable identity so a host passing an inline array literal does
   // not re-render every rule card per keystroke (same reconciliation pattern
-  // as useStableOptions; the render-phase ref write is idempotent).
+  // as useScopeFields; the render-phase ref write is idempotent).
   const ref = useRef<LinkageContextSource[]>(EMPTY_SOURCES);
   const next = sources ?? EMPTY_SOURCES;
 

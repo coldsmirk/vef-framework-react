@@ -1,48 +1,41 @@
-import type { ChangeEvent, FC, ReactElement } from "react";
+import type { FC, ReactElement } from "react";
 
-import type { PriorStepSchema, WritableTargetField } from "../../../../engine/linkage";
+import type { PriorStepSchema } from "../../../../engine/linkage";
 import type { ValidationSeverity } from "../../../../engine/validation";
-import type {
-  ActionErrorPolicy,
-  FieldLinkageAction,
-  FormDataSource,
-  FormField,
-  KeyedFormField,
-  LinkageActionType,
-  LinkageAlertLevel
-} from "../../../../types";
-import type { ReferenceScope } from "../../reference-scope";
-import type { ActionSummaryContext } from "./action-summary";
-import type { OptionItem, SourceFieldOption } from "./options";
+import type { FieldLinkageAction, LinkageActionType, LinkageAlertLevel } from "../../../../types";
+import type { ModalEditableAction } from "./action-modal";
+import type { OptionItem } from "./options";
+import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { css } from "@emotion/react";
 import { Button, CodeEditor, globalCssVars, Input, Select } from "@vef-framework-react/components";
 import { useSortable } from "@vef-framework-react/core";
-import { useMemo, useState } from "react";
+import { useMergedRef } from "@vef-framework-react/hooks";
+import { useMemo } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
 import { collectStepOutputNames, isEffectAction } from "../../../../engine/linkage";
-import { isValidIdentifier } from "../../../../engine/validation";
 import { EditorIcon } from "../../../../icons";
-import { DynamicValueEditor as ActionValueEditor } from "../../dynamic-value-editor";
+import { useDataSourceApis } from "../../../data-source-apis";
+import { DynamicValueEditor } from "../../dynamic-value-editor";
 import { ReferenceScopeProvider } from "../../reference-scope";
 import { CatalogRemoteRequestEditor } from "../../remote-request-editor";
-import { formatActionSummaryLine, summarizeAction } from "./action-summary";
+import { DragHandle } from "../../sortable-rows";
+import { isModalEditableAction } from "./action-modal";
+import { summarizeAction } from "./action-summary";
 import { NO_COMPLETION_SETUP } from "./expression-input";
+import { withOptional } from "./mutators";
+import { OnErrorField } from "./on-error-field";
 import { actionLabelFor, alertLevelOptions, isLinkageActionType } from "./options";
 import { SelectRecordEditor } from "./select-record-editor";
 import { SetFieldsEditor } from "./set-fields-editor";
+import { StepOutputInput } from "./step-output-field";
 import {
   actionCardCss,
-  actionDeleteCss,
   codeEditorWrapperCss,
   selectStyle
 } from "./styles";
-
-const ON_ERROR_OPTIONS: Array<OptionItem<ActionErrorPolicy>> = [
-  { value: "stop", label: "失败时终止后续动作（默认）" },
-  { value: "continue", label: "忽略错误继续后续动作" }
-];
+import { useAttention } from "./use-attention";
 
 const stepCardCss = css({
   display: "flex",
@@ -69,40 +62,6 @@ const stepHeaderCss = css({
   gap: 4,
   padding: "6px 8px",
   minHeight: 38
-});
-
-const dragHandleCss = css({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 20,
-  height: 22,
-  flexShrink: 0,
-  borderRadius: globalCssVars.borderRadiusSm,
-  color: globalCssVars.colorTextTertiary,
-  cursor: "grab",
-  transition: `color ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}, background ${globalCssVars.motionDurationFast} ${globalCssVars.motionEaseOut}`,
-
-  "&:hover": {
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary
-  },
-
-  "&:focus-visible": {
-    outline: "none",
-    color: globalCssVars.colorText,
-    background: globalCssVars.colorFillTertiary,
-    boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBorder}`
-  },
-
-  "&:active": {
-    cursor: "grabbing"
-  },
-
-  "& > svg": {
-    width: 14,
-    height: 14
-  }
 });
 
 const toggleSummaryCss = css({
@@ -239,162 +198,31 @@ const unsupportedBannerCss = css({
   lineHeight: 1.5
 });
 
-const fieldStackCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 4
-});
-
-const fieldLabelCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary
-});
-
-const fieldErrorCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorErrorText,
-  lineHeight: 1.4
-});
-
-const fieldHintCss = css({
-  fontSize: globalCssVars.fontSizeSm,
-  color: globalCssVars.colorTextTertiary,
-  lineHeight: 1.4
-});
-
-const onErrorRowCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  paddingTop: 4,
-  borderTop: `1px dashed ${globalCssVars.colorBorderSecondary}`
-});
-
-export interface OnErrorSelectProps {
-  value: ActionErrorPolicy | undefined;
-  onChange: (next: ActionErrorPolicy) => void;
-}
-
-export function OnErrorSelect({ onChange, value }: OnErrorSelectProps): ReactElement {
-  return (
-    <Select
-      aria-label="失败处理"
-      options={ON_ERROR_OPTIONS}
-      style={selectStyle}
-      value={value ?? "stop"}
-      onChange={next => onChange(next === "continue" ? "continue" : "stop")}
-    />
-  );
-}
-
-interface StepOutputInputProps {
-  value: string;
-  required: boolean;
-  placeholder: string;
-  usedNames: ReadonlySet<string>;
-  onCommit: (nextOutput: string | undefined) => void;
-}
-
-/**
- * Draft-buffered step output name input for inline editing inside the right
- * panel. Validates identifier syntax and rule-wide uniqueness on commit; valid
- * renames propagate to all subsequent `$steps.<old>` references in one step.
- */
-function StepOutputInput({
-  onCommit,
-  placeholder,
-  required,
-  usedNames,
-  value
-}: StepOutputInputProps): ReactElement {
-  const [draft, setDraft] = useState<string | null>(null);
-  const current = draft ?? value;
-  const trimmed = current.trim();
-
-  let error: string | null = null;
-
-  if (trimmed.length === 0) {
-    if (required) {
-      error = "请填写结果名";
-    }
-  } else if (!isValidIdentifier(trimmed)) {
-    error = "结果名需以字母或下划线开头，仅含字母、数字或下划线";
-  } else if (usedNames.has(trimmed)) {
-    error = `结果名「${trimmed}」与本规则其它步骤重复`;
-  }
-
-  const commit = (): void => {
-    if (draft === null) {
-      return;
-    }
-
-    const next = draft.trim();
-    setDraft(null);
-
-    if (next === value) {
-      return;
-    }
-
-    if (next.length === 0) {
-      if (!required) {
-        onCommit(undefined);
-      }
-
-      return;
-    }
-
-    if (isValidIdentifier(next) && !usedNames.has(next)) {
-      onCommit(next);
-    }
-  };
-
-  return (
-    <div css={fieldStackCss}>
-      <span css={fieldLabelCss}>{required ? "结果名" : "结果名（可选）"}</span>
-
-      <Input
-        aria-label="步骤结果名"
-        placeholder={placeholder}
-        status={error === null ? undefined : "warning"}
-        value={current}
-        onBlur={commit}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => setDraft(sanitizeKey(event.target.value))}
-        onFocus={() => setDraft(value)}
-        onPressEnter={commit}
-      />
-
-      {error === null
-        ? <span css={fieldHintCss}>改名后将自动更新后续步骤中的引用</span>
-        : <span css={fieldErrorCss}>{error}</span>}
-    </div>
-  );
-}
-
 export interface ActionEditorProps {
   action: FieldLinkageAction;
-  actionIndex: number;
-  allActions: readonly FieldLinkageAction[];
+  /**
+   * The rule's whole sequence, and this step's place in it.
+   */
+  actions: readonly FieldLinkageAction[];
+  index: number;
   sortableId: string;
   expanded: boolean;
-  highlighted: boolean;
-  canReorder: boolean;
-  canRemove: boolean;
-  canEditInModal: boolean;
+  /**
+   * Set while a diagnostic points at this step (see {@link useAttention}).
+   */
+  attention: object | null;
   issueSeverity: ValidationSeverity | undefined;
   unsupportedReason: string | null;
   availableActions: Array<OptionItem<LinkageActionType>>;
-  targetOptions: SourceFieldOption[];
-  writableTargets: readonly WritableTargetField[];
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
-  dataSources: readonly FormDataSource[];
-  dataSourceOptions: SourceFieldOption[];
-  ownerField?: FormField;
-  referenceScope: ReferenceScope;
-  priorSteps: readonly PriorStepSchema[];
-  summaryContext: ActionSummaryContext;
-  stepRef?: (node: HTMLDivElement | null) => void;
+  scope: LinkageScope;
+  selfKey?: string;
+  /**
+   * The results this step can read; `undefined` for a state action, which
+   * reads none.
+   */
+  priorSteps: readonly PriorStepSchema[] | undefined;
   onToggleExpand: () => void;
-  onOpenModal: () => void;
+  onOpenModal: (action: ModalEditableAction) => void;
   onChangeType: (nextType: LinkageActionType) => void;
   onChange: (next: FieldLinkageAction) => void;
   onRenameOutput: (nextOutput: string | undefined) => void;
@@ -402,23 +230,16 @@ export interface ActionEditorProps {
 }
 
 /**
- * Collapsible, drag-sortable step card for one linkage action. Keeps the whole
- * sequence scannable in one screen when collapsed (showing a plain-Chinese
- * summary, `失败继续` / `当前宿主不支持` badges, and a direct modal-edit trigger
- * for complex steps), and unfolds into the full inline editor when expanded.
+ * One step of a sequence: a one-line summary that unfolds into the step's
+ * inputs.
  */
 export const ActionEditor: FC<ActionEditorProps> = ({
   action,
-  actionIndex,
-  allActions,
+  actions,
+  attention,
   availableActions,
-  canEditInModal,
-  canRemove,
-  canReorder,
-  dataSourceOptions,
-  dataSources,
   expanded,
-  highlighted,
+  index,
   issueSeverity,
   onChange,
   onChangeType,
@@ -426,52 +247,36 @@ export const ActionEditor: FC<ActionEditorProps> = ({
   onRemove,
   onRenameOutput,
   onToggleExpand,
-  ownerField,
   priorSteps,
-  referenceScope,
-  scopeFieldsByKey,
+  scope,
+  selfKey,
   sortableId,
-  stepRef,
-  summaryContext,
-  targetOptions,
-  unsupportedReason,
-  writableTargets
+  unsupportedReason
 }) => {
   const {
     handleRef,
     isDragging,
     ref: sortableRef
-  } = useSortable({ id: sortableId, index: actionIndex });
+  } = useSortable({ id: sortableId, index });
+  const { highlighted, ref: attentionRef } = useAttention(attention);
+  const cardRef = useMergedRef<HTMLDivElement>(sortableRef, attentionRef);
+  const apis = useDataSourceApis();
 
-  const selectOptions = useMemo(
-    () => availableActions.some(option => option.value === action.type)
-      ? availableActions
-      : [...availableActions, { value: action.type, label: actionLabelFor(action.type) }],
-    [action.type, availableActions]
+  const isOnlyStep = actions.length === 1;
+  const selectOptions = availableActions.some(option => option.value === action.type)
+    ? availableActions
+    : [...availableActions, { value: action.type, label: actionLabelFor(action.type) }];
+
+  const summary = useMemo(() => summarizeAction(action, scope, apis), [action, scope, apis]);
+  const usedOutputs = useMemo(() => collectStepOutputNames(actions, index), [actions, index]);
+  const referenceScope = useMemo(
+    () => priorSteps === undefined ? scope.reference : { ...scope.reference, priorSteps },
+    [scope.reference, priorSteps]
   );
-
-  const summary = useMemo(
-    () => summarizeAction(action, summaryContext),
-    [action, summaryContext]
-  );
-
-  const summaryLine = formatActionSummaryLine(summary);
-  const effectAction = isEffectAction(action);
-
-  const usedOutputs = useMemo(
-    () => collectStepOutputNames(allActions, actionIndex),
-    [allActions, actionIndex]
-  );
-
-  const setCardRef = (node: HTMLDivElement | null): void => {
-    sortableRef(node);
-    stepRef?.(node);
-  };
 
   return (
     <div
-      ref={setCardRef}
-      data-action-index={actionIndex}
+      ref={cardRef}
       css={[
         stepCardCss,
         highlighted && stepCardHighlightedCss,
@@ -479,25 +284,12 @@ export const ActionEditor: FC<ActionEditorProps> = ({
       ]}
     >
       <div css={stepHeaderCss}>
-        {canReorder
-          ? (
-              <span
-                ref={handleRef}
-                aria-label={`拖动排序步骤 ${actionIndex + 1}`}
-                css={dragHandleCss}
-                role="button"
-                tabIndex={0}
-                title="拖动排序"
-              >
-                <EditorIcon name="grip-vertical" />
-              </span>
-            )
-          : null}
+        {isOnlyStep ? null : <DragHandle handleRef={handleRef} label={`拖动排序步骤 ${index + 1}`} />}
 
         <button
           aria-expanded={expanded}
           css={toggleSummaryCss}
-          title={summaryLine}
+          title={summary.text}
           type="button"
           onClick={onToggleExpand}
         >
@@ -505,27 +297,20 @@ export const ActionEditor: FC<ActionEditorProps> = ({
             <EditorIcon name={expanded ? "chevron-down" : "chevron-right"} />
           </span>
 
-          <span css={stepIndexBadgeCss}>{actionIndex + 1}</span>
+          <span css={stepIndexBadgeCss}>{index + 1}</span>
 
           {issueSeverity === undefined
             ? null
             : <span aria-hidden css={[issueDotCss, issueSeverity === "error" ? issueErrorDotCss : issueWarningDotCss]} />}
 
-          <span css={[summaryTextCss, summary.incomplete && summaryIncompleteCss]}>
-            {summaryLine}
-          </span>
+          <span css={[summaryTextCss, summary.incomplete && summaryIncompleteCss]}>{summary.text}</span>
         </button>
 
         <div css={badgeRowCss}>
-          {effectAction && action.onError === "continue"
-            ? <span css={continueBadgeCss}>失败继续</span>
-            : null}
+          {isEffectAction(action) && action.onError === "continue" ? <span css={continueBadgeCss}>失败继续</span> : null}
+          {unsupportedReason === null ? null : <span css={unsupportedBadgeCss}>当前宿主不支持</span>}
 
-          {unsupportedReason === null
-            ? null
-            : <span css={unsupportedBadgeCss}>当前宿主不支持</span>}
-
-          {canEditInModal
+          {isModalEditableAction(action)
             ? (
                 <Button
                   aria-label="弹窗编辑步骤"
@@ -534,23 +319,23 @@ export const ActionEditor: FC<ActionEditorProps> = ({
                   size="small"
                   title="在宽弹窗中编辑"
                   type="text"
-                  onClick={onOpenModal}
+                  onClick={() => onOpenModal(action)}
                 />
               )
             : null}
 
-          {canRemove
-            ? (
+          {isOnlyStep
+            ? null
+            : (
                 <Button
                   aria-label="删除动作"
-                  css={actionDeleteCss}
+                  css={iconButtonCss}
                   icon={<EditorIcon name="x" />}
                   size="small"
                   type="text"
                   onClick={onRemove}
                 />
-              )
-            : null}
+              )}
         </div>
       </div>
 
@@ -580,41 +365,17 @@ export const ActionEditor: FC<ActionEditorProps> = ({
               <ReferenceScopeProvider value={referenceScope}>
                 <ActionBody
                   action={action}
-                  actionIndex={actionIndex}
-                  allActions={allActions}
-                  dataSourceOptions={dataSourceOptions}
-                  dataSources={dataSources}
-                  ownerField={ownerField}
-                  priorSteps={priorSteps}
-                  scopeFieldsByKey={scopeFieldsByKey}
-                  targetOptions={targetOptions}
+                  laterActions={actions.slice(index + 1)}
+                  scope={scope}
+                  selfKey={selfKey}
                   usedOutputs={usedOutputs}
-                  writableTargets={writableTargets}
                   onChange={onChange}
                   onRenameOutput={onRenameOutput}
                 />
               </ReferenceScopeProvider>
 
-              {effectAction
-                ? (
-                    <div css={onErrorRowCss}>
-                      <span css={fieldLabelCss}>失败处理</span>
-
-                      <OnErrorSelect
-                        value={action.onError}
-                        onChange={next => {
-                          if (next === "continue") {
-                            onChange({ ...action, onError: "continue" });
-                            return;
-                          }
-
-                          const cleaned = { ...action };
-                          delete cleaned.onError;
-                          onChange(cleaned);
-                        }}
-                      />
-                    </div>
-                  )
+              {isEffectAction(action)
+                ? <OnErrorField value={action.onError} onChange={onError => onChange(withOptional(action, "onError", onError))} />
                 : null}
             </div>
           )
@@ -625,16 +386,10 @@ export const ActionEditor: FC<ActionEditorProps> = ({
 
 interface ActionBodyProps {
   action: FieldLinkageAction;
-  actionIndex: number;
-  allActions: readonly FieldLinkageAction[];
-  dataSources: readonly FormDataSource[];
-  dataSourceOptions: SourceFieldOption[];
-  ownerField?: FormField;
-  priorSteps: readonly PriorStepSchema[];
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
-  targetOptions: SourceFieldOption[];
+  laterActions: readonly FieldLinkageAction[];
+  scope: LinkageScope;
+  selfKey?: string;
   usedOutputs: ReadonlySet<string>;
-  writableTargets: readonly WritableTargetField[];
   onChange: (next: FieldLinkageAction) => void;
   onRenameOutput: (nextOutput: string | undefined) => void;
 }
@@ -645,27 +400,21 @@ interface ActionBodyProps {
  */
 function ActionBody({
   action,
-  actionIndex,
-  allActions,
-  dataSourceOptions,
-  dataSources,
+  laterActions,
   onChange,
   onRenameOutput,
-  ownerField,
-  priorSteps,
-  scopeFieldsByKey,
-  targetOptions,
-  usedOutputs,
-  writableTargets
+  scope,
+  selfKey,
+  usedOutputs
 }: ActionBodyProps): ReactElement | null {
   switch (action.type) {
     case "assign": {
       return (
-        <ActionValueEditor
-          dataSources={dataSources}
+        <DynamicValueEditor
+          dataSources={scope.dataSources}
           expressionPlaceholder="field.A + field.B"
           literalPlaceholder="赋值内容"
-          targetField={ownerField}
+          targetField={selfKey === undefined ? undefined : scope.fieldsByKey.get(selfKey)}
           value={action.value}
           onChange={value => onChange({ ...action, value })}
         />
@@ -676,10 +425,7 @@ function ActionBody({
       return (
         <SetFieldsEditor
           assignments={action.assignments}
-          dataSources={dataSources}
-          priorSteps={priorSteps}
-          targetOptions={targetOptions}
-          writableTargets={writableTargets}
+          scope={scope}
           onChange={assignments => onChange({ ...action, assignments })}
         />
       );
@@ -694,7 +440,7 @@ function ActionBody({
             onChange={event => onChange({ ...action, variable: sanitizeKey(event.target.value) })}
           />
 
-          <ActionValueEditor
+          <DynamicValueEditor
             expressionPlaceholder="$vars.count + 1"
             literalPlaceholder="写入的值"
             value={action.value}
@@ -708,7 +454,7 @@ function ActionBody({
       return (
         <Select
           notFoundContent="请先在左侧「数据」页中创建"
-          options={dataSourceOptions}
+          options={scope.dataSourceOptions}
           placeholder="选择数据源"
           style={selectStyle}
           value={action.dataSourceId.length > 0 ? action.dataSourceId : undefined}
@@ -727,7 +473,7 @@ function ActionBody({
             onChange={value => onChange({ ...action, level: asAlertLevel(value) })}
           />
 
-          <ActionValueEditor
+          <DynamicValueEditor
             expressionPlaceholder="field.name + ' 已保存'"
             literalPlaceholder="提示内容"
             value={action.message}
@@ -739,7 +485,7 @@ function ActionBody({
 
     case "navigate": {
       return (
-        <ActionValueEditor
+        <DynamicValueEditor
           expressionPlaceholder="'/orders/' + field.id"
           literalPlaceholder="目标路径，如 /orders"
           value={action.to}
@@ -757,13 +503,7 @@ function ActionBody({
             onChange={request => onChange({ ...action, request })}
           />
 
-          <StepOutputInput
-            placeholder="如 result（留空不保存结果）"
-            required={false}
-            usedNames={usedOutputs}
-            value={action.output ?? ""}
-            onCommit={onRenameOutput}
-          />
+          <StepOutputInput required={false} usedNames={usedOutputs} value={action.output ?? ""} onCommit={onRenameOutput} />
         </>
       );
     }
@@ -772,22 +512,9 @@ function ActionBody({
       return (
         <SelectRecordEditor
           action={action}
-          actionIndex={actionIndex}
-          allActions={allActions}
-          scopeFieldsByKey={scopeFieldsByKey}
-          outputControl={(
-            <StepOutputInput
-              required
-              placeholder="如 selected"
-              usedNames={usedOutputs}
-              value={action.output}
-              onCommit={next => {
-                if (next !== undefined) {
-                  onRenameOutput(next);
-                }
-              }}
-            />
-          )}
+          fieldsByKey={scope.fieldsByKey}
+          laterActions={laterActions}
+          outputControl={<StepOutputInput required usedNames={usedOutputs} value={action.output} onCommit={onRenameOutput} />}
           onChange={onChange}
         />
       );

@@ -5,40 +5,26 @@ import type {
   FieldAssignment,
   FieldLinkageAction,
   KeyedFormField,
-  RemoteDataSourceRequest,
   SelectRecordColumn
 } from "../../types";
 import type { WritableTargetField } from "./validator";
 
+import { findDataSourceApi } from "../data-source-apis";
 import { nextUniqueKey } from "../keys";
 import { isRecord, isValidIdentifier } from "../validation";
-import {
-  getActionDynamicValues,
-  getActionOutput,
-  mapActionDynamicValues
-} from "./action-descriptors";
+import { getActionDynamicValues, getActionOutput, mapActionDynamicValues, writeActionOutput } from "./action-descriptors";
 import { parseLeafSource } from "./scope";
 
 /**
- * Pure designer-facing analysis and transformation helpers for ordered effect
- * action sequences: step output naming, downstream `$steps.<output>` reference
- * tracking and renaming, reorder safety checks, prior-step field schema
- * propagation (`api_call` → `select_record`), `select_record` auto-column
- * preview, and `set_fields` name-based auto-matching.
+ * What an ordered action sequence's steps are named, which later steps read
+ * them, and the record fields those results are known to carry. Shared by the
+ * designer, which edits sequences, and the runtime's record picker.
  */
-
-export interface StepReferenceUsage {
-  actionIndex: number;
-  action: FieldLinkageAction;
-  slotPath: string;
-  path: string;
-}
 
 export interface BrokenStepReference {
   stepName: string;
   producerIndex: number;
   consumerIndex: number;
-  consumerAction: FieldLinkageAction;
 }
 
 export interface PriorStepSchema {
@@ -54,31 +40,19 @@ export interface FieldMatchResult {
   nextAssignments: FieldAssignment[];
 }
 
-function matchCatalogApi(
-  apis: readonly DataSourceApi[],
-  request: RemoteDataSourceRequest
-): DataSourceApi | undefined {
-  const version = request.version ?? "";
+/**
+ * The name a step's result is stored under, or `undefined` for a step that
+ * stores none.
+ */
+export function getStepOutputName(action: FieldLinkageAction): string | undefined {
+  const value = getActionOutput(action)?.value;
 
-  return apis.find(
-    api => api.resource === request.resource
-      && api.action === request.action
-      && (api.version ?? "") === version
-  );
-}
-
-function readActionOutputName(action: FieldLinkageAction): string | undefined {
-  const slot = getActionOutput(action);
-
-  return slot !== undefined && typeof slot.value === "string" && slot.value.length > 0
-    ? slot.value
-    : undefined;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /**
- * Collect every valid non-empty step output name declared in `actions`,
- * optionally skipping one index (used when validating or renaming that step's
- * own output).
+ * Every output name declared in `actions`, optionally leaving out one step
+ * (the one being named).
  */
 export function collectStepOutputNames(
   actions: readonly FieldLinkageAction[],
@@ -87,11 +61,7 @@ export function collectStepOutputNames(
   const used = new Set<string>();
 
   for (const [index, action] of actions.entries()) {
-    if (index === excludeIndex) {
-      continue;
-    }
-
-    const output = readActionOutputName(action);
+    const output = index === excludeIndex ? undefined : getStepOutputName(action);
 
     if (output !== undefined) {
       used.add(output);
@@ -102,7 +72,7 @@ export function collectStepOutputNames(
 }
 
 /**
- * Mint a rule-unique identifier for a step's `output` (`result`, `result_2`, …).
+ * Mint a rule-unique output name (`result`, `result_2`, …).
  */
 export function nextUniqueStepOutput(
   actions: readonly FieldLinkageAction[],
@@ -112,12 +82,12 @@ export function nextUniqueStepOutput(
   return nextUniqueKey(collectStepOutputNames(actions, excludeIndex), base);
 }
 
-function collectActionStepUsages(
-  action: FieldLinkageAction,
-  actionIndex: number,
-  stepName: string,
-  usages: StepReferenceUsage[]
-): void {
+/**
+ * The step names an action's `{ kind: "reference" }` values read.
+ */
+function collectReferencedSteps(action: FieldLinkageAction): Set<string> {
+  const names = new Set<string>();
+
   for (const slot of getActionDynamicValues(action)) {
     if (!isRecord(slot.value) || slot.value.kind !== "reference" || typeof slot.value.path !== "string") {
       continue;
@@ -125,146 +95,59 @@ function collectActionStepUsages(
 
     const parsed = parseLeafSource(slot.value.path);
 
-    if (parsed.kind === "step" && parsed.step === stepName) {
-      usages.push({
-        actionIndex,
-        action,
-        slotPath: slot.path,
-        path: slot.value.path
-      });
-    }
-  }
-}
-
-/**
- * Collect every structured reference slot (`{ kind: "reference" }`) in
- * `actions[fromIndex..]` that reads `$steps.<stepName>` (whole or sub-path).
- */
-export function collectStepReferenceUsages(
-  actions: readonly FieldLinkageAction[],
-  stepName: string,
-  fromIndex = 0
-): StepReferenceUsage[] {
-  if (stepName.length === 0) {
-    return [];
-  }
-
-  const usages: StepReferenceUsage[] = [];
-
-  for (let index = Math.max(0, fromIndex); index < actions.length; index += 1) {
-    const action = actions[index];
-
-    if (action !== undefined) {
-      collectActionStepUsages(action, index, stepName, usages);
+    if (parsed.kind === "step") {
+      names.add(parsed.step);
     }
   }
 
-  return usages;
+  return names;
 }
 
 /**
- * Subsequent steps (`j > index`) that reference the output produced by
- * `actions[index]`, deduplicated per step index. Used to warn before deleting
- * or clearing the output of a referenced step.
+ * The indexes of the steps after `index` that read its output.
  */
-export function findDependentStepsAfter(
-  actions: readonly FieldLinkageAction[],
-  index: number
-): Array<{ index: number; action: FieldLinkageAction }> {
+export function findDependentStepsAfter(actions: readonly FieldLinkageAction[], index: number): number[] {
   const target = actions[index];
-
-  if (target === undefined) {
-    return [];
-  }
-
-  const output = readActionOutputName(target);
+  const output = target === undefined ? undefined : getStepOutputName(target);
 
   if (output === undefined) {
     return [];
   }
 
-  const usages = collectStepReferenceUsages(actions, output, index + 1);
-  const seen = new Set<number>();
-  const dependents: Array<{ index: number; action: FieldLinkageAction }> = [];
-
-  for (const usage of usages) {
-    if (seen.has(usage.actionIndex)) {
-      continue;
-    }
-
-    seen.add(usage.actionIndex);
-    dependents.push({ index: usage.actionIndex, action: usage.action });
-  }
-
-  return dependents;
-}
-
-function collectActionBrokenStepRefs(
-  action: FieldLinkageAction,
-  consumerIndex: number,
-  producerByName: ReadonlyMap<string, number>,
-  seen: Set<string>,
-  broken: BrokenStepReference[]
-): void {
-  for (const slot of getActionDynamicValues(action)) {
-    if (!isRecord(slot.value) || slot.value.kind !== "reference" || typeof slot.value.path !== "string") {
-      continue;
-    }
-
-    const parsed = parseLeafSource(slot.value.path);
-
-    if (parsed.kind !== "step") {
-      continue;
-    }
-
-    const producerIndex = producerByName.get(parsed.step);
-
-    if (producerIndex !== undefined && producerIndex >= consumerIndex) {
-      const dedupeKey = `${parsed.step}:${consumerIndex}`;
-
-      if (!seen.has(dedupeKey)) {
-        seen.add(dedupeKey);
-        broken.push({
-          stepName: parsed.step,
-          producerIndex,
-          consumerIndex,
-          consumerAction: action
-        });
-      }
-    }
-  }
+  return actions.flatMap((action, current) => current > index && collectReferencedSteps(action).has(output) ? [current] : []);
 }
 
 /**
- * Detect step references in `nextActions` whose producer now sits at or after
- * the consumer (e.g. dragging an `api_call` below the `select_record` or
- * `set_fields` that reads its output, or dragging a consumer above its
- * producer).
+ * The step references whose producer sits at or after the step reading it, as
+ * a reorder can leave them.
  */
-export function findBrokenStepReferencesAfterReorder(
-  nextActions: readonly FieldLinkageAction[]
-): BrokenStepReference[] {
+export function findBrokenStepReferences(actions: readonly FieldLinkageAction[]): BrokenStepReference[] {
   const producerByName = new Map<string, number>();
 
-  for (const [index, action] of nextActions.entries()) {
-    const output = readActionOutputName(action);
+  for (const [index, action] of actions.entries()) {
+    const output = getStepOutputName(action);
 
     if (output !== undefined && !producerByName.has(output)) {
       producerByName.set(output, index);
     }
   }
 
-  const broken: BrokenStepReference[] = [];
-  const seen = new Set<string>();
+  return actions.flatMap((action, consumerIndex) => [...collectReferencedSteps(action)].flatMap(stepName => {
+    const producerIndex = producerByName.get(stepName);
 
-  for (const [consumerIndex, action] of nextActions.entries()) {
-    collectActionBrokenStepRefs(action, consumerIndex, producerByName, seen, broken);
-  }
-
-  return broken;
+    return producerIndex !== undefined && producerIndex >= consumerIndex
+      ? [
+          {
+            stepName,
+            producerIndex,
+            consumerIndex
+          }
+        ]
+      : [];
+  }));
 }
 
-function rewriteStepReferenceValue(value: DynamicValue, oldName: string, nextName: string): DynamicValue {
+function renameReferencedStep(value: DynamicValue, oldName: string, nextName: string): DynamicValue {
   if (value.kind !== "reference") {
     return value;
   }
@@ -275,17 +158,13 @@ function rewriteStepReferenceValue(value: DynamicValue, oldName: string, nextNam
     return value;
   }
 
-  const nextPath = parsed.path.length > 0
-    ? `$steps.${nextName}.${parsed.path.join(".")}`
-    : `$steps.${nextName}`;
-
-  return nextPath === value.path ? value : { ...value, path: nextPath };
+  return { ...value, path: ["$steps", nextName, ...parsed.path].join(".") };
 }
 
 /**
- * Update `actions[actionIndex]`'s `output` name and keep every subsequent
- * `$steps.<old>[.path]` reference in the same rule in sync. Stops rewriting if
- * an intermediate step shadows `oldName`.
+ * Rename a step's output (`undefined` or blank clears it) and carry every
+ * reference to it in the steps that follow, up to one that redefines the old
+ * name.
  */
 export function renameStepOutputInRule(
   actions: readonly FieldLinkageAction[],
@@ -294,59 +173,45 @@ export function renameStepOutputInRule(
 ): FieldLinkageAction[] {
   const target = actions[actionIndex];
 
-  if (target === undefined || (target.type !== "api_call" && target.type !== "select_record")) {
+  if (target === undefined) {
     return [...actions];
   }
 
-  const trimmed = nextOutput?.trim();
-  const normalizedNext = trimmed !== undefined && trimmed.length > 0 ? trimmed : undefined;
-  const oldOutput = readActionOutputName(target);
+  const nextName = nextOutput?.trim() || undefined;
+  const oldName = getStepOutputName(target);
+  const renamed = actions.with(actionIndex, writeActionOutput(target, nextName));
 
-  let updatedTarget: FieldLinkageAction;
-
-  if (target.type === "api_call") {
-    if (normalizedNext === undefined) {
-      const next = { ...target };
-      delete next.output;
-      updatedTarget = next;
-    } else {
-      updatedTarget = { ...target, output: normalizedNext };
-    }
-  } else {
-    updatedTarget = { ...target, output: normalizedNext ?? "" };
+  if (oldName === undefined || nextName === undefined || !isValidIdentifier(nextName)) {
+    return renamed;
   }
 
-  const shouldPropagate = oldOutput !== undefined
-    && normalizedNext !== undefined
-    && oldOutput !== normalizedNext
-    && isValidIdentifier(normalizedNext);
-
-  let shadowed = false;
-
-  return actions.map((action, index) => {
-    if (index < actionIndex) {
-      return action;
+  for (const [index, action] of actions.entries()) {
+    if (index <= actionIndex) {
+      continue;
     }
 
-    if (index === actionIndex) {
-      return updatedTarget;
+    renamed[index] = mapActionDynamicValues(action, value => renameReferencedStep(value, oldName, nextName));
+
+    if (getStepOutputName(action) === oldName) {
+      break;
     }
+  }
 
-    if (!shouldPropagate || shadowed) {
-      return action;
+  return renamed;
+}
+
+function indexFirst<T>(items: readonly T[], keyOf: (item: T) => string): Map<string, T> {
+  const index = new Map<string, T>();
+
+  for (const item of items) {
+    const key = keyOf(item);
+
+    if (key.length > 0 && !index.has(key)) {
+      index.set(key, item);
     }
+  }
 
-    const rewritten = mapActionDynamicValues(
-      action,
-      value => rewriteStepReferenceValue(value, oldOutput, normalizedNext)
-    );
-
-    if (readActionOutputName(action) === oldOutput) {
-      shadowed = true;
-    }
-
-    return rewritten;
-  });
+  return index;
 }
 
 function projectStepFields(
@@ -371,114 +236,89 @@ function projectStepFields(
 
 function mergeDeclaredFields(
   inherited: readonly DataSourceApiField[],
-  columns: readonly SelectRecordColumn[] | undefined
+  columns: readonly SelectRecordColumn[] = []
 ): readonly DataSourceApiField[] {
-  if (columns === undefined || columns.length === 0) {
-    return inherited;
-  }
-
-  const existing = new Set(inherited.map(field => field.path));
-  const extras: DataSourceApiField[] = [];
-
-  for (const column of columns) {
+  const declared = columns.map(column => {
     const path = column.path.trim();
 
-    if (path.length === 0 || existing.has(path)) {
-      continue;
-    }
+    return { path, label: column.label.trim() || path };
+  });
 
-    existing.add(path);
-    extras.push({
-      path,
-      label: column.label.trim().length > 0 ? column.label.trim() : path
-    });
-  }
-
-  return extras.length === 0 ? inherited : [...inherited, ...extras];
+  return indexFirst([...inherited, ...declared], field => field.path).values().toArray();
 }
 
 /**
- * Resolve every named output produced by steps strictly before `beforeIndex`,
- * propagating declared `DataSourceApi.fields` from `api_call` through
- * `select_record` when `select_record.source` references an earlier step.
+ * The step a `select_record` draws from and the declared fields of what it
+ * selects among.
+ */
+function resolveRecordSource(
+  source: DynamicValue,
+  priorSteps: readonly PriorStepSchema[]
+): { step: PriorStepSchema; fields: readonly DataSourceApiField[] } | undefined {
+  const parsed = source.kind === "reference" ? parseLeafSource(source.path) : undefined;
+
+  if (parsed?.kind !== "step") {
+    return undefined;
+  }
+
+  const step = priorSteps.find(candidate => candidate.output === parsed.step);
+
+  return step && { step, fields: projectStepFields(step.fields, parsed.path) };
+}
+
+function describeStep(
+  action: FieldLinkageAction,
+  priorSteps: readonly PriorStepSchema[],
+  apis: readonly DataSourceApi[]
+): Pick<PriorStepSchema, "fields" | "kind" | "label"> | undefined {
+  if (action.type === "api_call") {
+    const api = findDataSourceApi(apis, action.request);
+    const endpoint = [action.request.resource.trim(), action.request.action.trim()];
+
+    return {
+      kind: "api_call",
+      label: api?.label ?? (endpoint.every(part => part.length > 0) ? endpoint.join(" / ") : "接口结果"),
+      fields: api?.fields ?? []
+    };
+  }
+
+  if (action.type === "select_record") {
+    const source = resolveRecordSource(action.source, priorSteps);
+
+    return {
+      kind: "select_record",
+      label: action.title?.trim() || (source === undefined ? "选中记录" : `${source.step.label} · 选中记录`),
+      fields: mergeDeclaredFields(source?.fields ?? [], action.columns)
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * The named results of the steps before `beforeIndex`, with the record fields
+ * each is declared to carry: an `api_call`'s from the API catalog, a
+ * `select_record`'s from the step it draws from.
  */
 export function resolvePriorStepSchemas(
   actions: readonly FieldLinkageAction[],
   beforeIndex: number,
   apis: readonly DataSourceApi[]
 ): PriorStepSchema[] {
-  const limit = Math.min(Math.max(0, beforeIndex), actions.length);
   const resolved: PriorStepSchema[] = [];
-  const byOutput = new Map<string, PriorStepSchema>();
 
-  for (let index = 0; index < limit; index += 1) {
-    const action = actions[index];
+  const earlier = actions.slice(0, beforeIndex);
 
-    if (action === undefined) {
-      continue;
-    }
+  for (const [index, action] of earlier.entries()) {
+    const output = getStepOutputName(action);
+    const description = output === undefined ? undefined : describeStep(action, resolved, apis);
 
-    if (action.type === "api_call") {
-      const output = readActionOutputName(action);
-
-      if (output === undefined) {
-        continue;
-      }
-
-      const api = matchCatalogApi(apis, action.request);
-      const fallbackEndpoint = action.request.resource.trim().length > 0 && action.request.action.trim().length > 0
-        ? `${action.request.resource.trim()} / ${action.request.action.trim()}`
-        : "接口结果";
-      const entry: PriorStepSchema = {
+    if (output !== undefined && description !== undefined) {
+      resolved.push({
         index,
         output,
-        label: api?.label ?? fallbackEndpoint,
-        kind: "api_call",
-        fields: api?.fields ?? []
-      };
-
-      resolved.push(entry);
-      byOutput.set(output, entry);
-      continue;
-    }
-
-    if (action.type === "select_record") {
-      const output = readActionOutputName(action);
-
-      if (output === undefined) {
-        continue;
-      }
-
-      let upstream: PriorStepSchema | undefined;
-      let inheritedFields: readonly DataSourceApiField[] = [];
-
-      if (action.source.kind === "reference") {
-        const parsed = parseLeafSource(action.source.path);
-
-        if (parsed.kind === "step") {
-          upstream = byOutput.get(parsed.step);
-
-          if (upstream !== undefined) {
-            inheritedFields = projectStepFields(upstream.fields, parsed.path);
-          }
-        }
-      }
-
-      const title = action.title?.trim();
-      const entry: PriorStepSchema = {
-        index,
-        output,
-        label: title && title.length > 0
-          ? title
-          : upstream === undefined
-            ? "选中记录"
-            : `${upstream.label} · 选中记录`,
-        kind: "select_record",
-        fields: mergeDeclaredFields(inheritedFields, action.columns)
-      };
-
-      resolved.push(entry);
-      byOutput.set(output, entry);
+        ...description
+      });
     }
   }
 
@@ -486,223 +326,92 @@ export function resolvePriorStepSchemas(
 }
 
 /**
- * Resolve the declared record fields of the step that `actions[actionIndex]`
- * (`select_record`) draws from, so the column picker can offer them by label.
+ * The declared fields of the records a `select_record` selects among.
  */
-export function resolveSelectRecordSourceFields(
-  actions: readonly FieldLinkageAction[],
-  actionIndex: number,
-  apis: readonly DataSourceApi[]
+export function resolveRecordSourceFields(
+  source: DynamicValue,
+  priorSteps: readonly PriorStepSchema[]
 ): readonly DataSourceApiField[] {
-  const action = actions[actionIndex];
-
-  if (action?.type !== "select_record" || action.source.kind !== "reference") {
-    return [];
-  }
-
-  const parsed = parseLeafSource(action.source.path);
-
-  if (parsed.kind !== "step") {
-    return [];
-  }
-
-  const prior = resolvePriorStepSchemas(actions, actionIndex, apis);
-  const upstream = prior.find(step => step.output === parsed.step);
-
-  return upstream === undefined ? [] : projectStepFields(upstream.fields, parsed.path);
-}
-
-function collectInferredFromAssignments(
-  assignments: readonly FieldAssignment[],
-  prefix: string,
-  scopeFields: ReadonlyMap<string, KeyedFormField>,
-  seen: Set<string>,
-  inferred: SelectRecordColumn[]
-): void {
-  for (const assignment of assignments) {
-    if (assignment.value.kind !== "reference" || !assignment.value.path.startsWith(prefix)) {
-      continue;
-    }
-
-    const subPath = assignment.value.path.slice(prefix.length);
-
-    if (subPath.length === 0 || seen.has(subPath)) {
-      continue;
-    }
-
-    seen.add(subPath);
-    const target = scopeFields.get(assignment.targetKey);
-    const label = target?.label || (assignment.targetKey.length > 0 ? assignment.targetKey : subPath);
-
-    inferred.push({ path: subPath, label });
-  }
+  return resolveRecordSource(source, priorSteps)?.fields ?? [];
 }
 
 /**
- * Preview the display columns `select_record` will infer when `columns` is left
- * empty: every `$steps.<output>.<path>` referenced by subsequent `set_fields`
- * actions in the same rule, labelled by each target field's label. Mirrors
- * `runtime/record-selector.tsx`'s `inferSelectRecordColumns`.
+ * The columns a `select_record` without its own shows: what the `set_fields`
+ * steps after it read from its result, under each target field's label.
+ * Tolerates malformed steps, since the runtime calls it on stored schemas.
  */
 export function collectInferredSelectRecordColumns(
   output: string,
   remainingActions: readonly FieldLinkageAction[],
-  scopeFields: ReadonlyMap<string, KeyedFormField>
+  scopeFields: ReadonlyMap<string, Pick<KeyedFormField, "label">>
 ): SelectRecordColumn[] {
   if (output.length === 0) {
     return [];
   }
 
   const prefix = `$steps.${output}.`;
-  const seen = new Set<string>();
-  const inferred: SelectRecordColumn[] = [];
+  const columns = remainingActions.flatMap(action => getActionDynamicValues(action)).flatMap(({ target, value }) => {
+    const reference = isRecord(value) && value.kind === "reference" ? value.path : undefined;
 
-  for (const next of remainingActions) {
-    if (next.type === "set_fields") {
-      collectInferredFromAssignments(next.assignments, prefix, scopeFields, seen, inferred);
+    if (target?.kind !== "field" || typeof reference !== "string" || !reference.startsWith(prefix)) {
+      return [];
     }
-  }
 
-  return inferred;
+    const path = reference.slice(prefix.length);
+
+    return [{ path, label: scopeFields.get(target.key)?.label || target.key || path }];
+  });
+
+  return indexFirst(columns, column => column.path).values().toArray();
 }
 
 function lastPathSegment(path: string): string {
-  const dot = path.lastIndexOf(".");
-
-  return dot === -1 ? path : path.slice(dot + 1);
+  return path.slice(path.lastIndexOf(".") + 1);
 }
 
-function isEmptyPlaceholderAssignment(assignment: FieldAssignment): boolean {
+function isUntouchedAssignment(assignment: FieldAssignment): boolean {
   return assignment.targetKey.length === 0
     && assignment.value.kind === "literal"
     && (assignment.value.value === "" || assignment.value.value === undefined);
 }
 
 /**
- * Match declared fields of `step` against unmapped same-scope writable target
- * controls — first by key (exact path, then last segment, then case-insensitive
- * key), then by trimmed field label. Existing mapped targets are never
- * overwritten; a sole untouched blank row is replaced cleanly when matches are
- * appended.
+ * Map a step's declared fields onto the writable controls nothing writes yet:
+ * by binding key (exact path, its last segment, then either case-insensitively),
+ * else by label. Existing assignments stay as they are, except that rows left
+ * blank make way when nothing else is mapped yet.
  */
 export function matchStepFieldsToTargets(
   step: PriorStepSchema,
   targetFields: readonly WritableTargetField[],
   existingAssignments: readonly FieldAssignment[]
 ): FieldMatchResult {
-  if (step.fields.length === 0 || step.output.length === 0) {
-    return { added: [], nextAssignments: [...existingAssignments] };
-  }
+  const mappedKeys = new Set(existingAssignments.map(assignment => assignment.targetKey));
+  const byPath = indexFirst(step.fields, field => field.path);
+  const bySegment = indexFirst(step.fields, field => lastPathSegment(field.path));
+  const byLowerPath = indexFirst(step.fields, field => field.path.toLowerCase());
+  const byLowerSegment = indexFirst(step.fields, field => lastPathSegment(field.path).toLowerCase());
+  const byLabel = indexFirst(step.fields, field => field.label.trim());
 
-  const mappedKeys = new Set(
-    existingAssignments
-      .map(assignment => assignment.targetKey)
-      .filter(key => key.length > 0)
-  );
-  const candidates = targetFields.filter(field => !mappedKeys.has(field.key));
-
-  if (candidates.length === 0) {
-    return { added: [], nextAssignments: [...existingAssignments] };
-  }
-
-  const exactByPath = new Map<string, DataSourceApiField>();
-  const exactByLeaf = new Map<string, DataSourceApiField>();
-  const lowerByPath = new Map<string, DataSourceApiField>();
-  const lowerByLeaf = new Map<string, DataSourceApiField>();
-  const byLabel = new Map<string, DataSourceApiField>();
-
-  for (const apiField of step.fields) {
-    const leaf = lastPathSegment(apiField.path);
-    const trimmedLabel = apiField.label.trim();
-
-    if (!exactByPath.has(apiField.path)) {
-      exactByPath.set(apiField.path, apiField);
+  // Assignments follow the target controls' order in the form.
+  const added = targetFields.flatMap((target): FieldAssignment[] => {
+    if (mappedKeys.has(target.key)) {
+      return [];
     }
 
-    if (!exactByLeaf.has(leaf)) {
-      exactByLeaf.set(leaf, apiField);
-    }
+    const lowerKey = target.key.toLowerCase();
+    const match = byPath.get(target.key)
+      ?? bySegment.get(target.key)
+      ?? byLowerPath.get(lowerKey)
+      ?? byLowerSegment.get(lowerKey)
+      ?? byLabel.get(target.label?.trim() ?? "");
 
-    const lowerPath = apiField.path.toLowerCase();
+    return match === undefined
+      ? []
+      : [{ targetKey: target.key, value: { kind: "reference", path: `$steps.${step.output}.${match.path}` } }];
+  });
 
-    if (!lowerByPath.has(lowerPath)) {
-      lowerByPath.set(lowerPath, apiField);
-    }
+  const kept = added.length > 0 && existingAssignments.every(assignment => isUntouchedAssignment(assignment)) ? [] : existingAssignments;
 
-    const lowerLeaf = leaf.toLowerCase();
-
-    if (!lowerByLeaf.has(lowerLeaf)) {
-      lowerByLeaf.set(lowerLeaf, apiField);
-    }
-
-    if (trimmedLabel.length > 0 && !byLabel.has(trimmedLabel)) {
-      byLabel.set(trimmedLabel, apiField);
-    }
-  }
-
-  const matchedByKey = new Map<string, DataSourceApiField>();
-
-  // Pass 1: match by binding key (exact path → exact leaf → case-insensitive).
-  for (const field of candidates) {
-    const lowerKey = field.key.toLowerCase();
-    const match = exactByPath.get(field.key)
-      ?? exactByLeaf.get(field.key)
-      ?? lowerByPath.get(lowerKey)
-      ?? lowerByLeaf.get(lowerKey);
-
-    if (match !== undefined) {
-      matchedByKey.set(field.key, match);
-    }
-  }
-
-  // Pass 2: match remaining controls by trimmed display label.
-  for (const field of candidates) {
-    if (matchedByKey.has(field.key)) {
-      continue;
-    }
-
-    const label = field.label?.trim() ?? "";
-
-    if (label.length === 0) {
-      continue;
-    }
-
-    const match = byLabel.get(label);
-
-    if (match !== undefined) {
-      matchedByKey.set(field.key, match);
-    }
-  }
-
-  // Emit assignments in the target controls' visual/declaration order.
-  const added: FieldAssignment[] = [];
-
-  for (const field of candidates) {
-    const match = matchedByKey.get(field.key);
-
-    if (match !== undefined) {
-      added.push({
-        targetKey: field.key,
-        value: {
-          kind: "reference",
-          path: `$steps.${step.output}.${match.path}`
-        }
-      });
-    }
-  }
-
-  if (added.length === 0) {
-    return { added: [], nextAssignments: [...existingAssignments] };
-  }
-
-  const base = existingAssignments.length === 1
-    && existingAssignments[0] !== undefined
-    && isEmptyPlaceholderAssignment(existingAssignments[0])
-    ? []
-    : existingAssignments;
-
-  return {
-    added,
-    nextAssignments: [...base, ...added]
-  };
+  return { added, nextAssignments: [...kept, ...added] };
 }

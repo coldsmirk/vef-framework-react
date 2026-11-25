@@ -261,8 +261,8 @@ export function getTargetFieldOptions(args: {
  * Data-source dropdown options for a `refresh_data_source` action — the form's
  * named data sources by id. An unnamed source falls back to its id as the label.
  */
-export function getDataSourceOptions(dataSources: FormDataSource[] | undefined): SourceFieldOption[] {
-  return (dataSources ?? []).map(source => {
+export function getDataSourceOptions(dataSources: readonly FormDataSource[]): SourceFieldOption[] {
+  return dataSources.map(source => {
     return { value: source.id, label: source.name.length > 0 ? source.name : source.id };
   });
 }

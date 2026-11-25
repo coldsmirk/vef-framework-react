@@ -118,6 +118,48 @@ afterEach(() => {
 });
 
 describe("form data sources panel", () => {
+  it("binds a request parameter to a form field through the reference picker", async () => {
+    const user = userEvent.setup();
+
+    setup([], {
+      apis: CATALOG_APIS,
+      schemaExtra: {
+        dataSources: [
+          {
+            id: "ds1",
+            name: "部门",
+            kind: "remote",
+            request: {
+              resource: "sys/department",
+              action: "find_options",
+              params: { orgId: { kind: "reference", path: "" } }
+            }
+          }
+        ],
+        presentations: {
+          pc: {
+            children: [
+              {
+                id: "Field_org",
+                type: "textfield",
+                key: "org",
+                label: "机构"
+              }
+            ]
+          }
+        }
+      }
+    });
+
+    await user.click(screen.getByRole("button", { name: "编辑数据源 部门" }));
+
+    const dialog = await screen.findByRole("dialog");
+
+    await user.click(within(dialog).getByText("选择引用数据"));
+
+    expect(await screen.findByText("机构 · org")).toBeInTheDocument();
+  });
+
   describe("compact list rendering", () => {
     it("renders empty state when no data sources exist", () => {
       setup();

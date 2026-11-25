@@ -356,7 +356,7 @@ describe("EditorFooter", () => {
       expect(storeApi.getState().propertiesTab).toBe("form");
       expect(storeApi.getState().propertiesDrawerOpen).toBe(true);
       expect(storeApi.getState().pendingLinkageFocus).toEqual({
-        scope: "form",
+        nodeId: null,
         ruleIndex: 0,
         actionIndex: 0
       });

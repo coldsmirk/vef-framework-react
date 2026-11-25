@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { ButtonField, FieldLinkage, FormField, FormSchema, TextfieldField } from "../../../../types";
 
@@ -7,6 +7,8 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { createDefaultRegistry } from "../../../../engine/registry/defaults";
+import { RegistryProvider } from "../../../../store/engine-provider";
 import { FormEditorStoreProvider } from "../../../../store/form-store";
 import { definePropertyEntry } from "../../../../types";
 import { PreviewRuntimeProvider } from "../../../preview-runtime-context";
@@ -54,13 +56,23 @@ function schemaFor(target: TextfieldField): FormSchema {
   };
 }
 
+const registries = { pc: createDefaultRegistry(), mobile: createDefaultRegistry() };
+
+function EditorProviders({ children, schema }: { children: ReactNode; schema: FormSchema }): ReactElement {
+  return (
+    <RegistryProvider registries={registries}>
+      <FormEditorStoreProvider initialState={{ schema }}>{children}</FormEditorStoreProvider>
+    </RegistryProvider>
+  );
+}
+
 function renderEntry(target: TextfieldField, onChange: (value: unknown) => void): void {
   const schema = schemaFor(target);
 
   render(
-    <FormEditorStoreProvider initialState={{ schema }}>
+    <EditorProviders schema={schema}>
       <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={onChange} />
-    </FormEditorStoreProvider>
+    </EditorProviders>
   );
 }
 
@@ -96,9 +108,9 @@ function renderSolo(target: FormField, onChange: (value: unknown) => void): void
   const schema = soloSchemaFor(target);
 
   render(
-    <FormEditorStoreProvider initialState={{ schema }}>
+    <EditorProviders schema={schema}>
       <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={onChange} />
-    </FormEditorStoreProvider>
+    </EditorProviders>
   );
 }
 
@@ -146,14 +158,14 @@ function FocusHarness(): ReactElement {
   const [field, setField] = useState<FormField>(() => assignRuleField());
 
   return (
-    <FormEditorStoreProvider initialState={{ schema: schemaFor(assignRuleField()) }}>
+    <EditorProviders schema={schemaFor(assignRuleField())}>
       <LinkageRulesEntry
         entry={entry}
         field={field}
         schema={schemaFor(assignRuleField())}
         onChange={value => setField(current => entry.write(current, value as FieldLinkage | undefined))}
       />
-    </FormEditorStoreProvider>
+    </EditorProviders>
   );
 }
 
@@ -632,9 +644,9 @@ describe("linkage rules entry", () => {
 
       render(
         <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: false, hasNavigate: false } }}>
-          <FormEditorStoreProvider initialState={{ schema }}>
+          <EditorProviders schema={schema}>
             <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={vi.fn()} />
-          </FormEditorStoreProvider>
+          </EditorProviders>
         </PreviewRuntimeProvider>
       );
 
@@ -667,9 +679,9 @@ describe("linkage rules entry", () => {
 
       render(
         <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
-          <FormEditorStoreProvider initialState={{ schema }}>
+          <EditorProviders schema={schema}>
             <LinkageRulesEntry entry={entry} field={target} schema={schema} onChange={vi.fn()} />
-          </FormEditorStoreProvider>
+          </EditorProviders>
         </PreviewRuntimeProvider>
       );
 

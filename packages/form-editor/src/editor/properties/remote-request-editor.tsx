@@ -8,8 +8,9 @@ import { Button, globalCssVars, Input, Select } from "@vef-framework-react/compo
 import { omit } from "@vef-framework-react/shared";
 import { useMemo, useState } from "react";
 
+import { endpointKey, findDataSourceApi } from "../../engine/data-source-apis";
 import { EditorIcon } from "../../icons";
-import { endpointKey, findDataSourceApi, useDataSourceApis } from "../data-source-apis";
+import { useDataSourceApis } from "../data-source-apis";
 import { DynamicValueEditor } from "./dynamic-value-editor";
 
 export const requestGridCss = css({
@@ -481,7 +482,7 @@ function DeclaredParamRow({
   );
 }
 
-export interface RemoteRequestEditorProps {
+interface RequestEndpointFieldsProps {
   request: RemoteDataSourceRequest;
   onChange: (request: RemoteDataSourceRequest) => void;
 }
@@ -489,7 +490,7 @@ export interface RemoteRequestEditorProps {
 /**
  * The hand-entered endpoint: resource / action / version.
  */
-export function RequestEndpointFields({ onChange, request }: RemoteRequestEditorProps): ReactElement {
+function RequestEndpointFields({ onChange, request }: RequestEndpointFieldsProps): ReactElement {
   const setVersion = (version: string): void => {
     // A cleared version is "the default", not an empty version to send.
     onChange(version.trim().length > 0 ? { ...request, version } : omit(request, ["version"]));
@@ -707,19 +708,6 @@ export function CatalogRemoteRequestEditor({
             </>
           )
         : null}
-    </div>
-  );
-}
-
-/**
- * Hand-entered endpoint plus its parameters (or catalog-backed when a host
- * catalog is provided via `DataSourceApisProvider`).
- */
-export function RemoteRequestEditor({ onChange, request }: RemoteRequestEditorProps): ReactElement {
-  return (
-    <div css={requestEditorCss}>
-      <RequestEndpointFields request={request} onChange={onChange} />
-      <RequestParamsEditor params={request.params} onChange={params => onChange(withRequestParams(request, params))} />
     </div>
   );
 }

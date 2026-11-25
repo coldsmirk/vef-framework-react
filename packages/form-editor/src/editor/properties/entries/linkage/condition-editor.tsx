@@ -1,20 +1,16 @@
 import type { FC } from "react";
 
 import type {
-  FormVariable,
   LinkageCondition,
   LinkageConditionGroup,
   LinkageConditionLeaf
 } from "../../../../types";
-import type { ReferenceScope } from "../../reference-scope";
-import type { SourceFieldOption } from "./options";
 
 import { Button, Input, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { EditorIcon } from "../../../../icons";
-import { useContextSources } from "../../../context-sources";
-import { ReferencePicker } from "../../reference-scope";
+import { ReferencePicker, useReferenceScope } from "../../reference-scope";
 import { coerceToString } from "../coerce";
 import { ExpressionInput } from "./expression-input";
 import {
@@ -42,23 +38,8 @@ import {
   selectStyle
 } from "./styles";
 
-/**
- * The source picker's popup width. The select itself shares a row with the
- * operator, so a popup matching it would cut a field's "label · key" and a
- * system variable's name mid-word.
- */
-const SOURCE_POPUP_WIDTH = 240;
-
-const EMPTY_VARIABLES: readonly FormVariable[] = [];
-
 export interface ConditionEditorProps {
   condition: LinkageCondition;
-  sourceOptions: SourceFieldOption[];
-  /**
-   * Form-global variables offered alongside fields and host system variables
-   * through the shared {@link ReferencePicker}.
-   */
-  variables?: readonly FormVariable[];
   /**
    * The owning block's data-binding key. The expression → visual switch
    * seeds its first condition with another field when one exists — a
@@ -78,8 +59,6 @@ export interface ConditionEditorProps {
  */
 export const ConditionEditor: FC<ConditionEditorProps> = ({
   condition,
-  sourceOptions,
-  variables = EMPTY_VARIABLES,
   selfKey,
   onChange
 }) => {
@@ -89,7 +68,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
       <ExpressionConditionEditor
         condition={condition}
         selfKey={selfKey}
-        sourceOptions={sourceOptions}
         onChange={onChange}
       />
     );
@@ -101,8 +79,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
       <GroupConditionEditor
         condition={condition}
         depth={0}
-        sourceOptions={sourceOptions}
-        variables={variables}
         onChange={onChange}
         onSwitchToExpression={() => onChange(createExpression())}
       />
@@ -119,8 +95,6 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
     <GroupConditionEditor
       depth={0}
-      sourceOptions={sourceOptions}
-      variables={variables}
       condition={{
         kind: "group",
         logic: "all",
@@ -134,17 +108,16 @@ export const ConditionEditor: FC<ConditionEditorProps> = ({
 
 interface ExpressionConditionEditorProps {
   condition: Extract<LinkageCondition, { kind: "expression" }>;
-  sourceOptions: SourceFieldOption[];
   selfKey?: string;
   onChange: (next: LinkageCondition) => void;
 }
 
 const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
   condition,
-  sourceOptions,
   selfKey,
   onChange
 }) => {
+  const { fieldOptions } = useReferenceScope();
   // Shown (instead of committing an empty group) when "切换到可视化" is clicked
   // while no keyed field exists to seed the visual builder with.
   const [noSourceNotice, setNoSourceNotice] = useState(false);
@@ -154,7 +127,7 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
     // Prefer a field other than the rule's own: a self-referencing show rule
     // is almost always a mistake — mirroring how a freshly created rule seeds
     // its first condition.
-    const seed = seedSourceKey(sourceOptions, selfKey) ?? sourceOptions[0]?.value;
+    const seed = seedSourceKey(fieldOptions, selfKey) ?? fieldOptions[0]?.value;
 
     if (!seed) {
       setNoSourceNotice(true);
@@ -165,7 +138,7 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
   };
 
   const switchButton = (
-    <Button icon={<EditorIcon name="git-branch" />} size="small" type="text" onClick={authored && sourceOptions.length > 0 ? undefined : switchToVisual}>
+    <Button icon={<EditorIcon name="git-branch" />} size="small" type="text" onClick={authored && fieldOptions.length > 0 ? undefined : switchToVisual}>
       切换到可视化
     </Button>
   );
@@ -175,7 +148,7 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
       <div css={conditionGroupHeaderCss}>
         <span css={expressionHeaderLabelCss}>JS 表达式（返回布尔）</span>
 
-        {authored && sourceOptions.length > 0
+        {authored && fieldOptions.length > 0
           ? (
               <Popconfirm
                 cancelText="取消"
@@ -207,8 +180,6 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
 interface GroupConditionEditorProps {
   condition: LinkageConditionGroup;
   depth: number;
-  sourceOptions: SourceFieldOption[];
-  variables: readonly FormVariable[];
   /**
    * Switch the entire root condition into expression mode. Only the depth-0
    * group exposes this — nested groups do not (mode-switching mid-tree
@@ -228,14 +199,14 @@ interface GroupConditionEditorProps {
 const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
   condition,
   depth,
-  sourceOptions,
-  variables,
   onChange,
   onRemoveSelf,
   onSwitchToExpression
 }) => {
+  const { fieldOptions } = useReferenceScope();
+  const seed = fieldOptions[0]?.value;
   const canNest = depth < MAX_CONDITION_NESTING_DEPTH;
-  const canAddLeaf = sourceOptions.length > 0;
+  const canAddLeaf = seed !== undefined;
   const authored = conditionHasAuthoredContent(condition);
 
   const updateChild = (index: number, next: LinkageCondition): void => {
@@ -253,7 +224,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
         return;
       }
 
-      onChange(createGroup([createLeaf(sourceOptions[0]?.value ?? "")]));
+      onChange(createGroup([createLeaf(seed ?? "")]));
       return;
     }
 
@@ -261,23 +232,18 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
   };
 
   const addLeaf = (): void => {
-    const seed = sourceOptions[0]?.value;
-
-    if (!seed) {
-      return;
+    if (seed !== undefined) {
+      onChange(appendChild(condition, [], createLeaf(seed)));
     }
-
-    onChange(appendChild(condition, [], createLeaf(seed)));
   };
 
   const addGroup = (): void => {
-    const seed = sourceOptions[0]?.value;
-
-    if (!seed) {
+    if (seed === undefined) {
       return;
     }
 
     const group = createGroup([createLeaf(seed)]);
+
     onChange(appendChild(condition, [], group));
   };
 
@@ -332,8 +298,6 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
               key={child.id ?? index}
               condition={child}
               depth={depth + 1}
-              sourceOptions={sourceOptions}
-              variables={variables}
               onChange={next => updateChild(index, next)}
               onRemoveSelf={() => removeChild(index)}
             />
@@ -371,8 +335,6 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
           <LeafConditionEditor
             key={child.id ?? index}
             condition={child}
-            sourceOptions={sourceOptions}
-            variables={variables}
             onChange={next => updateChild(index, next)}
             onRemove={() => removeChild(index)}
           />
@@ -412,40 +374,21 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
 
 interface LeafConditionEditorProps {
   condition: LinkageConditionLeaf;
-  sourceOptions: SourceFieldOption[];
-  variables: readonly FormVariable[];
   onChange: (next: LinkageConditionLeaf) => void;
   onRemove: () => void;
 }
 
 const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
   condition,
-  sourceOptions,
-  variables,
   onChange,
   onRemove
 }) => {
-  const contextSources = useContextSources();
   const showValueInput = operatorNeedsValue(condition.operator);
-  // Shared candidate assembly with DynamicValueEditor's ReferencePicker: both
-  // surfaces expose the exact same fields, form variables, and system variables
-  // (conditions never see step outputs, so `allowSteps` stays false).
-  const referenceScope = useMemo<ReferenceScope>(() => {
-    return {
-      fieldOptions: sourceOptions,
-      variables,
-      contextSources,
-      allowSteps: false
-    };
-  }, [sourceOptions, variables, contextSources]);
 
   return (
     <div css={conditionRowCss}>
       <ReferencePicker
-        flatSingleFieldGroup
         placeholder="选择源字段"
-        popupMatchSelectWidth={SOURCE_POPUP_WIDTH}
-        scope={referenceScope}
         value={condition.sourceKey}
         onChange={sourceKey => onChange({ ...condition, sourceKey })}
       />

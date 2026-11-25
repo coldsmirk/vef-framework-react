@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 
 import type { ContainerNode, FieldLinkage, LinkageTriggerKind } from "../../../../types";
 
-import { useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
+import { useFormEditorStoreApi } from "../../../../store/form-store";
 import { DefaultsPanel } from "./linkage-rules-entry";
 import { createRule, normalizeLinkage } from "./mutators";
 import { RuleListEditor } from "./rule-list-editor";
@@ -38,33 +38,15 @@ export interface ContainerLinkageSectionProps {
  */
 export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps): ReactElement {
   const storeApi = useFormEditorStoreApi();
-  const layer = useCurrentLayer();
-  const dataSources = useFormEditorStore(state => state.schema.dataSources);
-  const schemaVariables = useFormEditorStore(state => state.schema.variables);
   const linkage = readLinkage(node.linkage);
   const rules = linkage.rules ?? [];
 
-  // Same-scope keyed leaf fields feed both the condition source and the
-  // `set_fields` target — a container references the scope it RESIDES in (a
-  // subform node references its outer siblings; its template children open
-  // their own scope), mirroring the validator's resolution.
-  const {
-    dataSourceOptions,
-    dataSources: resolvedDataSources,
-    fieldOptions,
-    issuesByRule,
-    scopeFieldsByKey,
-    targetOptions,
-    variables,
-    writableTargets
-  } = useLinkageEditorModel({
-    layer,
-    nodeId: node.id,
-    dataSources,
-    variables: schemaVariables
-  });
+  // A container references the scope it RESIDES in (a subform node references
+  // its outer siblings; its template children open their own scope), mirroring
+  // the validator's resolution.
+  const { issuesByRule, scope } = useLinkageEditorModel(node.id);
 
-  const seedSourceKey = fieldOptions[0]?.value;
+  const seedSourceKey = scope.reference.fieldOptions[0]?.value;
   // Without a keyed field in scope a condition rule cannot be seeded (an
   // empty condition group is never authored), so rule creation is disabled
   // with an explanation; defaults stay editable either way.
@@ -97,19 +79,13 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
         isContainerTarget
         addDisabledReason={addDisabledReason}
         createRule={() => createRule(seedSourceKey, false)}
-        dataSourceOptions={dataSourceOptions}
-        dataSources={resolvedDataSources}
         issuesByRule={issuesByRule}
         isTargetKeyed={false}
         noun="联动"
+        ownerNodeId={node.id}
         rules={rules}
-        scopeFieldsByKey={scopeFieldsByKey}
-        scopeNodeId={node.id}
-        sourceOptions={fieldOptions}
-        targetOptions={targetOptions}
+        scope={scope}
         triggerKinds={triggerKinds}
-        variables={variables}
-        writableTargets={writableTargets}
         onChange={next => commit({ ...linkage, rules: next })}
       />
     </div>

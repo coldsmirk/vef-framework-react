@@ -1,53 +1,47 @@
 import type { WritableTargetField } from "../../../../engine/linkage";
 import type { ValidationIssue } from "../../../../engine/validation";
-import type { FieldLinkage, FormDataSource, FormVariable, KeyedFormField, PresentationLayer } from "../../../../types";
+import type { FormDataSource, KeyedFormField } from "../../../../types";
+import type { ReferenceScope } from "../../reference-scope";
 import type { SourceFieldOption } from "./options";
 
 import { useDeferredValue, useMemo, useRef } from "react";
 
 import { isKeyedField } from "../../../../engine/keys";
 import { isWritableTargetField, validateLinkageSchema } from "../../../../engine/linkage";
-import { findScope } from "../../../../engine/schema/walk";
-import { collectSourceCandidates, getDataSourceOptions, getSourceFieldOptions, getTargetFieldOptions } from "./options";
+import { useCurrentLayer, useFormEditorStore } from "../../../../store/form-store";
+import { useFieldsReferenceScope, useScopeFields } from "../../scope-fields";
+import { getDataSourceOptions, getTargetFieldOptions } from "./options";
 import { groupIssuesByRule, stabilizeIssueBuckets } from "./rule-diagnostics";
-import { useStableOptions } from "./use-stable-options";
 
-const ROOT_SCOPE_KEY = "";
-const EMPTY_DATA_SOURCES: readonly FormDataSource[] = [];
-const EMPTY_VARIABLES: readonly FormVariable[] = [];
+const NO_DATA_SOURCES: readonly FormDataSource[] = [];
 
-export interface LinkageEditorModel {
+/**
+ * What the rules of one linkage panel can read and write. One object, stable
+ * across linkage edits, so it passes through the memoized rule cards whole.
+ */
+export interface LinkageScope {
   /**
-   * Same-scope keyed-field options for condition sources and reference pickers.
+   * What conditions and dynamic values can refer to.
    */
-  fieldOptions: SourceFieldOption[];
+  reference: ReferenceScope;
   /**
-   * Same-scope writable keyed-field options for `set_fields` targets (excludes
-   * non-writable field types such as `upload`).
+   * The keyed fields sharing the owner's value scope.
    */
-  targetOptions: SourceFieldOption[];
+  fieldsByKey: ReadonlyMap<string, KeyedFormField>;
   /**
-   * Same-scope writable keyed fields themselves, powering `set_fields` typed
-   * literal inputs and "按名称匹配".
+   * The ones `set_fields` can write, and their picker options.
    */
   writableTargets: readonly WritableTargetField[];
+  targetOptions: SourceFieldOption[];
   /**
-   * Same-scope keyed fields indexed by key, powering `select_record`
-   * auto-inferred column previews and human-readable summaries.
-   */
-  scopeFieldsByKey: ReadonlyMap<string, KeyedFormField>;
-  /**
-   * Form-global data sources for `TypedLiteralInput` (`ref` → static options).
+   * The form's data sources, and their picker options.
    */
   dataSources: readonly FormDataSource[];
-  /**
-   * Form-global declared variables for unified condition and reference pickers.
-   */
-  variables: readonly FormVariable[];
-  /**
-   * The form's named data sources, for a `refresh_data_source` action.
-   */
   dataSourceOptions: SourceFieldOption[];
+}
+
+export interface LinkageEditorModel {
+  scope: LinkageScope;
   /**
    * Validator issues hung onto each rule by id, for live in-card diagnostics.
    */
@@ -55,104 +49,54 @@ export interface LinkageEditorModel {
 }
 
 /**
- * The shared model behind every linkage editor host — the field-level entry, the
- * container section, and the form-level events panel. Each resolves the same
- * things (same-scope field metadata, data-source options, variables, deferred
- * rule diagnostics) and differed only in which layer/scope they walk and
- * whether the form-level linkage participates; that wiring lived copy-pasted
- * across all three.
+ * The model behind every linkage editor — a field's, a container's, and the
+ * form's events (`null`). Each resolves the value scope its owner sits in: a
+ * subform field references its row siblings, not the outer form.
  *
- * `nodeId` is the node whose own value scope the sources resolve in (`null` for
- * the form-level root scope). `formLinkage` is threaded only by the form panel so
- * its diagnostics see the shared linkage; field/container pass `undefined`.
- *
- * The structural passes (scope resolution, the candidate walk, and validation)
- * only change on a structural edit — never on the linkage keystroke being typed —
- * so they run against a {@link useDeferredValue} layer at transition priority,
- * keeping per-keystroke typing latency off them.
+ * Validation only changes on a structural edit, so like the scope walk it runs
+ * against deferred values.
  */
-export function useLinkageEditorModel(args: {
-  layer: PresentationLayer;
-  nodeId: string | null;
-  dataSources: FormDataSource[] | undefined;
-  variables?: FormVariable[];
-  formLinkage?: FieldLinkage;
-}): LinkageEditorModel {
-  const {
-    dataSources,
-    formLinkage,
-    layer,
-    nodeId,
-    variables
-  } = args;
+export function useLinkageEditorModel(ownerNodeId: string | null): LinkageEditorModel {
+  const fields = useScopeFields(ownerNodeId);
+  const reference = useFieldsReferenceScope(fields);
+  const dataSources = useFormEditorStore(state => state.schema.dataSources) ?? NO_DATA_SOURCES;
 
-  const deferredLayer = useDeferredValue(layer);
+  const scope = useMemo<LinkageScope>(
+    () => {
+      return {
+        reference,
+        fieldsByKey: new Map(fields.filter(isKeyedField).map(field => [field.key, field])),
+        writableTargets: fields.filter(isWritableTargetField),
+        targetOptions: getTargetFieldOptions({ components: fields }),
+        dataSources,
+        dataSourceOptions: getDataSourceOptions(dataSources)
+      };
+    },
+    [reference, fields, dataSources]
+  );
+
+  const currentLayer = useCurrentLayer();
+  const pcLayer = useFormEditorStore(state => state.schema.presentations.pc);
+  // Only the form's own panel shows the form linkage's issues; rule ids are
+  // unique, so the fields' issues never leak into its cards.
+  const formLinkage = useFormEditorStore(state => ownerNodeId === null ? state.schema.linkage : undefined);
+  const layer = useDeferredValue(ownerNodeId === null ? pcLayer : currentLayer);
   const deferredFormLinkage = useDeferredValue(formLinkage);
 
-  // The node's value scope, serialized to a stable string so the candidate walk
-  // below re-runs only when the scope actually changes (a node move), not on
-  // every fresh-but-equal scope array. `findScope` is itself deferred.
-  const scopeKey = useMemo(
-    () => nodeId === null ? ROOT_SCOPE_KEY : (findScope(deferredLayer, nodeId) ?? []).join("/"),
-    [deferredLayer, nodeId]
-  );
-
-  const candidates = useMemo(
-    () => collectSourceCandidates(deferredLayer, candidateScope => candidateScope.join("/") === scopeKey),
-    [deferredLayer, scopeKey]
-  );
-
-  const fieldOptions = useStableOptions(useMemo(
-    () => getSourceFieldOptions({ components: candidates }),
-    [candidates]
-  ));
-
-  const targetOptions = useStableOptions(useMemo(
-    () => getTargetFieldOptions({ components: candidates }),
-    [candidates]
-  ));
-
-  const writableTargets = useMemo(
-    () => candidates.filter(isWritableTargetField),
-    [candidates]
-  );
-
-  const scopeFieldsByKey = useMemo(() => {
-    const map = new Map<string, KeyedFormField>();
-
-    for (const candidate of candidates) {
-      if (isKeyedField(candidate)) {
-        map.set(candidate.key, candidate);
-      }
-    }
-
-    return map;
-  }, [candidates]);
-
-  const dataSourceOptions = useMemo(() => getDataSourceOptions(dataSources), [dataSources]);
   // Bucket identities are reconciled against the previous run so an
   // issue-carrying RuleCard's memo survives unrelated edits. The render-phase
-  // ref write is safe for the same reason as useStableOptions: stabilizing is
+  // ref write is safe for the same reason as in useScopeFields: stabilizing is
   // idempotent under self-composition.
   const issuesByRuleRef = useRef<Map<string, ValidationIssue[]>>(undefined);
   const issuesByRule = useMemo(
     () => stabilizeIssueBuckets(
       issuesByRuleRef.current,
-      groupIssuesByRule(validateLinkageSchema(deferredLayer, deferredFormLinkage).issues)
+      groupIssuesByRule(validateLinkageSchema(layer, deferredFormLinkage).issues)
     ),
-    [deferredLayer, deferredFormLinkage]
+    [layer, deferredFormLinkage]
   );
 
   issuesByRuleRef.current = issuesByRule;
 
-  return {
-    fieldOptions,
-    targetOptions,
-    writableTargets,
-    scopeFieldsByKey,
-    dataSources: dataSources ?? EMPTY_DATA_SOURCES,
-    variables: variables ?? EMPTY_VARIABLES,
-    dataSourceOptions,
-    issuesByRule
-  };
+  return { scope, issuesByRule };
 }

@@ -1143,6 +1143,19 @@ describe("reconcile", () => {
           }
         ]
       };
+      // A field may be keyed `self`; writing it is not writing the rule's own.
+      const writesFieldKeyedSelf: FieldLinkage = {
+        rules: [
+          {
+            id: "R",
+            trigger: { kind: "change" },
+            actions: [{ type: "set_fields", assignments: [{ targetKey: "self", value: { kind: "literal", value: "2026-01-01" } }] }]
+          }
+        ]
+      };
+
+      expect(hasLinkageDateLiterals(writesFieldKeyedSelf, "period", { includeOwnAssign: true })).toBe(false);
+      expect(hasLinkageDateLiterals(writesFieldKeyedSelf, "self")).toBe(true);
       expect(hasLinkageDateLiterals(literalLinkage, "period")).toBe(true);
       expect(hasLinkageDateLiterals(literalLinkage, "other")).toBe(false);
     });

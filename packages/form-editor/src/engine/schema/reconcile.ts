@@ -13,6 +13,7 @@ import type {
   PresentationLayer
 } from "../../types";
 import type { ScopeKeyBucket } from "../keys";
+import type { WriteTarget } from "../linkage/action-descriptors";
 import type { ScopePath } from "./walk";
 
 import { assertNever } from "../assert-never";
@@ -848,12 +849,12 @@ function isTargetDateConditionLeaf(condition: DateConditionLeaf, key: string): b
     && condition.operator !== "notEmpty";
 }
 
-function matchesDateTargetSlot(
-  targetKey: string | "self" | undefined,
+function writesDateTarget(
+  target: WriteTarget | undefined,
   key: string,
   includeOwnAssign: boolean
 ): boolean {
-  return targetKey === key || (includeOwnAssign && targetKey === "self");
+  return target?.kind === "self" ? includeOwnAssign : target?.key === key;
 }
 
 function conditionHasDateLiterals(condition: LinkageCondition, key: string): boolean {
@@ -879,7 +880,7 @@ function conditionHasDateLiterals(condition: LinkageCondition, key: string): boo
 function actionHasDateLiterals(action: FieldLinkageAction, key: string, includeOwnAssign: boolean): boolean {
   for (const slot of getActionDynamicValues(action)) {
     if (
-      matchesDateTargetSlot(slot.targetKey, key, includeOwnAssign)
+      writesDateTarget(slot.target, key, includeOwnAssign)
       && typeof slot.value === "object"
       && slot.value !== null
       && (slot.value as DynamicValue).kind === "literal"
@@ -987,9 +988,9 @@ function scrubActionDateLiterals(
   target: DateGranularityScrubTarget,
   includeOwnAssign: boolean
 ): FieldLinkageAction {
-  return mapActionDynamicValues(action, (value, meta) => {
+  return mapActionDynamicValues(action, (value, writeTarget) => {
     if (
-      matchesDateTargetSlot(meta.targetKey, target.key, includeOwnAssign)
+      writesDateTarget(writeTarget, target.key, includeOwnAssign)
       && value.kind === "literal"
       && !isDateLiteralCompatible(target.fieldType, value.value, target.nextGranularity)
     ) {

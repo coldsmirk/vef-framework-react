@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import type { FieldLinkage, FieldLinkageRule, FormSchema } from "../../types";
 
 import { FORM_TRIGGER_KINDS } from "../../engine/linkage";
-import { useFormEditorStore } from "../../store/form-store";
 import { createFormRule } from "./entries/linkage/mutators";
 import { RuleListEditor } from "./entries/linkage/rule-list-editor";
 import { useLinkageEditorModel } from "./entries/linkage/use-linkage-editor-model";
@@ -24,34 +23,16 @@ export interface FormLinkagePanelProps {
  * resolve against root-scope keyed fields.
  */
 export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): ReactElement {
-  // Form-scope linkage is shared across devices, so its source fields resolve
-  // against the canonical pc tree (not the active device's) and root-scope
-  // fields only — matching how `validateSchema` validates the shared form
-  // linkage. `formLinkage` is threaded so the deferred diagnostics validate the
-  // shared linkage too (rule ids are unique, so field-scope issues never leak
-  // in). Condition sources and `set_fields` targets resolve from the pc root scope.
-  const pcLayer = useFormEditorStore(state => state.schema.presentations.pc);
+  // Form-scope linkage is shared across devices, so it resolves against the
+  // canonical pc tree (not the active device's), root-scope fields only —
+  // matching how `validateSchema` validates it.
+  const { issuesByRule, scope } = useLinkageEditorModel(null);
+  const { fieldOptions } = scope.reference;
   const rules = schema.linkage?.rules ?? [];
-  const {
-    dataSourceOptions,
-    dataSources,
-    fieldOptions: sourceOptions,
-    issuesByRule,
-    scopeFieldsByKey,
-    targetOptions,
-    variables,
-    writableTargets
-  } = useLinkageEditorModel({
-    layer: pcLayer,
-    nodeId: null,
-    dataSources: schema.dataSources,
-    variables: schema.variables,
-    formLinkage: schema.linkage
-  });
   // A `condition` trigger with no comparable root-scope source field yields an
   // empty group the validator rejects and the builder can't repair, so drop it
   // from the palette (mirroring the field-level linkage entry).
-  const triggerKinds = sourceOptions.length > 0 ? FORM_TRIGGER_KINDS : FORM_TRIGGER_KINDS_NO_CONDITION;
+  const triggerKinds = fieldOptions.length > 0 ? FORM_TRIGGER_KINDS : FORM_TRIGGER_KINDS_NO_CONDITION;
 
   const commit = (next: FieldLinkageRule[]): void => {
     onChange(next.length > 0 ? { rules: next } : undefined);
@@ -60,20 +41,14 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
   return (
     <RuleListEditor
       allowStateActions={false}
-      createRule={() => createFormRule(sourceOptions[0]?.value)}
-      dataSourceOptions={dataSourceOptions}
-      dataSources={dataSources}
+      createRule={() => createFormRule(fieldOptions[0]?.value)}
       issuesByRule={issuesByRule}
       isTargetKeyed={false}
       noun="事件"
+      ownerNodeId={null}
       rules={rules}
-      scopeFieldsByKey={scopeFieldsByKey}
-      scopeNodeId={null}
-      sourceOptions={sourceOptions}
-      targetOptions={targetOptions}
+      scope={scope}
       triggerKinds={triggerKinds}
-      variables={variables}
-      writableTargets={writableTargets}
       onChange={commit}
     />
   );

@@ -6,7 +6,7 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 import { isDeepEqual } from "@vef-framework-react/shared";
 
-const ACTION_INDEX_RE = /\.actions\[(?<index>\d+)\](?:\.|$)/;
+import { parseLinkageIssuePath } from "../../../linkage-issue-path";
 
 const listCss = css({
   display: "flex",
@@ -60,17 +60,6 @@ const errorLineCss = css({
 const errorDotCss = css({
   background: globalCssVars.colorError
 });
-
-/**
- * Extract the 0-based action index referenced by a rule issue's path
- * (`node[f1].linkage.rules[0].actions[2].assignments[0].targetKey` → `2`), or
- * `undefined` for rule-level / trigger-level issues.
- */
-export function parseIssueActionIndex(path: string): number | undefined {
-  const index = ACTION_INDEX_RE.exec(path)?.groups?.index;
-
-  return index === undefined ? undefined : Number(index);
-}
 
 /**
  * Index rule-scoped validation issues by their `ruleId` so the rule-list
@@ -131,10 +120,9 @@ export function stabilizeIssueBuckets(
 export interface RuleDiagnosticsProps {
   issues: readonly ValidationIssue[];
   /**
-   * Invoked when the designer clicks an action-scoped issue to expand and jump
-   * directly to that step.
+   * Show the step an issue is about.
    */
-  onFocusAction?: (actionIndex: number) => void;
+  onFocusAction: (actionIndex: number) => void;
 }
 
 /**
@@ -152,20 +140,17 @@ export function RuleDiagnostics({ issues, onFocusAction }: RuleDiagnosticsProps)
   return (
     <div css={listCss} role="status">
       {issues.map((issue, index) => {
-        const actionIndex = parseIssueActionIndex(issue.path);
+        const actionIndex = parseLinkageIssuePath(issue.path)?.actionIndex;
         const severityLineCss = issue.severity === "error" ? errorLineCss : warningLineCss;
         const severityDotCss = issue.severity === "error" ? errorDotCss : warningDotCss;
         const content = (
           <>
             <span css={[dotCss, severityDotCss]} />
-
-            <span>
-              {actionIndex === undefined ? issue.message : `步骤 ${actionIndex + 1}：${issue.message}`}
-            </span>
+            <span>{actionIndex === undefined ? issue.message : `步骤 ${actionIndex + 1}：${issue.message}`}</span>
           </>
         );
 
-        if (actionIndex !== undefined && onFocusAction !== undefined) {
+        if (actionIndex !== undefined) {
           return (
             <button
               key={`${issue.path}:${issue.code}:${index}`}
