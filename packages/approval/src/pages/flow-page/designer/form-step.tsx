@@ -62,9 +62,9 @@ export function FormStep({
   const {
     codeSets,
     dataSourceApis,
-    dataSourceResolver,
     evaluators,
-    formGlobals
+    formGlobals,
+    services
   } = useApprovalPlugins();
   const contextSources = useMemo(() => toFormContextSources(formGlobals), [formGlobals]);
 
@@ -101,10 +101,10 @@ export function FormStep({
           codeSets={codeSets}
           contextSources={contextSources}
           dataSourceApis={dataSourceApis}
-          dataSourceResolver={dataSourceResolver}
           evaluators={evaluators}
           initialSchema={initialSchema}
           registries={registries}
+          services={services}
           validate={validateApprovalProjection}
           onSchemaChange={onSchemaChange}
         />

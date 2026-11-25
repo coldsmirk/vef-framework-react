@@ -71,9 +71,9 @@ export function InstanceFormPanel({
   renderFieldExtra
 }: InstanceFormPanelProps) {
   const {
-    dataSourceResolver,
     evaluators,
-    registries
+    registries,
+    services
   } = useApprovalPlugins();
   const resolvedSchema = useFormSchema(schema);
   const evaluationContext = useMemo(() => toFormEvaluationContext(applicant, globals), [applicant, globals]);
@@ -86,7 +86,6 @@ export function InstanceFormPanel({
     <RegistryProvider registries={registries}>
       <FormRenderer
         apiRef={apiRef}
-        dataSourceResolver={dataSourceResolver}
         defaultValues={formData}
         device={device}
         disabled={disabled}
@@ -95,6 +94,7 @@ export function InstanceFormPanel({
         fieldPermissions={fieldPermissions}
         renderFieldExtra={renderFieldExtra}
         schema={resolvedSchema}
+        services={services}
         onSubmit={onSubmit}
       />
     </RegistryProvider>

@@ -1,5 +1,5 @@
 import type { EditorPlugins, FormFieldDefinition, PickerProps, TenantOption } from "@vef-framework-react/approval-flow-editor";
-import type { CodeSetDescriptor, DataSourceApi, DataSourceResolver, DeviceRegistries, FormSchema, LinkageEvaluators } from "@vef-framework-react/form-editor";
+import type { CodeSetDescriptor, DataSourceApi, DeviceRegistries, FormSchema, FormServices, LinkageEvaluators } from "@vef-framework-react/form-editor";
 import type { FC, PropsWithChildren, ReactNode, Ref } from "react";
 
 import type { InstanceDetail, KindOptions, StartForm, ViewerTask, VoidOptions, VoidTarget } from "../types";
@@ -75,18 +75,18 @@ export interface ApprovalPlugins {
    */
   formGlobals?: FormGlobalDefinition[];
   /**
-   * Turns a form's remote data-source request into options. Without one, every
-   * remote source in an approval form resolves to an empty list — the designer
-   * lets you configure the request, but nothing fetches it. Wire the host's
-   * API client here; the form designer's preview uses it too.
+   * Host runtime services (`request`, `navigate`, `notify`) forwarded to
+   * approval form rendering and the flow form designer. `request` backs both
+   * remote option sources and `api_call` actions; `notify` defaults to the
+   * framework message helpers when omitted.
    */
-  dataSourceResolver?: DataSourceResolver;
+  services?: FormServices;
   /**
-   * The host's catalog of option APIs. The form designer's remote data sources
-   * then lead with a picker ("部门列表") instead of a hand-typed endpoint and
-   * field mapping. A pick is stored as the request itself, so the runtime still
-   * fetches through `dataSourceResolver`, which must serve every endpoint
-   * listed here.
+   * The host's catalog of option / lookup APIs. The form designer's remote
+   * data sources then lead with a picker instead of a hand-typed endpoint and
+   * field mapping. A pick is stored as the request itself, so the runtime
+   * fetches through `services.request`, which must serve every endpoint listed
+   * here.
    */
   dataSourceApis?: DataSourceApi[];
   /**

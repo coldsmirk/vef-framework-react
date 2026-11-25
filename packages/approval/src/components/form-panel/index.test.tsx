@@ -1,7 +1,10 @@
 import type { FormSchema } from "@vef-framework-react/form-editor";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
 
+import { ApprovalProvider } from "../../plugins";
 import { InstanceFormPanel } from "./index";
 
 /**
@@ -97,5 +100,76 @@ describe("InstanceFormPanel", () => {
     render(<InstanceFormPanel globals={{ staffTitle: "主任医师" }} schema={SCHEMA} />);
 
     expect(screen.getByRole("textbox", { name: "职称说明" })).toBeInTheDocument();
+  });
+
+  it("wires ApprovalProvider plugins.services into the rendered FormRenderer", async () => {
+    const user = userEvent.setup();
+    const request = vi.fn().mockResolvedValue({ fullName: "Ada Lovelace" });
+    const lookupSchema: FormSchema = {
+      id: "Form_lookup",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Field_code",
+              type: "textfield",
+              key: "code",
+              label: "工号",
+              linkage: {
+                rules: [
+                  {
+                    id: "Rule_lookup",
+                    trigger: { kind: "commit" },
+                    actions: [
+                      {
+                        type: "api_call",
+                        request: {
+                          resource: "hr/staff",
+                          action: "find",
+                          params: { code: { kind: "reference", path: "$form.code" } }
+                        },
+                        output: "staff"
+                      },
+                      {
+                        type: "set_fields",
+                        assignments: [{ targetKey: "fullName", value: { kind: "reference", path: "$steps.staff.fullName" } }]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              id: "Field_fullName",
+              type: "textfield",
+              key: "fullName",
+              label: "姓名"
+            }
+          ]
+        }
+      }
+    };
+
+    render(
+      <ApprovalProvider plugins={{ services: { request } }}>
+        <InstanceFormPanel schema={lookupSchema} />
+      </ApprovalProvider>
+    );
+
+    const codeInput = screen.getByRole("textbox", { name: "工号" });
+    await user.type(codeInput, "E001{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("Ada Lovelace");
+    });
+    expect(request).toHaveBeenCalledWith(
+      {
+        resource: "hr/staff",
+        action: "find",
+        params: { code: "E001" }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 });

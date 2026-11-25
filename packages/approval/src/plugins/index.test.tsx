@@ -46,9 +46,13 @@ function toSchema(fields: readonly HostField[]): FormSchema {
               trigger: { kind: "load" },
               actions: [
                 {
-                  type: "set_field",
-                  targetKey: key,
-                  value: { kind: "literal", value: defaultValue }
+                  type: "set_fields",
+                  assignments: [
+                    {
+                      targetKey: key,
+                      value: { kind: "literal", value: defaultValue }
+                    }
+                  ]
                 }
               ]
             }
