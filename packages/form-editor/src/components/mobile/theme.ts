@@ -20,6 +20,9 @@ import "antd-mobile/es/global/theme-default.css";
  * node) on purpose: antd-mobile popups portal to `document.body`, so a subtree
  * scope would not reach them, whereas `--adm-*` are inert for any non-`.adm-`
  * element and so are safe globally.
+ *
+ * A tappable list row is an anchor, which the global reset left out above would
+ * keep from looking like a link.
  */
 export const admThemeBridge = css`
   :root:root {
@@ -39,5 +42,10 @@ export const admThemeBridge = css`
     --adm-radius-l: ${globalCssVars.borderRadiusLg};
     --adm-font-size-main: ${globalCssVars.fontSize};
     --adm-font-family: ${globalCssVars.fontFamily};
+  }
+
+  .adm-plain-anchor {
+    color: var(--adm-color-text);
+    transition: none;
   }
 `;
