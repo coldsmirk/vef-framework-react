@@ -143,7 +143,7 @@ interface TabEmptyHint {
 
 const TAB_EMPTY_FALLBACK: TabEmptyHint = {
   title: "暂无可配置项",
-  hint: "当前字段在该标签下尚未注册任何编辑项。",
+  hint: "此控件在这一页没有可配置的内容。",
   icon: "settings-2"
 };
 
@@ -155,17 +155,17 @@ const TAB_EMPTY_FALLBACK: TabEmptyHint = {
 const EMPTY_TAB_HINTS: Partial<Record<PropertyTabId, TabEmptyHint>> = {
   props: {
     title: "暂无属性",
-    hint: "当前字段尚未注册任何属性编辑器。",
+    hint: "此控件没有可配置的属性。",
     icon: "sliders-horizontal"
   },
   validation: {
-    title: "无校验规则",
-    hint: "当前字段类型未暴露可配置的校验项；如需校验，请回到「属性」面板调整。",
+    title: "无需校验",
+    hint: "此控件没有可配置的校验。",
     icon: "shield-check"
   },
   linkage: {
-    title: "暂无联动配置",
-    hint: "为字段添加显示、禁用或赋值联动后会出现在此处。",
+    title: "不支持联动",
+    hint: "此控件没有可配置的联动。",
     icon: "link-2"
   }
 };
