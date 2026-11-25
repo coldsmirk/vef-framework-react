@@ -35,6 +35,32 @@ export const FORM_DATA_SOURCE_APIS: DataSourceApi[] = [
         description: "匹配工号、姓名、电话或邮箱"
       }
     ]
+  },
+  {
+    label: "职员查询",
+    description: "按工号、姓名、电话或邮箱查询职员明细记录（输入 ERROR 可模拟失败）",
+    group: "主数据",
+    resource: "md/staff",
+    action: "lookup",
+    params: [
+      {
+        name: "keyword",
+        label: "关键字",
+        required: true,
+        description: "支持精确工号（如 S010001）或前缀模糊查询（如 S0100）"
+      }
+    ],
+    fields: [
+      { path: "number", label: "工号" },
+      { path: "name", label: "姓名" },
+      { path: "gender", label: "性别" },
+      { path: "genderName", label: "性别名称" },
+      { path: "phoneNumber", label: "手机号" },
+      { path: "email", label: "邮箱" },
+      { path: "birthDate", label: "出生日期" },
+      { path: "status", label: "在职状态" },
+      { path: "statusName", label: "状态名称" }
+    ]
   }
 ];
 

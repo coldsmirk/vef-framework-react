@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 
-import { defineMock } from "../define-mock";
+import { defineMock, MockBusinessError } from "../define-mock";
 import { createCrudMock } from "../helpers/crud";
 import { enrichWithDictNames } from "../helpers/dict-enrich";
 
@@ -24,19 +24,21 @@ interface StaffRow {
   remark?: string | null;
 }
 
-createCrudMock<StaffRow>({
+const decorateStaff = enrichWithDictNames<StaffRow>({
+  category: "md.staff.category",
+  gender: "md.staff.gender",
+  idType: "md.staff.id_type",
+  position: "md.staff.position",
+  professionalRole: "md.staff.professional_role",
+  professionalTitle: "md.staff.professional_title",
+  status: "md.staff.status"
+});
+
+const staffCrud = createCrudMock<StaffRow>({
   resource: "md/staff",
   seed: 32,
   searchFields: ["number", "name", "phoneNumber", "email"],
-  decorate: enrichWithDictNames({
-    category: "md.staff.category",
-    gender: "md.staff.gender",
-    idType: "md.staff.id_type",
-    position: "md.staff.position",
-    professionalRole: "md.staff.professional_role",
-    professionalTitle: "md.staff.professional_title",
-    status: "md.staff.status"
-  }),
+  decorate: decorateStaff,
   factory: i => {
     return {
       id: faker.string.uuid(),
@@ -95,3 +97,40 @@ defineMock<
   staffDepartments.set(params.staffId, rows);
   return null;
 });
+
+/**
+ * Record-lookup endpoint for form action sequences (`api_call` → `select_record`
+ * → `set_fields`). Exercises 0 / 1 / multiple matches against the seeded staff
+ * store (e.g. `S010001` → 1, `S0100` → multiple, `S999999` → 0), throws a
+ * business error on `ERROR` / `FAIL`, and adds a short async delay so busy
+ * indicators and rapid-change superseding are observable in preview.
+ */
+defineMock<{ keyword?: string }, StaffRow[]>(
+  "md/staff",
+  "lookup",
+  async ({ params }) => {
+    await new Promise(resolve => {
+      setTimeout(resolve, 120);
+    });
+
+    const keyword = typeof params?.keyword === "string" ? params.keyword.trim() : "";
+
+    if (keyword.length === 0) {
+      return [];
+    }
+
+    const upper = keyword.toUpperCase();
+
+    if (upper === "ERROR" || upper === "FAIL") {
+      throw new MockBusinessError(500, "职员查询服务暂不可用");
+    }
+
+    const needle = keyword.toLowerCase();
+
+    return staffCrud.store
+      .filter(row => [row.number, row.name, row.phoneNumber, row.email].some(
+        value => typeof value === "string" && value.toLowerCase().includes(needle)
+      ))
+      .map(row => decorateStaff(row));
+  }
+);
