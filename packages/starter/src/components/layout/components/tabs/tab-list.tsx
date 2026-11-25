@@ -1,6 +1,6 @@
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
-import { AnimatePresence, clsx, DragDropProvider, moveDragItem, RestrictToHorizontalAxis, useShallow } from "@vef-framework-react/core";
+import { AnimatePresence, clsx, DragDropProvider, moveSortableItem, RestrictToHorizontalAxis, useShallow } from "@vef-framework-react/core";
 
 import { INDEX_ROUTE_PATH } from "../../../../constants";
 import { useTabStore } from "../../../../stores";
@@ -34,7 +34,7 @@ export function TabList() {
       modifiers={[RestrictToHorizontalAxis]}
       onDragEnd={event => {
         setTabs(
-          moveDragItem(tabs, event)
+          moveSortableItem(tabs, event)
         );
       }}
     >

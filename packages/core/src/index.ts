@@ -50,6 +50,7 @@ export {
   KeyboardSensor,
   moveArrayItem,
   moveDragItem,
+  moveSortableItem,
   PointerActivationConstraints,
   pointerDistance,
   pointerIntersection,

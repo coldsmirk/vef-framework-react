@@ -1,3 +1,6 @@
+// The list in the order a sortable drag left it on screen
+export { moveSortableItem } from "./move-sortable-item";
+
 // @dnd-kit/abstract - collision priority tiers for `useDroppable({ collisionPriority })`.
 // Lowest=0, Low=1, Normal=2, High=3, Highest=4 — overrides a collision's intrinsic
 // priority so nested drop zones sort by tier first, geometric distance second.

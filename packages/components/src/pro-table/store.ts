@@ -6,7 +6,7 @@ import type { OrderSpec } from "../_base/types";
 import type { TableColumn } from "../table";
 import type { ProTableEvents } from "./event";
 
-import { createComponentStore, moveDragItem } from "@vef-framework-react/core";
+import { createComponentStore, moveSortableItem } from "@vef-framework-react/core";
 import { isFunction, isNumber } from "@vef-framework-react/shared";
 
 import { pageSizeOptions } from "../table";
@@ -204,7 +204,7 @@ export const {
       },
       reorderColumns: event => {
         set(state => {
-          state.columnSettings = moveDragItem(state.columnSettings, event);
+          state.columnSettings = moveSortableItem(state.columnSettings, event);
         });
       },
       setColumnFixed: (id, fixed) => {

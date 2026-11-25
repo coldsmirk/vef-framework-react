@@ -1,4 +1,3 @@
-import type { DragEndEvent } from "@vef-framework-react/core";
 import type { ReactElement } from "react";
 
 import type { FieldOption } from "../../types";
@@ -7,12 +6,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
+import { dragSortableRow } from "../../../test-utils";
 import {
   OptionListEditor,
   parseBulkOptionLines,
   parseIndentedOptionLines
 } from "./option-editors";
-import { reorderRows } from "./sortable-rows";
 
 interface HarnessProps {
   initial: FieldOption[];
@@ -55,18 +54,10 @@ function threeOptions(): FieldOption[] {
 }
 
 /**
- * A minimal sortable drag-end event, populated with only the fields
- * `moveDragItem` reads: the source row's id and its projected `index`, a target,
- * and the cancel flag. Mirrors the fabricated-event approach in `dnd.test.tsx`.
+ * The rows' labels as they stand on screen.
  */
-function reorderEvent(sourceId: string, toIndex: number, canceled = false): DragEndEvent {
-  return {
-    operation: {
-      canceled,
-      source: { id: sourceId, index: toIndex },
-      target: { id: sourceId }
-    }
-  } as unknown as DragEndEvent;
+function shownLabels(): string[] {
+  return screen.getAllByPlaceholderText<HTMLInputElement>("标签").map(input => input.value);
 }
 
 describe("OptionListEditor", () => {
@@ -106,38 +97,57 @@ describe("OptionListEditor", () => {
   });
 
   describe("reordering", () => {
-    it("moves a row down", () => {
-      const result = reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1));
+    it("moves a row to where it was dropped", async () => {
+      const onCommit = vi.fn();
 
-      expect(result).toEqual({
-        rows: [
-          { label: "B", value: "b" },
-          { label: "A", value: "a" },
-          { label: "C", value: "c" }
-        ],
-        ids: ["r1", "r0", "r2"]
+      render(<Harness initial={threeOptions()} onCommit={onCommit} />);
+
+      await dragSortableRow({
+        handles: screen.getAllByRole("button", { name: "拖动排序" }),
+        from: 0,
+        to: 1
       });
+
+      expect(onCommit).toHaveBeenCalledExactlyOnceWith([
+        { label: "B", value: "b" },
+        { label: "A", value: "a" },
+        { label: "C", value: "c" }
+      ]);
+      expect(shownLabels()).toEqual(["B", "A", "C"]);
     });
 
-    it("moves a row up", () => {
-      const result = reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r2", 1));
+    it("keeps the order shown when a row is released off the list", async () => {
+      const onCommit = vi.fn();
 
-      expect(result).toEqual({
-        rows: [
-          { label: "A", value: "a" },
-          { label: "C", value: "c" },
-          { label: "B", value: "b" }
-        ],
-        ids: ["r0", "r2", "r1"]
+      render(<Harness initial={threeOptions()} onCommit={onCommit} />);
+
+      await dragSortableRow({
+        handles: screen.getAllByRole("button", { name: "拖动排序" }),
+        from: 0,
+        to: 2,
+        releaseOffList: true
       });
+
+      expect(onCommit).toHaveBeenCalledExactlyOnceWith([
+        { label: "B", value: "b" },
+        { label: "C", value: "c" },
+        { label: "A", value: "a" }
+      ]);
+      expect(shownLabels()).toEqual(["B", "C", "A"]);
     });
 
-    it("returns null when the drag is canceled", () => {
-      expect(reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 1, true))).toBeNull();
-    });
+    it("commits nothing when a row is dropped in its own slot", async () => {
+      const onCommit = vi.fn();
 
-    it("returns null when a row is dropped in its own slot", () => {
-      expect(reorderRows(threeOptions(), ["r0", "r1", "r2"], reorderEvent("r0", 0))).toBeNull();
+      render(<Harness initial={threeOptions()} onCommit={onCommit} />);
+
+      await dragSortableRow({
+        handles: screen.getAllByRole("button", { name: "拖动排序" }),
+        from: 0,
+        to: 0
+      });
+
+      expect(onCommit).not.toHaveBeenCalled();
     });
 
     it("renders a drag handle per row and no step buttons", () => {

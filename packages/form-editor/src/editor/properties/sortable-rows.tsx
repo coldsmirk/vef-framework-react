@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
-import { moveDragItem } from "@vef-framework-react/core";
+import { moveSortableItem } from "@vef-framework-react/core";
 import { useRef } from "react";
 
 import { EditorIcon } from "../../icons";
@@ -92,15 +92,14 @@ export function nextRowId(): string {
 /**
  * Reorder rows from a sortable drag. Drives off the row ids (the sortable item
  * ids) and permutes the rows into the same order, so the two can never drift.
- * `null` for a no-op (cancelled, or dropped in place), which the caller uses to
- * skip an empty commit.
+ * `null` when the order did not change, so the caller can skip an empty commit.
  */
 export function reorderRows<T>(
   rows: readonly T[],
   ids: string[],
   event: DragEndEvent
 ): { rows: T[]; ids: string[] } | null {
-  const nextIds = moveDragItem(ids, event);
+  const nextIds = moveSortableItem(ids, event);
 
   if (nextIds === ids) {
     return null;
