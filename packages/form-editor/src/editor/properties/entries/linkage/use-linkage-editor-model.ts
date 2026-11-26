@@ -17,8 +17,8 @@ import { isWritableTargetField, validateLinkageSchema } from "../../../../engine
 import { updateNode } from "../../../../engine/schema/mutate";
 import { useCurrentLayer, useFormEditorStore } from "../../../../store/form-store";
 import { useContextSources } from "../../../context-sources";
-import { useScopeFields } from "../../scope-fields";
-import { getDataSourceOptions, getSourceFieldOptions, getTargetFieldOptions } from "./options";
+import { useScopeFieldOptions, useScopeFields } from "../../scope-fields";
+import { getDataSourceOptions, getTargetFieldOptions } from "./options";
 import { groupIssuesByRule, stabilizeIssueBuckets } from "./rule-diagnostics";
 
 const NO_DATA_SOURCES: readonly FormDataSource[] = [];
@@ -72,13 +72,14 @@ export interface LinkageEditorModel {
  */
 export function useLinkageEditorModel(ownerNodeId: string | null): LinkageEditorModel {
   const fields = useScopeFields(ownerNodeId);
+  const fieldOptions = useScopeFieldOptions(fields);
   const contextSources = useContextSources();
   const dataSources = useFormEditorStore(state => state.schema.dataSources) ?? NO_DATA_SOURCES;
 
   const scope = useMemo<LinkageScope>(
     () => {
       return {
-        fieldOptions: getSourceFieldOptions({ components: fields }),
+        fieldOptions,
         contextSources,
         fieldsByKey: new Map(fields.filter(isKeyedField).map(field => [field.key, field])),
         writableTargets: fields.filter(isWritableTargetField),
@@ -87,7 +88,7 @@ export function useLinkageEditorModel(ownerNodeId: string | null): LinkageEditor
         dataSourceOptions: getDataSourceOptions(dataSources)
       };
     },
-    [fields, contextSources, dataSources]
+    [fields, fieldOptions, contextSources, dataSources]
   );
 
   const currentLayer = useCurrentLayer();

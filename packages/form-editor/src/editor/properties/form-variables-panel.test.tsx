@@ -364,4 +364,35 @@ describe("form variables panel", () => {
       expect(storeVariables(api)).toEqual([]);
     });
   });
+
+  describe("diagnostic jump", () => {
+    it("scrolls the target variable row into view, clears pendingDataEdit, and opens its modal", async () => {
+      const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+      const api = setup([
+        {
+          id: "v1",
+          name: "first",
+          type: "string"
+        },
+        {
+          id: "v2",
+          name: "quota",
+          type: "number",
+          defaultValue: 10
+        }
+      ]);
+
+      act(() => {
+        api.getState().requestDataEdit({ kind: "variable", id: "v2" });
+      });
+
+      const dialog = await screen.findByRole("dialog", { name: "编辑变量" });
+
+      expect(within(dialog).getByLabelText(/变量名/)).toHaveValue("quota");
+      expect(api.getState().pendingDataEdit).toBeNull();
+      const rows = screen.getAllByRole("listitem");
+      expect(scrollSpy).toHaveBeenCalledWith({ block: "nearest" });
+      expect(scrollSpy.mock.contexts).toContain(rows[1]);
+    });
+  });
 });

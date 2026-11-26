@@ -10,7 +10,7 @@ import { globalCssVars, Input, Select } from "@vef-framework-react/components";
 import { createContext, use, useMemo } from "react";
 
 import { parseLeafSource } from "../../engine/linkage/scope";
-import { useFieldsReferenceScope, useScopeFields } from "./scope-fields";
+import { useFieldOptionsReferenceScope, useScopeFieldOptions, useScopeFields } from "./scope-fields";
 
 /**
  * What a condition or a `{ kind: "reference" }` value can refer to where it is
@@ -62,7 +62,10 @@ export function NodeReferenceScopeProvider({
   nodeId: string | null;
   children: ReactNode;
 }): ReactElement {
-  return <ReferenceScopeProvider value={useFieldsReferenceScope(useScopeFields(nodeId))}>{children}</ReferenceScopeProvider>;
+  const fieldOptions = useScopeFieldOptions(useScopeFields(nodeId));
+  const scope = useFieldOptionsReferenceScope(fieldOptions);
+
+  return <ReferenceScopeProvider value={scope}>{children}</ReferenceScopeProvider>;
 }
 
 /**

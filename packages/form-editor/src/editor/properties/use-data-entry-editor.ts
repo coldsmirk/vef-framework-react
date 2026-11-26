@@ -1,23 +1,15 @@
 import type { RefCallback } from "react";
 
 import type { DataEntryRef } from "../../store/form-store";
+import type { DraftSession } from "./use-draft-session";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useLatest } from "@vef-framework-react/hooks";
+import { useCallback } from "react";
 
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
+import { useDraftSession } from "./use-draft-session";
 
-export interface DataEntrySession<T> {
-  /**
-   * Distinct per opening, so the modal of a new session mounts a fresh draft.
-   */
-  key: number;
-  mode: "create" | "edit";
-  initial: T;
-  /**
-   * `false` while the modal plays its close transition.
-   */
-  open: boolean;
-}
+export type DataEntrySession<T> = DraftSession<T>;
 
 export interface DataEntryEditor<T> {
   session: DataEntrySession<T> | null;
@@ -25,14 +17,15 @@ export interface DataEntryEditor<T> {
   openCreate: () => void;
   openEdit: (entry: T) => void;
   close: () => void;
+  closeIfEditing: (id: string) => void;
   handleAfterClose: () => void;
   rowRef: (id: string) => RefCallback<HTMLDivElement>;
 }
 
 /**
- * The editing session behind one list of the `数据` tab: which entry's modal is
- * open, kept mounted through its close transition, and opened on a diagnostic
- * jump (`requestDataEdit`) with the entry's row scrolled into view.
+ * The editing session behind one list of the `数据` tab (data sources or form
+ * variables): specializes {@link useDraftSession} for `pendingDataEdit` jumps
+ * by entry id and blank-entry creation.
  */
 export function useDataEntryEditor<T extends { id: string }>(args: {
   createBlank: () => T;
@@ -46,49 +39,42 @@ export function useDataEntryEditor<T extends { id: string }>(args: {
   } = args;
   const storeApi = useFormEditorStoreApi();
   const pendingEdit = useFormEditorStore(s => s.pendingDataEdit?.kind === kind ? s.pendingDataEdit : null);
-  const rowsRef = useRef(new Map<string, HTMLDivElement>());
-  const [session, setSession] = useState<DataEntrySession<T> | null>(null);
+  const createBlankRef = useLatest(createBlank);
+  const entriesRef = useLatest(entries);
 
-  const openSession = useCallback((mode: DataEntrySession<T>["mode"], initial: T): void => {
-    setSession(previous => {
-      return {
-        key: (previous?.key ?? 0) + 1,
-        mode,
-        initial,
-        open: true
-      };
-    });
-  }, []);
+  const {
+    close,
+    closeIfEditing,
+    editingId,
+    handleAfterClose,
+    openCreate: openCreateDraft,
+    openEdit,
+    rowRef,
+    session
+  } = useDraftSession<T, DataEntryRef>({
+    jump: {
+      pending: pendingEdit,
+      clear: () => storeApi.getState().clearPendingDataEdit(),
+      resolve: target => {
+        const entry = entriesRef.current.find(candidate => candidate.id === target.id);
 
-  useEffect(() => {
-    if (pendingEdit === null) {
-      return;
+        return entry === undefined ? undefined : { entry };
+      }
     }
+  });
 
-    storeApi.getState().clearPendingDataEdit();
-
-    const target = entries.find(entry => entry.id === pendingEdit.id);
-
-    if (target !== undefined) {
-      rowsRef.current.get(target.id)?.scrollIntoView?.({ block: "nearest" });
-      openSession("edit", target);
-    }
-  }, [pendingEdit, entries, storeApi, openSession]);
+  const openCreate = useCallback((): void => {
+    openCreateDraft(createBlankRef.current());
+  }, [createBlankRef, openCreateDraft]);
 
   return {
     session,
-    editingId: session?.open && session.mode === "edit" ? session.initial.id : null,
-    openCreate: () => openSession("create", createBlank()),
-    openEdit: entry => openSession("edit", entry),
-    close: () => setSession(previous => previous && { ...previous, open: false }),
-    // A session reopened during the transition stays.
-    handleAfterClose: () => setSession(previous => previous?.open ? previous : null),
-    rowRef: id => node => {
-      if (node === null) {
-        rowsRef.current.delete(id);
-      } else {
-        rowsRef.current.set(id, node);
-      }
-    }
+    editingId,
+    openCreate,
+    openEdit,
+    close,
+    closeIfEditing,
+    handleAfterClose,
+    rowRef
   };
 }

@@ -4,24 +4,7 @@ import { Input } from "@vef-framework-react/components";
 import { useId } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
-import { isValidIdentifier } from "../../../../engine/validation";
 import { DraftField } from "../../draft-modal";
-
-/**
- * Why a step's result cannot be stored under `name`, or `null` when it can. An
- * optional result may be left unnamed, and is then not stored.
- */
-export function stepOutputError(name: string, required: boolean, usedNames: ReadonlySet<string>): string | null {
-  if (name.length === 0) {
-    return required ? "请填写结果名，供后续步骤引用" : null;
-  }
-
-  if (!isValidIdentifier(name)) {
-    return "结果名须以字母或下划线开头，仅含字母、数字和下划线";
-  }
-
-  return usedNames.has(name) ? `结果名「${name}」与本规则其它步骤重复` : null;
-}
 
 export interface StepOutputFieldProps {
   error: string | null;

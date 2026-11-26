@@ -152,6 +152,7 @@ export function FormDataSourcesPanel(): ReactElement {
   const usages = collectDataSourceUsages(schema);
   const {
     close,
+    closeIfEditing,
     editingId,
     handleAfterClose,
     openCreate,
@@ -185,8 +186,13 @@ export function FormDataSourcesPanel(): ReactElement {
   const handleDelete = (source: FormDataSource): void => {
     const usage = usages.get(source.id);
 
-    if (usage === undefined || usage.total === 0) {
+    const remove = (): void => {
       storeApi.getState().removeDataSource(source.id);
+      closeIfEditing(source.id);
+    };
+
+    if (usage === undefined || usage.total === 0) {
+      remove();
       return;
     }
 
@@ -198,7 +204,7 @@ export function FormDataSourcesPanel(): ReactElement {
       okType: "danger",
       okText: "删除",
       detail: lines.join("\n"),
-      onOk: () => storeApi.getState().removeDataSource(source.id)
+      onOk: remove
     });
   };
 

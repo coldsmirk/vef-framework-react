@@ -26,17 +26,10 @@ import { reorderRows } from "../../sortable-rows";
 import { ActionEditor } from "./action-editor";
 import { createActionFor } from "./mutators";
 import { actionOptionsFor } from "./options";
+import { actionKey } from "./step-output-drafts";
 import { actionsListCss, addInlineButtonCss, sectionCss, sectionLabelCss } from "./styles";
 
 type DragEndHandler = DragDropEventHandlers["onDragEnd"];
-
-/**
- * A step's identity among its rule's. Actions authored here carry an id; one
- * from a hand-written schema may not, and goes by its position.
- */
-export function actionKey(action: FieldLinkageAction, index: number): string {
-  return action.id ?? `action-${index}`;
-}
 
 function actionKeys(actions: readonly FieldLinkageAction[]): string[] {
   return actions.map((action, index) => actionKey(action, index));

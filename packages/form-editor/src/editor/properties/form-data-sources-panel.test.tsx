@@ -557,4 +557,26 @@ describe("form data sources panel", () => {
       expect(storeSources(api)).toHaveLength(1);
     });
   });
+
+  describe("diagnostic jump", () => {
+    it("scrolls the target row into view, clears pendingDataEdit, and opens its modal", async () => {
+      const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+      const api = setup([
+        staticSource({ id: "ds1", name: "城市" }),
+        staticSource({ id: "ds2", name: "部门" })
+      ]);
+
+      act(() => {
+        api.getState().requestDataEdit({ kind: "dataSource", id: "ds2" });
+      });
+
+      const dialog = await screen.findByRole("dialog", { name: "编辑数据源" });
+
+      expect(within(dialog).getByLabelText(/名称/)).toHaveValue("部门");
+      expect(api.getState().pendingDataEdit).toBeNull();
+      const rows = screen.getAllByRole("listitem");
+      expect(scrollSpy).toHaveBeenCalledWith({ block: "nearest" });
+      expect(scrollSpy.mock.contexts).toContain(rows[1]);
+    });
+  });
 });

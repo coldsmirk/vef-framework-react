@@ -3,38 +3,38 @@ import type { ReactElement } from "react";
 import type {
   FieldLinkageAction,
   FieldLinkageRule,
-  FormVariable,
   LinkageTrigger,
   LinkageTriggerKind
 } from "../../../../types";
-import type { ReferenceScope } from "../../reference-scope";
+import type { DraftSession } from "../../use-draft-session";
 import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { isDeepEqual } from "@vef-framework-react/shared";
 import { useMemo, useRef, useState } from "react";
 
 import { getStepOutputName, isEffectAction, renameStepOutputInRule } from "../../../../engine/linkage";
-import { useFormEditorStore } from "../../../../store/form-store";
 import { DraftModal } from "../../draft-modal";
 import { ReferenceScopeProvider } from "../../reference-scope";
-import { actionKey, ActionsEditor } from "./actions-editor";
+import { useFieldOptionsReferenceScope } from "../../scope-fields";
+import { ActionsEditor } from "./actions-editor";
 import { reconcileRuleTrigger, switchRuleTrigger, triggerSwitchStripsStateActions } from "./mutators";
 import { seedSourceKey } from "./options";
 import { RuleDiagnostics } from "./rule-diagnostics";
-import { stepOutputError } from "./step-output-field";
+import {
+  applyOutputDrafts,
+  collectEffectiveOutputNames,
+  computeOutputErrors,
+  hasPendingOutputEdits,
+  hasStepOutput,
+  pruneOutputDrafts,
+  stepOutputError
+} from "./step-output-drafts";
 import { TriggerEditor } from "./trigger-editor";
 import { useDraftRuleIssues } from "./use-linkage-editor-model";
 
 const MODAL_WIDTH = 960;
-const NO_VARIABLES: readonly FormVariable[] = [];
 
-export interface RuleDraftSession {
-  /**
-   * Distinct per opening so each session mounts a fresh draft.
-   */
-  key: number;
-  mode: "create" | "edit";
-  initial: FieldLinkageRule;
+export interface RuleSessionMeta {
   /**
    * 1-based rule number shown in the edit dialog title; omitted when creating.
    */
@@ -43,11 +43,9 @@ export interface RuleDraftSession {
    * Optional step to expand, scroll to, and highlight on open (diagnostic jump).
    */
   initialFocus: { actionIndex?: number } | null;
-  /**
-   * `false` while the modal plays its close transition.
-   */
-  open: boolean;
 }
+
+export type RuleDraftSession = DraftSession<FieldLinkageRule, RuleSessionMeta>;
 
 export interface RuleDraftModalProps {
   session: RuleDraftSession;
@@ -66,187 +64,12 @@ export interface RuleDraftModalProps {
   onAfterClose: () => void;
 }
 
-function hasStepOutput(action: FieldLinkageAction): action is Extract<FieldLinkageAction, { type: "api_call" | "select_record" }> {
-  return action.type === "api_call" || action.type === "select_record";
-}
-
-function effectiveOutputText(
-  action: FieldLinkageAction,
-  index: number,
-  outputDrafts: Readonly<Record<string, string>>
-): string {
-  const key = actionKey(action, index);
-
-  return Object.hasOwn(outputDrafts, key)
-    ? outputDrafts[key] ?? ""
-    : getStepOutputName(action) ?? "";
-}
-
-function collectEffectiveOutputNames(
-  actions: readonly FieldLinkageAction[],
-  outputDrafts: Readonly<Record<string, string>>,
-  excludeIndex: number
-): Set<string> {
-  const used = new Set<string>();
-
-  for (const [index, action] of actions.entries()) {
-    if (index === excludeIndex || !hasStepOutput(action)) {
-      continue;
-    }
-
-    const name = effectiveOutputText(action, index, outputDrafts);
-
-    if (name.length > 0) {
-      used.add(name);
-    }
-  }
-
-  return used;
-}
-
-function computeOutputErrors(
-  actions: readonly FieldLinkageAction[],
-  outputDrafts: Readonly<Record<string, string>>
-): { byKey: Map<string, string>; firstInvalidIndex: number | null } {
-  const byKey = new Map<string, string>();
-  let firstInvalidIndex: number | null = null;
-
-  // Claim committed (non-drafted) names first in step order so a duplicate
-  // typed into another step blames the step being edited (or, for two
-  // pre-existing duplicates, the later duplicate) rather than an untouched
-  // earlier producer.
-  const committedNames = new Set<string>();
-
-  for (const [index, action] of actions.entries()) {
-    if (!hasStepOutput(action)) {
-      continue;
-    }
-
-    const key = actionKey(action, index);
-
-    if (Object.hasOwn(outputDrafts, key)) {
-      continue;
-    }
-
-    const value = getStepOutputName(action) ?? "";
-    const error = stepOutputError(value, action.type === "select_record", committedNames);
-
-    if (error !== null) {
-      byKey.set(key, error);
-
-      if (firstInvalidIndex === null) {
-        firstInvalidIndex = index;
-      }
-    } else if (value.length > 0) {
-      committedNames.add(value);
-    }
-  }
-
-  for (const [index, action] of actions.entries()) {
-    if (!hasStepOutput(action)) {
-      continue;
-    }
-
-    const key = actionKey(action, index);
-
-    if (!Object.hasOwn(outputDrafts, key)) {
-      continue;
-    }
-
-    const value = outputDrafts[key] ?? "";
-    const error = stepOutputError(value, action.type === "select_record", collectEffectiveOutputNames(actions, outputDrafts, index));
-
-    if (error !== null) {
-      byKey.set(key, error);
-
-      if (firstInvalidIndex === null || index < firstInvalidIndex) {
-        firstInvalidIndex = index;
-      }
-    }
-  }
-
-  return { byKey, firstInvalidIndex };
-}
-
-function pruneOutputDrafts(
-  actions: readonly FieldLinkageAction[],
-  outputDrafts: Readonly<Record<string, string>>
-): Record<string, string> {
-  const activeKeys = new Set<string>();
-
-  for (const [index, action] of actions.entries()) {
-    if (hasStepOutput(action)) {
-      activeKeys.add(actionKey(action, index));
-    }
-  }
-
-  let changed = false;
-  const next: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(outputDrafts)) {
-    if (activeKeys.has(key)) {
-      next[key] = value;
-    } else {
-      changed = true;
-    }
-  }
-
-  return changed ? next : { ...outputDrafts };
-}
-
-function hasPendingOutputEdits(
-  actions: readonly FieldLinkageAction[],
-  outputDrafts: Readonly<Record<string, string>>
-): boolean {
-  for (const [index, action] of actions.entries()) {
-    if (!hasStepOutput(action)) {
-      continue;
-    }
-
-    const key = actionKey(action, index);
-
-    if (Object.hasOwn(outputDrafts, key) && outputDrafts[key] !== (getStepOutputName(action) ?? "")) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function applyOutputDrafts(
-  rule: FieldLinkageRule,
-  outputDrafts: Readonly<Record<string, string>>
-): FieldLinkageRule {
-  let nextActions = rule.actions;
-
-  for (const [index, action] of nextActions.entries()) {
-    if (!hasStepOutput(action)) {
-      continue;
-    }
-
-    const key = actionKey(action, index);
-
-    if (!Object.hasOwn(outputDrafts, key)) {
-      continue;
-    }
-
-    const nextText = outputDrafts[key] ?? "";
-    const committed = getStepOutputName(action) ?? "";
-
-    if (nextText !== committed) {
-      nextActions = renameStepOutputInRule(nextActions, index, nextText.length > 0 ? nextText : undefined);
-    }
-  }
-
-  return nextActions === rule.actions ? rule : { ...rule, actions: nextActions };
-}
-
 function dialogTitle(session: RuleDraftSession, noun: string, ownerLabel: string | undefined): string {
   if (session.mode === "create") {
     return `新建${noun}规则`;
   }
 
-  const label = `规则 ${session.ruleNumber ?? 1}`;
+  const label = `规则 ${session.extra.ruleNumber ?? 1}`;
   const trimmedOwner = ownerLabel?.trim();
 
   return trimmedOwner && trimmedOwner.length > 0 ? `${label} · ${trimmedOwner}` : label;
@@ -275,7 +98,7 @@ export function RuleDraftModal({
 }: RuleDraftModalProps): ReactElement {
   const [draft, setDraft] = useState<FieldLinkageRule>(() => structuredClone(session.initial));
   const [outputDrafts, setOutputDrafts] = useState<Record<string, string>>({});
-  const [focus, setFocus] = useState<{ actionIndex?: number } | null>(session.initialFocus);
+  const [focus, setFocus] = useState<{ actionIndex?: number } | null>(session.extra.initialFocus);
 
   // Synced refs keep blur→submit in the same event turn consistent even if
   // React has not committed the blur's state update before 确定 clicks.
@@ -284,19 +107,9 @@ export function RuleDraftModal({
   draftRef.current = draft;
   outputDraftsRef.current = outputDrafts;
 
-  // Subscribed here (only while a dialog is open) so `$vars` edits never
-  // re-render the closed rule list.
-  const variables = useFormEditorStore(state => state.schema.variables) ?? NO_VARIABLES;
-  const referenceScope = useMemo<ReferenceScope>(
-    () => {
-      return {
-        fieldOptions: scope.fieldOptions,
-        variables,
-        contextSources: scope.contextSources
-      };
-    },
-    [scope.fieldOptions, variables, scope.contextSources]
-  );
+  // Built through the same shared hook as `NodeReferenceScopeProvider`, only
+  // while this dialog is mounted so `$vars` edits never re-render closed rows.
+  const referenceScope = useFieldOptionsReferenceScope(scope.fieldOptions);
 
   const issues = useDraftRuleIssues(ownerNodeId, draft);
   const { byKey: outputErrors } = useMemo(
@@ -312,6 +125,10 @@ export function RuleDraftModal({
   };
 
   const updateOutputDrafts = (next: Record<string, string>): void => {
+    if (next === outputDraftsRef.current) {
+      return;
+    }
+
     outputDraftsRef.current = next;
     setOutputDrafts(next);
   };

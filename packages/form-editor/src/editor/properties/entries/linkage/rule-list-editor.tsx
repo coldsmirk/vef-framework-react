@@ -2,15 +2,16 @@ import type { DropdownMenuItem } from "@vef-framework-react/components";
 import type { FC } from "react";
 
 import type { ValidationIssue, ValidationSeverity } from "../../../../engine/validation";
+import type { LinkageFocusRef } from "../../../../store/form-store";
 import type { FieldLinkageRule, LinkageTriggerKind } from "../../../../types";
-import type { RuleDraftSession } from "./rule-modal";
+import type { RuleSessionMeta } from "./rule-modal";
 import type { LinkageRuleTemplate } from "./templates";
 import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars } from "@vef-framework-react/components";
 import { useLatest } from "@vef-framework-react/hooks";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback } from "react";
 
 import { EditorIcon } from "../../../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
@@ -25,6 +26,7 @@ import {
   dataListSummaryCss,
   dataListWarningCss
 } from "../../data-list";
+import { useDraftSession } from "../../use-draft-session";
 import { summarizeRuleActions } from "./action-summary";
 import { cloneRule } from "./mutators";
 import { RuleDraftModal } from "./rule-modal";
@@ -209,72 +211,50 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
   const rulesRef = useLatest(rules);
   const onChangeRef = useLatest(onChange);
   const createRuleRef = useLatest(createRule);
-  const rowsRef = useRef(new Map<string, HTMLDivElement>());
 
   const apis = useDataSourceApis();
   const storeApi = useFormEditorStoreApi();
   const pendingFocus = useFormEditorStore(s => s.pendingLinkageFocus?.nodeId === ownerNodeId ? s.pendingLinkageFocus : null);
-  const [session, setSession] = useState<RuleDraftSession | null>(null);
 
-  const openEditSession = useCallback(
-    (rule: FieldLinkageRule, ruleNumber: number, actionIndex?: number): void => {
-      setSession(previous => {
+  const {
+    close,
+    closeIfEditing,
+    editingId: editingRuleId,
+    handleAfterClose,
+    openCreate,
+    openEdit,
+    registerRow,
+    session
+  } = useDraftSession<FieldLinkageRule, LinkageFocusRef, RuleSessionMeta>({
+    jump: {
+      pending: pendingFocus,
+      clear: () => storeApi.getState().clearPendingLinkageFocus(),
+      resolve: focus => {
+        const rule = rulesRef.current[focus.ruleIndex];
+
+        if (rule === undefined) {
+          return;
+        }
+
         return {
-          key: (previous?.key ?? 0) + 1,
-          mode: "edit",
-          initial: rule,
-          ruleNumber,
-          initialFocus: actionIndex === undefined ? null : { actionIndex },
-          open: true
+          entry: rule,
+          extra: {
+            ruleNumber: focus.ruleIndex + 1,
+            initialFocus: focus.actionIndex === undefined ? null : { actionIndex: focus.actionIndex }
+          }
         };
-      });
-    },
-    []
-  );
-
-  const openCreateSession = useCallback((initial: FieldLinkageRule): void => {
-    setSession(previous => {
-      return {
-        key: (previous?.key ?? 0) + 1,
-        mode: "create",
-        initial,
-        initialFocus: null,
-        open: true
-      };
-    });
-  }, []);
-
-  useEffect(() => {
-    if (pendingFocus === null) {
-      return;
+      }
     }
-
-    storeApi.getState().clearPendingLinkageFocus();
-
-    const rule = rulesRef.current[pendingFocus.ruleIndex];
-
-    if (rule !== undefined) {
-      rowsRef.current.get(rule.id)?.scrollIntoView?.({ block: "nearest" });
-      openEditSession(rule, pendingFocus.ruleIndex + 1, pendingFocus.actionIndex);
-    }
-  }, [pendingFocus, rulesRef, storeApi, openEditSession]);
-
-  const registerRow = useCallback((ruleId: string, node: HTMLDivElement | null): void => {
-    if (node === null) {
-      rowsRef.current.delete(ruleId);
-    } else {
-      rowsRef.current.set(ruleId, node);
-    }
-  }, []);
+  });
 
   const handleEdit = useCallback((ruleId: string): void => {
     const index = rulesRef.current.findIndex(rule => rule.id === ruleId);
     const target = index === -1 ? undefined : rulesRef.current[index];
 
     if (target !== undefined) {
-      openEditSession(target, index + 1);
+      openEdit(target, { ruleNumber: index + 1, initialFocus: null });
     }
-  }, [rulesRef, openEditSession]);
+  }, [rulesRef, openEdit]);
 
   const handleDuplicate = useCallback((ruleId: string): void => {
     const index = rulesRef.current.findIndex(rule => rule.id === ruleId);
@@ -289,16 +269,8 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
 
   const handleRemove = useCallback((ruleId: string): void => {
     onChangeRef.current(rulesRef.current.filter(rule => rule.id !== ruleId));
-    setSession(current => current?.mode === "edit" && current.initial.id === ruleId ? { ...current, open: false } : current);
-  }, [onChangeRef, rulesRef]);
-
-  const closeSession = useCallback((): void => {
-    setSession(current => current && { ...current, open: false });
-  }, []);
-
-  const handleAfterClose = useCallback((): void => {
-    setSession(current => current?.open ? current : null);
-  }, []);
+    closeIfEditing(ruleId);
+  }, [closeIfEditing, onChangeRef, rulesRef]);
 
   const handleSave = (nextRule: FieldLinkageRule): void => {
     const currentRules = rulesRef.current;
@@ -309,18 +281,16 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
         ? currentRules.map(rule => rule.id === nextRule.id ? nextRule : rule)
         : [...currentRules, nextRule]
     );
-    closeSession();
+    close();
   };
 
   const addRule = useCallback((): void => {
-    openCreateSession(createRuleRef.current());
-  }, [createRuleRef, openCreateSession]);
+    openCreate(createRuleRef.current(), { initialFocus: null });
+  }, [createRuleRef, openCreate]);
 
   const addTemplateRule = useCallback((template: LinkageRuleTemplate): void => {
-    openCreateSession(template.create());
-  }, [openCreateSession]);
-
-  const editingRuleId = session?.open && session.mode === "edit" ? session.initial.id : null;
+    openCreate(template.create(), { initialFocus: null });
+  }, [openCreate]);
 
   const templateMenuItems: DropdownMenuItem[] = templates.map(template => {
     return {
@@ -436,7 +406,7 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
               session={session}
               triggerKinds={triggerKinds}
               onAfterClose={handleAfterClose}
-              onClose={closeSession}
+              onClose={close}
               onSave={handleSave}
             />
           )}

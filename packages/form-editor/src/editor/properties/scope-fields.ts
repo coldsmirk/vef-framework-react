@@ -1,4 +1,5 @@
 import type { FormField, FormVariable } from "../../types";
+import type { SourceFieldOption } from "./entries/linkage/options";
 import type { ReferenceScope } from "./reference-scope";
 
 import { isDeepEqual, omit } from "@vef-framework-react/shared";
@@ -71,20 +72,36 @@ export function useScopeFields(nodeId: string | null): FormField[] {
 }
 
 /**
- * What a value in the scope of `fields` can refer to, step results aside.
+ * Source-field picker options for `fields`, memoized by the stabilized field
+ * list identity. Shared by `useLinkageEditorModel` and
+ * `NodeReferenceScopeProvider` so `getSourceFieldOptions` has one call site.
  */
-export function useFieldsReferenceScope(fields: FormField[]): ReferenceScope {
+export function useScopeFieldOptions(fields: FormField[]): SourceFieldOption[] {
+  return useMemo(
+    () => getSourceFieldOptions({ components: fields }),
+    [fields]
+  );
+}
+
+/**
+ * Assemble a {@link ReferenceScope} from pre-resolved `fieldOptions`,
+ * subscribing to `$vars` and host `contextSources`. Shared by
+ * `NodeReferenceScopeProvider` and `RuleDraftModal` so `$vars` stays subscribed
+ * only where a reference picker is mounted and never re-renders closed rule
+ * rows.
+ */
+export function useFieldOptionsReferenceScope(fieldOptions: readonly SourceFieldOption[]): ReferenceScope {
   const variables = useFormEditorStore(state => state.schema.variables) ?? NO_VARIABLES;
   const contextSources = useContextSources();
 
   return useMemo(
     () => {
       return {
-        fieldOptions: getSourceFieldOptions({ components: fields }),
+        fieldOptions,
         variables,
         contextSources
       };
     },
-    [fields, variables, contextSources]
+    [fieldOptions, variables, contextSources]
   );
 }

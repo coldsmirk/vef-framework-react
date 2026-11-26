@@ -199,6 +199,7 @@ export function FormVariablesPanel({ title, titleLevel = "main" }: FormVariables
   const storeApi = useFormEditorStoreApi();
   const {
     close,
+    closeIfEditing,
     editingId,
     handleAfterClose,
     openCreate,
@@ -273,7 +274,10 @@ export function FormVariablesPanel({ title, titleLevel = "main" }: FormVariables
                           : <span css={dataListSummaryCss}>{`默认：${defaultSummary}`}</span>}
                       </span>
                     )}
-                    onDelete={() => storeApi.getState().removeVariable(variable.id)}
+                    onDelete={() => {
+                      storeApi.getState().removeVariable(variable.id);
+                      closeIfEditing(variable.id);
+                    }}
                     onDuplicate={() => handleDuplicate(variable)}
                     onEdit={() => openEdit(variable)}
                   />
