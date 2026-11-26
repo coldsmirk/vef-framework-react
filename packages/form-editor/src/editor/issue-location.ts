@@ -1,3 +1,4 @@
+import type { NodeDefinitionLookup } from "../engine/schema/walk";
 import type { SchemaIssue } from "../engine/validation";
 import type { DataEntryRef, FormEditorStoreApi, LinkageFocusRef, PropertiesTabId, SidebarTabId } from "../store/form-store";
 import type { Block, FieldLinkage, FormSchema, PresentationDevice, PresentationLayer } from "../types";
@@ -7,7 +8,8 @@ import { useCallback } from "react";
 
 import { assertNever } from "../engine/assert-never";
 import { isKeyedNode } from "../engine/keys";
-import { findNode, nodeLabel, scopeEquals, walkNodes } from "../engine/schema/walk";
+import { findNode, nodeDisplayName, scopeEquals, walkNodes } from "../engine/schema/walk";
+import { useDeviceRegistries } from "../store/engine-provider";
 import { useFormEditorStoreApi } from "../store/form-store";
 import { parseLinkageIssuePath } from "./linkage-issue-path";
 import { actionLabelFor } from "./properties/entries/linkage/options";
@@ -284,9 +286,14 @@ function nodeAt(schema: FormSchema, device: PresentationDevice, nodeId: string):
   return layer === undefined ? undefined : findNode(layer, nodeId);
 }
 
-function describeNode(schema: FormSchema, device: PresentationDevice, nodeId: string): string {
+function describeNode(
+  schema: FormSchema,
+  device: PresentationDevice,
+  nodeId: string,
+  registry: NodeDefinitionLookup | undefined
+): string {
   const node = nodeAt(schema, device, nodeId);
-  const name = node === undefined ? nodeId : nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
+  const name = node === undefined ? nodeId : nodeDisplayName(node, registry);
 
   return device === "mobile" ? `移动端 · ${name}` : name;
 }
@@ -309,12 +316,18 @@ function describeRule(linkage: FieldLinkage | undefined, trail: LinkageIssuePath
 }
 
 /**
- * Where a diagnostic is, in the designer's own words — the field it is about
- * (`金额`, `移动端 · 备注`), the exact linkage step (`工号 · 规则 1 · 步骤 3（设置字段）`),
+ * Where a diagnostic is, in the designer's own words — the field or container
+ * it is about (`金额`, `弹性布局`, `移动端 · 备注`), the exact linkage step
+ * (`工号 · 规则 1 · 步骤 3（设置字段）`, `弹性布局 · 规则 1 · 步骤 1（调用接口）`),
  * or the form-level entry (`数据源「部门」`, `表单事件 · 规则 1 · 步骤 2（选择记录）`)
  * — or `undefined` when the path names nothing the designer shows.
  */
-export function describeIssueLocation(path: string, schema: FormSchema, device: PresentationDevice): string | undefined {
+export function describeIssueLocation(
+  path: string,
+  schema: FormSchema,
+  device: PresentationDevice,
+  registries?: Partial<Record<PresentationDevice, NodeDefinitionLookup>>
+): string | undefined {
   const target = locateIssue(path, schema, device);
 
   if (target === undefined) {
@@ -323,7 +336,7 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
 
   switch (target.kind) {
     case "node": {
-      return describeNode(schema, target.device, target.nodeId);
+      return describeNode(schema, target.device, target.nodeId, registries?.[target.device]);
     }
 
     case "linkage": {
@@ -332,7 +345,7 @@ export function describeIssueLocation(path: string, schema: FormSchema, device: 
 
       return nodeId === null
         ? `表单事件 · ${describeRule(schema.linkage, { ...trail, inWhenGuard })}`
-        : `${describeNode(schema, target.device, nodeId)} · ${describeRule(nodeAt(schema, target.device, nodeId)?.linkage, { ...trail, inWhenGuard })}`;
+        : `${describeNode(schema, target.device, nodeId, registries?.[target.device])} · ${describeRule(nodeAt(schema, target.device, nodeId)?.linkage, { ...trail, inWhenGuard })}`;
     }
 
     case "dataEntry": {
@@ -403,14 +416,15 @@ function showIssueTarget(storeApi: FormEditorStoreApi, target: IssueTarget): voi
  */
 export function useIssueDescriber(): (issue: SchemaIssue) => string | undefined {
   const storeApi = useFormEditorStoreApi();
+  const registries = useDeviceRegistries();
 
   return useCallback(
     (issue: SchemaIssue) => {
       const { device, schema } = storeApi.getState();
 
-      return describeIssueLocation(issue.path, schema, device);
+      return describeIssueLocation(issue.path, schema, device, registries);
     },
-    [storeApi]
+    [registries, storeApi]
   );
 }
 

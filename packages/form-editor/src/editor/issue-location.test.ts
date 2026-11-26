@@ -1,6 +1,13 @@
 import type { FormSchema } from "../types";
 
+import { createDefaultRegistry } from "../engine/registry/defaults";
+import { createDefaultMobileRegistry } from "../engine/registry/defaults-mobile";
 import { describeIssueLocation, locateIssue } from "./issue-location";
+
+const REGISTRIES = {
+  pc: createDefaultRegistry(),
+  mobile: createDefaultMobileRegistry()
+};
 
 /**
  * pc: a section holding `amount`, a tabs container whose second tab holds
@@ -383,6 +390,67 @@ describe("describeIssueLocation", () => {
         .toBe("金额 · 规则 1 · 步骤 1（设置字段）");
       expect(describeIssueLocation("node[Field_amount].linkage.rules[0].trigger.when.children[0].sourceKey", schema, "pc"))
         .toBe("金额 · 规则 1 · 执行条件");
+    });
+
+    it("names container linkage rules by registry type name rather than raw id, keeping the mobile prefix", () => {
+      const schema = makeSchema();
+
+      schema.presentations.pc.children.push({
+        id: "Field_blkuy0tgvlb6r4fi",
+        type: "flex",
+        children: [],
+        linkage: {
+          rules: [
+            {
+              id: "R_flex",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "amount",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [
+                {
+                  id: "A_api",
+                  type: "api_call",
+                  request: { resource: "", action: "" },
+                  output: "result"
+                }
+              ]
+            }
+          ]
+        }
+      });
+      schema.presentations.mobile?.children.push({
+        id: "Flex_mobile",
+        type: "flex",
+        children: [],
+        linkage: {
+          rules: [
+            {
+              id: "R_m_flex",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "remark",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [{ id: "A_m_show", type: "show" }]
+            }
+          ]
+        }
+      });
+
+      expect(describeIssueLocation("node[Field_blkuy0tgvlb6r4fi].linkage.rules[0].actions[0].request", schema, "pc", REGISTRIES))
+        .toBe("弹性布局 · 规则 1 · 步骤 1（调用接口）");
+      expect(describeIssueLocation("node[Flex_mobile].linkage.rules[0]", schema, "pc", REGISTRIES))
+        .toBe("移动端 · 弹性布局 · 规则 1");
+      expect(describeIssueLocation("presentations.pc.children[0].title", schema, "pc", REGISTRIES))
+        .toBe("卡片");
     });
   });
 

@@ -361,6 +361,47 @@ describe("EditorFooter", () => {
         actionIndex: 0
       });
     });
+
+    it("names a container rule by its designer type name instead of its raw id", async () => {
+      const user = userEvent.setup();
+      const schema = makeSchema();
+
+      schema.presentations.pc.children.push({
+        id: "Field_blkuy0tgvlb6r4fi",
+        type: "flex",
+        children: [],
+        linkage: {
+          rules: [
+            {
+              id: "R_flex",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  sourceKey: "name",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [
+                {
+                  id: "A_api",
+                  type: "api_call",
+                  request: { resource: "", action: "" },
+                  output: "result"
+                }
+              ]
+            }
+          ]
+        }
+      });
+
+      setupFooter(schema);
+
+      await user.click(screen.getByTestId("footer-issues"));
+
+      expect(await screen.findByText("弹性布局 · 规则 1 · 步骤 1（调用接口）")).toBeInTheDocument();
+      expect(screen.queryByText(/Field_blkuy0tgvlb6r4fi/)).not.toBeInTheDocument();
+    });
   });
 
   describe("when the host validates the schema", () => {

@@ -1,5 +1,6 @@
-import type { Block, GridNode, PresentationLayer, SectionNode, SubformNode, TabsNode, TextfieldField } from "../../types";
+import type { Block, FlexNode, GridNode, PresentationLayer, SectionNode, SubformNode, TabsNode, TextfieldField } from "../../types";
 
+import { createDefaultRegistry } from "../registry/defaults";
 import {
   collectNodeIds,
   containsNode,
@@ -11,6 +12,8 @@ import {
   findScope,
   isContainerNode,
   isLeafField,
+  nodeDefinition,
+  nodeDisplayName,
   walkFields,
   walkNodes
 } from "./walk";
@@ -343,6 +346,106 @@ describe("walk", () => {
 
       expect(isLeafField(tf("f", "k"))).toBe(true);
       expect(isLeafField(section)).toBe(false);
+    });
+  });
+
+  describe("nodeDefinition / nodeDisplayName", () => {
+    it("prefers label/title, then key, then registry designer name, then raw type", () => {
+      const registry = createDefaultRegistry();
+
+      expect(nodeDisplayName({
+        id: "f1",
+        type: "textfield",
+        key: "userName",
+        label: "姓名"
+      }, registry)).toBe("姓名");
+      expect(nodeDisplayName({
+        id: "f2",
+        type: "textfield",
+        key: "userName"
+      }, registry)).toBe("userName");
+      expect(nodeDisplayName({
+        id: "f3",
+        type: "divider"
+      }, registry)).toBe("分割线");
+      expect(nodeDisplayName({
+        id: "f4",
+        type: "unknown_widget"
+      } as unknown as Block, registry)).toBe("unknown_widget");
+    });
+
+    it("resolves container type names from the registry (including 卡片 for untitled sections)", () => {
+      const registry = createDefaultRegistry();
+      const untitledSection: SectionNode = {
+        id: "s1",
+        type: "section",
+        variant: "card",
+        children: []
+      };
+      const titledSection: SectionNode = { ...untitledSection, title: "基本信息" };
+      const flex: FlexNode = {
+        id: "fl1",
+        type: "flex",
+        children: []
+      };
+      const grid: GridNode = {
+        id: "g1",
+        type: "grid",
+        children: []
+      };
+      const tabs: TabsNode = {
+        id: "t1",
+        type: "tabs",
+        tabs: []
+      };
+
+      expect(nodeDisplayName(titledSection, registry)).toBe("基本信息");
+      expect(nodeDisplayName(untitledSection, registry)).toBe("卡片");
+      expect(nodeDisplayName(flex, registry)).toBe("弹性布局");
+      expect(nodeDisplayName(grid, registry)).toBe("栅格布局");
+      expect(nodeDisplayName(tabs, registry)).toBe("标签页");
+    });
+
+    it("resolves a fixed-row subform to the matrix-table preset definition and name", () => {
+      const registry = createDefaultRegistry();
+      const dynamicSubform: SubformNode = {
+        id: "sf1",
+        type: "subform",
+        variant: "stack",
+        key: "",
+        template: []
+      };
+      const fixedSubform: SubformNode = {
+        id: "sf2",
+        type: "subform",
+        variant: "table",
+        key: "",
+        rows: {
+          mode: "fixed",
+          itemKey: "item",
+          source: { kind: "static", options: [] }
+        },
+        template: []
+      };
+
+      expect(nodeDefinition(dynamicSubform, registry)?.config).toMatchObject({
+        name: "子表单",
+        icon: "table"
+      });
+      expect(nodeDisplayName(dynamicSubform, registry)).toBe("子表单");
+
+      expect(nodeDefinition(fixedSubform, registry)?.config).toMatchObject({
+        paletteId: "matrix-table",
+        name: "矩阵表格",
+        icon: "clipboard-list"
+      });
+      expect(nodeDisplayName(fixedSubform, registry)).toBe("矩阵表格");
+      expect(nodeDisplayName({ ...fixedSubform, key: "checklist" }, registry)).toBe("checklist");
+      expect(nodeDisplayName({
+        ...fixedSubform,
+        key: "checklist",
+        label: "巡检项"
+      }, registry)).toBe("巡检项");
     });
   });
 });

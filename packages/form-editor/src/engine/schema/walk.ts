@@ -1,4 +1,4 @@
-import type { Block, ContainerNode, FormField, KeyedNodeUnion, PresentationLayer } from "../../types";
+import type { Block, ContainerNode, FieldDefinition, FormField, KeyedNodeUnion, PresentationLayer } from "../../types";
 
 import { isShallowEqual } from "@vef-framework-react/shared";
 
@@ -65,6 +65,69 @@ export function nodeLabel(node: Block): string | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Minimal field-registry lookup needed to resolve a block's designer
+ * definition (name and icon), satisfied by `FormFieldRegistry`.
+ */
+export interface NodeDefinitionLookup {
+  get: (type: string) => FieldDefinition | undefined;
+  getPaletteItem: (paletteKey: string) => FieldDefinition | undefined;
+}
+
+const MATRIX_TABLE_PALETTE_ID = "matrix-table";
+
+/**
+ * Resolve the field-registry definition representing `node` in the designer.
+ * A fixed-row subform resolves to the `"matrix-table"` palette preset
+ * (`矩阵表格`) when registered, falling back to the primary `subform`
+ * definition.
+ */
+export function nodeDefinition(
+  node: Block,
+  registry: NodeDefinitionLookup | undefined
+): FieldDefinition | undefined {
+  if (registry === undefined) {
+    return undefined;
+  }
+
+  if (node.type === "subform" && node.rows?.mode === "fixed") {
+    return registry.getPaletteItem(MATRIX_TABLE_PALETTE_ID) ?? registry.get(node.type);
+  }
+
+  return registry.get(node.type);
+}
+
+/**
+ * The single designer display name for any block (leaf field or container):
+ * 1. its human-facing `label` / `title` ({@link nodeLabel})
+ * 2. its non-empty data-binding `key`
+ * 3. its field-registry definition's designer `name` (fixed-row subforms use
+ * the `matrix-table` preset's `矩阵表格`)
+ * 4. finally `node.type` when no registry entry exists.
+ */
+export function nodeDisplayName(
+  node: Block,
+  registry?: NodeDefinitionLookup
+): string {
+  const label = nodeLabel(node);
+
+  if (label !== undefined) {
+    return label;
+  }
+
+  if ("key" in node && typeof node.key === "string" && node.key.length > 0) {
+    return node.key;
+  }
+
+  const definitionName = nodeDefinition(node, registry)?.config.name;
+
+  if (definitionName !== undefined && definitionName.length > 0) {
+    return definitionName;
+  }
+
+  return node.type;
 }
 
 function eachNode(

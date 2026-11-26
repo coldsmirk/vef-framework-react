@@ -33,8 +33,9 @@ import {
   getDynamicSubformRows,
   isFixedSubform
 } from "../../engine/schema/subform";
-import { walkNodes } from "../../engine/schema/walk";
+import { nodeDefinition, nodeDisplayName, walkNodes } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
+import { useFieldRegistry } from "../../store/engine-provider";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { ROW_COLS } from "../../types";
 import { removeTabWithConfirm } from "../remove-node-confirm";
@@ -118,14 +119,6 @@ function ContainerGapField({ onChange, value }: { onChange: (gap?: GapScale) => 
   );
 }
 
-const CONTAINER_META: Record<ContainerNode["type"], { icon: DynamicIconName; name: string }> = {
-  section: { icon: "square", name: "卡片 / 区块" },
-  tabs: { icon: "layout-panel-top", name: "标签页" },
-  subform: { icon: "table", name: "子表单" },
-  flex: { icon: "stretch-horizontal", name: "弹性布局" },
-  grid: { icon: "layout-grid", name: "栅格布局" }
-};
-
 export interface ContainerPropertiesProps {
   node: ContainerNode;
   /**
@@ -156,8 +149,11 @@ export function ContainerProperties({
   parent,
   onClose
 }: ContainerPropertiesProps): ReactElement {
+  const registry = useFieldRegistry();
   const storeApi = useFormEditorStoreApi();
-  const meta = CONTAINER_META[node.type];
+  const definition = nodeDefinition(node, registry);
+  const icon: DynamicIconName = definition?.config.icon ?? "square";
+  const title = nodeDisplayName(node, registry);
 
   const update: Update = (updater, coalesceKey) => {
     storeApi.getState().updateBlock(
@@ -168,7 +164,7 @@ export function ContainerProperties({
 
   return (
     <>
-      <PanelHeader icon={<EditorIcon name={meta.icon} />} subtitle={node.id} title={meta.name} onClose={onClose} />
+      <PanelHeader icon={<EditorIcon name={icon} />} subtitle={node.id} title={title} onClose={onClose} />
 
       <ScrollArea css={panelBodyCss} scrollbars="vertical">
         <div css={bodyCss}>

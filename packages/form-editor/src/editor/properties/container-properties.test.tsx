@@ -3,12 +3,14 @@ import type { ScrollAreaProps } from "@vef-framework-react/components";
 import type { ReactElement } from "react";
 
 import type { FormEditorStoreApi } from "../../store/form-store";
-import type { FormSchema, SubformNode } from "../../types";
+import type { ContainerNode, FormSchema, SubformNode } from "../../types";
 
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 
+import { createDefaultRegistry } from "../../engine/registry/defaults";
+import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { ContainerProperties } from "./container-properties";
 
@@ -78,11 +80,13 @@ function setup(subform: SubformNode, mobileSubform?: SubformNode): FormEditorSto
 
   render(
     <FormEditorStoreProvider initialState={{ schema: makeSchema(subform, mobileSubform) }}>
-      <Harness
-        onReady={api => {
-          captured = api;
-        }}
-      />
+      <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+        <Harness
+          onReady={api => {
+            captured = api;
+          }}
+        />
+      </RegistryProvider>
     </FormEditorStoreProvider>
   );
 
@@ -91,6 +95,22 @@ function setup(subform: SubformNode, mobileSubform?: SubformNode): FormEditorSto
   }
 
   return captured;
+}
+
+function renderContainer(container: ContainerNode): void {
+  const schema: FormSchema = {
+    id: "Form_1",
+    version: 2,
+    presentations: { pc: { children: [container] } }
+  };
+
+  render(
+    <FormEditorStoreProvider initialState={{ schema }}>
+      <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+        <ContainerProperties node={container} parent={undefined} onClose={vi.fn()} />
+      </RegistryProvider>
+    </FormEditorStoreProvider>
+  );
 }
 
 function storeSubform(api: FormEditorStoreApi): SubformNode {
@@ -108,6 +128,37 @@ describe("ContainerProperties", () => {
     setup(subformNode());
 
     expect(screen.getByTestId("container-properties-scroll-area")).toHaveAttribute("scrollbars", "vertical");
+  });
+
+  it("reads container header names from the field registry instead of a parallel table", () => {
+    renderContainer({
+      id: "Sec_1",
+      type: "section",
+      variant: "card",
+      children: []
+    });
+
+    const header = screen.getByText("Sec_1").parentElement as HTMLElement;
+
+    expect(within(header).getByText("卡片")).toBeInTheDocument();
+    expect(screen.queryByText("卡片 / 区块")).not.toBeInTheDocument();
+  });
+
+  it("names a fixed-row subform without label or key as 矩阵表格", () => {
+    renderContainer(subformNode({
+      key: "",
+      label: "",
+      variant: "table",
+      rows: {
+        mode: "fixed",
+        itemKey: "item",
+        source: { kind: "static", options: [] }
+      }
+    }));
+
+    const header = screen.getByText(SUBFORM_ID).parentElement as HTMLElement;
+
+    expect(within(header).getByText("矩阵表格")).toBeInTheDocument();
   });
 
   describe("subform", () => {

@@ -354,7 +354,7 @@ export function Toolbar({
 
     confirmDialog(
       `存在 ${warnings.length} 条校验提示，仍要发布？`,
-      <IssueList describeLocation={issue => describeIssueLocation(issue.path, schema, device)} issues={warnings} />,
+      <IssueList describeLocation={issue => describeIssueLocation(issue.path, schema, device, registries)} issues={warnings} />,
       {
         onOk: () => onPublish(schema),
         okType: "primary",

@@ -7,7 +7,7 @@ import { useMemo } from "react";
 
 import { isKeyedField } from "../../../../engine/keys";
 import { FIELD_TRIGGER_KINDS } from "../../../../engine/linkage";
-import { nodeLabel } from "../../../../engine/schema/walk";
+import { nodeDisplayName } from "../../../../engine/schema/walk";
 import { useFieldRegistry } from "../../../../store/engine-provider";
 import { usePreviewRuntime } from "../../../preview-runtime-context";
 import { createRule, normalizeLinkage } from "./mutators";
@@ -61,7 +61,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   // a pre-filled self-condition (self stays selectable in the dropdown after).
   // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
-  const ownerLabel = nodeLabel(field) ?? selfKey;
+  const ownerLabel = nodeDisplayName(field, registry);
   const seedKey = seedSourceKey(fieldOptions, selfKey);
   // Drop trigger kinds the target can't actually use, rather than letting an
   // author configure a silently-inert (and validator-rejected) rule:

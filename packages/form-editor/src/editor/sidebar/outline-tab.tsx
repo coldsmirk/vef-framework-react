@@ -7,8 +7,9 @@ import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 import { memo } from "react";
 
+import { isKeyedNode } from "../../engine/keys";
 import { containerBodies } from "../../engine/schema/nodes";
-import { isContainerNode, nodeLabel } from "../../engine/schema/walk";
+import { isContainerNode, nodeDefinition, nodeDisplayName } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFieldRegistry } from "../../store/engine-provider";
 import { useCurrentLayer, useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
@@ -134,13 +135,10 @@ const BlockNode = memo(function BlockNode({ block, depth }: { block: Block; dept
   // only the deselected and newly selected rows re-render.
   const isSelected = useFormEditorStore(s => s.selectedId === block.id);
 
-  const definition = registry.get(block.type);
+  const definition = nodeDefinition(block, registry);
   const icon: DynamicIconName = definition?.config.icon ?? "square";
-  // `key` is an optional probe on the union (keyed leaves and subforms carry it):
-  // it backs the label when a node has no label/title, and the trailing key tag.
-  const nodeKey = "key" in block && typeof block.key === "string" && block.key.length > 0 ? block.key : undefined;
-  const label = nodeLabel(block) ?? nodeKey ?? definition?.config.name ?? block.type;
-  const keyTag = isContainerNode(block) ? undefined : nodeKey;
+  const label = nodeDisplayName(block, registry);
+  const keyTag = !isContainerNode(block) && isKeyedNode(block) ? block.key : undefined;
 
   return (
     <>

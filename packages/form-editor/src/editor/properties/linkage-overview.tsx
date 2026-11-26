@@ -6,7 +6,8 @@ import type { Block } from "../../types";
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
-import { nodeLabel, walkNodes } from "../../engine/schema/walk";
+import { isKeyedNode } from "../../engine/keys";
+import { nodeDefinition, nodeDisplayName, walkNodes } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFieldRegistry } from "../../store/engine-provider";
 import { useCurrentLayer, useFormEditorStoreApi } from "../../store/form-store";
@@ -95,10 +96,10 @@ export function LinkageOverview(): ReactElement {
   return (
     <div css={listCss}>
       {rows.map(({ block, ruleCount }) => {
-        const definition = registry.get(block.type);
+        const definition = nodeDefinition(block, registry);
         const icon: DynamicIconName = definition?.config.icon ?? "square";
-        const nodeKey = "key" in block && typeof block.key === "string" && block.key.length > 0 ? block.key : undefined;
-        const label = nodeLabel(block) ?? nodeKey ?? definition?.config.name ?? block.type;
+        const nodeKey = isKeyedNode(block) ? block.key : undefined;
+        const label = nodeDisplayName(block, registry);
 
         return (
           <div

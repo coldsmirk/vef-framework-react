@@ -2,8 +2,8 @@ import type { ReactElement } from "react";
 
 import type { ContainerNode, FieldLinkage, LinkageTriggerKind } from "../../../../types";
 
-import { isKeyedNode } from "../../../../engine/keys";
-import { nodeLabel } from "../../../../engine/schema/walk";
+import { nodeDisplayName } from "../../../../engine/schema/walk";
+import { useFieldRegistry } from "../../../../store/engine-provider";
 import { useFormEditorStoreApi } from "../../../../store/form-store";
 import { DefaultsPanel } from "./linkage-rules-entry";
 import { createRule, normalizeLinkage } from "./mutators";
@@ -19,14 +19,6 @@ import { useLinkageEditorModel } from "./use-linkage-editor-model";
  */
 const CONTAINER_TRIGGER_KINDS: readonly LinkageTriggerKind[] = ["condition"];
 const NO_TRIGGER_KINDS: readonly LinkageTriggerKind[] = [];
-
-const CONTAINER_FALLBACK_LABELS: Record<ContainerNode["type"], string> = {
-  section: "卡片 / 区块",
-  tabs: "标签页",
-  subform: "子表单",
-  flex: "弹性布局",
-  grid: "栅格布局"
-};
 
 function readLinkage(value: FieldLinkage | undefined): FieldLinkage {
   return value ?? {};
@@ -45,6 +37,7 @@ export interface ContainerLinkageSectionProps {
  * container subset, and writes go through the store's `updateBlock`.
  */
 export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps): ReactElement {
+  const registry = useFieldRegistry();
   const storeApi = useFormEditorStoreApi();
   const linkage = readLinkage(node.linkage);
   const rules = linkage.rules ?? [];
@@ -62,7 +55,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
     ? "当前作用域内没有可引用的字段，请先添加带数据绑定的字段"
     : undefined;
   const triggerKinds = seedSourceKey === undefined ? NO_TRIGGER_KINDS : CONTAINER_TRIGGER_KINDS;
-  const ownerLabel = nodeLabel(node) ?? (isKeyedNode(node) ? node.key : undefined) ?? CONTAINER_FALLBACK_LABELS[node.type];
+  const ownerLabel = nodeDisplayName(node, registry);
 
   const commit = (next: FieldLinkage): void => {
     const normalized = normalizeLinkage(next);

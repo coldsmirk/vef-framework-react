@@ -8,6 +8,8 @@ import userEvent from "@testing-library/user-event";
 import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
+import { createDefaultRegistry } from "../../../../engine/registry/defaults";
+import { RegistryProvider } from "../../../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
 import { ContainerLinkageSection } from "./container-linkage-section";
 
@@ -72,11 +74,13 @@ function setup(schema: FormSchema): FormEditorStoreApi {
   render(
     <ConfigProvider>
       <FormEditorStoreProvider initialState={{ schema }}>
-        <Harness
-          onReady={api => {
-            captured = api;
-          }}
-        />
+        <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+          <Harness
+            onReady={api => {
+              captured = api;
+            }}
+          />
+        </RegistryProvider>
       </FormEditorStoreProvider>
     </ConfigProvider>
   );
@@ -244,5 +248,45 @@ describe("ContainerLinkageSection", () => {
 
     expect(screen.getByRole("button", { name: /新建联动规则/ })).toBeDisabled();
     expect(screen.getByText(/当前作用域内没有可引用的字段/)).toBeInTheDocument();
+  });
+
+  it("titles an unlabelled container's rule dialog with its registry type name", async () => {
+    const user = userEvent.setup();
+    const flex: ContainerNode = {
+      id: "Flex_1",
+      type: "flex",
+      children: [],
+      linkage: conditionShowLinkage()
+    };
+    const schema: FormSchema = {
+      id: "Form_1",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Field_amount",
+              type: "number",
+              key: "amount",
+              label: "金额"
+            },
+            flex
+          ]
+        }
+      }
+    };
+
+    render(
+      <ConfigProvider>
+        <FormEditorStoreProvider initialState={{ schema }}>
+          <RegistryProvider registries={{ pc: createDefaultRegistry(), mobile: createDefaultRegistry() }}>
+            <ContainerLinkageSection node={flex} />
+          </RegistryProvider>
+        </FormEditorStoreProvider>
+      </ConfigProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "编辑规则 1" }));
+    expect(await screen.findByRole("dialog", { name: "规则 1 · 弹性布局" })).toBeInTheDocument();
   });
 });
