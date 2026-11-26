@@ -2,11 +2,12 @@ import type { FC } from "react";
 
 import type { DateGranularity, EntryComponentProps } from "../../../types";
 
-import { Popconfirm, Select } from "@vef-framework-react/components";
+import { Select } from "@vef-framework-react/components";
 import { isDateGranularity } from "@vef-framework-react/shared";
 
 import { DATE_GRANULARITY_OPTIONS, isDateGranularityField } from "../../../engine/schema/date-granularity";
 import { hasDateGranularityLiterals, useFormEditorStore, useFormEditorStoreApi } from "../../../store/form-store";
+import { SwitchConfirm } from "../switch-confirm";
 import { useConfirmableKindSwitch } from "../use-confirmable-kind-switch";
 import { EntryField } from "./entry-field";
 
@@ -55,9 +56,7 @@ export const DateGranularityEntry: FC<EntryComponentProps> = ({
 
   return (
     <EntryField description={entry.description} label={entry.label}>
-      <Popconfirm
-        cancelText="取消"
-        okText="切换"
+      <SwitchConfirm
         open={kindSwitch.pendingKind !== null}
         title="切换精度将清空该字段关联的联动字面量值"
         onCancel={kindSwitch.cancel}
@@ -75,7 +74,7 @@ export const DateGranularityEntry: FC<EntryComponentProps> = ({
             }
           }}
         />
-      </Popconfirm>
+      </SwitchConfirm>
     </EntryField>
   );
 };

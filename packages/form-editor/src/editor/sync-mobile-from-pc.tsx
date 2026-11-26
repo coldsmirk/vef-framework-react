@@ -38,6 +38,8 @@ export function syncMobileFromPc(storeApi: FormEditorStoreApi, registries: Devic
   const lines = replacementLines(collectLostBindings(mobile, layer), report);
 
   confirmDialog("用 PC 端覆盖移动端？", <DialogLines footnote={UNDOABLE_FOOTNOTE} lines={lines} />, {
+    okText: "覆盖",
+    okIcon: "refresh-cw",
     onOk: () => {
       commit();
       notify("success", `已从 PC 同步 ${report.convertedCount} 个组件`);

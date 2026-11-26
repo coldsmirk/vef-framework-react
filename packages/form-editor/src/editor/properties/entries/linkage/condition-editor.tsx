@@ -6,11 +6,12 @@ import type {
   LinkageConditionLeaf
 } from "../../../../types";
 
-import { Button, Input, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
+import { Button, Input, Segmented, Select } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { EditorIcon } from "../../../../icons";
 import { ReferencePicker, useReferenceScope } from "../../reference-scope";
+import { SwitchConfirm } from "../../switch-confirm";
 import { coerceToString } from "../coerce";
 import { ExpressionInput } from "./expression-input";
 import {
@@ -153,14 +154,12 @@ const ExpressionConditionEditor: FC<ExpressionConditionEditorProps> = ({
 
         {authored && fieldOptions.length > 0
           ? (
-              <Popconfirm
-                cancelText="取消"
-                okText="切换"
+              <SwitchConfirm
                 title="切换到可视化将丢弃当前表达式"
                 onConfirm={switchToVisual}
               >
                 {switchButton}
-              </Popconfirm>
+              </SwitchConfirm>
             )
           : switchButton}
       </div>
@@ -282,14 +281,12 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
 
         {switchButton && authored
           ? (
-              <Popconfirm
-                cancelText="取消"
-                okText="切换"
+              <SwitchConfirm
                 title="切换到表达式将丢弃当前可视化条件"
                 onConfirm={onSwitchToExpression}
               >
                 {switchButton}
-              </Popconfirm>
+              </SwitchConfirm>
             )
           : switchButton}
       </div>

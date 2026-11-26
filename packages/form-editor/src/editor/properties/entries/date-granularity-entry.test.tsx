@@ -170,14 +170,14 @@ describe("DateGranularityEntry", () => {
     expect(await screen.findByText("切换精度将清空该字段关联的联动字面量值")).toBeInTheDocument();
 
     // Canceling leaves schema and undo stack untouched.
-    await user.click(screen.getByRole("button", { name: "取 消" }));
+    await user.click(screen.getByRole("button", { name: "取消" }));
     expect(controls?.getSchema()).toBe(schema);
     expect(controls?.getPastLength()).toBe(0);
 
     // Re-request and confirm.
     await user.click(screen.getByRole("combobox"));
     await user.click(await screen.findByText("月 (YYYY-MM)"));
-    await user.click(await screen.findByRole("button", { name: "切 换" }));
+    await user.click(await screen.findByRole("button", { name: "切换" }));
 
     const updated = controls?.getSchema();
     const updatedField = updated?.presentations.pc.children[0] as DateField;

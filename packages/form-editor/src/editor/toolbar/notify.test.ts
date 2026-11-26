@@ -99,12 +99,16 @@ describe("confirmDialog", () => {
       const vef = installVefGlobal();
       const onOk = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
+      confirmDialog("确认清空？", "该操作可撤销。", {
+        okText: "清空",
+        okIcon: "trash-2",
+        onOk
+      });
 
       expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({
         title: "确认清空？",
         content: "该操作可撤销。",
-        okText: "确认",
+        okText: "清空",
         cancelText: "取消",
         okType: "danger",
         onOk
@@ -112,11 +116,35 @@ describe("confirmDialog", () => {
       expect(onOk).not.toHaveBeenCalled();
     });
 
+    it("gives the act its icon and keeps both labels as written", () => {
+      const vef = installVefGlobal();
+
+      confirmDialog("确认清空？", "该操作可撤销。", {
+        okText: "清空",
+        okIcon: "trash-2",
+        onOk: vi.fn()
+      });
+
+      const [props] = vef.modal.confirm.mock.calls[0] as [{
+        okButtonProps: { autoInsertSpace: boolean; icon: { props: { name: string } } };
+        cancelButtonProps: { autoInsertSpace: boolean };
+      }];
+
+      expect(props.okButtonProps.icon.props.name).toBe("trash-2");
+      expect(props.okButtonProps.autoInsertSpace).toBe(false);
+      expect(props.cancelButtonProps.autoInsertSpace).toBe(false);
+    });
+
     it("forwards the decline callback", () => {
       const vef = installVefGlobal();
       const onCancel = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", { onOk: vi.fn(), onCancel });
+      confirmDialog("确认清空？", "该操作可撤销。", {
+        okText: "清空",
+        okIcon: "trash-2",
+        onOk: vi.fn(),
+        onCancel
+      });
 
       expect(vef.modal.confirm).toHaveBeenCalledWith(expect.objectContaining({ onCancel }));
     });
@@ -127,6 +155,7 @@ describe("confirmDialog", () => {
 
       confirmDialog("放弃未保存的修改？", "修改将不会保存。", {
         okText: "放弃修改",
+        okIcon: "eraser",
         cancelText: "继续编辑",
         onOk
       });
@@ -143,7 +172,11 @@ describe("confirmDialog", () => {
       vi.spyOn(globalThis, "confirm").mockReturnValue(true);
       const onOk = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", { onOk });
+      confirmDialog("确认清空？", "该操作可撤销。", {
+        okText: "清空",
+        okIcon: "trash-2",
+        onOk
+      });
 
       expect(onOk).toHaveBeenCalledTimes(1);
     });
@@ -153,7 +186,12 @@ describe("confirmDialog", () => {
       const onOk = vi.fn();
       const onCancel = vi.fn();
 
-      confirmDialog("确认清空？", "该操作可撤销。", { onOk, onCancel });
+      confirmDialog("确认清空？", "该操作可撤销。", {
+        okText: "清空",
+        okIcon: "trash-2",
+        onOk,
+        onCancel
+      });
 
       expect(onOk).not.toHaveBeenCalled();
       expect(onCancel).toHaveBeenCalledTimes(1);
@@ -166,6 +204,8 @@ describe("confirmDialog", () => {
       // A ReactNode content cannot be shown natively; `detail` carries its
       // substance so the question is never reduced to the bare title.
       confirmDialog("删除该控件将影响联动规则", { rich: true } as never, {
+        okText: "删除",
+        okIcon: "trash-2",
         onOk,
         detail: "将同时移除 2 条引用它的联动规则"
       });

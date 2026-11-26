@@ -249,6 +249,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
       `${listSteps(dependents)} 引用了该步骤的结果，删除后这些引用将失效。`,
       {
         okText: "仍然删除",
+        okIcon: "trash-2",
         cancelText: "取消",
         onOk: commit
       }
@@ -281,6 +282,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
       `${listSteps(dependents)} 引用了该步骤的结果，更改类型后这些引用将失效。`,
       {
         okText: "仍然更改",
+        okIcon: "replace",
         cancelText: "取消",
         onOk: commit
       }
@@ -324,6 +326,7 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
         .join("；"),
       {
         okText: "仍然移动",
+        okIcon: "move-vertical",
         cancelText: "取消",
         onOk: () => {
           setProposed(null);

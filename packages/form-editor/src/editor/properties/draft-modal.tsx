@@ -99,6 +99,7 @@ export function DraftModal({
 
     confirmDialog("放弃未保存的修改？", "关闭后本次修改将不会保存。", {
       okText: "放弃修改",
+      okIcon: "eraser",
       cancelText: "继续编辑",
       onOk: onClose
     });

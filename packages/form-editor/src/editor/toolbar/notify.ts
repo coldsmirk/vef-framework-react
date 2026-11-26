@@ -8,7 +8,12 @@
  * `alert` / `confirm` so user feedback still happens, just less gracefully.
  */
 
+import type { DynamicIconName } from "@vef-framework-react/components";
 import type { ReactNode } from "react";
+
+import { createElement } from "react";
+
+import { EditorIcon } from "../../icons";
 
 export type NotifyKind = "success" | "warning" | "error";
 
@@ -92,11 +97,15 @@ export interface ConfirmDialogOptions {
    */
   okType?: "danger" | "primary";
   /**
-   * Label for the confirm button.
-   *
-   * @default "确认"
+   * Label for the confirm button: the act it performs ("删除", "发布"), never a
+   * bare "确认".
    */
-  okText?: string;
+  okText: string;
+  /**
+   * Icon of the confirm button. An act takes the icon it has everywhere else
+   * in the designer (删除 → `trash-2`, 发布 → `rocket`).
+   */
+  okIcon: DynamicIconName;
   /**
    * Label for the cancel button.
    *
@@ -116,7 +125,8 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
   const {
     cancelText = "取消",
     detail,
-    okText = "确认",
+    okIcon,
+    okText,
     okType = "danger",
     onCancel,
     onOk
@@ -129,7 +139,9 @@ export function confirmDialog(title: string, content: ReactNode, options: Confir
       content,
       okText,
       okType,
+      okButtonProps: { autoInsertSpace: false, icon: createElement(EditorIcon, { name: okIcon }) },
       cancelText,
+      cancelButtonProps: { autoInsertSpace: false },
       onOk,
       onCancel
     });

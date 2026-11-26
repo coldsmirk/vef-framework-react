@@ -108,6 +108,8 @@ function confirmRemoval(impact: RemovalImpact, title: string, commit: () => void
   const lines = removalImpactLines(impact);
 
   confirmDialog(title, <DialogLines footnote={UNDOABLE_FOOTNOTE} lines={lines} />, {
+    okText: "删除",
+    okIcon: "trash-2",
     onOk: commit,
     detail: lines.join("\n")
   });

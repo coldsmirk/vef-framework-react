@@ -462,7 +462,7 @@ describe("form data sources panel", () => {
       // Switching a configured static source waits behind Popconfirm.
       expect(within(dialog).queryByRole("textbox", { name: "资源" })).not.toBeInTheDocument();
 
-      await user.click(await screen.findByRole("button", { name: "切 换" }));
+      await user.click(await screen.findByRole("button", { name: "切换" }));
       expect(within(dialog).getByRole("textbox", { name: "资源" })).toBeInTheDocument();
 
       await user.type(within(dialog).getByRole("textbox", { name: "资源" }), "geo/city");
@@ -542,7 +542,7 @@ describe("form data sources panel", () => {
       await user.click(screen.getByRole("button", { name: "删除数据源 城市" }));
 
       expect(await screen.findByText(/「所在城市」/)).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "取 消" }));
+      await user.click(screen.getByRole("button", { name: "取消" }));
       await waitFor(() => {
         expect(screen.queryByText(/「所在城市」/)).not.toBeInTheDocument();
       });
@@ -551,7 +551,7 @@ describe("form data sources panel", () => {
       await user.click(screen.getByRole("button", { name: "删除数据源 城市" }));
 
       expect(await screen.findByText(/「所在城市」/)).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "删 除" }));
+      await user.click(screen.getByRole("button", { name: "删除" }));
 
       expect(storeSources(api)).toEqual([]);
 

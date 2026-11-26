@@ -20,7 +20,7 @@ import type {
 } from "../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Input, InputNumber, Popconfirm, ScrollArea, Segmented, Select, Switch } from "@vef-framework-react/components";
+import { Button, globalCssVars, Input, InputNumber, ScrollArea, Segmented, Select, Switch } from "@vef-framework-react/components";
 import { useState } from "react";
 
 import { createId } from "../../engine/ids";
@@ -46,6 +46,7 @@ import { OptionSourceEditor } from "./entries/options-source";
 import { optionSourceHasPayload } from "./entries/options-source/source-mutators";
 import { PanelHeader } from "./panel-header";
 import { NodeReferenceScopeProvider } from "./reference-scope";
+import { SwitchConfirm } from "./switch-confirm";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 
 const bodyCss = css({
@@ -469,9 +470,7 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
       <div css={fieldCss}>
         <span css={labelCss}>行模式</span>
 
-        <Popconfirm
-          cancelText="取消"
-          okText="切换"
+        <SwitchConfirm
           open={modeSwitch.pendingKind !== null}
           title="切换为动态行将丢弃当前固定行项目配置"
           onCancel={modeSwitch.cancel}
@@ -487,7 +486,7 @@ function SubformEditor({ subform, update }: { subform: SubformNode; update: Upda
               }
             }}
           />
-        </Popconfirm>
+        </SwitchConfirm>
 
         <span css={hintCss}>
           {fixed

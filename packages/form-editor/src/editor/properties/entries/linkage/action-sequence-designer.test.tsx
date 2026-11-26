@@ -34,6 +34,21 @@ import { PropertiesPanel } from "../../properties-panel";
 import { commitHintForField, LinkageRulesEntry } from "./linkage-rules-entry";
 import { createActionFor, switchRuleTrigger } from "./mutators";
 
+/**
+ * The dialog opened last, which sits on top: a confirmation raised from inside
+ * the rule dialog has buttons of the same names as the rule dialog's own.
+ */
+function topDialog(): HTMLElement {
+  const dialogs = screen.getAllByRole("dialog");
+  const top = dialogs.at(-1);
+
+  if (top === undefined) {
+    throw new Error("No dialog is open");
+  }
+
+  return top;
+}
+
 const codeEditorRender = vi.hoisted(() => vi.fn());
 
 function CodeEditor(props: CodeEditorProps): ReactElement {
@@ -744,7 +759,7 @@ describe("action sequence designer", () => {
       await user.click(deleteButtons[0] as HTMLElement);
 
       expect(await screen.findByText(/步骤 2 引用了该步骤的结果/)).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "取 消" }));
+      await user.click(within(topDialog()).getByRole("button", { name: "取消" }));
       await waitFor(() => {
         expect(screen.queryByText(/步骤 2 引用了该步骤的结果/)).not.toBeInTheDocument();
       });
@@ -857,7 +872,7 @@ describe("action sequence designer", () => {
       await dragFirstStepLast(dialog);
 
       expect(await screen.findByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "取 消" }));
+      await user.click(within(topDialog()).getByRole("button", { name: "取消" }));
       await waitFor(() => {
         expect(screen.queryByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).not.toBeInTheDocument();
       });

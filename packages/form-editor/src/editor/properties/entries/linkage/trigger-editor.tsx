@@ -3,10 +3,11 @@ import type { FC } from "react";
 import type { LinkageTrigger, LinkageTriggerKind } from "../../../../types";
 
 import { css } from "@emotion/react";
-import { Button, globalCssVars, Popconfirm, Select, Switch } from "@vef-framework-react/components";
+import { Button, globalCssVars, Select, Switch } from "@vef-framework-react/components";
 
 import { EditorIcon } from "../../../../icons";
 import { useReferenceScope } from "../../reference-scope";
+import { SwitchConfirm } from "../../switch-confirm";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { ConditionEditor } from "./condition-editor";
 import { createGroup, createLeaf, withOptional } from "./mutators";
@@ -125,9 +126,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
     <div css={sectionCss}>
       <span css={sectionLabelCss}>WHEN</span>
 
-      <Popconfirm
-        cancelText="取消"
-        okText="切换"
+      <SwitchConfirm
         open={kindSwitch.pendingKind !== null}
         title="切换触发方式将移除状态类动作"
         onCancel={kindSwitch.cancel}
@@ -143,7 +142,7 @@ export const TriggerEditor: FC<TriggerEditorProps> = ({
             }
           }}
         />
-      </Popconfirm>
+      </SwitchConfirm>
 
       {trigger.kind === "condition"
         ? (

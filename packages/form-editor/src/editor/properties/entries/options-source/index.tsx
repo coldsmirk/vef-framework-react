@@ -4,12 +4,13 @@ import type { EntryComponentProps, FieldOptionSource, FormDataSource } from "../
 import type { OptionSourceKind } from "./source-mutators";
 
 import { css } from "@emotion/react";
-import { globalCssVars, Popconfirm, Segmented, Select } from "@vef-framework-react/components";
+import { globalCssVars, Segmented, Select } from "@vef-framework-react/components";
 
 import { isTreeSelectField } from "../../../../engine/options";
 import { OptionListEditor } from "../../option-editors";
 import { NodeReferenceScopeProvider } from "../../reference-scope";
 import { RemoteOptionSourceEditor } from "../../remote-option-source-editor";
+import { SwitchConfirm } from "../../switch-confirm";
 import { useConfirmableKindSwitch } from "../../use-confirmable-kind-switch";
 import { descriptionCss, entryLabelCss } from "../entry-field";
 import { CodeSetSource } from "./code-set-source";
@@ -86,9 +87,7 @@ export function OptionSourceEditor({
     <div css={wrapperCss}>
       <span css={entryLabelCss}>{label}</span>
 
-      <Popconfirm
-        cancelText="取消"
-        okText="切换"
+      <SwitchConfirm
         open={kindSwitch.pendingKind !== null}
         title={confirmTitle}
         onCancel={kindSwitch.cancel}
@@ -104,7 +103,7 @@ export function OptionSourceEditor({
             }
           }}
         />
-      </Popconfirm>
+      </SwitchConfirm>
 
       {source.kind === "static"
         ? (

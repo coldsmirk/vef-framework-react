@@ -319,6 +319,8 @@ export function Toolbar({
       "确认清空当前表单？",
       `将清空 PC 与移动端的全部 ${totalFields} 个字段，以及变量、数据源与表单级联动。该操作可通过撤销恢复。`,
       {
+        okText: "清空",
+        okIcon: "trash-2",
         onOk: () => {
           storeApi.getState().clearSchema();
         }
@@ -357,6 +359,8 @@ export function Toolbar({
       <IssueList describeLocation={issue => describeIssueLocation(issue.path, schema, device, registries)} issues={warnings} />,
       {
         onOk: () => onPublish(schema),
+        okText: "发布",
+        okIcon: "rocket",
         okType: "primary",
         detail: warnings.map(issue => formatIssueLine(issue)).join("\n")
       }

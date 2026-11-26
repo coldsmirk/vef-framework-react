@@ -4,7 +4,7 @@ import type { FormDataSource, RemoteDataSource, RemoteDataSourceRequest, RemoteO
 import type { DataEntrySession } from "./use-data-entry-editor";
 
 import { css } from "@emotion/react";
-import { globalCssVars, Input, Popconfirm, Segmented } from "@vef-framework-react/components";
+import { globalCssVars, Input, Segmented } from "@vef-framework-react/components";
 import { isDeepEqual, omit } from "@vef-framework-react/shared";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -41,6 +41,7 @@ import { DraftField, DraftModal } from "./draft-modal";
 import { OptionListEditor } from "./option-editors";
 import { NodeReferenceScopeProvider } from "./reference-scope";
 import { RemoteOptionSourceEditor } from "./remote-option-source-editor";
+import { SwitchConfirm } from "./switch-confirm";
 import { useConfirmableKindSwitch } from "./use-confirmable-kind-switch";
 import { useDataEntryEditor } from "./use-data-entry-editor";
 
@@ -205,6 +206,7 @@ export function FormDataSourcesPanel(): ReactElement {
     confirmDialog(dialogTitle, <DialogLines footnote={UNDOABLE_FOOTNOTE} lines={lines} />, {
       okType: "danger",
       okText: "删除",
+      okIcon: "trash-2",
       detail: lines.join("\n"),
       onOk: remove
     });
@@ -385,9 +387,7 @@ function DataSourceModal({
       </DraftField>
 
       <DraftField label="来源类型">
-        <Popconfirm
-          cancelText="取消"
-          okText="切换"
+        <SwitchConfirm
           open={kindSwitch.pendingKind !== null}
           title="切换类型将丢弃当前数据源配置"
           onCancel={kindSwitch.cancel}
@@ -403,7 +403,7 @@ function DataSourceModal({
               }
             }}
           />
-        </Popconfirm>
+        </SwitchConfirm>
       </DraftField>
 
       {draft.kind === "static"

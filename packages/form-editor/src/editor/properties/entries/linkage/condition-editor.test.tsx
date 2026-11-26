@@ -248,7 +248,7 @@ describe("ConditionEditor", () => {
       // Nothing committed yet — the destructive replace waits for the confirm.
       expect(onCommit).not.toHaveBeenCalled();
 
-      await user.click(await screen.findByRole("button", { name: "切 换" }));
+      await user.click(await screen.findByRole("button", { name: "切换" }));
 
       expect(lastCondition(onCommit)).toMatchObject({ kind: "expression" });
     });
@@ -295,7 +295,7 @@ describe("ConditionEditor", () => {
 
       expect(onCommit).not.toHaveBeenCalled();
 
-      await user.click(await screen.findByRole("button", { name: "切 换" }));
+      await user.click(await screen.findByRole("button", { name: "切换" }));
 
       expect(lastCondition(onCommit)).toMatchObject({ kind: "group" });
     });
