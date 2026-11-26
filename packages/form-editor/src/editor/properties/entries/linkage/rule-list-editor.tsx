@@ -1,44 +1,40 @@
 import type { DropdownMenuItem } from "@vef-framework-react/components";
 import type { FC } from "react";
 
-import type { ValidationIssue } from "../../../../engine/validation";
-import type {
-  FieldLinkageAction,
-  FieldLinkageRule,
-  LinkageTrigger,
-  LinkageTriggerKind
-} from "../../../../types";
+import type { ValidationIssue, ValidationSeverity } from "../../../../engine/validation";
+import type { FieldLinkageRule, LinkageTriggerKind } from "../../../../types";
+import type { RuleDraftSession } from "./rule-modal";
 import type { LinkageRuleTemplate } from "./templates";
 import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { css } from "@emotion/react";
 import { Button, Dropdown, globalCssVars } from "@vef-framework-react/components";
 import { useLatest } from "@vef-framework-react/hooks";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
-import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
-import { ReferenceScopeProvider } from "../../reference-scope";
-import { ActionsEditor } from "./actions-editor";
-import { reconcileRuleTrigger, switchRuleTrigger, triggerSwitchStripsStateActions } from "./mutators";
-import { seedSourceKey } from "./options";
-import { RuleDiagnostics } from "./rule-diagnostics";
+import { useDataSourceApis } from "../../../data-source-apis";
+import {
+  dataListItemsCss,
+  dataListMetaDotCss,
+  dataListNameCss,
+  dataListPrimaryLineCss,
+  DataListRow,
+  dataListSecondaryLineCss,
+  dataListSummaryCss,
+  dataListWarningCss
+} from "../../data-list";
+import { summarizeRuleActions } from "./action-summary";
+import { cloneRule } from "./mutators";
+import { RuleDraftModal } from "./rule-modal";
 import {
   addButtonCss,
-  deleteButtonCss,
   emptyBlockedCss,
   emptyCss,
-  ruleBodyCss,
-  ruleCardCss,
-  ruleHeaderCss,
-  ruleIndexCss,
-  ruleListRootCss,
-  rulesCss,
-  ruleTitleCss
+  ruleListRootCss
 } from "./styles";
-import { TriggerEditor } from "./trigger-editor";
-import { useAttention } from "./use-attention";
+import { summarizeTrigger } from "./trigger-summary";
 
 const EMPTY_ISSUES: readonly ValidationIssue[] = [];
 const NO_TEMPLATES: readonly LinkageRuleTemplate[] = [];
@@ -66,18 +62,56 @@ const templateDescCss = css({
   color: globalCssVars.colorTextTertiary
 });
 
-const ruleCardHighlightedCss = css({
-  borderColor: globalCssVars.colorPrimary,
-  boxShadow: `0 0 0 2px ${globalCssVars.colorPrimaryBg}`
+const ruleNumberBadgeCss = css({
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  height: 18,
+  padding: "0 5px",
+  borderRadius: 4,
+  background: globalCssVars.colorFillSecondary,
+  color: globalCssVars.colorTextSecondary,
+  fontSize: 11,
+  fontWeight: 500,
+  fontVariantNumeric: "tabular-nums",
+  lineHeight: 1
 });
 
-/**
- * The rule (and the step inside it) a diagnostic jumped to; a new object per
- * jump.
- */
-interface RuleFocus {
-  ruleId: string;
-  actionIndex?: number;
+const ruleIssueBadgeCss = css({
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  fontVariantNumeric: "tabular-nums"
+});
+
+const ruleIssueErrorCss = css({
+  color: globalCssVars.colorErrorText
+});
+
+const ruleIssueIconCss = css({
+  display: "inline-flex",
+  flexShrink: 0,
+  fontSize: 11,
+
+  "& svg": {
+    width: 12,
+    height: 12
+  }
+});
+
+function worstSeverityOf(issues: readonly ValidationIssue[]): ValidationSeverity | undefined {
+  let worst: ValidationSeverity | undefined;
+
+  for (const issue of issues) {
+    if (issue.severity === "error") {
+      return "error";
+    }
+
+    worst = issue.severity;
+  }
+
+  return worst;
 }
 
 export interface RuleListEditorProps {
@@ -86,6 +120,11 @@ export interface RuleListEditorProps {
    * The node owning the rules; `null` for the form's own events.
    */
   ownerNodeId: string | null;
+  /**
+   * Display name of the owning field, container, or form-event section, used
+   * in row trigger summaries and the rule dialog title.
+   */
+  ownerLabel?: string;
   /**
    * What the rules can read and write.
    */
@@ -114,12 +153,13 @@ export interface RuleListEditorProps {
    */
   selfKey?: string;
   /**
-   * Localized noun for the empty state and add button ("联动" / "事件").
+   * Localized noun for the empty state, add button, and create dialog title
+   * ("联动" / "事件").
    */
   noun: string;
   /**
-   * Live validator issues mapped per rule id (see `groupIssuesByRule`); each
-   * card renders its own bucket.
+   * Live validator issues mapped per committed rule id (see `groupIssuesByRule`)
+   * for the compact rows' issue badges.
    */
   issuesByRule: ReadonlyMap<string, ValidationIssue[]>;
   /**
@@ -139,11 +179,11 @@ export interface RuleListEditorProps {
 }
 
 /**
- * The shared rule-list editor: an add/remove list of rules, each a
- * {@link TriggerEditor} (WHEN) over an {@link ActionsEditor} (THEN). Field
- * linkage, container linkage, and the form-level events panel all render
- * through it, differing only in the allowed triggers, the action palette,
- * templates, and the new-rule seed.
+ * Shared compact rule-list editor for field linkage, container linkage, and
+ * form-level events. Renders each rule as a compact two-line `DataListRow` and
+ * opens one rule at a time in a wide draft dialog ({@link RuleDraftModal}),
+ * mounting trigger/action editors and CodeMirrors only while that dialog is
+ * open.
  */
 export const RuleListEditor: FC<RuleListEditorProps> = ({
   addDisabledReason,
@@ -155,6 +195,7 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
   issuesByRule,
   noun,
   onChange,
+  ownerLabel,
   ownerNodeId,
   rules,
   scope,
@@ -162,20 +203,46 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
   templates = NO_TEMPLATES,
   triggerKinds
 }) => {
-  // Latest-value refs so the per-rule handlers stay referentially stable across
-  // renders (feeding RuleCard's memo) while still reading the current rules /
-  // onChange. A keystroke in one rule then re-renders only that rule's card, not
-  // every sibling (and their mounted CodeMirrors).
+  // Latest-value refs keep row handlers referentially stable so memoized
+  // `RuleRow` items skip re-rendering unless their own summary or active state
+  // actually changed.
   const rulesRef = useLatest(rules);
   const onChangeRef = useLatest(onChange);
-  const allowStateActionsRef = useLatest(allowStateActions);
   const createRuleRef = useLatest(createRule);
-  const scopeRef = useLatest(scope);
-  const selfKeyRef = useLatest(selfKey);
+  const rowsRef = useRef(new Map<string, HTMLDivElement>());
 
+  const apis = useDataSourceApis();
   const storeApi = useFormEditorStoreApi();
   const pendingFocus = useFormEditorStore(s => s.pendingLinkageFocus?.nodeId === ownerNodeId ? s.pendingLinkageFocus : null);
-  const [focus, setFocus] = useState<RuleFocus | null>(null);
+  const [session, setSession] = useState<RuleDraftSession | null>(null);
+
+  const openEditSession = useCallback(
+    (rule: FieldLinkageRule, ruleNumber: number, actionIndex?: number): void => {
+      setSession(previous => {
+        return {
+          key: (previous?.key ?? 0) + 1,
+          mode: "edit",
+          initial: rule,
+          ruleNumber,
+          initialFocus: actionIndex === undefined ? null : { actionIndex },
+          open: true
+        };
+      });
+    },
+    []
+  );
+
+  const openCreateSession = useCallback((initial: FieldLinkageRule): void => {
+    setSession(previous => {
+      return {
+        key: (previous?.key ?? 0) + 1,
+        mode: "create",
+        initial,
+        initialFocus: null,
+        open: true
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (pendingFocus === null) {
@@ -187,64 +254,73 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
     const rule = rulesRef.current[pendingFocus.ruleIndex];
 
     if (rule !== undefined) {
-      setFocus({ ruleId: rule.id, actionIndex: pendingFocus.actionIndex });
+      rowsRef.current.get(rule.id)?.scrollIntoView?.({ block: "nearest" });
+      openEditSession(rule, pendingFocus.ruleIndex + 1, pendingFocus.actionIndex);
     }
-  }, [pendingFocus, rulesRef, storeApi]);
+  }, [pendingFocus, rulesRef, storeApi, openEditSession]);
 
-  const updateRule = useCallback(
-    (ruleId: string, updater: (rule: FieldLinkageRule) => FieldLinkageRule): void => {
-      onChangeRef.current(rulesRef.current.map(rule => rule.id === ruleId ? updater(rule) : rule));
-    },
-    [onChangeRef, rulesRef]
-  );
-
-  const handleRemove = useCallback(
-    (ruleId: string): void => {
-      onChangeRef.current(rulesRef.current.filter(rule => rule.id !== ruleId));
-    },
-    [onChangeRef, rulesRef]
-  );
-
-  const handleActionsChange = useCallback(
-    (ruleId: string, actions: FieldLinkageAction[]): void => {
-      updateRule(ruleId, current => {
-        return { ...current, actions };
-      });
-    },
-    [updateRule]
-  );
-
-  const handleTriggerChange = useCallback(
-    (ruleId: string, trigger: LinkageTrigger): void => {
-      updateRule(ruleId, current => reconcileRuleTrigger(current, trigger, allowStateActionsRef.current));
-    },
-    [allowStateActionsRef, updateRule]
-  );
-
-  const handleTriggerKindSwitch = useCallback(
-    (ruleId: string, nextKind: LinkageTriggerKind): void => {
-      const { fieldOptions } = scopeRef.current.reference;
-      const fallback = seedSourceKey(fieldOptions, selfKeyRef.current) ?? fieldOptions[0]?.value;
-
-      updateRule(ruleId, current => switchRuleTrigger(current, nextKind, allowStateActionsRef.current, fallback));
-    },
-    [allowStateActionsRef, scopeRef, selfKeyRef, updateRule]
-  );
-
-  const handleFocusAction = useCallback((ruleId: string, actionIndex: number): void => {
-    setFocus({ ruleId, actionIndex });
+  const registerRow = useCallback((ruleId: string, node: HTMLDivElement | null): void => {
+    if (node === null) {
+      rowsRef.current.delete(ruleId);
+    } else {
+      rowsRef.current.set(ruleId, node);
+    }
   }, []);
 
-  const addRule = useCallback((): void => {
-    onChangeRef.current([...rulesRef.current, createRuleRef.current()]);
-  }, [createRuleRef, onChangeRef, rulesRef]);
+  const handleEdit = useCallback((ruleId: string): void => {
+    const index = rulesRef.current.findIndex(rule => rule.id === ruleId);
+    const target = index === -1 ? undefined : rulesRef.current[index];
 
-  const addTemplateRule = useCallback(
-    (template: LinkageRuleTemplate): void => {
-      onChangeRef.current([...rulesRef.current, template.create()]);
-    },
-    [onChangeRef, rulesRef]
-  );
+    if (target !== undefined) {
+      openEditSession(target, index + 1);
+    }
+  }, [rulesRef, openEditSession]);
+
+  const handleDuplicate = useCallback((ruleId: string): void => {
+    const index = rulesRef.current.findIndex(rule => rule.id === ruleId);
+    const target = index === -1 ? undefined : rulesRef.current[index];
+
+    if (target === undefined) {
+      return;
+    }
+
+    onChangeRef.current(rulesRef.current.toSpliced(index + 1, 0, cloneRule(target)));
+  }, [onChangeRef, rulesRef]);
+
+  const handleRemove = useCallback((ruleId: string): void => {
+    onChangeRef.current(rulesRef.current.filter(rule => rule.id !== ruleId));
+    setSession(current => current?.mode === "edit" && current.initial.id === ruleId ? { ...current, open: false } : current);
+  }, [onChangeRef, rulesRef]);
+
+  const closeSession = useCallback((): void => {
+    setSession(current => current && { ...current, open: false });
+  }, []);
+
+  const handleAfterClose = useCallback((): void => {
+    setSession(current => current?.open ? current : null);
+  }, []);
+
+  const handleSave = (nextRule: FieldLinkageRule): void => {
+    const currentRules = rulesRef.current;
+    const exists = currentRules.some(rule => rule.id === nextRule.id);
+
+    onChangeRef.current(
+      exists
+        ? currentRules.map(rule => rule.id === nextRule.id ? nextRule : rule)
+        : [...currentRules, nextRule]
+    );
+    closeSession();
+  };
+
+  const addRule = useCallback((): void => {
+    openCreateSession(createRuleRef.current());
+  }, [createRuleRef, openCreateSession]);
+
+  const addTemplateRule = useCallback((template: LinkageRuleTemplate): void => {
+    openCreateSession(template.create());
+  }, [openCreateSession]);
+
+  const editingRuleId = session?.open && session.mode === "edit" ? session.initial.id : null;
 
   const templateMenuItems: DropdownMenuItem[] = templates.map(template => {
     return {
@@ -258,6 +334,12 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
     };
   });
 
+  const triggerSummaryScope = {
+    fieldsByKey: scope.fieldsByKey,
+    contextSources: scope.contextSources,
+    ownerLabel: ownerNodeId === null ? undefined : ownerLabel
+  };
+
   return (
     <div css={ruleListRootCss}>
       {rules.length === 0
@@ -268,29 +350,28 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
             </div>
           )
         : (
-            <div css={rulesCss}>
-              {rules.map((rule, index) => (
-                // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference in recursive component rendering
-                <RuleCard
-                  key={rule.id}
-                  allowStateActions={allowStateActions}
-                  commitHint={commitHint}
-                  focus={focus?.ruleId === rule.id ? focus : null}
-                  index={index}
-                  isContainerTarget={isContainerTarget}
-                  issues={issuesByRule.get(rule.id) ?? EMPTY_ISSUES}
-                  isTargetKeyed={isTargetKeyed}
-                  rule={rule}
-                  scope={scope}
-                  selfKey={selfKey}
-                  triggerKinds={triggerKinds}
-                  onActionsChange={handleActionsChange}
-                  onFocusAction={handleFocusAction}
-                  onRemove={handleRemove}
-                  onTriggerChange={handleTriggerChange}
-                  onTriggerKindSwitch={handleTriggerKindSwitch}
-                />
-              ))}
+            <div aria-label={`${noun}规则列表`} css={dataListItemsCss} role="list">
+              {rules.map((rule, index) => {
+                const ruleIssues = issuesByRule.get(rule.id) ?? EMPTY_ISSUES;
+
+                return (
+                  // eslint-disable-next-line @typescript-eslint/no-use-before-define -- forward reference to memoized row
+                  <RuleRow
+                    key={rule.id}
+                    actionsSummary={summarizeRuleActions(rule.actions, scope, apis)}
+                    active={editingRuleId === rule.id}
+                    index={index}
+                    issueCount={ruleIssues.length}
+                    issueSeverity={worstSeverityOf(ruleIssues)}
+                    ruleId={rule.id}
+                    triggerSummary={summarizeTrigger(rule.trigger, triggerSummaryScope)}
+                    onDelete={handleRemove}
+                    onDuplicate={handleDuplicate}
+                    onEdit={handleEdit}
+                    onRegisterRow={registerRow}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -337,118 +418,113 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
               {`新建${noun}规则`}
             </Button>
           )}
+
+      {session === null
+        ? null
+        : (
+            <RuleDraftModal
+              key={session.key}
+              allowStateActions={allowStateActions}
+              commitHint={commitHint}
+              isContainerTarget={isContainerTarget}
+              isTargetKeyed={isTargetKeyed}
+              noun={noun}
+              ownerLabel={ownerLabel}
+              ownerNodeId={ownerNodeId}
+              scope={scope}
+              selfKey={selfKey}
+              session={session}
+              triggerKinds={triggerKinds}
+              onAfterClose={handleAfterClose}
+              onClose={closeSession}
+              onSave={handleSave}
+            />
+          )}
     </div>
   );
 };
 
-interface RuleCardProps {
-  allowStateActions: boolean;
-  commitHint?: string;
-  focus: RuleFocus | null;
+interface RuleRowProps {
+  ruleId: string;
   index: number;
-  isContainerTarget: boolean;
-  isTargetKeyed: boolean;
-  issues: readonly ValidationIssue[];
-  rule: FieldLinkageRule;
-  scope: LinkageScope;
-  selfKey?: string;
-  triggerKinds: readonly LinkageTriggerKind[];
-  onActionsChange: (ruleId: string, actions: FieldLinkageAction[]) => void;
-  onFocusAction: (ruleId: string, actionIndex: number) => void;
-  onRemove: (ruleId: string) => void;
-  onTriggerChange: (ruleId: string, trigger: LinkageTrigger) => void;
-  onTriggerKindSwitch: (ruleId: string, nextKind: LinkageTriggerKind) => void;
+  active: boolean;
+  triggerSummary: string;
+  actionsSummary: string;
+  issueCount: number;
+  issueSeverity: ValidationSeverity | undefined;
+  onEdit: (ruleId: string) => void;
+  onDuplicate: (ruleId: string) => void;
+  onDelete: (ruleId: string) => void;
+  onRegisterRow: (ruleId: string, node: HTMLDivElement | null) => void;
 }
 
-const RuleCardBase: FC<RuleCardProps> = ({
-  allowStateActions,
-  commitHint,
-  focus,
+const RuleRowBase: FC<RuleRowProps> = ({
+  actionsSummary,
+  active,
   index,
-  isContainerTarget,
-  isTargetKeyed,
-  issues,
-  onActionsChange,
-  onFocusAction,
-  onRemove,
-  onTriggerChange,
-  onTriggerKindSwitch,
-  rule,
-  scope,
-  selfKey,
-  triggerKinds
+  issueCount,
+  issueSeverity,
+  onDelete,
+  onDuplicate,
+  onEdit,
+  onRegisterRow,
+  ruleId,
+  triggerSummary
 }) => {
-  const { highlighted, ref } = useAttention(focus !== null && focus.actionIndex === undefined ? focus : null);
+  const ruleNumber = index + 1;
+  const rowRef = useCallback(
+    (node: HTMLDivElement | null) => onRegisterRow(ruleId, node),
+    [onRegisterRow, ruleId]
+  );
 
   return (
-    // A rule card is a composite of related controls (trigger + actions +
-    // diagnostics) — expose it as a labelled group so assistive tech (and
-    // accessible queries) can address one rule.
-    <div
-      ref={ref}
-      aria-label={`规则 ${index + 1}`}
-      css={[ruleCardCss, highlighted && ruleCardHighlightedCss]}
-      role="group"
-    >
-      <div css={ruleHeaderCss}>
-        <span css={ruleIndexCss}>{index + 1}</span>
-
-        <span css={ruleTitleCss}>
-          规则
-          {index + 1}
+    <DataListRow
+      active={active}
+      deleteAriaLabel={`删除规则 ${ruleNumber}`}
+      duplicateAriaLabel={`复制规则 ${ruleNumber}`}
+      editAriaLabel={`编辑规则 ${ruleNumber}`}
+      rowRef={rowRef}
+      primary={(
+        <span css={dataListPrimaryLineCss}>
+          <span css={ruleNumberBadgeCss}>{`规则 ${ruleNumber}`}</span>
+          <span css={dataListNameCss} title={triggerSummary}>{triggerSummary}</span>
         </span>
+      )}
+      secondary={(
+        <span css={dataListSecondaryLineCss}>
+          <span css={dataListSummaryCss} title={actionsSummary}>{actionsSummary}</span>
 
-        <Button
-          aria-label={`删除规则 ${index + 1}`}
-          css={deleteButtonCss}
-          icon={<EditorIcon name="trash-2" />}
-          title="删除规则"
-          type="text"
-          onClick={() => onRemove(rule.id)}
-        />
-      </div>
+          {issueCount > 0
+            ? (
+                <>
+                  <span aria-hidden css={dataListMetaDotCss}>·</span>
 
-      <ReferenceScopeProvider value={scope.reference}>
-        <div css={ruleBodyCss}>
-          <TriggerEditor
-            commitHint={commitHint}
-            confirmKindSwitch={triggerSwitchStripsStateActions(rule)}
-            hasEffectActions={rule.actions.some(action => isEffectAction(action))}
-            selfKey={selfKey}
-            trigger={rule.trigger}
-            triggerKinds={triggerKinds}
-            onChange={trigger => onTriggerChange(rule.id, trigger)}
-            onKindSwitch={nextKind => onTriggerKindSwitch(rule.id, nextKind)}
-          />
+                  <span
+                    css={[ruleIssueBadgeCss, issueSeverity === "error" ? ruleIssueErrorCss : dataListWarningCss]}
+                    data-has-issues="true"
+                    data-issue-severity={issueSeverity}
+                  >
+                    <span aria-hidden css={ruleIssueIconCss}>
+                      <EditorIcon name={issueSeverity === "error" ? "circle-x" : "triangle-alert"} />
+                    </span>
 
-          <ActionsEditor
-            actions={rule.actions}
-            allowStateActions={allowStateActions}
-            focus={focus}
-            isContainerTarget={isContainerTarget}
-            issues={issues}
-            isTargetKeyed={isTargetKeyed}
-            scope={scope}
-            selfKey={selfKey}
-            triggerKind={rule.trigger.kind}
-            onChange={actions => onActionsChange(rule.id, actions)}
-          />
-
-          <RuleDiagnostics
-            issues={issues}
-            onFocusAction={actionIndex => onFocusAction(rule.id, actionIndex)}
-          />
-        </div>
-      </ReferenceScopeProvider>
-    </div>
+                    <span>{`${issueCount} 项问题`}</span>
+                  </span>
+                </>
+              )
+            : null}
+        </span>
+      )}
+      onDelete={() => onDelete(ruleId)}
+      onDuplicate={() => onDuplicate(ruleId)}
+      onEdit={() => onEdit(ruleId)}
+    />
   );
 };
 
 /**
- * Memoized so a keystroke in one rule re-renders only that rule's card: the
- * edited rule's `rule` reference changes while every sibling's stays identity-
- * stable (the list edit preserves untouched rules), and all the option / handler
- * props above are referentially stable, so the shallow prop compare skips the
- * rest — and their mounted CodeMirrors never reconfigure.
+ * Memoized on primitive summary strings and stable callbacks so unrelated scope
+ * changes, `$vars` updates, and edits to sibling rules never re-render untouched
+ * rows.
  */
-const RuleCard = memo(RuleCardBase);
+const RuleRow = memo(RuleRowBase);

@@ -3,7 +3,6 @@ import type { FC, ReactElement } from "react";
 import type { PriorStepSchema } from "../../../../engine/linkage";
 import type { ValidationSeverity } from "../../../../engine/validation";
 import type { FieldLinkageAction, LinkageActionType, LinkageAlertLevel } from "../../../../types";
-import type { ModalEditableAction } from "./action-modal";
 import type { OptionItem } from "./options";
 import type { LinkageScope } from "./use-linkage-editor-model";
 
@@ -14,14 +13,13 @@ import { useMergedRef } from "@vef-framework-react/hooks";
 import { useMemo } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
-import { collectStepOutputNames, isEffectAction } from "../../../../engine/linkage";
+import { isEffectAction } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { useDataSourceApis } from "../../../data-source-apis";
 import { DynamicValueEditor } from "../../dynamic-value-editor";
-import { ReferenceScopeProvider } from "../../reference-scope";
+import { ReferenceScopeProvider, useReferenceScope } from "../../reference-scope";
 import { CatalogRemoteRequestEditor } from "../../remote-request-editor";
 import { DragHandle } from "../../sortable-rows";
-import { isModalEditableAction } from "./action-modal";
 import { summarizeAction } from "./action-summary";
 import { NO_COMPLETION_SETUP } from "./expression-input";
 import { withOptional } from "./mutators";
@@ -29,7 +27,7 @@ import { OnErrorField } from "./on-error-field";
 import { actionLabelFor, alertLevelOptions, isLinkageActionType } from "./options";
 import { SelectRecordEditor } from "./select-record-editor";
 import { SetFieldsEditor } from "./set-fields-editor";
-import { StepOutputInput } from "./step-output-field";
+import { StepOutputField } from "./step-output-field";
 import {
   actionCardCss,
   codeEditorWrapperCss,
@@ -181,8 +179,8 @@ const iconButtonCss = css({
 const stepBodyCss = css({
   display: "flex",
   flexDirection: "column",
-  gap: 8,
-  padding: "8px 10px 10px",
+  gap: 10,
+  padding: "10px 12px 12px",
   borderTop: `1px solid ${globalCssVars.colorBorderSecondary}`
 });
 
@@ -208,7 +206,8 @@ export interface ActionEditorProps {
   sortableId: string;
   expanded: boolean;
   /**
-   * Set while a diagnostic points at this step (see {@link useAttention}).
+   * Set while a diagnostic or submit check points at this step (see
+   * {@link useAttention}).
    */
   attention: object | null;
   issueSeverity: ValidationSeverity | undefined;
@@ -221,17 +220,23 @@ export interface ActionEditorProps {
    * reads none.
    */
   priorSteps: readonly PriorStepSchema[] | undefined;
+  /**
+   * In-flight output name text when being edited (undefined means show the
+   * action's stored output).
+   */
+  outputDraft: string | undefined;
+  outputError: string | null;
   onToggleExpand: () => void;
-  onOpenModal: (action: ModalEditableAction) => void;
   onChangeType: (nextType: LinkageActionType) => void;
   onChange: (next: FieldLinkageAction) => void;
-  onRenameOutput: (nextOutput: string | undefined) => void;
+  onOutputChange: (nextText: string) => void;
+  onOutputCommit: () => void;
   onRemove: () => void;
 }
 
 /**
- * One step of a sequence: a one-line summary that unfolds into the step's
- * inputs.
+ * One step of a sequence inside the rule dialog: a one-line summary that
+ * unfolds in place into the step's full editor.
  */
 export const ActionEditor: FC<ActionEditorProps> = ({
   action,
@@ -243,10 +248,12 @@ export const ActionEditor: FC<ActionEditorProps> = ({
   issueSeverity,
   onChange,
   onChangeType,
-  onOpenModal,
+  onOutputChange,
+  onOutputCommit,
   onRemove,
-  onRenameOutput,
   onToggleExpand,
+  outputDraft,
+  outputError,
   priorSteps,
   scope,
   selfKey,
@@ -261,6 +268,7 @@ export const ActionEditor: FC<ActionEditorProps> = ({
   const { highlighted, ref: attentionRef } = useAttention(attention);
   const cardRef = useMergedRef<HTMLDivElement>(sortableRef, attentionRef);
   const apis = useDataSourceApis();
+  const parentReferenceScope = useReferenceScope();
 
   const isOnlyStep = actions.length === 1;
   const selectOptions = availableActions.some(option => option.value === action.type)
@@ -268,11 +276,11 @@ export const ActionEditor: FC<ActionEditorProps> = ({
     : [...availableActions, { value: action.type, label: actionLabelFor(action.type) }];
 
   const summary = useMemo(() => summarizeAction(action, scope, apis), [action, scope, apis]);
-  const usedOutputs = useMemo(() => collectStepOutputNames(actions, index), [actions, index]);
   const referenceScope = useMemo(
-    () => priorSteps === undefined ? scope.reference : { ...scope.reference, priorSteps },
-    [scope.reference, priorSteps]
+    () => priorSteps === undefined ? parentReferenceScope : { ...parentReferenceScope, priorSteps },
+    [parentReferenceScope, priorSteps]
   );
+  const effectiveSeverity: ValidationSeverity | undefined = outputError === null ? issueSeverity : "error";
 
   return (
     <div
@@ -299,9 +307,9 @@ export const ActionEditor: FC<ActionEditorProps> = ({
 
           <span css={stepIndexBadgeCss}>{index + 1}</span>
 
-          {issueSeverity === undefined
+          {effectiveSeverity === undefined
             ? null
-            : <span aria-hidden css={[issueDotCss, issueSeverity === "error" ? issueErrorDotCss : issueWarningDotCss]} />}
+            : <span aria-hidden css={[issueDotCss, effectiveSeverity === "error" ? issueErrorDotCss : issueWarningDotCss]} />}
 
           <span css={[summaryTextCss, summary.incomplete && summaryIncompleteCss]}>{summary.text}</span>
         </button>
@@ -309,20 +317,6 @@ export const ActionEditor: FC<ActionEditorProps> = ({
         <div css={badgeRowCss}>
           {isEffectAction(action) && action.onError === "continue" ? <span css={continueBadgeCss}>失败继续</span> : null}
           {unsupportedReason === null ? null : <span css={unsupportedBadgeCss}>当前宿主不支持</span>}
-
-          {isModalEditableAction(action)
-            ? (
-                <Button
-                  aria-label="弹窗编辑步骤"
-                  css={iconButtonCss}
-                  icon={<EditorIcon name="square-pen" />}
-                  size="small"
-                  title="在宽弹窗中编辑"
-                  type="text"
-                  onClick={() => onOpenModal(action)}
-                />
-              )
-            : null}
 
           {isOnlyStep
             ? null
@@ -366,11 +360,13 @@ export const ActionEditor: FC<ActionEditorProps> = ({
                 <ActionBody
                   action={action}
                   laterActions={actions.slice(index + 1)}
+                  outputDraft={outputDraft}
+                  outputError={outputError}
                   scope={scope}
                   selfKey={selfKey}
-                  usedOutputs={usedOutputs}
                   onChange={onChange}
-                  onRenameOutput={onRenameOutput}
+                  onOutputChange={onOutputChange}
+                  onOutputCommit={onOutputCommit}
                 />
               </ReferenceScopeProvider>
 
@@ -387,11 +383,13 @@ export const ActionEditor: FC<ActionEditorProps> = ({
 interface ActionBodyProps {
   action: FieldLinkageAction;
   laterActions: readonly FieldLinkageAction[];
+  outputDraft: string | undefined;
+  outputError: string | null;
   scope: LinkageScope;
   selfKey?: string;
-  usedOutputs: ReadonlySet<string>;
   onChange: (next: FieldLinkageAction) => void;
-  onRenameOutput: (nextOutput: string | undefined) => void;
+  onOutputChange: (nextText: string) => void;
+  onOutputCommit: () => void;
 }
 
 /**
@@ -402,10 +400,12 @@ function ActionBody({
   action,
   laterActions,
   onChange,
-  onRenameOutput,
+  onOutputChange,
+  onOutputCommit,
+  outputDraft,
+  outputError,
   scope,
-  selfKey,
-  usedOutputs
+  selfKey
 }: ActionBodyProps): ReactElement | null {
   switch (action.type) {
     case "assign": {
@@ -504,7 +504,14 @@ function ActionBody({
             onChange={request => onChange({ ...action, request })}
           />
 
-          <StepOutputInput required={false} usedNames={usedOutputs} value={action.output ?? ""} onCommit={onRenameOutput} />
+          <StepOutputField
+            error={outputError}
+            required={false}
+            value={outputDraft ?? action.output ?? ""}
+            onBlur={onOutputCommit}
+            onChange={onOutputChange}
+            onPressEnter={onOutputCommit}
+          />
         </>
       );
     }
@@ -515,7 +522,16 @@ function ActionBody({
           action={action}
           fieldsByKey={scope.fieldsByKey}
           laterActions={laterActions}
-          outputControl={<StepOutputInput required usedNames={usedOutputs} value={action.output} onCommit={onRenameOutput} />}
+          outputControl={(
+            <StepOutputField
+              required
+              error={outputError}
+              value={outputDraft ?? action.output}
+              onBlur={onOutputCommit}
+              onChange={onOutputChange}
+              onPressEnter={onOutputCommit}
+            />
+          )}
           onChange={onChange}
         />
       );

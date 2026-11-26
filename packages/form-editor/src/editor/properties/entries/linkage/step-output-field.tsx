@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
 import { Input } from "@vef-framework-react/components";
-import { useId, useState } from "react";
+import { useId } from "react";
 
 import { sanitizeKey } from "../../../../engine/keys";
 import { isValidIdentifier } from "../../../../engine/validation";
@@ -32,6 +32,10 @@ export interface StepOutputFieldProps {
   onPressEnter?: () => void;
 }
 
+/**
+ * Controlled output-name input for `api_call` and `select_record` steps inside
+ * the rule draft dialog.
+ */
 export function StepOutputField({
   error,
   onBlur,
@@ -60,47 +64,5 @@ export function StepOutputField({
         onPressEnter={onPressEnter}
       />
     </DraftField>
-  );
-}
-
-export interface StepOutputInputProps {
-  required: boolean;
-  usedNames: ReadonlySet<string>;
-  value: string;
-  onCommit: (next: string | undefined) => void;
-}
-
-/**
- * The inline form: the name is a draft while it is typed, committed on blur or
- * Enter, and dropped when it cannot be used — every commit renames the
- * references in the steps that follow, so a half-typed name must not.
- */
-export function StepOutputInput({
-  onCommit,
-  required,
-  usedNames,
-  value
-}: StepOutputInputProps): ReactElement {
-  const [draft, setDraft] = useState<string | null>(null);
-  const current = draft ?? value;
-  const error = stepOutputError(current, required, usedNames);
-
-  const commit = (): void => {
-    setDraft(null);
-
-    if (current !== value && error === null) {
-      onCommit(current.length > 0 ? current : undefined);
-    }
-  };
-
-  return (
-    <StepOutputField
-      error={error}
-      required={required}
-      value={current}
-      onBlur={commit}
-      onChange={setDraft}
-      onPressEnter={commit}
-    />
   );
 }

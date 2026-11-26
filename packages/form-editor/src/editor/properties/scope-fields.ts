@@ -22,10 +22,10 @@ function isSameDeclaration(previous: FormField | undefined, next: FormField): bo
  * Keep the field list's identity while nothing but the fields' own linkage
  * changed.
  *
- * Every store edit rebuilds the list, and a keystroke in a rule replaces the
- * field holding it. Downstream this identity feeds `RuleCard`'s memo, so a
- * fresh one per keystroke would re-render every rule card and its mounted
- * CodeMirror; nothing there reads a candidate's linkage.
+ * Every store edit rebuilds the list, and saving a rule replaces the field
+ * holding it. Downstream this identity feeds the linkage scope memo so
+ * linkage-only writes skip rebuilding field option maps and pickers; nothing
+ * there reads a candidate's linkage.
  *
  * The ref write happens during render but is idempotent for a given content,
  * so StrictMode double-renders and discarded concurrent renders stay

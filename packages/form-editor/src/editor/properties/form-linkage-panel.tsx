@@ -7,8 +7,6 @@ import { createFormRule } from "./entries/linkage/mutators";
 import { RuleListEditor } from "./entries/linkage/rule-list-editor";
 import { useLinkageEditorModel } from "./entries/linkage/use-linkage-editor-model";
 
-// Precomputed (vs a fresh `.filter` per render) so the trigger-kind list keeps a
-// stable identity and never busts the rule cards' memo when there is no source.
 const FORM_TRIGGER_KINDS_NO_CONDITION = FORM_TRIGGER_KINDS.filter(kind => kind !== "condition");
 
 export interface FormLinkagePanelProps {
@@ -27,7 +25,7 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
   // canonical pc tree (not the active device's), root-scope fields only —
   // matching how `validateSchema` validates it.
   const { issuesByRule, scope } = useLinkageEditorModel(null);
-  const { fieldOptions } = scope.reference;
+  const { fieldOptions } = scope;
   const rules = schema.linkage?.rules ?? [];
   // A `condition` trigger with no comparable root-scope source field yields an
   // empty group the validator rejects and the builder can't repair, so drop it
@@ -45,6 +43,7 @@ export function FormLinkagePanel({ onChange, schema }: FormLinkagePanelProps): R
       issuesByRule={issuesByRule}
       isTargetKeyed={false}
       noun="事件"
+      ownerLabel="表单事件"
       ownerNodeId={null}
       rules={rules}
       scope={scope}

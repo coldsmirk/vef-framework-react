@@ -365,10 +365,12 @@ function ControlProperties({ activeTab, onTabChange }: ControlPropertiesProps): 
 
     // Coalesce per entry, not per field: a run of keystrokes in one entry's
     // input folds into a single undo step, while moving on to another entry
-    // (label → placeholder) starts a fresh one.
+    // (label → placeholder) starts a fresh one. Linkage edits are discrete
+    // commits (confirmed rule dialogs, duplicates, deletes, default toggles),
+    // so they omit `coalesceKey` and keep one undo step each.
     storeApi.getState().editField(
       { fieldId: field.id, updater: current => entry.write(current, value) },
-      { coalesceKey: `field:${field.id}:${entry.id}` }
+      entry.type === "linkage-rules" ? undefined : { coalesceKey: `field:${field.id}:${entry.id}` }
     );
   };
 

@@ -28,17 +28,25 @@ export interface OptionItem<T extends string> {
   label: string;
 }
 
-export const operatorOptions: Array<OptionItem<LinkageOperator>> = [
-  { value: "eq", label: "等于" },
-  { value: "ne", label: "不等于" },
-  { value: "gt", label: "大于" },
-  { value: "lt", label: "小于" },
-  { value: "gte", label: "大于等于" },
-  { value: "lte", label: "小于等于" },
-  { value: "contains", label: "包含" },
-  { value: "empty", label: "为空" },
-  { value: "notEmpty", label: "不为空" }
-];
+const OPERATOR_LABELS: Record<LinkageOperator, string> = {
+  eq: "等于",
+  ne: "不等于",
+  gt: "大于",
+  lt: "小于",
+  gte: "大于等于",
+  lte: "小于等于",
+  contains: "包含",
+  empty: "为空",
+  notEmpty: "不为空"
+};
+
+export const operatorOptions: Array<OptionItem<LinkageOperator>> = LINKAGE_OPERATORS.map(value => {
+  return { value, label: OPERATOR_LABELS[value] };
+});
+
+export function operatorLabelFor(operator: LinkageOperator): string {
+  return OPERATOR_LABELS[operator];
+}
 
 const TRIGGER_LABELS: Record<LinkageTriggerKind, string> = {
   condition: "满足条件",
@@ -51,6 +59,10 @@ const TRIGGER_LABELS: Record<LinkageTriggerKind, string> = {
   beforeSubmit: "提交前",
   afterSubmit: "提交后"
 };
+
+export function triggerLabelFor(kind: LinkageTriggerKind): string {
+  return TRIGGER_LABELS[kind];
+}
 
 const STATE_ACTION_LABELS: Record<StateActionType, string> = {
   show: "显示",

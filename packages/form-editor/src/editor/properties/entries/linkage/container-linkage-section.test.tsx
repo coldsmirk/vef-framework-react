@@ -3,8 +3,9 @@ import type { ReactElement } from "react";
 import type { FormEditorStoreApi } from "../../../../store/form-store";
 import type { Block, ContainerNode, FieldLinkage, FormSchema, SectionNode } from "../../../../types";
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
 import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
@@ -69,13 +70,15 @@ function setup(schema: FormSchema): FormEditorStoreApi {
   let captured: FormEditorStoreApi | null = null;
 
   render(
-    <FormEditorStoreProvider initialState={{ schema }}>
-      <Harness
-        onReady={api => {
-          captured = api;
-        }}
-      />
-    </FormEditorStoreProvider>
+    <ConfigProvider>
+      <FormEditorStoreProvider initialState={{ schema }}>
+        <Harness
+          onReady={api => {
+            captured = api;
+          }}
+        />
+      </FormEditorStoreProvider>
+    </ConfigProvider>
   );
 
   if (!captured) {
@@ -122,12 +125,42 @@ function conditionShowLinkage(): FieldLinkage {
   };
 }
 
+beforeEach(() => {
+  vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  } as unknown as MediaQueryList));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("ContainerLinkageSection", () => {
-  it("adds a condition rule seeded off a same-scope keyed field", async () => {
+  it("adds a condition rule seeded off a same-scope keyed field only after confirm", async () => {
     const user = userEvent.setup();
     const api = setup(makeSchema(sectionNode()));
 
     await user.click(screen.getByRole("button", { name: /新建联动规则/ }));
+
+    let dialog = await screen.findByRole("dialog", { name: "新建联动规则" });
+    expect(storeSection(api).linkage?.rules).toBeUndefined();
+
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "新建联动规则" })).not.toBeInTheDocument();
+    });
+    expect(storeSection(api).linkage?.rules).toBeUndefined();
+
+    await user.click(screen.getByRole("button", { name: /新建联动规则/ }));
+    dialog = await screen.findByRole("dialog", { name: "新建联动规则" });
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
     const rules = storeSection(api).linkage?.rules;
     expect(rules).toHaveLength(1);
@@ -136,22 +169,38 @@ describe("ContainerLinkageSection", () => {
       condition: { kind: "group", children: [{ kind: "leaf", sourceKey: "amount" }] }
     });
     expect(rules?.[0]?.actions?.[0]).toMatchObject({ type: "show" });
+    expect(api.getState().past).toHaveLength(1);
   });
 
-  it("authors a hide-section rule by switching the action type", async () => {
+  it("renders a compact row and authors a hide-section rule in the dialog", async () => {
     const user = userEvent.setup();
     const schema = makeSchema(sectionNode(conditionShowLinkage()));
     const api = setup(schema);
 
-    // Combobox order on the card: trigger kind, leaf source, leaf operator,
+    expect(screen.getByText("金额 不为空 时")).toBeInTheDocument();
+    expect(screen.getByText("显示")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "编辑规则 1" }));
+    const dialog = await screen.findByRole("dialog", { name: "规则 1 · 联系方式" });
+
+    // Combobox order in the dialog: trigger kind, leaf source, leaf operator,
     // then the action's type select.
-    const selects = screen.getAllByRole("combobox");
+    const selects = within(dialog).getAllByRole("combobox");
     await user.click(selects[3] as HTMLElement);
     await user.click(await screen.findByText("隐藏"));
+    await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
     // The action keeps its client-stable id across the type switch.
     const action = storeSection(api).linkage?.rules?.[0]?.actions?.[0];
     expect(action).toEqual({ id: "A1", type: "hide" });
+    expect(screen.getByText("隐藏")).toBeInTheDocument();
+    expect(api.getState().past).toHaveLength(1);
+
+    act(() => {
+      api.getState().undo();
+    });
+
+    expect(storeSection(api).linkage?.rules?.[0]?.actions?.[0]).toEqual({ id: "A1", type: "show" });
   });
 
   it("limits container state actions to show/hide/enable/disable", async () => {
@@ -159,7 +208,10 @@ describe("ContainerLinkageSection", () => {
     const schema = makeSchema(sectionNode(conditionShowLinkage()));
     setup(schema);
 
-    const selects = screen.getAllByRole("combobox");
+    await user.click(screen.getByRole("button", { name: "编辑规则 1" }));
+    const dialog = await screen.findByRole("dialog", { name: "规则 1 · 联系方式" });
+
+    const selects = within(dialog).getAllByRole("combobox");
     await user.click(selects[3] as HTMLElement);
     await screen.findByText("隐藏");
 

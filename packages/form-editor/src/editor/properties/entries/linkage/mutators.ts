@@ -235,6 +235,40 @@ export function createRule(sourceKey: string | undefined, isTargetKeyed: boolean
   };
 }
 
+function refreshConditionIds(condition: LinkageCondition): LinkageCondition {
+  if (condition.kind === "group") {
+    return {
+      ...condition,
+      ...condition.id !== undefined && { id: createId("Condition") },
+      children: condition.children.map(child => refreshConditionIds(child))
+    };
+  }
+
+  return condition.id === undefined ? condition : { ...condition, id: createId("Condition") };
+}
+
+/**
+ * Deep-clone a rule under a fresh rule id (and fresh action / condition ids so
+ * the duplicate shares no identity with the original).
+ */
+export function cloneRule(rule: FieldLinkageRule): FieldLinkageRule {
+  const cloned = structuredClone(rule);
+  const trigger: LinkageTrigger = cloned.trigger.kind === "condition"
+    ? { ...cloned.trigger, condition: refreshConditionIds(cloned.trigger.condition) }
+    : cloned.trigger.when === undefined
+      ? cloned.trigger
+      : { ...cloned.trigger, when: refreshConditionIds(cloned.trigger.when) };
+
+  return {
+    ...cloned,
+    id: createId("Rule"),
+    trigger,
+    actions: cloned.actions.map(action => {
+      return { ...action, id: createId("Action") };
+    })
+  };
+}
+
 /**
  * Reconcile a rule's actions after its trigger changes. State actions are only
  * valid under a `condition` trigger in a state-allowing scope; when the new

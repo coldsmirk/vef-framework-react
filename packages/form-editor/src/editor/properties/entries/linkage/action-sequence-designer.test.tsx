@@ -2,7 +2,7 @@ import type * as ComponentsModule from "@vef-framework-react/components";
 import type { CodeEditorProps } from "@vef-framework-react/components";
 import type { ChangeEvent, ReactElement } from "react";
 
-import type { LinkageFocusRef } from "../../../../store/form-store";
+import type { FormEditorStoreApi, LinkageFocusRef } from "../../../../store/form-store";
 import type {
   DataSourceApi,
   FieldLinkage,
@@ -16,15 +16,16 @@ import type {
   UploadField
 } from "../../../../types";
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect, useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { ConfigProvider } from "@vef-framework-react/components";
+import { Profiler, useEffect, useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dragSortableRow } from "../../../../../test-utils";
 import { createDefaultRegistry } from "../../../../engine/registry/defaults";
 import { RegistryProvider } from "../../../../store/engine-provider";
-import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../../../store/form-store";
+import { FormEditorStoreProvider, useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
 import { definePropertyEntry } from "../../../../types";
 import { ContextSourcesProvider } from "../../../context-sources";
 import { DataSourceApisProvider } from "../../../data-source-apis";
@@ -111,15 +112,23 @@ function FocusDispatcher({ focus }: { focus: LinkageFocusRef }): ReactElement {
  * The real properties panel over the real store, on the rule a diagnostic
  * points at.
  */
-function renderPanel(linkage: FieldLinkage, focus: LinkageFocusRef): void {
+function renderPanel(
+  linkage: FieldLinkage | undefined,
+  focus: LinkageFocusRef,
+  formLinkage?: FieldLinkage
+): void {
   render(
-    <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
-      <RegistryProvider registries={REGISTRIES}>
-        <FormEditorStoreProvider initialState={{ schema: makeStaffSchema(linkage) }}>
-          <FocusDispatcher focus={focus} />
-        </FormEditorStoreProvider>
-      </RegistryProvider>
-    </PreviewRuntimeProvider>
+    <ConfigProvider>
+      <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
+        <DataSourceApisProvider apis={DEFAULT_APIS}>
+          <RegistryProvider registries={REGISTRIES}>
+            <FormEditorStoreProvider initialState={{ schema: makeStaffSchema(linkage, formLinkage) }}>
+              <FocusDispatcher focus={focus} />
+            </FormEditorStoreProvider>
+          </RegistryProvider>
+        </DataSourceApisProvider>
+      </PreviewRuntimeProvider>
+    </ConfigProvider>
   );
 }
 
@@ -141,7 +150,7 @@ function alertRule(id: string, source: string): NonNullable<FieldLinkage["rules"
   };
 }
 
-function makeStaffSchema(codeLinkage?: FieldLinkage): FormSchema {
+function makeStaffSchema(codeLinkage?: FieldLinkage, formLinkage?: FieldLinkage): FormSchema {
   const codeField: TextfieldField = {
     id: "Field_code",
     type: "textfield",
@@ -196,6 +205,7 @@ function makeStaffSchema(codeLinkage?: FieldLinkage): FormSchema {
   return {
     id: "Form_staff",
     version: 2,
+    ...formLinkage && { linkage: formLinkage },
     variables: [
       {
         id: "Var_1",
@@ -249,26 +259,28 @@ function StatefulLinkageHarness({
   };
 
   return (
-    <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest, hasNavigate } }}>
-      <DataSourceApisProvider apis={apis}>
-        <ContextSourcesProvider sources={contextSources}>
-          <RegistryProvider registries={REGISTRIES}>
-            <FormEditorStoreProvider initialState={{ schema }}>
-              <LinkageRulesEntry
-                entry={ENTRY}
-                field={field}
-                schema={schema}
-                onChange={value => {
-                  const next = value as FieldLinkage | undefined;
-                  onCommit?.(next);
-                  setField(current => ENTRY.write(current, next));
-                }}
-              />
-            </FormEditorStoreProvider>
-          </RegistryProvider>
-        </ContextSourcesProvider>
-      </DataSourceApisProvider>
-    </PreviewRuntimeProvider>
+    <ConfigProvider>
+      <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest, hasNavigate } }}>
+        <DataSourceApisProvider apis={apis}>
+          <ContextSourcesProvider sources={contextSources}>
+            <RegistryProvider registries={REGISTRIES}>
+              <FormEditorStoreProvider initialState={{ schema }}>
+                <LinkageRulesEntry
+                  entry={ENTRY}
+                  field={field}
+                  schema={schema}
+                  onChange={value => {
+                    const next = value as FieldLinkage | undefined;
+                    onCommit?.(next);
+                    setField(current => ENTRY.write(current, next));
+                  }}
+                />
+              </FormEditorStoreProvider>
+            </RegistryProvider>
+          </ContextSourcesProvider>
+        </DataSourceApisProvider>
+      </PreviewRuntimeProvider>
+    </ConfigProvider>
   );
 }
 
@@ -301,11 +313,35 @@ function dependentSteps(withIds = true): FieldLinkage {
 }
 
 /**
- * The steps' summaries as they stand on screen.
+ * The steps' summaries as they stand inside the open dialog.
  */
-function summaries(): string[] {
-  return screen.getAllByText(/^(?:调用接口|选择记录) · /).map(element => element.textContent);
+function summaries(container: HTMLElement): string[] {
+  return within(container).getAllByText(/^(?:调用接口|选择记录) · /).map(element => element.textContent);
 }
+
+async function openFirstRule(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  await user.click(screen.getByRole("button", { name: "编辑规则 1" }));
+
+  return screen.findByRole("dialog");
+}
+
+beforeEach(() => {
+  codeEditorRender.mockClear();
+  vi.spyOn(globalThis, "matchMedia").mockImplementation((query: string) => ({
+    matches: query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  } as unknown as MediaQueryList));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("action sequence designer", () => {
   describe("control-specific commit hints and event guards", () => {
@@ -327,7 +363,7 @@ describe("action sequence designer", () => {
       })).toBe("值改变后立即触发");
     });
 
-    it("adds, edits, and removes a when guard on an event trigger", async () => {
+    it("adds, edits, and removes a when guard on an event trigger inside the dialog", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
 
@@ -352,11 +388,15 @@ describe("action sequence designer", () => {
         />
       );
 
-      expect(screen.getByText("按回车，或离开输入框且内容变化时触发")).toBeInTheDocument();
+      const dialog = await openFirstRule(user);
+      expect(within(dialog).getByText("按回车，或离开输入框且内容变化时触发")).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: /添加执行条件/ }));
+      await user.click(within(dialog).getByRole("button", { name: /添加执行条件/ }));
+      expect(within(dialog).getByText("仅在满足条件时执行")).toBeInTheDocument();
+      // Nothing written until 确定.
+      expect(onCommit).not.toHaveBeenCalled();
 
-      expect(screen.getByText("仅在满足条件时执行")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
       const afterAdd = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
       expect(afterAdd.rules?.[0]?.trigger).toMatchObject({
         kind: "commit",
@@ -372,7 +412,9 @@ describe("action sequence designer", () => {
         }
       });
 
-      await user.click(screen.getByRole("button", { name: "移除条件" }));
+      const reopened = await openFirstRule(user);
+      await user.click(within(reopened).getByRole("button", { name: "移除条件" }));
+      await user.click(within(reopened).getByRole("button", { name: "确定" }));
       const afterRemove = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
       expect(afterRemove.rules?.[0]?.trigger).toEqual({ kind: "commit" });
     });
@@ -413,7 +455,7 @@ describe("action sequence designer", () => {
   });
 
   describe("lookup-and-fill template and step summary / collapse", () => {
-    it("offers 查询并回填 template only on writable leaf fields when request service is wired", async () => {
+    it("opens 查询并回填 in the dialog and commits only on confirm", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
 
@@ -421,6 +463,27 @@ describe("action sequence designer", () => {
 
       await user.click(screen.getByRole("button", { name: /模板/ }));
       await user.click(await screen.findByText("查询并回填"));
+
+      let dialog = await screen.findByRole("dialog", { name: "新建联动规则" });
+      expect(onCommit).not.toHaveBeenCalled();
+
+      // Multi-step sequence starts collapsed with plain-Chinese summaries inside the dialog.
+      expect(within(dialog).getByText(/调用接口 · 未选择接口 → result/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/选择记录 · result → selected/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/设置字段 · 未配置写入项/)).toBeInTheDocument();
+
+      // Cancelling inserts nothing.
+      await user.click(within(dialog).getByRole("button", { name: "取消" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "新建联动规则" })).not.toBeInTheDocument();
+      });
+      expect(onCommit).not.toHaveBeenCalled();
+
+      // Re-opening via template and confirming commits the rule and renders its compact row.
+      await user.click(screen.getByRole("button", { name: /模板/ }));
+      await user.click(await screen.findByText("查询并回填"));
+      dialog = await screen.findByRole("dialog", { name: "新建联动规则" });
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
       const committed = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
       expect(committed.rules).toHaveLength(1);
@@ -448,10 +511,8 @@ describe("action sequence designer", () => {
         { type: "set_fields" }
       ]);
 
-      // Multi-step sequence starts collapsed with plain-Chinese summaries.
-      expect(screen.getByText(/调用接口 · 未选择接口 → result/)).toBeInTheDocument();
-      expect(screen.getByText(/选择记录 · result → selected/)).toBeInTheDocument();
-      expect(screen.getByText(/设置字段 · 未配置写入项/)).toBeInTheDocument();
+      expect(screen.getByText("工号 输入完成时 · 工号 不为空")).toBeInTheDocument();
+      expect(screen.getByText("3 个步骤：调用接口 → 选择记录 → 设置字段")).toBeInTheDocument();
 
       unmount();
 
@@ -473,7 +534,7 @@ describe("action sequence designer", () => {
     });
   });
 
-  describe("step outputs, catalog api_call, select_record, and set_fields matching", () => {
+  describe("step outputs, in-place complex editing, select_record, and set_fields matching", () => {
     it("allocates unique output names and seeds select_record source from prior step", () => {
       const a1 = createActionFor("api_call", []);
       expect(a1).toMatchObject({ type: "api_call", output: "result" });
@@ -499,7 +560,7 @@ describe("action sequence designer", () => {
       });
     });
 
-    it("propagates output renames, supports 按名称匹配, and previews inferred select_record columns", async () => {
+    it("edits complex steps in place with no second dialog, runs 按名称匹配, previews inferred columns, and propagates output renames", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
 
@@ -541,25 +602,43 @@ describe("action sequence designer", () => {
         />
       );
 
-      // Collapsed summary shows the catalog API label.
-      expect(screen.getByText("调用接口 · 职员查询 → result")).toBeInTheDocument();
+      const dialog = await openFirstRule(user);
 
-      // Open step 3 (set_fields) in the wide DraftModal and run 按名称匹配.
-      const modalButtons = screen.getAllByRole("button", { name: "弹窗编辑步骤" });
-      await user.click(modalButtons[2] as HTMLElement);
+      // Single dialog layer: no nested "弹窗编辑步骤" button.
+      expect(within(dialog).queryByRole("button", { name: "弹窗编辑步骤" })).not.toBeInTheDocument();
+      expect(within(dialog).getByText("调用接口 · 职员查询 → result")).toBeInTheDocument();
 
-      const dialog = await screen.findByRole("dialog");
-      // Two prior steps declare fields (selected + result), so clicking opens dropdown.
+      // Expand step 3 (set_fields) in place and run 按名称匹配.
+      await user.click(within(dialog).getByRole("button", { name: /设置字段 · 未配置写入项/ }));
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
       await user.click(within(dialog).getByRole("button", { name: /按名称匹配/ }));
       await user.click(await screen.findByText(/步骤 2 · 职员查询 · 选中记录/));
 
       // The rule's own field (工号) is left out although the step declares it.
       expect(within(dialog).getByRole("status")).toHaveTextContent(/已按名称匹配并新增 3 项写入/);
+
+      // Expand step 2 (select_record) in place and check auto-inferred columns preview.
+      await user.click(within(dialog).getByRole("button", { name: /选择记录 · result → selected/ }));
+      expect(within(dialog).getByText("留空时展示后续步骤引用的列：姓名、手机号、性别")).toBeInTheDocument();
+
+      // Expand step 1 (api_call) in place, rename its output, and save the whole rule at once.
+      await user.click(within(dialog).getByRole("button", { name: /调用接口 · 职员查询 → result/ }));
+      const outputInput = within(dialog).getByDisplayValue("result");
+      await user.clear(outputInput);
+      await user.type(outputInput, "staffList");
+
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
       await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
-      const afterMatch = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
-      const setFieldsAction = afterMatch.rules?.[0]?.actions[2];
-      expect(setFieldsAction).toMatchObject({
+      expect(onCommit).toHaveBeenCalledTimes(1);
+      const afterSave = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
+      expect(afterSave.rules?.[0]?.actions[0]).toMatchObject({ type: "api_call", output: "staffList" });
+      expect(afterSave.rules?.[0]?.actions[1]).toMatchObject({
+        type: "select_record",
+        source: { kind: "reference", path: "$steps.staffList" }
+      });
+      expect(afterSave.rules?.[0]?.actions[2]).toMatchObject({
         type: "set_fields",
         assignments: [
           { targetKey: "name", value: { kind: "reference", path: "$steps.selected.name" } },
@@ -567,29 +646,57 @@ describe("action sequence designer", () => {
           { targetKey: "gender", value: { kind: "reference", path: "$steps.selected.gender" } }
         ]
       });
+    });
 
-      // Expand step 2 (select_record) and check auto-inferred columns preview.
-      await user.click(screen.getByRole("button", { name: /选择记录 · result → selected/ }));
-      expect(screen.getByText("留空时展示后续步骤引用的列：姓名、手机号、性别")).toBeInTheDocument();
+    it("blocks 确定 and focuses the offending step when a required output is blank or duplicated", async () => {
+      const user = userEvent.setup();
+      const onCommit = vi.fn();
 
-      // Rename step 1's output in modal and verify step 2's source follows automatically.
-      const updatedModalButtons = screen.getAllByRole("button", { name: "弹窗编辑步骤" });
-      await user.click(updatedModalButtons[0] as HTMLElement);
-      const apiDialog = await screen.findByRole("dialog");
-      const outputInput = within(apiDialog).getByLabelText("结果名");
+      render(
+        <StatefulLinkageHarness
+          initialLinkage={dependentSteps()}
+          onCommit={onCommit}
+        />
+      );
+
+      const dialog = await openFirstRule(user);
+
+      // Expand step 2 (select_record), clear its required output, then collapse it.
+      const step2Toggle = within(dialog).getByRole("button", { name: /选择记录/ });
+      await user.click(step2Toggle);
+      const outputInput = within(dialog).getByDisplayValue("selected");
       await user.clear(outputInput);
-      await user.type(outputInput, "staffList");
-      await user.click(within(apiDialog).getByRole("button", { name: "确定" }));
+      await user.click(step2Toggle);
+      expect(step2Toggle).toHaveAttribute("aria-expanded", "false");
 
-      const afterRename = onCommit.mock.calls.at(-1)?.[0] as FieldLinkage;
-      expect(afterRename.rules?.[0]?.actions[0]).toMatchObject({ type: "api_call", output: "staffList" });
-      expect(afterRename.rules?.[0]?.actions[1]).toMatchObject({
+      // Clicking 确定 blocks save, re-expands step 2, and displays the alert.
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+      expect(onCommit).not.toHaveBeenCalled();
+      expect(step2Toggle).toHaveAttribute("aria-expanded", "true");
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("请填写结果名，供后续步骤引用");
+
+      // Typing a duplicate name ("result", already owned by step 1) also blocks 确定.
+      await user.type(within(dialog).getByLabelText(/结果名/), "result");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+      expect(onCommit).not.toHaveBeenCalled();
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("结果名「result」与本规则其它步骤重复");
+
+      // Fixing to a unique valid name lets 确定 commit cleanly.
+      const inputAgain = within(dialog).getByLabelText(/结果名/);
+      await user.clear(inputAgain);
+      await user.type(inputAgain, "picked");
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+
+      expect(onCommit).toHaveBeenCalledTimes(1);
+      expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions[1]).toMatchObject({
         type: "select_record",
-        source: { kind: "reference", path: "$steps.staffList" }
+        output: "picked"
       });
     });
 
-    it("renders typed literal controls in set_fields for number, switch, and static select targets", () => {
+    it("renders typed literal controls in set_fields for number, switch, and static select targets", async () => {
+      const user = userEvent.setup();
+
       render(
         <StatefulLinkageHarness
           initialLinkage={{
@@ -614,58 +721,44 @@ describe("action sequence designer", () => {
         />
       );
 
+      const dialog = await openFirstRule(user);
       // Single-step rule opens expanded: number spinbutton, switch segmented, and static select.
-      expect(screen.getByRole("spinbutton")).toHaveValue("28");
-      expect(screen.getByText("开启")).toBeInTheDocument();
-      expect(screen.getByText("男")).toBeInTheDocument();
+      expect(within(dialog).getByRole("spinbutton")).toHaveValue("28");
+      expect(within(dialog).getByText("开启")).toBeInTheDocument();
+      expect(within(dialog).getByText("男")).toBeInTheDocument();
     });
 
     it("warns before deleting a step referenced by later steps", async () => {
       const user = userEvent.setup();
       const onCommit = vi.fn();
-      const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
 
-      try {
-        render(
-          <StatefulLinkageHarness
-            initialLinkage={{
-              rules: [
-                {
-                  id: "R1",
-                  trigger: { kind: "commit" },
-                  actions: [
-                    {
-                      id: "A1",
-                      type: "api_call",
-                      request: { resource: "md/staff", action: "lookup" },
-                      output: "result"
-                    },
-                    {
-                      id: "A2",
-                      type: "select_record",
-                      source: { kind: "reference", path: "$steps.result" },
-                      output: "selected"
-                    }
-                  ]
-                }
-              ]
-            }}
-            onCommit={onCommit}
-          />
-        );
+      render(
+        <StatefulLinkageHarness
+          initialLinkage={dependentSteps()}
+          onCommit={onCommit}
+        />
+      );
 
-        const deleteButtons = screen.getAllByRole("button", { name: "删除动作" });
-        await user.click(deleteButtons[0] as HTMLElement);
+      const dialog = await openFirstRule(user);
+      const deleteButtons = within(dialog).getAllByRole("button", { name: "删除动作" });
+      await user.click(deleteButtons[0] as HTMLElement);
 
-        expect(confirmSpy).toHaveBeenCalledTimes(1);
-        expect(onCommit).not.toHaveBeenCalled();
+      expect(await screen.findByText(/步骤 2 引用了该步骤的结果/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "取 消" }));
+      await waitFor(() => {
+        expect(screen.queryByText(/步骤 2 引用了该步骤的结果/)).not.toBeInTheDocument();
+      });
+      expect(within(dialog).getAllByRole("button", { name: "删除动作" })).toHaveLength(2);
 
-        confirmSpy.mockReturnValue(true);
-        await user.click(deleteButtons[0] as HTMLElement);
-        expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions).toHaveLength(1);
-      } finally {
-        confirmSpy.mockRestore();
-      }
+      await user.click(within(dialog).getAllByRole("button", { name: "删除动作" })[0] as HTMLElement);
+      expect(await screen.findByText(/步骤 2 引用了该步骤的结果/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "仍然删除" }));
+      await waitFor(() => {
+        expect(within(dialog).queryByRole("button", { name: "删除动作" })).not.toBeInTheDocument();
+      });
+
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
+      expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions).toHaveLength(1);
     });
 
     it("starts an untouched value over when its target changes", async () => {
@@ -693,8 +786,10 @@ describe("action sequence designer", () => {
         />
       );
 
-      await user.click(screen.getByRole("combobox", { name: "目标字段" }));
+      const dialog = await openFirstRule(user);
+      await user.click(within(dialog).getByRole("combobox", { name: "目标字段" }));
       await user.click(await screen.findByText("姓名 · name"));
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
 
       expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions[0]).toMatchObject({
         assignments: [{ targetKey: "name", value: { kind: "literal", value: "" } }]
@@ -726,72 +821,91 @@ describe("action sequence designer", () => {
         />
       );
 
-      expect(screen.getByText("当前宿主不支持")).toBeInTheDocument();
-      expect(screen.getByText(/当前宿主未接入接口调用，执行到此步骤会失败/)).toBeInTheDocument();
+      const dialog = await openFirstRule(user);
+      expect(within(dialog).getByText("当前宿主不支持")).toBeInTheDocument();
+      expect(within(dialog).getByText(/当前宿主未接入接口调用，执行到此步骤会失败/)).toBeInTheDocument();
 
       // Still editable: changing onError works and updates the badge.
-      const onErrorSelect = screen.getByLabelText("失败处理");
+      const onErrorSelect = within(dialog).getByLabelText("失败处理");
       await user.click(onErrorSelect);
       await user.click(await screen.findByText("忽略失败，继续后续步骤"));
-      expect(screen.getByText("失败继续")).toBeInTheDocument();
+      expect(within(dialog).getByText("失败继续")).toBeInTheDocument();
     });
   });
 
-  describe("moving a step", () => {
+  describe("moving a step inside the dialog", () => {
     const HANDLES = { name: /^拖动排序步骤/ };
 
-    function shownSteps(): string[] {
-      return screen.getAllByRole("button", HANDLES).map(handle => handle.getAttribute("aria-label") as string);
+    function shownSteps(dialog: HTMLElement): string[] {
+      return within(dialog).getAllByRole("button", HANDLES).map(handle => handle.getAttribute("aria-label") as string);
     }
 
-    async function dragFirstStepLast(): Promise<void> {
+    async function dragFirstStepLast(dialog: HTMLElement): Promise<void> {
       await dragSortableRow({
-        handles: screen.getAllByRole("button", HANDLES),
+        handles: within(dialog).getAllByRole("button", HANDLES),
         from: 0,
         to: 1
       });
     }
 
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     it("shows the steps in their own order again once a move that breaks references is declined", async () => {
+      const user = userEvent.setup();
       const onCommit = vi.fn();
-      const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
 
       render(<StatefulLinkageHarness initialLinkage={dependentSteps()} onCommit={onCommit} />);
-      await dragFirstStepLast();
+      const dialog = await openFirstRule(user);
+      await dragFirstStepLast(dialog);
 
-      expect(confirmSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("步骤 1 引用了结果「result」，它要到步骤 2 才产生"));
+      expect(await screen.findByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "取 消" }));
+      await waitFor(() => {
+        expect(screen.queryByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).not.toBeInTheDocument();
+      });
+
       expect(onCommit).not.toHaveBeenCalled();
-      expect(shownSteps()).toEqual(["拖动排序步骤 1", "拖动排序步骤 2"]);
-      expect(summaries()).toEqual([expect.stringContaining("调用接口"), expect.stringContaining("选择记录")]);
+      expect(shownSteps(dialog)).toEqual(["拖动排序步骤 1", "拖动排序步骤 2"]);
+      expect(summaries(dialog)).toEqual([expect.stringContaining("调用接口"), expect.stringContaining("选择记录")]);
     });
 
     it("moves the step once the move is confirmed", async () => {
+      const user = userEvent.setup();
       const onCommit = vi.fn();
 
-      vi.spyOn(globalThis, "confirm").mockReturnValue(true);
       render(<StatefulLinkageHarness initialLinkage={dependentSteps()} onCommit={onCommit} />);
-      await dragFirstStepLast();
+      const dialog = await openFirstRule(user);
+      await dragFirstStepLast(dialog);
 
+      expect(await screen.findByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "仍然移动" }));
+      await waitFor(() => {
+        expect(screen.queryByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).not.toBeInTheDocument();
+      });
+
+      expect(summaries(dialog)).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
       expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions.map(action => action.id)).toEqual(["A2", "A1"]);
-      expect(summaries()).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
     });
 
     it("shows the steps as committed where they came without ids", async () => {
+      const user = userEvent.setup();
       const onCommit = vi.fn();
 
-      vi.spyOn(globalThis, "confirm").mockReturnValue(true);
       render(<StatefulLinkageHarness initialLinkage={dependentSteps(false)} onCommit={onCommit} />);
-      await dragFirstStepLast();
+      const dialog = await openFirstRule(user);
+      await dragFirstStepLast(dialog);
 
+      expect(await screen.findByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "仍然移动" }));
+      await waitFor(() => {
+        expect(screen.queryByText(/步骤 1 引用了结果「result」，它要到步骤 2 才产生/)).not.toBeInTheDocument();
+      });
+
+      expect(summaries(dialog)).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
+      await user.click(within(dialog).getByRole("button", { name: "确定" }));
       expect((onCommit.mock.calls.at(-1)?.[0] as FieldLinkage).rules?.[0]?.actions.map(action => action.type)).toEqual([
         "select_record",
         "api_call"
       ]);
-      expect(summaries()).toEqual([expect.stringContaining("选择记录"), expect.stringContaining("调用接口")]);
     });
   });
 
@@ -819,14 +933,19 @@ describe("action sequence designer", () => {
       ]
     };
 
-    it("opens the 联动 tab and expands the step", async () => {
+    it("opens the 联动 tab, opens the rule dialog, and expands and scrolls to the step", async () => {
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+
       renderPanel(lookupRules, {
         nodeId: "Field_code",
         ruleIndex: 0,
         actionIndex: 1
       });
 
-      expect(await screen.findByText("选择目标字段")).toBeInTheDocument();
+      const dialog = await screen.findByRole("dialog", { name: "规则 1 · 工号" });
+      expect(within(dialog).getByText("选择目标字段")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: /设置字段/ })).toHaveAttribute("aria-expanded", "true");
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
     });
 
     it("leaves the step alone once it has been shown", async () => {
@@ -839,41 +958,141 @@ describe("action sequence designer", () => {
         actionIndex: 1
       });
 
-      await user.click(await screen.findByRole("button", { name: /设置字段/ }));
+      const dialog = await screen.findByRole("dialog", { name: "规则 1 · 工号" });
+      await user.click(within(dialog).getByRole("button", { name: /设置字段/ }));
       scroll.mockClear();
-      await user.click(screen.getByRole("button", { name: /调用接口/ }));
-      await user.click(within(screen.getByRole("group", { name: "规则 1" })).getByLabelText("失败处理"));
+      await user.click(within(dialog).getByRole("button", { name: /调用接口/ }));
+      await user.click(within(dialog).getByLabelText("失败处理"));
       await user.click(await screen.findByText("忽略失败，继续后续步骤"));
 
-      expect(screen.getByText("失败继续")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /设置字段/ })).toHaveAttribute("aria-expanded", "false");
+      expect(within(dialog).getByText("失败继续")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: /设置字段/ })).toHaveAttribute("aria-expanded", "false");
       expect(scroll).not.toHaveBeenCalled();
     });
 
-    it("scrolls a rule into view when the issue names no step", async () => {
+    it("opens the rule dialog and scrolls its row when the issue names no step", async () => {
       const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
 
       renderPanel(lookupRules, { nodeId: "Field_code", ruleIndex: 1 });
 
-      const card = await screen.findByRole("group", { name: "规则 2" });
+      expect(await screen.findByRole("dialog", { name: "规则 2 · 工号" })).toBeInTheDocument();
+      const rows = screen.getAllByRole("listitem");
+      await waitFor(() => expect(scroll.mock.contexts).toContain(rows[1]));
+    });
 
-      await waitFor(() => expect(scroll.mock.contexts).toContain(card));
+    it("opens the 表单 tab and the form-event rule dialog for a form-level issue", async () => {
+      renderPanel(undefined, {
+        nodeId: null,
+        ruleIndex: 0,
+        actionIndex: 0
+      }, {
+        rules: [
+          {
+            id: "R_form",
+            trigger: { kind: "load" },
+            actions: [
+              {
+                id: "A_form",
+                type: "set_variable",
+                variable: "",
+                value: { kind: "literal", value: "1" }
+              }
+            ]
+          }
+        ]
+      });
+
+      const dialog = await screen.findByRole("dialog", { name: "规则 1 · 表单事件" });
+      expect(within(dialog).getByPlaceholderText("变量名")).toBeInTheDocument();
+      expect(within(dialog).getByText("步骤 1：尚未填写目标变量名")).toBeInTheDocument();
     });
   });
 
-  describe("editing one rule", () => {
-    it("renders no other rule again", async () => {
+  describe("performance", () => {
+    it("mounts CodeMirror only while a rule dialog is open and ignores $vars and unrelated field changes", async () => {
       const user = userEvent.setup();
+      let storeApi: FormEditorStoreApi | null = null;
+      const onEntryRender = vi.fn();
+      const initialSchema = makeStaffSchema({ rules: [alertRule("R1", "first"), alertRule("R2", "second")] });
 
-      renderPanel({ rules: [alertRule("R1", "first"), alertRule("R2", "second")] }, { nodeId: "Field_code", ruleIndex: 0 });
+      function PerfHarness(): ReactElement | null {
+        const api = useFormEditorStoreApi();
+        const field = useFormEditorStore(state => state.schema.presentations.pc.children[0]);
 
-      const card = await screen.findByRole("group", { name: "规则 1" });
-      const [editor] = within(card).getAllByLabelText("mock-code-editor");
+        useEffect(() => {
+          storeApi = api;
+        }, [api]);
+
+        if (!field || field.type !== "textfield") {
+          return null;
+        }
+
+        return (
+          <Profiler id="linkage-entry" onRender={onEntryRender}>
+            <LinkageRulesEntry
+              entry={ENTRY}
+              field={field}
+              schema={initialSchema}
+              onChange={value => {
+                api.getState().editField({
+                  fieldId: field.id,
+                  updater: current => ENTRY.write(current, value as FieldLinkage | undefined)
+                });
+              }}
+            />
+          </Profiler>
+        );
+      }
+
+      render(
+        <ConfigProvider>
+          <PreviewRuntimeProvider value={{ serviceCapabilities: { hasRequest: true, hasNavigate: true } }}>
+            <DataSourceApisProvider apis={DEFAULT_APIS}>
+              <RegistryProvider registries={REGISTRIES}>
+                <FormEditorStoreProvider initialState={{ schema: initialSchema }}>
+                  <PerfHarness />
+                </FormEditorStoreProvider>
+              </RegistryProvider>
+            </DataSourceApisProvider>
+          </PreviewRuntimeProvider>
+        </ConfigProvider>
+      );
+
+      // No CodeMirror mounts for the closed compact list.
+      expect(codeEditorRender).not.toHaveBeenCalled();
+
+      // Mutating `$vars` does not re-render the closed linkage list at all.
+      onEntryRender.mockClear();
+      act(() => {
+        storeApi!.getState().saveVariable({
+          id: "Var_2",
+          name: "extra",
+          type: "string"
+        });
+      });
+      expect(onEntryRender).not.toHaveBeenCalled();
+      expect(codeEditorRender).not.toHaveBeenCalled();
+
+      // Mutating an unrelated field still mounts no CodeMirror.
+      act(() => {
+        storeApi!.getState().editField({
+          fieldId: "Field_phone",
+          updater: current => {
+            return { ...current, label: "联系电话" };
+          }
+        });
+      });
+
+      expect(codeEditorRender).not.toHaveBeenCalled();
+
+      // Opening rule 1 mounts only rule 1's CodeMirror, never rule 2's.
+      const dialog = await openFirstRule(user);
+      expect(codeEditorRender).toHaveBeenCalledWith("first");
+      expect(codeEditorRender).not.toHaveBeenCalledWith("second");
 
       codeEditorRender.mockClear();
-      await user.type(editor as HTMLElement, "!");
-
-      await waitFor(() => expect(codeEditorRender).toHaveBeenCalledWith("first!"));
+      await user.type(within(dialog).getByLabelText("mock-code-editor"), "!");
+      expect(codeEditorRender).toHaveBeenCalledWith("first!");
       expect(codeEditorRender).not.toHaveBeenCalledWith("second");
     });
   });

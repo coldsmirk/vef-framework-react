@@ -559,7 +559,13 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           return;
         }
 
-        checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
+        // Form linkage commits are discrete modal saves / duplicates / deletes,
+        // never a stream of keystrokes — keep each one its own undo step.
+        if (Object.hasOwn(shared, "linkage")) {
+          checkpoint();
+        } else {
+          checkpointCoalescing(`form:${Object.keys(patch).toSorted().join(",")}`);
+        }
 
         const next: FormSchema = { ...schema, ...shared };
 
@@ -659,7 +665,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
           set({
             propertiesTab: "form",
             propertiesDrawerOpen: true,
-            pendingLinkageFocus: focus
+            pendingLinkageFocus: { ...focus }
           });
           return;
         }
@@ -671,7 +677,7 @@ const result: ReturnedComponentStoreResult<FormEditorStoreState, { schema?: Form
         coalesceKey = null;
         set({
           ...selectPatch(focus.nodeId),
-          pendingLinkageFocus: focus
+          pendingLinkageFocus: { ...focus }
         });
       },
 

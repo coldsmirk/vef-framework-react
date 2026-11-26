@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendChild,
+  cloneRule,
   conditionHasAuthoredContent,
   createActionFor,
   createExpression,
@@ -337,5 +338,55 @@ describe("conditionHasAuthoredContent", () => {
   it("keys an expression off a non-blank source", () => {
     expect(conditionHasAuthoredContent({ kind: "expression", source: "  " })).toBe(false);
     expect(conditionHasAuthoredContent({ kind: "expression", source: "field.a > 1" })).toBe(true);
+  });
+});
+
+describe("cloneRule", () => {
+  it("deep-clones a rule with fresh rule, action, and condition ids", () => {
+    const original: FieldLinkageRule = {
+      id: "R1",
+      trigger: {
+        kind: "condition",
+        condition: {
+          kind: "group",
+          id: "G1",
+          logic: "all",
+          children: [
+            {
+              kind: "leaf",
+              id: "C1",
+              sourceKey: "amount",
+              operator: "gt",
+              value: "10"
+            }
+          ]
+        }
+      },
+      actions: [
+        {
+          id: "A1",
+          type: "set_fields",
+          assignments: [{ targetKey: "note", value: { kind: "literal", value: "ok" } }]
+        }
+      ]
+    };
+
+    const copy = cloneRule(original);
+
+    expect(copy.id).not.toBe(original.id);
+    expect(copy.actions[0]?.id).not.toBe("A1");
+    expect(copy.trigger.kind === "condition" && copy.trigger.condition.id).not.toBe("G1");
+    expect(
+      copy.trigger.kind === "condition"
+      && copy.trigger.condition.kind === "group"
+      && copy.trigger.condition.children[0]?.id
+    ).not.toBe("C1");
+
+    // Mutating the copy's nested payloads never affects the original.
+    if (copy.actions[0]?.type === "set_fields" && copy.actions[0].assignments[0]) {
+      copy.actions[0].assignments[0].targetKey = "changed";
+    }
+
+    expect(original.actions[0]?.type === "set_fields" && original.actions[0].assignments[0]?.targetKey).toBe("note");
   });
 });

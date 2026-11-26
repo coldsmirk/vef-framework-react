@@ -3,7 +3,6 @@ import type { FC } from "react";
 
 import type { ValidationIssue, ValidationSeverity } from "../../../../engine/validation";
 import type { FieldLinkageAction, LinkageActionType, LinkageTriggerKind } from "../../../../types";
-import type { ModalEditableAction } from "./action-modal";
 import type { LinkageScope } from "./use-linkage-editor-model";
 
 import { Button } from "@vef-framework-react/components";
@@ -15,11 +14,8 @@ import { createId } from "../../../../engine/ids";
 import {
   findBrokenStepReferences,
   findDependentStepsAfter,
-  getStepOutputName,
   isEffectAction,
-  renameStepOutputInRule,
-  resolvePriorStepSchemas,
-  writeActionOutput
+  resolvePriorStepSchemas
 } from "../../../../engine/linkage";
 import { EditorIcon } from "../../../../icons";
 import { useDataSourceApis } from "../../../data-source-apis";
@@ -28,28 +24,17 @@ import { usePreviewRuntime } from "../../../preview-runtime-context";
 import { confirmDialog } from "../../../toolbar/notify";
 import { reorderRows } from "../../sortable-rows";
 import { ActionEditor } from "./action-editor";
-import { ActionDraftModal } from "./action-modal";
 import { createActionFor } from "./mutators";
 import { actionOptionsFor } from "./options";
 import { actionsListCss, addInlineButtonCss, sectionCss, sectionLabelCss } from "./styles";
 
 type DragEndHandler = DragDropEventHandlers["onDragEnd"];
 
-interface ModalSession {
-  key: number;
-  actionIndex: number;
-  action: ModalEditableAction;
-  /**
-   * `false` while the modal plays its close transition.
-   */
-  open: boolean;
-}
-
 /**
  * A step's identity among its rule's. Actions authored here carry an id; one
  * from a hand-written schema may not, and goes by its position.
  */
-function actionKey(action: FieldLinkageAction, index: number): string {
+export function actionKey(action: FieldLinkageAction, index: number): string {
   return action.id ?? `action-${index}`;
 }
 
@@ -127,20 +112,32 @@ export interface ActionsEditorProps {
    */
   selfKey?: string;
   /**
-   * The rule's validation issues.
+   * The draft rule's live validation issues.
    */
   issues: readonly ValidationIssue[];
   /**
-   * The step to expand and show; a new object per request.
+   * The step to expand, scroll to, and highlight; a new object per request.
    */
   focus: { actionIndex?: number } | null;
+  /**
+   * Uncommitted output-name drafts keyed by {@link actionKey}.
+   */
+  outputDrafts: Readonly<Record<string, string>>;
+  /**
+   * Output-name validation errors keyed by {@link actionKey}.
+   */
+  outputErrors: ReadonlyMap<string, string>;
   onChange: (next: FieldLinkageAction[]) => void;
+  onOutputChange: (key: string, nextText: string) => void;
+  onOutputCommit: (index: number, key: string) => void;
+  onClearOutputDraft: (key: string) => void;
 }
 
 /**
- * The THEN half of a rule: an ordered sequence of collapsible steps. A lone
- * step opens expanded and a longer sequence collapsed, so the whole of it stays
- * on one screen; the ones with much to configure also open in a wide modal.
+ * The THEN half of a rule inside the rule dialog: an ordered sequence of
+ * collapsible, drag-sortable steps edited in place. A lone step opens expanded
+ * and a longer sequence collapsed (plus any focused step) so the whole pipeline
+ * is visible at a glance.
  */
 export const ActionsEditor: FC<ActionsEditorProps> = ({
   actions,
@@ -150,6 +147,11 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   issues,
   isTargetKeyed,
   onChange,
+  onClearOutputDraft,
+  onOutputChange,
+  onOutputCommit,
+  outputDrafts,
+  outputErrors,
   scope,
   selfKey,
   triggerKind
@@ -160,11 +162,18 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   const apis = useDataSourceApis();
   const actionsRef = useLatest(actions);
 
-  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(
-    () => new Set(actions.length === 1 ? actionKeys(actions) : [])
-  );
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(() => {
+    const initial = new Set<string>(actions.length === 1 ? actionKeys(actions) : []);
+    const focusIndex = focus?.actionIndex;
+    const focused = focusIndex === undefined ? undefined : actions[focusIndex];
+
+    if (focusIndex !== undefined && focused !== undefined) {
+      initial.add(actionKey(focused, focusIndex));
+    }
+
+    return initial;
+  });
   const [attention, setAttention] = useState<{ key: string } | null>(null);
-  const [modalSession, setModalSession] = useState<ModalSession | null>(null);
 
   // The order a drag left, shown while the reader decides on the references it
   // breaks. The drag has moved the rows' elements by then, so declining it puts
@@ -224,7 +233,17 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   };
 
   const removeAt = (index: number): void => {
-    const commit = (): void => onChange(actions.toSpliced(index, 1));
+    const target = actions[index];
+    const key = target === undefined ? undefined : actionKey(target, index);
+
+    const commit = (): void => {
+      if (key !== undefined) {
+        onClearOutputDraft(key);
+      }
+
+      onChange(actions.toSpliced(index, 1));
+    };
+
     const dependents = findDependentStepsAfter(actions, index);
 
     if (dependents.length === 0) {
@@ -244,7 +263,14 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
   };
 
   const changeTypeAt = (index: number, nextType: LinkageActionType): void => {
+    const target = actions[index];
+    const key = target === undefined ? undefined : actionKey(target, index);
+
     const commit = (): void => {
+      if (key !== undefined) {
+        onClearOutputDraft(key);
+      }
+
       const created = createActionFor(nextType, actions, index);
 
       updateAt(index, { ...created, id: actions[index]?.id ?? created.id });
@@ -279,16 +305,6 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
 
     setExpandedKeys(previous => new Set(previous).add(actionKey(created, actions.length)));
     onChange([...actions, created]);
-  };
-
-  const commitModal = (index: number, next: ModalEditableAction): void => {
-    const previous = actions[index];
-    const previousOutput = previous && getStepOutputName(previous);
-    const replaced = actions.with(index, writeActionOutput(next, previousOutput));
-
-    // Renamed from the old name, so the references after it follow in the same
-    // undo step.
-    onChange(renameStepOutputInRule(replaced, index, getStepOutputName(next)));
   };
 
   const handleDragEnd: DragEndHandler = (event, manager) => {
@@ -344,6 +360,8 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
                 expanded={expandedKeys.has(key)}
                 index={index}
                 issueSeverity={proposed === null ? severities.get(index) : undefined}
+                outputDraft={outputDrafts[key]}
+                outputError={outputErrors.get(key) ?? null}
                 priorSteps={priorStepsByIndex[index]}
                 scope={scope}
                 selfKey={selfKey}
@@ -351,16 +369,9 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
                 unsupportedReason={unsupportedReasonFor(action, hasRequest, hasNavigate)}
                 onChange={next => updateAt(index, next)}
                 onChangeType={nextType => changeTypeAt(index, nextType)}
-                onOpenModal={target => setModalSession(previous => {
-                  return {
-                    key: (previous?.key ?? 0) + 1,
-                    actionIndex: index,
-                    action: target,
-                    open: true
-                  };
-                })}
+                onOutputChange={nextText => onOutputChange(key, nextText)}
+                onOutputCommit={() => onOutputCommit(index, key)}
                 onRemove={() => removeAt(index)}
-                onRenameOutput={nextOutput => onChange(renameStepOutputInRule(actions, index, nextOutput))}
                 onToggleExpand={() => toggleExpand(key)}
               />
             );
@@ -378,24 +389,6 @@ export const ActionsEditor: FC<ActionsEditorProps> = ({
       >
         新增动作
       </Button>
-
-      {modalSession === null
-        ? null
-        : (
-            <ActionDraftModal
-              key={modalSession.key}
-              action={modalSession.action}
-              actions={actions}
-              index={modalSession.actionIndex}
-              open={modalSession.open}
-              priorSteps={priorStepsByIndex[modalSession.actionIndex] ?? []}
-              scope={scope}
-              selfKey={selfKey}
-              onAfterClose={() => setModalSession(current => current?.open ? current : null)}
-              onClose={() => setModalSession(current => current && { ...current, open: false })}
-              onSubmit={next => commitModal(modalSession.actionIndex, next)}
-            />
-          )}
     </div>
   );
 };

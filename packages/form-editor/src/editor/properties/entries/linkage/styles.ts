@@ -99,63 +99,6 @@ export const emptyBlockedCss = css({
   color: globalCssVars.colorWarningText
 });
 
-export const rulesCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 12
-});
-
-export const ruleCardCss = css({
-  border: `1px solid ${globalCssVars.colorBorderSecondary}`,
-  borderRadius: globalCssVars.borderRadius,
-  overflow: "hidden",
-  background: globalCssVars.colorBgContainer
-});
-
-export const ruleHeaderCss = css({
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "12px 14px",
-  borderBottom: `1px solid ${globalCssVars.colorBorderSecondary}`,
-  background: globalCssVars.colorFillQuaternary
-});
-
-export const ruleIndexCss = css({
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 26,
-  height: 26,
-  borderRadius: globalCssVars.borderRadiusSm,
-  background: globalCssVars.colorPrimary,
-  color: globalCssVars.colorTextLightSolid,
-  fontSize: globalCssVars.fontSize,
-  fontWeight: 600,
-  flexShrink: 0
-});
-
-export const ruleTitleCss = css({
-  flex: 1,
-  minWidth: 0,
-  fontSize: globalCssVars.fontSize,
-  fontWeight: 600,
-  color: globalCssVars.colorText
-});
-
-export const deleteButtonCss = css({
-  width: 32,
-  height: 32,
-  padding: 0
-});
-
-export const ruleBodyCss = css({
-  display: "flex",
-  flexDirection: "column",
-  gap: 14,
-  padding: 14
-});
-
 export const sectionCss = css({
   display: "flex",
   flexDirection: "column",
@@ -176,7 +119,8 @@ export const conditionGroupCss = css({
   padding: 10,
   border: `1px solid ${globalCssVars.colorBorderSecondary}`,
   borderRadius: globalCssVars.borderRadius,
-  background: globalCssVars.colorFillQuaternary
+  background: globalCssVars.colorFillQuaternary,
+  containerType: "inline-size"
 });
 
 export const conditionGroupHeaderCss = css({
@@ -193,14 +137,40 @@ export const conditionRowCss = css({
   alignItems: "center"
 });
 
-export const conditionRowFullCss = css({
-  gridColumn: "1 / -1"
+export const conditionRowWithValueCss = css({
+  "@container (min-width: 560px)": {
+    gridTemplateColumns: "minmax(0, 1fr) 136px minmax(0, 1fr) auto"
+  }
+});
+
+export const conditionValueCss = css({
+  gridColumn: "1 / -1",
+  gridRow: 2,
+
+  "@container (min-width: 560px)": {
+    gridColumn: "auto",
+    gridRow: "auto"
+  }
 });
 
 export const conditionRowDeleteCss = css({
+  gridColumn: 3,
+  gridRow: 1,
   width: 32,
   height: 32,
-  padding: 0
+  padding: 0,
+
+  "@container (min-width: 560px)": {
+    gridColumn: "auto",
+    gridRow: "auto"
+  }
+});
+
+export const conditionExpressionRowCss = css({
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: 8,
+  alignItems: "start"
 });
 
 export const addRowCss = css({
@@ -221,7 +191,8 @@ export const addButtonCss = css({
 
 export const codeEditorWrapperCss = css({
   display: "flex",
-  flexDirection: "column"
+  flexDirection: "column",
+  minWidth: 0
 });
 
 // Inline notice inside the condition builder (e.g. "no field to seed the

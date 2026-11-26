@@ -63,9 +63,9 @@ const errorDotCss = css({
 
 /**
  * Index rule-scoped validation issues by their `ruleId` so the rule-list
- * editor can hang each issue onto the card of the rule that produced it.
- * Issues without a `ruleId` (schema-envelope problems, cross-rule cycles) are
- * not card-addressable and are dropped here.
+ * editor can show issue counts on each rule row. Issues without a `ruleId`
+ * (schema-envelope problems, cross-rule cycles) are not rule-addressable and
+ * are dropped here.
  */
 export function groupIssuesByRule(issues: readonly ValidationIssue[]): Map<string, ValidationIssue[]> {
   const byRule = new Map<string, ValidationIssue[]>();
@@ -86,11 +86,9 @@ export function groupIssuesByRule(issues: readonly ValidationIssue[]): Map<strin
 /**
  * Reference-reconcile a freshly-grouped issue map against the prior one.
  * {@link groupIssuesByRule} allocates fresh buckets on every revalidation
- * (every schema edit moves the deferred layer reference), which would hand
- * every issue-carrying RuleCard a new `issues` prop identity — busting its
- * memo on each keystroke anywhere in the form. A bucket whose content is
- * unchanged keeps its previous array reference; a fully unchanged map keeps
- * its own reference (mirroring the runtime's `stabilizeStateMap`).
+ * (every schema edit moves the deferred layer reference). A bucket whose
+ * content is unchanged keeps its previous array reference; a fully unchanged
+ * map keeps its own reference (mirroring the runtime's `stabilizeStateMap`).
  */
 export function stabilizeIssueBuckets(
   prev: Map<string, ValidationIssue[]> | undefined,
@@ -126,11 +124,12 @@ export interface RuleDiagnosticsProps {
 }
 
 /**
- * Compact per-rule diagnostics list rendered inside a rule card — the editor
- * surface of `validateLinkageSchema`, so half-configured or dangling rules are
- * visible while authoring instead of silently dead. Severity drives the
- * styling: warnings are legitimate mid-authoring states, errors mean the rule
- * cannot run. Clicking an action-specific line expands and scrolls to that step.
+ * Compact per-rule diagnostics list rendered inside the rule draft dialog —
+ * the editor surface of `validateLinkageSchema`, so half-configured or dangling
+ * rules are visible while authoring instead of silently dead. Severity drives
+ * the styling: warnings are legitimate mid-authoring states, errors mean the
+ * rule cannot run. Clicking an action-specific line expands and scrolls to that
+ * step inside the dialog.
  */
 export function RuleDiagnostics({ issues, onFocusAction }: RuleDiagnosticsProps): ReactElement | null {
   if (issues.length === 0) {

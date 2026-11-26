@@ -7,6 +7,7 @@ import { useMemo } from "react";
 
 import { isKeyedField } from "../../../../engine/keys";
 import { FIELD_TRIGGER_KINDS } from "../../../../engine/linkage";
+import { nodeLabel } from "../../../../engine/schema/walk";
 import { useFieldRegistry } from "../../../../store/engine-provider";
 import { usePreviewRuntime } from "../../../preview-runtime-context";
 import { createRule, normalizeLinkage } from "./mutators";
@@ -54,12 +55,13 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   const rules = linkage.rules ?? [];
   const isTargetKeyed = isKeyedField(field);
   const { issuesByRule, scope } = useLinkageEditorModel(field.id);
-  const { fieldOptions } = scope.reference;
+  const { fieldOptions } = scope;
   // Seed a new rule's condition off a SIBLING so it reads naturally; a field
   // whose only in-scope source is itself falls back to an edge rule rather than
   // a pre-filled self-condition (self stays selectable in the dropdown after).
   // Computed once and reused as the `selfKey` prop below.
   const selfKey = isKeyedField(field) ? field.key : undefined;
+  const ownerLabel = nodeLabel(field) ?? selfKey;
   const seedKey = seedSourceKey(fieldOptions, selfKey);
   // Drop trigger kinds the target can't actually use, rather than letting an
   // author configure a silently-inert (and validator-rejected) rule:
@@ -67,8 +69,6 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
   //   field (divider / alert / button) can never fire them.
   // - `condition` with no keyed field in scope yields an empty group the
   //   validator rejects and the visual builder can't repair.
-  // Memoized to a stable reference so it does not bust the rule cards' memo
-  // each keystroke (the scope is itself identity-stable — see useScopeFields).
   const triggerKinds = useMemo(
     () => FIELD_TRIGGER_KINDS.filter(kind => {
       if (kind === "change" || kind === "commit") {
@@ -120,6 +120,7 @@ export const LinkageRulesEntry: FC<EntryComponentProps> = ({
         issuesByRule={issuesByRule}
         isTargetKeyed={isTargetKeyed}
         noun="联动"
+        ownerLabel={ownerLabel}
         ownerNodeId={field.id}
         rules={rules}
         scope={scope}

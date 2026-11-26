@@ -1,9 +1,19 @@
-import type { DataSourceApi, DynamicValue, FieldLinkageAction } from "../../../../types";
-import type { LinkageScope } from "./use-linkage-editor-model";
+import type { DataSourceApi, DynamicValue, FieldLinkageAction, KeyedFormField, LinkageContextSource } from "../../../../types";
+import type { SourceFieldOption } from "./options";
 
 import { findDataSourceApi } from "../../../../engine/data-source-apis";
 import { parseLeafSource } from "../../../../engine/linkage/scope";
 import { actionLabelFor, alertLevelOptions } from "./options";
+
+/**
+ * The narrow read-only scope summaries need (omitting `$vars`, so variable
+ * edits never touch row summaries).
+ */
+export interface ActionSummaryScope {
+  fieldsByKey: ReadonlyMap<string, Pick<KeyedFormField, "label">>;
+  contextSources: readonly LinkageContextSource[];
+  dataSourceOptions: readonly SourceFieldOption[];
+}
 
 export interface ActionSummary {
   text: string;
@@ -15,12 +25,16 @@ export interface ActionSummary {
 
 const MAX_SNIPPET_LENGTH = 20;
 
-function truncate(text: string): string {
+export function truncateSnippet(text: string): string {
   return text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text;
 }
 
-function describeReference(path: string, scope: LinkageScope): string {
-  const parsed = parseLeafSource(path.trim());
+export function describeReference(
+  path: string,
+  scope: Pick<ActionSummaryScope, "contextSources" | "fieldsByKey">
+): string {
+  const trimmed = path.trim();
+  const parsed = parseLeafSource(trimmed);
 
   switch (parsed.kind) {
     case "step": {
@@ -36,23 +50,23 @@ function describeReference(path: string, scope: LinkageScope): string {
         return parsed.path.join(".");
       }
 
-      return scope.reference.contextSources.find(source => source.key === path)?.label ?? path;
+      return scope.contextSources.find(source => source.key === trimmed)?.label ?? trimmed;
     }
 
     case "unknown": {
-      return path;
+      return trimmed;
     }
   }
 }
 
-function describeValue(value: DynamicValue, scope: LinkageScope): string {
+function describeValue(value: DynamicValue, scope: ActionSummaryScope): string {
   switch (value.kind) {
     case "literal": {
       if (typeof value.value === "boolean") {
         return value.value ? "开启" : "关闭";
       }
 
-      return truncate(Array.isArray(value.value) ? value.value.join("、") : String(value.value ?? ""));
+      return truncateSnippet(Array.isArray(value.value) ? value.value.join("、") : String(value.value ?? ""));
     }
 
     case "reference": {
@@ -74,7 +88,7 @@ function withOutput(text: string, output: string | undefined): string {
  */
 function describeAction(
   action: FieldLinkageAction,
-  scope: LinkageScope,
+  scope: ActionSummaryScope,
   apis: readonly DataSourceApi[]
 ): { detail: string; incomplete: boolean } | undefined {
   switch (action.type) {
@@ -160,7 +174,7 @@ function describeAction(
  */
 export function summarizeAction(
   action: FieldLinkageAction,
-  scope: LinkageScope,
+  scope: ActionSummaryScope,
   apis: readonly DataSourceApi[]
 ): ActionSummary {
   const title = actionLabelFor(action.type);
@@ -169,4 +183,27 @@ export function summarizeAction(
   return description === undefined
     ? { text: title, incomplete: false }
     : { text: `${title} · ${description.detail}`, incomplete: description.incomplete };
+}
+
+/**
+ * One rule's action list in one line for a compact rule row: a single step uses
+ * {@link summarizeAction}, while multiple steps name the count and pipeline
+ * ("3 个步骤：调用接口 → 选择记录 → 设置字段").
+ */
+export function summarizeRuleActions(
+  actions: readonly FieldLinkageAction[],
+  scope: ActionSummaryScope,
+  apis: readonly DataSourceApi[]
+): string {
+  const [first] = actions;
+
+  if (first === undefined) {
+    return "未配置步骤";
+  }
+
+  if (actions.length === 1) {
+    return summarizeAction(first, scope, apis).text;
+  }
+
+  return `${actions.length} 个步骤：${actions.map(action => actionLabelFor(action.type)).join(" → ")}`;
 }

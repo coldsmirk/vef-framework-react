@@ -25,15 +25,18 @@ import {
 } from "./mutators";
 import { isLinkageOperator, isLogicValue, logicOptions, operatorNeedsValue, operatorOptions, seedSourceKey } from "./options";
 import {
+  actionDeleteCss,
   addInlineButtonCss,
   addRowCss,
   codeEditorWrapperCss,
+  conditionExpressionRowCss,
   conditionGroupCss,
   conditionGroupHeaderCss,
   conditionNoticeCss,
   conditionRowCss,
   conditionRowDeleteCss,
-  conditionRowFullCss,
+  conditionRowWithValueCss,
+  conditionValueCss,
   expressionHeaderLabelCss,
   selectStyle
 } from "./styles";
@@ -308,8 +311,8 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
           // Nested expression at a leaf slot is unusual but supported by
           // the data model. Render it without a "switch to visual" affordance.
           return (
-            <div key={child.id ?? index} css={conditionRowCss}>
-              <div css={[codeEditorWrapperCss, conditionRowFullCss]}>
+            <div key={child.id ?? index} css={conditionExpressionRowCss}>
+              <div css={codeEditorWrapperCss}>
                 <ExpressionInput
                   minHeight={36}
                   placeholder="JS 表达式"
@@ -320,7 +323,7 @@ const GroupConditionEditor: FC<GroupConditionEditorProps> = ({
 
               <Button
                 aria-label="删除条件"
-                css={conditionRowDeleteCss}
+                css={actionDeleteCss}
                 icon={<EditorIcon name="x" />}
                 size="small"
                 type="text"
@@ -386,7 +389,7 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
   const showValueInput = operatorNeedsValue(condition.operator);
 
   return (
-    <div css={conditionRowCss}>
+    <div css={[conditionRowCss, showValueInput && conditionRowWithValueCss]}>
       <ReferencePicker
         placeholder="选择源字段"
         value={condition.sourceKey}
@@ -410,6 +413,17 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
         }}
       />
 
+      {showValueInput
+        ? (
+            <Input
+              css={conditionValueCss}
+              placeholder="比较值"
+              value={coerceToString(condition.value)}
+              onChange={event => onChange({ ...condition, value: event.target.value })}
+            />
+          )
+        : null}
+
       <Button
         aria-label="删除条件"
         css={conditionRowDeleteCss}
@@ -418,17 +432,6 @@ const LeafConditionEditor: FC<LeafConditionEditorProps> = ({
         type="text"
         onClick={onRemove}
       />
-
-      {showValueInput
-        ? (
-            <Input
-              css={conditionRowFullCss}
-              placeholder="比较值"
-              value={coerceToString(condition.value)}
-              onChange={event => onChange({ ...condition, value: event.target.value })}
-            />
-          )
-        : null}
     </div>
   );
 };

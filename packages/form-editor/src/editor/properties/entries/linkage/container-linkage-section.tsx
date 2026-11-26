@@ -2,6 +2,8 @@ import type { ReactElement } from "react";
 
 import type { ContainerNode, FieldLinkage, LinkageTriggerKind } from "../../../../types";
 
+import { isKeyedNode } from "../../../../engine/keys";
+import { nodeLabel } from "../../../../engine/schema/walk";
 import { useFormEditorStoreApi } from "../../../../store/form-store";
 import { DefaultsPanel } from "./linkage-rules-entry";
 import { createRule, normalizeLinkage } from "./mutators";
@@ -16,9 +18,15 @@ import { useLinkageEditorModel } from "./use-linkage-editor-model";
  * a container body never dispatches — so the palette is `condition` only.
  */
 const CONTAINER_TRIGGER_KINDS: readonly LinkageTriggerKind[] = ["condition"];
-// A stable empty list for the no-source case (vs a fresh `[]` per render), so it
-// never busts the rule cards' memo.
 const NO_TRIGGER_KINDS: readonly LinkageTriggerKind[] = [];
+
+const CONTAINER_FALLBACK_LABELS: Record<ContainerNode["type"], string> = {
+  section: "卡片 / 区块",
+  tabs: "标签页",
+  subform: "子表单",
+  flex: "弹性布局",
+  grid: "栅格布局"
+};
 
 function readLinkage(value: FieldLinkage | undefined): FieldLinkage {
   return value ?? {};
@@ -46,7 +54,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   // the validator's resolution.
   const { issuesByRule, scope } = useLinkageEditorModel(node.id);
 
-  const seedSourceKey = scope.reference.fieldOptions[0]?.value;
+  const seedSourceKey = scope.fieldOptions[0]?.value;
   // Without a keyed field in scope a condition rule cannot be seeded (an
   // empty condition group is never authored), so rule creation is disabled
   // with an explanation; defaults stay editable either way.
@@ -54,14 +62,18 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
     ? "当前作用域内没有可引用的字段，请先添加带数据绑定的字段"
     : undefined;
   const triggerKinds = seedSourceKey === undefined ? NO_TRIGGER_KINDS : CONTAINER_TRIGGER_KINDS;
+  const ownerLabel = nodeLabel(node) ?? (isKeyedNode(node) ? node.key : undefined) ?? CONTAINER_FALLBACK_LABELS[node.type];
 
   const commit = (next: FieldLinkage): void => {
     const normalized = normalizeLinkage(next);
 
-    storeApi.getState().updateBlock(
-      { nodeId: node.id, updater: current => { return { ...current, linkage: normalized }; } },
-      { coalesceKey: `block:${node.id}:linkage` }
-    );
+    // Every linkage change is a discrete commit (modal save, duplicate, delete,
+    // or default toggle) — omit coalesceKey so consecutive actions stay
+    // distinct undo steps.
+    storeApi.getState().updateBlock({
+      nodeId: node.id,
+      updater: current => { return { ...current, linkage: normalized }; }
+    });
   };
 
   return (
@@ -82,6 +94,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
         issuesByRule={issuesByRule}
         isTargetKeyed={false}
         noun="联动"
+        ownerLabel={ownerLabel}
         ownerNodeId={node.id}
         rules={rules}
         scope={scope}

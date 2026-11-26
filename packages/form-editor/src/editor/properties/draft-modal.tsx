@@ -3,7 +3,12 @@ import type { ReactElement, ReactNode } from "react";
 import { css } from "@emotion/react";
 import { Button, globalCssVars, Modal, ScrollArea } from "@vef-framework-react/components";
 
+import { EditorIcon } from "../../icons";
 import { confirmDialog } from "../toolbar/notify";
+
+const MODAL_STYLE = {
+  maxWidth: "calc(100vw - 32px)"
+} as const;
 
 const MODAL_STYLES = {
   body: {
@@ -101,16 +106,18 @@ export function DraftModal({
 
   return (
     <Modal
+      centered
       destroyOnHidden
       afterClose={onAfterClose}
       open={open}
+      style={MODAL_STYLE}
       styles={MODAL_STYLES}
       title={title}
       width={width}
       footer={(
         <>
           <Button autoInsertSpace={false} onClick={requestClose}>取消</Button>
-          <Button autoInsertSpace={false} type="primary" onClick={onSubmit}>确定</Button>
+          <Button autoInsertSpace={false} icon={<EditorIcon name="check" />} type="primary" onClick={onSubmit}>确定</Button>
         </>
       )}
       onCancel={requestClose}
