@@ -2,13 +2,9 @@ import type { DeviceRegistries, FormSchema } from "@vef-framework-react/form-edi
 
 import type { StorageMode } from "../../../types";
 
-import { validateApprovalProjection } from "@vef-framework-react/approval-form-bridge";
 import { Flex, globalCssVars, Segmented, Stack, Text } from "@vef-framework-react/components";
-import { FormEditor } from "@vef-framework-react/form-editor";
-import { useMemo } from "react";
 
-import { useApprovalPlugins } from "../../../plugins";
-import { toFormContextSources } from "../../../plugins/form-context";
+import { ApprovalFormEditor } from "../../../components/form-editor";
 
 const STORAGE_OPTIONS: Array<{ label: string; value: StorageMode }> = [
   { label: "JSON 存储", value: "json" },
@@ -49,8 +45,8 @@ export interface FormStepProps {
  * (the bridge projection, a client-side pre-check of the server parser) —
  * lives in the editor's own status bar, where each one jumps to its field, so
  * the canvas keeps its full height; the wizard's footer only says why the step
- * cannot advance. The applicant attributes and the host's form globals are
- * offered as system variables.
+ * cannot advance. `ApprovalFormEditor` reports both kinds, and offers the
+ * applicant attributes and the host's form globals as system variables.
  */
 export function FormStep({
   storageMode,
@@ -59,15 +55,6 @@ export function FormStep({
   onStorageModeChange,
   onSchemaChange
 }: FormStepProps) {
-  const {
-    codeSets,
-    dataSourceApis,
-    evaluators,
-    formGlobals,
-    services
-  } = useApprovalPlugins();
-  const contextSources = useMemo(() => toFormContextSources(formGlobals), [formGlobals]);
-
   return (
     <Stack gap={8} style={{ height: "100%", minHeight: 0 }}>
       <Flex align="center" gap="middle" wrap="wrap">
@@ -97,15 +84,9 @@ export function FormStep({
           overflow: "hidden"
         }}
       >
-        <FormEditor
-          codeSets={codeSets}
-          contextSources={contextSources}
-          dataSourceApis={dataSourceApis}
-          evaluators={evaluators}
+        <ApprovalFormEditor
           initialSchema={initialSchema}
           registries={registries}
-          services={services}
-          validate={validateApprovalProjection}
           onSchemaChange={onSchemaChange}
         />
       </div>

@@ -8,6 +8,7 @@ export {
 export { AdminInstanceDetailPanel, type AdminInstanceDetailPanelProps } from "./detail/admin";
 export { InstanceDetailDrawer, type InstanceDetailDrawerProps } from "./detail/drawer";
 export { InstanceFlowGraphViewer, type InstanceFlowGraphViewerProps } from "./flow-graph";
+export { ApprovalFormEditor, type ApprovalFormEditorProps } from "./form-editor";
 export { InstanceFormPanel, type InstanceFormPanelProps } from "./form-panel";
 export { formatDurationSeconds, formatTimestamp } from "./format";
 export { PrincipalSelect, type PrincipalSelectProps } from "./principal";
