@@ -22,7 +22,7 @@ import { actionLabelFor } from "./properties/entries/linkage/options";
  */
 export type IssueTarget
   = | { kind: "node"; device: PresentationDevice; nodeId: string }
-    | { kind: "linkage"; device: PresentationDevice; focus: LinkageFocusRef }
+    | { kind: "linkage"; device: PresentationDevice; focus: LinkageFocusRef & { ruleIndex: number } }
     | { kind: "dataEntry"; entry: DataEntryRef }
     | { kind: "sidebar"; tab: SidebarTabId }
     | { kind: "properties"; tab: PropertiesTabId };

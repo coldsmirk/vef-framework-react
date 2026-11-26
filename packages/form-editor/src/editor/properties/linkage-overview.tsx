@@ -71,9 +71,10 @@ interface LinkageBearerRow {
 
 /**
  * Read-only index of every node on the active layer that carries linkage
- * rules — the field-level share of the footer's "联动" count. Rules are
- * authored per field, so each row simply selects its node, which switches the
- * right properties panel to that control.
+ * rules — the field-level share of the footer's "联动" count. Clicking a row
+ * selects its node and opens its linkage surface directly (the `联动` tab for
+ * a field, or scrolled to `联动规则` for a container) without opening a rule
+ * dialog.
  */
 export function LinkageOverview(): ReactElement {
   const layer = useCurrentLayer();
@@ -105,7 +106,7 @@ export function LinkageOverview(): ReactElement {
           <div
             key={block.id}
             css={rowCss}
-            onClick={() => storeApi.getState().selectNode(block.id)}
+            onClick={() => storeApi.getState().requestLinkageFocus({ nodeId: block.id })}
           >
             <EditorIcon name={icon} />
             <span css={labelTextCss}>{label}</span>

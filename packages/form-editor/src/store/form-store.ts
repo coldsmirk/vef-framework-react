@@ -92,14 +92,18 @@ export interface DataEntryRef {
 }
 
 /**
- * A linkage rule, and the step inside it when `actionIndex` is given.
+ * A linkage navigation target. With `ruleIndex` omitted, selects `nodeId` and
+ * opens its linkage surface (the `联动` tab for a field, or scrolled to
+ * `联动规则` for a container) without opening a rule dialog. When `ruleIndex`
+ * is given, also opens that rule's draft dialog (and focuses `actionIndex`
+ * inside it when provided).
  */
 export interface LinkageFocusRef {
   /**
-   * The node owning the rule; `null` for the form's own events.
+   * The node owning the rules; `null` for the form's own events.
    */
   nodeId: string | null;
-  ruleIndex: number;
+  ruleIndex?: number;
   actionIndex?: number;
 }
 

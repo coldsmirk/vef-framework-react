@@ -197,8 +197,13 @@ export function PropertiesPanel(): ReactElement {
   // Retained here so switching `控件` → `表单` → `控件` keeps the field sub-tab.
   const [fieldTab, setFieldTab] = useState<PropertyTabId>("props");
 
-  // Jumping to a node's linkage diagnostic opens the field's "联动" tab so the
-  // lazy LinkageRulesEntry mounts and consumes `pendingLinkageFocus`.
+  // Jumping to a node's linkage (from a diagnostic or the 字段联动 overview)
+  // opens the field's "联动" tab immediately so the lazy LinkageRulesEntry
+  // mounts on the first render and consumes `pendingLinkageFocus`.
+  const effectiveFieldTab: PropertyTabId = pendingLinkageFocus !== null && pendingLinkageFocus.nodeId !== null
+    ? "linkage"
+    : fieldTab;
+
   useEffect(() => {
     if (pendingLinkageFocus !== null && pendingLinkageFocus.nodeId !== null) {
       setFieldTab("linkage");
@@ -261,7 +266,7 @@ export function PropertiesPanel(): ReactElement {
 
         {panelVisible
           ? resolvedPanelTab === "control"
-            ? <ControlProperties activeTab={fieldTab} onTabChange={setFieldTab} />
+            ? <ControlProperties activeTab={effectiveFieldTab} onTabChange={setFieldTab} />
             : <FormPropertiesTab />
           : null}
       </aside>

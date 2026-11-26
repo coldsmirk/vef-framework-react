@@ -245,7 +245,7 @@ describe("PropertiesPanel", () => {
       expect(screen.getByRole("button", { name: "取消选择" })).toBeInTheDocument();
     });
 
-    it("lists field linkage overview and form events on 表单, and selects the bearer row on click", async () => {
+    it("lists field linkage overview and form events on 表单, and opens the bearer's 联动 tab without opening a dialog", async () => {
       const user = userEvent.setup();
       const storeApi = setupPropertiesPanel(undefined, makeLinkageSchema());
 
@@ -260,6 +260,52 @@ describe("PropertiesPanel", () => {
       expect(storeApi.getState().selectedId).toBe("Field_2");
       expect(storeApi.getState().propertiesTab).toBe("control");
       expect(screen.getByRole("tab", { name: "控件" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tab", { name: /联动/ })).toHaveAttribute("aria-selected", "true");
+      expect(await screen.findByText("姓名 等于 x 时")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(storeApi.getState().pendingLinkageFocus).toBeNull();
+    });
+
+    it("selects a container and scrolls its linkage section into view when clicked in the 字段联动 overview", async () => {
+      const user = userEvent.setup();
+      const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+      const schema = makeSchema();
+
+      schema.presentations.pc.children.push({
+        id: "Flex_1",
+        type: "flex",
+        children: [],
+        linkage: {
+          rules: [
+            {
+              id: "Rule_flex",
+              trigger: {
+                kind: "condition",
+                condition: {
+                  kind: "leaf",
+                  id: "Cond_flex",
+                  sourceKey: "name",
+                  operator: "notEmpty"
+                }
+              },
+              actions: [{ id: "Action_flex", type: "show" }]
+            }
+          ]
+        }
+      });
+
+      const storeApi = setupPropertiesPanel(undefined, schema);
+
+      await user.click(screen.getByText("弹性布局"));
+
+      expect(storeApi.getState().selectedId).toBe("Flex_1");
+      expect(storeApi.getState().propertiesTab).toBe("control");
+      expect(screen.getByText("联动规则")).toBeInTheDocument();
+      expect(screen.getByText("姓名 不为空 时")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(storeApi.getState().pendingLinkageFocus).toBeNull();
+      expect(scrollSpy).toHaveBeenCalledWith({ block: "start" });
+      scrollSpy.mockRestore();
     });
   });
 

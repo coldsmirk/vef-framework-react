@@ -230,6 +230,10 @@ export const RuleListEditor: FC<RuleListEditorProps> = ({
       pending: pendingFocus,
       clear: () => storeApi.getState().clearPendingLinkageFocus(),
       resolve: focus => {
+        if (focus.ruleIndex === undefined) {
+          return;
+        }
+
         const rule = rulesRef.current[focus.ruleIndex];
 
         if (rule === undefined) {

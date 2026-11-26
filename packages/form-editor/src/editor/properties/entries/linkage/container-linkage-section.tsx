@@ -2,9 +2,11 @@ import type { ReactElement } from "react";
 
 import type { ContainerNode, FieldLinkage, LinkageTriggerKind } from "../../../../types";
 
+import { useEffect, useRef } from "react";
+
 import { nodeDisplayName } from "../../../../engine/schema/walk";
 import { useFieldRegistry } from "../../../../store/engine-provider";
-import { useFormEditorStoreApi } from "../../../../store/form-store";
+import { useFormEditorStore, useFormEditorStoreApi } from "../../../../store/form-store";
 import { DefaultsPanel } from "./linkage-rules-entry";
 import { createRule, normalizeLinkage } from "./mutators";
 import { RuleListEditor } from "./rule-list-editor";
@@ -39,8 +41,19 @@ export interface ContainerLinkageSectionProps {
 export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps): ReactElement {
   const registry = useFieldRegistry();
   const storeApi = useFormEditorStoreApi();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useFormEditorStore(s => s.pendingLinkageFocus?.nodeId === node.id ? s.pendingLinkageFocus : null);
   const linkage = readLinkage(node.linkage);
   const rules = linkage.rules ?? [];
+
+  // When navigated from the 字段联动 overview (no specific rule to open),
+  // bring the container's linkage section cleanly into view; rule-specific
+  // diagnostic jumps scroll the target rule row inside `RuleListEditor`.
+  useEffect(() => {
+    if (pendingFocus !== null && pendingFocus.ruleIndex === undefined) {
+      sectionRef.current?.scrollIntoView?.({ block: "start" });
+    }
+  }, [pendingFocus]);
 
   // A container references the scope it RESIDES in (a subform node references
   // its outer siblings; its template children open their own scope), mirroring
@@ -70,7 +83,7 @@ export function ContainerLinkageSection({ node }: ContainerLinkageSectionProps):
   };
 
   return (
-    <div css={rootCss}>
+    <div ref={sectionRef} css={rootCss}>
       <span css={titleCss}>联动规则</span>
 
       <DefaultsPanel
