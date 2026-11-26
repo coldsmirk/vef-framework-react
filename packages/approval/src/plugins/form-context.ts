@@ -32,7 +32,9 @@ const APPLICANT_CONTEXT_SOURCES: readonly LinkageContextSource[] = [
 
 /**
  * The system variables the approval form designer offers: the built-in
- * applicant attributes, then the host's declared form globals.
+ * applicant attributes, then the host's declared form globals. Pass the result
+ * as `FormEditor`'s `contextSources` when a host renders the designer itself
+ * rather than through the built-in flow designer.
  */
 export function toFormContextSources(formGlobals: readonly FormGlobalDefinition[] | undefined): LinkageContextSource[] {
   return [

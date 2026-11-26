@@ -16,6 +16,7 @@ export type {
 } from "./permissions";
 export { ApprovalProvider, toEditorPlugins, useApprovalPlugins, useFormSchema } from "./plugins";
 export type { ApprovalPlugins, ApprovalProviderProps, BusinessFormHandle, BusinessKindRenderer, ResolvedApprovalPlugins } from "./plugins";
+export { toFormContextSources } from "./plugins/form-context";
 export type { FormGlobalDefinition } from "./plugins/form-context";
 export * from "./types";
 // The picker contract hosts implement for `ApprovalPlugins.pickers`, plus the
