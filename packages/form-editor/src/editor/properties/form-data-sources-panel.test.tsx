@@ -8,6 +8,9 @@ import userEvent from "@testing-library/user-event";
 import { ConfigProvider } from "@vef-framework-react/components";
 import { useEffect } from "react";
 
+import { createDefaultRegistry } from "../../engine/registry/defaults";
+import { createDefaultMobileRegistry } from "../../engine/registry/defaults-mobile";
+import { RegistryProvider } from "../../store/engine-provider";
 import { FormEditorStoreProvider, useFormEditorStoreApi } from "../../store/form-store";
 import { DataSourceApisProvider } from "../data-source-apis";
 import { FormDataSourcesPanel } from "./form-data-sources-panel";
@@ -56,6 +59,11 @@ function Harness({ onReady }: HarnessProps): ReactElement {
   return <FormDataSourcesPanel />;
 }
 
+const REGISTRIES = {
+  pc: createDefaultRegistry(),
+  mobile: createDefaultMobileRegistry()
+};
+
 function setup(
   dataSources: FormDataSource[] = [],
   options?: { apis?: DataSourceApi[]; schemaExtra?: Partial<FormSchema> }
@@ -65,13 +73,15 @@ function setup(
   render(
     <ConfigProvider>
       <FormEditorStoreProvider initialState={{ schema: makeSchema(dataSources, options?.schemaExtra) }}>
-        <DataSourceApisProvider apis={options?.apis}>
-          <Harness
-            onReady={api => {
-              captured = api;
-            }}
-          />
-        </DataSourceApisProvider>
+        <RegistryProvider registries={REGISTRIES}>
+          <DataSourceApisProvider apis={options?.apis}>
+            <Harness
+              onReady={api => {
+                captured = api;
+              }}
+            />
+          </DataSourceApisProvider>
+        </RegistryProvider>
       </FormEditorStoreProvider>
     </ConfigProvider>
   );

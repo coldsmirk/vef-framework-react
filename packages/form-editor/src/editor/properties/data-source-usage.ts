@@ -1,3 +1,4 @@
+import type { DeviceNodeDefinitionLookups, NodeDefinitionLookup } from "../../engine/schema/walk";
 import type {
   Block,
   DataSourceApi,
@@ -11,10 +12,9 @@ import type {
 } from "../../types";
 
 import { findDataSourceApi } from "../../engine/data-source-apis";
-import { isKeyedNode } from "../../engine/keys";
 import { getActionDataSourceId } from "../../engine/linkage/action-descriptors";
 import { countOptionNodes } from "../../engine/options";
-import { isLeafField, nodeLabel, walkNodes } from "../../engine/schema/walk";
+import { isLeafField, nodeDisplayName, walkNodes } from "../../engine/schema/walk";
 
 export interface DataSourceFieldRef {
   device: PresentationDevice;
@@ -55,7 +55,7 @@ export interface DataSourceSummary {
 
 const MAX_LISTED_REFS = 8;
 
-const usageCache = new WeakMap<FormSchema, ReadonlyMap<string, DataSourceUsage>>();
+const usageCache = new WeakMap<DeviceNodeDefinitionLookups, WeakMap<FormSchema, ReadonlyMap<string, DataSourceUsage>>>();
 
 function getOrCreateUsage(map: Map<string, DataSourceUsage>, id: string): DataSourceUsage {
   const existing = map.get(id);
@@ -76,8 +76,8 @@ function getOrCreateUsage(map: Map<string, DataSourceUsage>, id: string): DataSo
   return fresh;
 }
 
-function displayNodeName(node: Block, device: PresentationDevice): string {
-  const base = nodeLabel(node) ?? (isKeyedNode(node) ? node.key : node.id);
+function displayNodeName(node: Block, device: PresentationDevice, registry: NodeDefinitionLookup): string {
+  const base = nodeDisplayName(node, registry);
 
   return device === "mobile" ? `移动端 · ${base}` : base;
 }
@@ -138,6 +138,7 @@ function collectLinkageUsages(
 function collectLayerUsages(
   layer: PresentationLayer | undefined,
   device: PresentationDevice,
+  registry: NodeDefinitionLookup,
   map: Map<string, DataSourceUsage>
 ): void {
   if (layer === undefined) {
@@ -155,7 +156,7 @@ function collectLayerUsages(
         usage.fields.push({
           device,
           nodeId: node.id,
-          label: displayNodeName(node, device),
+          label: displayNodeName(node, device, registry),
           kind: "field"
         });
       }
@@ -171,23 +172,34 @@ function collectLayerUsages(
       usage.fixedSubforms.push({
         device,
         nodeId: node.id,
-        label: displayNodeName(node, device),
+        label: displayNodeName(node, device, registry),
         kind: "fixed-subform"
       });
     }
 
     if (node.linkage !== undefined) {
-      collectLinkageUsages(node.linkage, device, displayNodeName(node, device), map);
+      collectLinkageUsages(node.linkage, device, displayNodeName(node, device, registry), map);
     }
   });
 }
 
 /**
  * Collect reference counts and locations for every data source referenced in
- * `schema` in a single traversal, memoized by schema identity.
+ * `schema` in a single traversal, naming each node as the designer does
+ * through its device's registry. Memoized by registries and schema identity.
  */
-export function collectDataSourceUsages(schema: FormSchema): ReadonlyMap<string, DataSourceUsage> {
-  const cached = usageCache.get(schema);
+export function collectDataSourceUsages(
+  schema: FormSchema,
+  registries: DeviceNodeDefinitionLookups
+): ReadonlyMap<string, DataSourceUsage> {
+  let bySchema = usageCache.get(registries);
+
+  if (bySchema === undefined) {
+    bySchema = new WeakMap();
+    usageCache.set(registries, bySchema);
+  }
+
+  const cached = bySchema.get(schema);
 
   if (cached !== undefined) {
     return cached;
@@ -195,11 +207,11 @@ export function collectDataSourceUsages(schema: FormSchema): ReadonlyMap<string,
 
   const map = new Map<string, DataSourceUsage>();
 
-  collectLayerUsages(schema.presentations.pc, "pc", map);
-  collectLayerUsages(schema.presentations.mobile, "mobile", map);
+  collectLayerUsages(schema.presentations.pc, "pc", registries.pc, map);
+  collectLayerUsages(schema.presentations.mobile, "mobile", registries.mobile, map);
   collectLinkageUsages(schema.linkage, "form", "表单级事件", map);
 
-  usageCache.set(schema, map);
+  bySchema.set(schema, map);
 
   return map;
 }

@@ -10,6 +10,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { createId } from "../../engine/ids";
 import { EditorIcon } from "../../icons";
+import { useDeviceRegistries } from "../../store/engine-provider";
 import { useFormEditorStore, useFormEditorStoreApi } from "../../store/form-store";
 import { useDataSourceApis } from "../data-source-apis";
 import { DialogLines, UNDOABLE_FOOTNOTE } from "../dialog-lines";
@@ -148,8 +149,9 @@ export function FormDataSourcesPanel(): ReactElement {
   const schema = useFormEditorStore(s => s.schema);
   const storeApi = useFormEditorStoreApi();
   const apis = useDataSourceApis();
+  const registries = useDeviceRegistries();
   const dataSources = schema.dataSources ?? NO_DATA_SOURCES;
-  const usages = collectDataSourceUsages(schema);
+  const usages = collectDataSourceUsages(schema, registries);
   const {
     close,
     closeIfEditing,

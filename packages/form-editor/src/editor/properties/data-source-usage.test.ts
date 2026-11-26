@@ -1,11 +1,18 @@
 import type { DataSourceApi, FormSchema } from "../../types";
 
+import { createDefaultRegistry } from "../../engine/registry/defaults";
+import { createDefaultMobileRegistry } from "../../engine/registry/defaults-mobile";
 import {
   collectDataSourceUsages,
   formatDataSourceRemovalLines,
   nextCopyName,
   summarizeDataSource
 } from "./data-source-usage";
+
+const REGISTRIES = {
+  pc: createDefaultRegistry(),
+  mobile: createDefaultMobileRegistry()
+};
 
 const APIS: DataSourceApi[] = [
   {
@@ -119,7 +126,7 @@ describe("collectDataSourceUsages", () => {
       }
     };
 
-    const usages = collectDataSourceUsages(schema);
+    const usages = collectDataSourceUsages(schema, REGISTRIES);
     const usage = usages.get("ds1");
 
     expect(usage).toEqual({
@@ -163,7 +170,7 @@ describe("collectDataSourceUsages", () => {
     });
 
     // Memoized by schema identity.
-    expect(collectDataSourceUsages(schema)).toBe(usages);
+    expect(collectDataSourceUsages(schema, REGISTRIES)).toBe(usages);
 
     const lines = formatDataSourceRemovalLines(usage!);
 
@@ -172,6 +179,55 @@ describe("collectDataSourceUsages", () => {
       "以下固定行明细表将清空行项目来源：「评分明细」",
       "将移除 2 个联动刷新动作（来自 「编码」、表单级事件），其中 1 条规则将被一并移除"
     ]);
+  });
+
+  it("names an unlabelled container owner as the designer does, never by its id", () => {
+    const schema: FormSchema = {
+      id: "Form_1",
+      version: 2,
+      presentations: {
+        pc: {
+          children: [
+            {
+              id: "Flex_blkuy0tgvlb6r4fi",
+              type: "flex",
+              children: [],
+              linkage: {
+                rules: [
+                  {
+                    id: "r-flex",
+                    trigger: { kind: "load" },
+                    actions: [{ type: "refresh_data_source", dataSourceId: "ds1" }]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        mobile: {
+          children: [
+            {
+              id: "Section_mobile",
+              type: "section",
+              variant: "card",
+              children: [],
+              linkage: {
+                rules: [
+                  {
+                    id: "r-section",
+                    trigger: { kind: "load" },
+                    actions: [{ type: "refresh_data_source", dataSourceId: "ds1" }]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    };
+    const usage = collectDataSourceUsages(schema, REGISTRIES).get("ds1")!;
+
+    expect(usage.linkages.map(ref => ref.ownerLabel)).toEqual(["弹性布局", "移动端 · 卡片"]);
   });
 
   it("caps long reference lists cleanly in confirmation lines", () => {
@@ -189,7 +245,7 @@ describe("collectDataSourceUsages", () => {
       version: 2,
       presentations: { pc: { children } }
     };
-    const usage = collectDataSourceUsages(schema).get("ds1")!;
+    const usage = collectDataSourceUsages(schema, REGISTRIES).get("ds1")!;
 
     expect(usage.total).toBe(10);
     expect(formatDataSourceRemovalLines(usage)).toEqual(["以下字段将清空选项来源：「字段1」、「字段2」、「字段3」、「字段4」、「字段5」、「字段6」、「字段7」、「字段8」等共 10 个字段"]);

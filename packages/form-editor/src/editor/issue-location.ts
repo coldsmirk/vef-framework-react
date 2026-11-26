@@ -1,4 +1,4 @@
-import type { NodeDefinitionLookup } from "../engine/schema/walk";
+import type { DeviceNodeDefinitionLookups, NodeDefinitionLookup } from "../engine/schema/walk";
 import type { SchemaIssue } from "../engine/validation";
 import type { DataEntryRef, FormEditorStoreApi, LinkageFocusRef, PropertiesTabId, SidebarTabId } from "../store/form-store";
 import type { Block, FieldLinkage, FormSchema, PresentationDevice, PresentationLayer } from "../types";
@@ -290,7 +290,7 @@ function describeNode(
   schema: FormSchema,
   device: PresentationDevice,
   nodeId: string,
-  registry: NodeDefinitionLookup | undefined
+  registry: NodeDefinitionLookup
 ): string {
   const node = nodeAt(schema, device, nodeId);
   const name = node === undefined ? nodeId : nodeDisplayName(node, registry);
@@ -326,7 +326,7 @@ export function describeIssueLocation(
   path: string,
   schema: FormSchema,
   device: PresentationDevice,
-  registries?: Partial<Record<PresentationDevice, NodeDefinitionLookup>>
+  registries: DeviceNodeDefinitionLookups
 ): string | undefined {
   const target = locateIssue(path, schema, device);
 
@@ -336,7 +336,7 @@ export function describeIssueLocation(
 
   switch (target.kind) {
     case "node": {
-      return describeNode(schema, target.device, target.nodeId, registries?.[target.device]);
+      return describeNode(schema, target.device, target.nodeId, registries[target.device]);
     }
 
     case "linkage": {
@@ -345,7 +345,7 @@ export function describeIssueLocation(
 
       return nodeId === null
         ? `表单事件 · ${describeRule(schema.linkage, { ...trail, inWhenGuard })}`
-        : `${describeNode(schema, target.device, nodeId, registries?.[target.device])} · ${describeRule(nodeAt(schema, target.device, nodeId)?.linkage, { ...trail, inWhenGuard })}`;
+        : `${describeNode(schema, target.device, nodeId, registries[target.device])} · ${describeRule(nodeAt(schema, target.device, nodeId)?.linkage, { ...trail, inWhenGuard })}`;
     }
 
     case "dataEntry": {

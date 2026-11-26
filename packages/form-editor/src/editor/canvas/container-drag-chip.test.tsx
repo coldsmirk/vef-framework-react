@@ -65,6 +65,24 @@ describe("ContainerDragChip", () => {
     expect(screen.getByText(flexName)).toBeInTheDocument();
   });
 
+  it("names a fixed-row subform with neither label nor key as the palette's 矩阵表格", () => {
+    const matrix: Block = {
+      id: "Sub_1",
+      type: "subform",
+      variant: "table",
+      key: "",
+      rows: {
+        mode: "fixed",
+        itemKey: "item",
+        source: { kind: "static", options: [] }
+      },
+      template: []
+    };
+    renderChip("Sub_1", [matrix]);
+
+    expect(screen.getByText("矩阵表格")).toBeInTheDocument();
+  });
+
   it("renders nothing for an unknown node id", () => {
     const { container } = renderChip("missing", [section]);
 

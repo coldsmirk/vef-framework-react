@@ -277,15 +277,15 @@ describe("locateIssue", () => {
 describe("describeIssueLocation", () => {
   describe("when the issue is about a field", () => {
     it("names the field by its label", () => {
-      expect(describeIssueLocation("presentations.pc.children[0].children[0].key", makeSchema(), "pc")).toBe("金额");
+      expect(describeIssueLocation("presentations.pc.children[0].children[0].key", makeSchema(), "pc", REGISTRIES)).toBe("金额");
     });
 
     it("falls back to the field's key", () => {
-      expect(describeIssueLocation("presentations.pc.children[1].tabs[1].children[0].key", makeSchema(), "pc")).toBe("note");
+      expect(describeIssueLocation("presentations.pc.children[1].tabs[1].children[0].key", makeSchema(), "pc", REGISTRIES)).toBe("note");
     });
 
     it("marks a field of the mobile layout", () => {
-      expect(describeIssueLocation("presentations.mobile.children[0].key", makeSchema(), "pc")).toBe("移动端 · remark");
+      expect(describeIssueLocation("presentations.mobile.children[0].key", makeSchema(), "pc", REGISTRIES)).toBe("移动端 · remark");
     });
   });
 
@@ -303,7 +303,7 @@ describe("describeIssueLocation", () => {
         ]
       };
 
-      expect(describeIssueLocation("dataSources[0].request", schema, "pc")).toBe("数据源「部门」");
+      expect(describeIssueLocation("dataSources[0].request", schema, "pc", REGISTRIES)).toBe("数据源「部门」");
     });
 
     it("numbers a data source that has no name", () => {
@@ -319,7 +319,7 @@ describe("describeIssueLocation", () => {
         ]
       };
 
-      expect(describeIssueLocation("dataSources[0].request", schema, "pc")).toBe("数据源 #1");
+      expect(describeIssueLocation("dataSources[0].request", schema, "pc", REGISTRIES)).toBe("数据源 #1");
     });
 
     it("names a variable by its name", () => {
@@ -334,7 +334,7 @@ describe("describeIssueLocation", () => {
         ]
       };
 
-      expect(describeIssueLocation("variables[0].defaultValue", schema, "pc")).toBe("变量「quota」");
+      expect(describeIssueLocation("variables[0].defaultValue", schema, "pc", REGISTRIES)).toBe("变量「quota」");
     });
 
     it("names the form's own linkage rule and action in designer words", () => {
@@ -358,10 +358,10 @@ describe("describeIssueLocation", () => {
         }
       };
 
-      expect(describeIssueLocation("linkage.rules[0]", schema, "pc")).toBe("表单事件 · 规则 1");
-      expect(describeIssueLocation("schema.linkage.rules[0].actions[0].source", schema, "pc"))
+      expect(describeIssueLocation("linkage.rules[0]", schema, "pc", REGISTRIES)).toBe("表单事件 · 规则 1");
+      expect(describeIssueLocation("schema.linkage.rules[0].actions[0].source", schema, "pc", REGISTRIES))
         .toBe("表单事件 · 规则 1 · 步骤 1（选择记录）");
-      expect(describeIssueLocation("linkage", schema, "pc")).toBe("表单联动");
+      expect(describeIssueLocation("linkage", schema, "pc", REGISTRIES)).toBe("表单联动");
     });
 
     it("names a node linkage rule, guard, and action step in designer words", () => {
@@ -386,9 +386,9 @@ describe("describeIssueLocation", () => {
         };
       }
 
-      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].actions[0].assignments[0].targetKey", schema, "pc"))
+      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].actions[0].assignments[0].targetKey", schema, "pc", REGISTRIES))
         .toBe("金额 · 规则 1 · 步骤 1（设置字段）");
-      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].trigger.when.children[0].sourceKey", schema, "pc"))
+      expect(describeIssueLocation("node[Field_amount].linkage.rules[0].trigger.when.children[0].sourceKey", schema, "pc", REGISTRIES))
         .toBe("金额 · 规则 1 · 执行条件");
     });
 
@@ -455,6 +455,6 @@ describe("describeIssueLocation", () => {
   });
 
   it("has no words for the schema envelope", () => {
-    expect(describeIssueLocation("id", makeSchema(), "pc")).toBeUndefined();
+    expect(describeIssueLocation("id", makeSchema(), "pc", REGISTRIES)).toBeUndefined();
   });
 });

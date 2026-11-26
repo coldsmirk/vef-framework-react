@@ -1,13 +1,10 @@
 import type { ReactElement } from "react";
 
-import type { ContainerNode } from "../../types";
-
 import { css } from "@emotion/react";
 import { globalCssVars } from "@vef-framework-react/components";
 
-import { assertNever } from "../../engine/assert-never";
 import { currentLayer } from "../../engine/schema/presentation";
-import { findNode, isContainerNode } from "../../engine/schema/walk";
+import { findNode, isContainerNode, nodeDefinition, nodeDisplayName } from "../../engine/schema/walk";
 import { EditorIcon } from "../../icons";
 import { useFieldRegistry } from "../../store/engine-provider";
 import { useFormEditorStore } from "../../store/form-store";
@@ -66,39 +63,12 @@ const labelCss = css({
 });
 
 /**
- * The dragged container's own title, when it has one — a section's title or a
- * subform's label. Tabs / flex / grid carry no instance title, so they fall
- * back to the registry's type name. The switch is compile-forced complete: a
- * sixth container variant fails `assertNever` rather than silently missing a
- * title.
- */
-function containerInstanceTitle(node: ContainerNode): string | undefined {
-  switch (node.type) {
-    case "section": {
-      return node.title;
-    }
-
-    case "subform": {
-      return node.label;
-    }
-
-    case "tabs":
-    case "flex":
-    case "grid": { return undefined; }
-
-    default: {
-      return assertNever(node);
-    }
-  }
-}
-
-/**
  * The drag ghost for a container move: a compact icon + label chip. Resolves the
- * container by id from the active device's layer, drawing its icon and type name
- * from the field registry (exactly as the palette does), and prefers the
- * container's own title/label when set. Renders nothing if the id no longer
- * resolves to a container (a torn-down drag), so the overlay stays empty rather
- * than throwing.
+ * container by id from the active device's layer and names it as the rest of
+ * the designer does ({@link nodeDisplayName}), with its registry definition's
+ * icon (a fixed-row subform takes the 矩阵表格 preset's). Renders nothing if the
+ * id no longer resolves to a container (a torn-down drag), so the overlay stays
+ * empty rather than throwing.
  */
 export function ContainerDragChip({ nodeId }: { nodeId: string }): ReactElement | null {
   const node = useFormEditorStore(s => findNode(currentLayer(s.schema, s.device), nodeId));
@@ -108,8 +78,8 @@ export function ContainerDragChip({ nodeId }: { nodeId: string }): ReactElement 
     return null;
   }
 
-  const definition = registry.get(node.type);
-  const label = containerInstanceTitle(node) ?? definition?.config.name ?? "容器";
+  const definition = nodeDefinition(node, registry);
+  const label = nodeDisplayName(node, registry);
 
   return (
     <div css={chipCss}>

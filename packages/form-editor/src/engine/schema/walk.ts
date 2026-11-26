@@ -1,4 +1,4 @@
-import type { Block, ContainerNode, FieldDefinition, FormField, KeyedNodeUnion, PresentationLayer } from "../../types";
+import type { Block, ContainerNode, FieldDefinition, FormField, KeyedNodeUnion, PresentationDevice, PresentationLayer } from "../../types";
 
 import { isShallowEqual } from "@vef-framework-react/shared";
 
@@ -76,6 +76,12 @@ export interface NodeDefinitionLookup {
   getPaletteItem: (paletteKey: string) => FieldDefinition | undefined;
 }
 
+/**
+ * One {@link NodeDefinitionLookup} per presentation device, satisfied by
+ * `DeviceRegistries`.
+ */
+export type DeviceNodeDefinitionLookups = Readonly<Record<PresentationDevice, NodeDefinitionLookup>>;
+
 const MATRIX_TABLE_PALETTE_ID = "matrix-table";
 
 /**
@@ -84,14 +90,7 @@ const MATRIX_TABLE_PALETTE_ID = "matrix-table";
  * (`矩阵表格`) when registered, falling back to the primary `subform`
  * definition.
  */
-export function nodeDefinition(
-  node: Block,
-  registry: NodeDefinitionLookup | undefined
-): FieldDefinition | undefined {
-  if (registry === undefined) {
-    return undefined;
-  }
-
+export function nodeDefinition(node: Block, registry: NodeDefinitionLookup): FieldDefinition | undefined {
   if (node.type === "subform" && node.rows?.mode === "fixed") {
     return registry.getPaletteItem(MATRIX_TABLE_PALETTE_ID) ?? registry.get(node.type);
   }
@@ -107,10 +106,7 @@ export function nodeDefinition(
  * the `matrix-table` preset's `矩阵表格`)
  * 4. finally `node.type` when no registry entry exists.
  */
-export function nodeDisplayName(
-  node: Block,
-  registry?: NodeDefinitionLookup
-): string {
+export function nodeDisplayName(node: Block, registry: NodeDefinitionLookup): string {
   const label = nodeLabel(node);
 
   if (label !== undefined) {
