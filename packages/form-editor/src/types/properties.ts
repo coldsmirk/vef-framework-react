@@ -72,7 +72,8 @@ export interface PropertyEntry<TField extends FormField = FormField, TValue = un
    */
   description?: string;
   /**
-   * Placeholder text for input-style entries.
+   * Placeholder text for input-style entries. A select entry shows "默认"
+   * when none is given, since its property is unset.
    */
   placeholder?: string;
   /**
@@ -81,7 +82,8 @@ export interface PropertyEntry<TField extends FormField = FormField, TValue = un
   read: (field: TField) => TValue;
   /**
    * Returns a new field with the property updated. Pure — must not mutate
-   * the input.
+   * the input. A select entry passes `undefined` when the user clears it,
+   * which unsets the property.
    */
   write: (field: TField, value: TValue) => TField;
 }

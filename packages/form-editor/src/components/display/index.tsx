@@ -222,8 +222,8 @@ const headingProperties: PropertiesDescriptor = [
         read: field => field.text,
         write: (field, text) => { return { ...field, text }; }
       }),
-      // The select entry reads and writes strings.
-      definePropertyEntry<HeadingField, string>({
+      // The select entry reads and writes strings, and writes `undefined` when cleared.
+      definePropertyEntry<HeadingField, string | undefined>({
         id: "level",
         label: "级别",
         type: "select",

@@ -127,7 +127,7 @@ const buttonProperties: PropertiesDescriptor = [
           { value: "reset", label: "重置" },
           { value: "button", label: "普通" }
         ],
-        read: field => field.action,
+        read: field => field.action ?? "submit",
         write: (field, action) => { return { ...field, action }; }
       }),
       definePropertyEntry<ButtonField, DynamicIconName | undefined>({

@@ -49,6 +49,31 @@ describe("SelectEntry", () => {
     expect(screen.getByText("默认")).toBeInTheDocument();
   });
 
+  it("shows 默认 when the entry declares no placeholder", () => {
+    render(<SelectEntry entry={{ ...entry, placeholder: undefined }} field={makeField()} schema={schema} onChange={vi.fn()} />);
+
+    expect(screen.getByText("默认")).toBeInTheDocument();
+  });
+
+  it("clears the value to undefined through onChange", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(<SelectEntry entry={entry} field={makeField("top")} schema={schema} onChange={onChange} />);
+
+    // form-editor specs render without the VEF ConfigProvider, so antd uses its
+    // default `ant-` prefix. The clear control is an unlabeled internal element.
+    const clear = screen.getByRole("combobox").closest(".ant-select")?.querySelector(".ant-select-clear");
+
+    if (!(clear instanceof HTMLElement)) {
+      throw new TypeError("clear control not found");
+    }
+
+    await user.click(clear);
+
+    expect(onChange).toHaveBeenCalledWith(undefined);
+  });
+
   it("forwards the picked option through onChange", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
